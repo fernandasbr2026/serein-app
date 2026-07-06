@@ -132,3 +132,5 @@ Decidiste ir por la vía de API automática. El plan recomendado:
 **Importante**: el SII no sabe a qué planta pertenece cada factura — esa inteligencia
 vive en las reglas de clasificación de TU app. Mientras más reglas definas, menos
 trabajo manual.
+
+
