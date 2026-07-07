@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Plus, Trash2, Users, Truck, Search } from 'lucide-react'
-import { PP_SEED } from './ProveedoresPagosModule.jsx'
 import { CLIENTES_FICHA } from './clientes-data.js'
+import { PROVEEDORES_FICHA } from './proveedores-data.js'
 
 // ============================================================
 // MÓDULO: Clientes y Proveedores
@@ -16,12 +16,12 @@ const inp = { padding: '6px 8px', border: '1px solid #CBD2D6', fontSize: 12.5, b
 const norm = s => (s || '').toString().trim()
 
 // Versión de la semilla: si cambia, se recarga la lista maestra
-export const CONTACTOS_VER = 'ficha-clientes-2026-07'
+export const CONTACTOS_VER = 'ficha-clientes-proveedores-2026-07'
 
 export const CONTACTOS_SEED = {
   ver: CONTACTOS_VER,
   clientes: (CLIENTES_FICHA || []).map(c => ({ ...c })),
-  proveedores: (PP_SEED.proveedores || []).map((p, i) => ({ id: 'cp' + i, nombre: p.nombre, rut: p.rut || '', giro: p.giro || '', direccion: p.direccion || '', comuna: '', estado: p.estado || 'Activo', vendedor: '' })),
+  proveedores: (PROVEEDORES_FICHA || []).map(p => ({ ...p })),
 }
 
 // Devuelve los nombres de clientes para autocompletar
@@ -42,6 +42,7 @@ const COLS_PROVEEDORES = [
   { key: 'rut', label: 'RUT', width: 120 },
   { key: 'giro', label: 'Giro', width: 180 },
   { key: 'direccion', label: 'Dirección', width: 180 },
+  { key: 'comuna', label: 'Comuna', width: 120 },
   { key: 'estado', label: 'Estado', width: 90, type: 'estado' },
 ]
 
