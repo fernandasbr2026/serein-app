@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { ChevronDown, ChevronUp, Plus, Trash2, X, Ruler, Paintbrush, FileText, Receipt, ShoppingCart, CircleDollarSign, Download, Camera } from 'lucide-react'
 import * as XLSX from 'xlsx'
+import { descargarOTDesdeOT } from './CotizacionesModule.jsx'
 
 const C = { azul: '#1D1D1B', teal: '#A8501F', ambar: '#D2642F', rojo: '#B5432E', verde: '#3D7A4E', carbon: '#161616', gris: '#7A8288' }
 const clp = n => '$' + Math.round(n).toLocaleString('es-CL')
@@ -458,6 +459,10 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true }) {
           <FotosOT ot={ot} onUpdate={onUpdate} />
 
           <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={() => descargarOTDesdeOT(ot)}
+              style={{ background: C.azul, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Download size={13} /> Descargar OT (PDF)
+            </button>
             {verValores && (
               <button onClick={() => descargarOT(ot)}
                 style={{ background: C.carbon, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>

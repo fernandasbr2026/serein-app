@@ -13,6 +13,8 @@ const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
 const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
 const AREAS = ['Santa Rosa', 'Istria', 'Proyectos']
+const ESTADOS_COT = ['Alta probabilidad de cierre', 'Baja probabilidad de cierre', 'Aprobada', 'Rechazada', 'Otro']
+const colorEstadoCot = e => ({ 'Aprobada': ['#E7F2EA', C.verde], 'Rechazada': ['#F6E0DA', C.rojo], 'Alta probabilidad de cierre': ['#E7EEF2', C.azul], 'Baja probabilidad de cierre': ['#F9E9DE', '#8C4519'], 'Otro': ['#EEE', C.gris] }[e] || ['#EEE', C.gris])
 
 // Datos de la empresa (encabezado del documento)
 export const EMPRESA = {
@@ -158,15 +160,72 @@ function imprimir(html) {
 export function descargarCotizacionPDF(cot) { imprimir(htmlDoc(cot, { conValores: true, esOT: false, conCondiciones: true })) }
 export function descargarOTPDF(cot) { imprimir(htmlDoc(cot, { conValores: false, esOT: true })) }
 
+// OT en PDF a partir de la OT real (refleja esquema, servicios y partidas editados)
+function htmlOTDoc(ot) {
+  const items = ot.itemsCot || []
+  const filas = items.map((it, i) => `<tr><td>${i + 1}</td><td>${it.codigo || ''}</td><td><b>${it.detalle || ''}</b>${it.comentario ? '<br><span style="color:#777">Comentario: ' + it.comentario + '</span>' : ''}</td><td class="r">${num(it.cant)}</td><td>${it.unidad || 'UN'}</td></tr>`).join('')
+  const partidas = ot.partidas || []
+  const partHtml = partidas.length ? `<div style="margin-top:12px"><b style="font-size:12px">Partidas / entregas de material</b>
+    <table class="items" style="margin-top:4px"><thead><tr><th>N°</th><th>Detalle del material</th><th>Fecha estimada</th><th>Estado</th></tr></thead><tbody>
+    ${partidas.map((p, i) => `<tr><td>${i + 1}</td><td>${p.detalle || ''}</td><td>${p.fecha || ''}</td><td>${p.estado || ''}</td></tr>`).join('')}</tbody></table></div>` : ''
+  const esquema = (ot.esquema && ot.esquema !== '—') ? String(ot.esquema).replace(/\n/g, '<br>') : ''
+  const servicios = ot.servicios ? String(ot.servicios).replace(/\n/g, '<br>') : ''
+  return `<!doctype html><html><head><meta charset="utf-8"><title>OT ${ot.numero || ''}</title><style>${estilosDoc()}</style></head><body>
+    <div class="head">
+      <div class="emp"><b>${EMPRESA.nombre}</b><div>R.U.T: ${EMPRESA.rut}</div><div>${EMPRESA.direccion}</div><div>Tel: ${EMPRESA.telefono} · ${EMPRESA.email}</div></div>
+      <div class="doc"><div class="t">Orden de trabajo</div><div class="f">${ot.numero || ''}</div></div>
+    </div>
+    <table class="cli"><tbody>
+      <tr><td><div class="lbl">Cliente</div>${ot.cliente || ''}</td><td><div class="lbl">Área</div>${ot.area || ''}</td><td><div class="lbl">Cotización</div>${ot.cotizacion || ''}</td><td><div class="lbl">OC</div>${ot.oc || ''}</td></tr>
+      <tr><td><div class="lbl">m²</div>${ot.m2 || 0}</td><td><div class="lbl">Preparación</div>${ot.preparacion || ''}</td><td><div class="lbl">Estado</div>${ot.estado || ''}</td><td></td></tr>
+    </tbody></table>
+    ${items.length ? `<table class="items"><thead><tr><th>Item</th><th>Código</th><th>Detalle</th><th>Cant</th><th>Unidad</th></tr></thead><tbody>${filas}</tbody></table>` : ''}
+    ${esquema ? `<div style="margin-top:12px;font-size:11px"><b>Esquema de pintura:</b><br>${esquema}</div>` : ''}
+    ${servicios ? `<div style="margin-top:8px;font-size:11px"><b>Servicios / observaciones:</b><br>${servicios}</div>` : ''}
+    ${partHtml}
+    <div class="badge" style="margin-top:12px">DOCUMENTO SIN VALORES · USO INTERNO / TALLER</div>
+  </body></html>`
+}
+export function descargarOTDesdeOT(ot) { imprimir(htmlOTDoc(ot)) }
+
 // Cotización vacía nueva
 const hoy = () => new Date().toISOString().slice(0, 10)
 function nuevaCot(folio) {
-  return { id: 'cot' + Date.now(), folio: String(folio || ''), fecha: hoy(), vencimiento: hoy(), area: 'Santa Rosa', cliente: '', rut: '', giro: '', ciudad: '', comuna: '', direccion: '', condicionPago: 'CONTADO', vendedor: 'Mario Vidal', comentario: '', estado: 'Borrador', items: [{ codigo: 'SPP', detalle: 'SERVICIO GRANALLADO Y PINTURA EN PLANTA', cant: '', unidad: 'UN', pUnitario: '', descuento: '', descDetallada: '', comentario: '' }] }
+  return { id: 'cot' + Date.now(), folio: String(folio || ''), fecha: hoy(), vencimiento: hoy(), area: 'Santa Rosa', cliente: '', rut: '', giro: '', ciudad: '', comuna: '', direccion: '', condicionPago: 'CONTADO', vendedor: 'Mario Vidal', comentario: '', estado: 'Alta probabilidad de cierre', estadoOtro: '', items: [{ codigo: 'SPP', detalle: 'SERVICIO GRANALLADO Y PINTURA EN PLANTA', cant: '', unidad: 'UN', pUnitario: '', descuento: '', descDetallada: '', comentario: '' }] }
 }
 
-function FormCotizacion({ inicial, onGuardar, onCancelar }) {
+// Mini panel para añadir un cliente nuevo a la lista maestra
+function MiniAddCliente({ nombreInicial, onAdd, onCancel }) {
+  const [c, setC] = useState({ nombre: nombreInicial || '', rut: '', giro: '', direccion: '', comuna: '' })
+  const sc = (k, v) => setC({ ...c, [k]: v })
+  return (
+    <div style={{ background: '#FAF7F3', border: '1px solid #E2DED4', padding: 12, marginTop: 6 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: C.gris, textTransform: 'uppercase', marginBottom: 8 }}>Añadir cliente a la lista</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
+        <input style={inp} placeholder="Nombre / Razón social *" value={c.nombre} onChange={e => sc('nombre', e.target.value)} />
+        <input style={inp} placeholder="RUT" value={c.rut} onChange={e => sc('rut', e.target.value)} />
+        <input style={inp} placeholder="Giro" value={c.giro} onChange={e => sc('giro', e.target.value)} />
+        <input style={inp} placeholder="Dirección" value={c.direccion} onChange={e => sc('direccion', e.target.value)} />
+        <input style={inp} placeholder="Comuna" value={c.comuna} onChange={e => sc('comuna', e.target.value)} />
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <button type="button" onClick={() => c.nombre.trim() && onAdd(c)} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5 }}>Guardar cliente</button>
+        <button type="button" onClick={onCancel} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>Cancelar</button>
+      </div>
+    </div>
+  )
+}
+
+function FormCotizacion({ inicial, onGuardar, onCancelar, clientes = [], onAddCliente = () => {} }) {
   const [f, setF] = useState(inicial)
+  const [addCli, setAddCli] = useState(false)
   const set = (k, v) => setF({ ...f, [k]: v })
+  const _n = s => (s || '').trim().toLowerCase()
+  const aplicarCliente = nombre => {
+    const cli = (clientes || []).find(x => _n(x.nombre) === _n(nombre))
+    if (cli) setF(prev => ({ ...prev, cliente: cli.nombre, rut: cli.rut || prev.rut, giro: cli.giro || prev.giro, direccion: cli.direccion || prev.direccion, comuna: cli.comuna || prev.comuna }))
+    else setF(prev => ({ ...prev, cliente: nombre }))
+  }
   const setItem = (i, k, v) => setF({ ...f, items: f.items.map((it, j) => j === i ? { ...it, [k]: v } : it) })
   const addItem = () => setF({ ...f, items: [...f.items, { codigo: 'SPP', detalle: '', cant: '', unidad: 'UN', pUnitario: '', descuento: '', descDetallada: '', comentario: '' }] })
   const delItem = i => setF({ ...f, items: f.items.filter((_, j) => j !== i) })
@@ -184,7 +243,14 @@ function FormCotizacion({ inicial, onGuardar, onCancelar }) {
             ))}
           </div>
         </div>
-        <label style={lab}>Cliente / Señor(es) *<input style={inp} value={f.cliente} onChange={e => set('cliente', e.target.value)} /></label>
+        <div style={{ ...lab, gridColumn: '1 / -1' }}>Cliente / Señor(es) *
+          <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input style={{ ...inp, flex: '1 1 220px' }} list="dl-cot-cli" value={f.cliente} onChange={e => aplicarCliente(e.target.value)} placeholder="Escribe y selecciona; se autocompletan sus datos" />
+            <button type="button" onClick={() => setAddCli(v => !v)} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5, whiteSpace: 'nowrap' }}>+ Añadir cliente</button>
+          </div>
+          <datalist id="dl-cot-cli">{(clientes || []).map(cl => <option key={cl.id || cl.nombre} value={cl.nombre} />)}</datalist>
+          {addCli && <MiniAddCliente nombreInicial={f.cliente} onAdd={cli => { onAddCliente(cli); setF(prev => ({ ...prev, cliente: cli.nombre, rut: cli.rut || '', giro: cli.giro || '', direccion: cli.direccion || '', comuna: cli.comuna || '' })); setAddCli(false) }} onCancel={() => setAddCli(false)} />}
+        </div>
         <label style={lab}>R.U.T<input style={inp} value={f.rut} onChange={e => set('rut', e.target.value)} /></label>
         <label style={lab}>Giro<input style={inp} value={f.giro} onChange={e => set('giro', e.target.value)} /></label>
         <label style={lab}>Dirección<input style={inp} value={f.direccion} onChange={e => set('direccion', e.target.value)} /></label>
@@ -234,7 +300,7 @@ function FormCotizacion({ inicial, onGuardar, onCancelar }) {
   )
 }
 
-export default function CotizacionesModule({ cotizaciones = [], setCotizaciones = () => {}, ots = [], setOts = () => {} }) {
+export default function CotizacionesModule({ cotizaciones = [], setCotizaciones = () => {}, ots = [], setOts = () => {}, clientes = [], onAddCliente = () => {} }) {
   const [creando, setCreando] = useState(false)
   const [editId, setEditId] = useState(null)
   const [busca, setBusca] = useState('')
@@ -265,11 +331,14 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
     window.alert('Cotización aprobada. Se generó la ' + numeroOT + ' en el módulo Órdenes de Trabajo. Ya puedes descargar la OT (sin valores).')
   }
 
+  const updateCot = (id, cambios) => setCotizaciones(cotizaciones.map(x => x.id === id ? { ...x, ...cambios } : x))
+  const setEstadoCot = (c, nuevo) => { if (nuevo === 'Aprobada' && c.estado !== 'Aprobada') aprobar(c); else updateCot(c.id, { estado: nuevo }) }
+
   const mostradas = cotizaciones.filter(c => !busca || (String(c.folio) + ' ' + (c.cliente || '')).toLowerCase().includes(busca.toLowerCase()))
 
   if (creando || editId) {
     const inicial = editId ? cotizaciones.find(c => c.id === editId) : nuevaCot(maxFolio + 1)
-    return <FormCotizacion inicial={inicial} onGuardar={guardar} onCancelar={() => { setCreando(false); setEditId(null) }} />
+    return <FormCotizacion inicial={inicial} onGuardar={guardar} onCancelar={() => { setCreando(false); setEditId(null) }} clientes={clientes} onAddCliente={onAddCliente} />
   }
 
   return (
@@ -296,13 +365,18 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
                   <td style={{ padding: '8px 10px', color: C.gris }}>{c.area}</td>
                   <td style={{ padding: '8px 10px', color: C.gris }}>{c.fecha}</td>
                   <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600 }}>{clp(t.total)}</td>
-                  <td style={{ padding: '8px 10px' }}><span style={{ background: c.estado === 'Aprobada' ? '#E7F2EA' : '#F9E9DE', color: c.estado === 'Aprobada' ? C.verde : '#8C4519', padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>{c.estado}</span></td>
+                  <td style={{ padding: '6px 10px', minWidth: 170 }}>
+                    {(() => { const [bg, fg] = colorEstadoCot(c.estado); return (
+                      <select value={c.estado} onChange={e => setEstadoCot(c, e.target.value)} style={{ border: 'none', background: bg, color: fg, padding: '4px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer', maxWidth: 195 }}>
+                        {ESTADOS_COT.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    ) })()}
+                    {c.estado === 'Otro' && <input value={c.estadoOtro || ''} onChange={e => updateCot(c.id, { estadoOtro: e.target.value })} placeholder="Especificar…" style={{ ...inp, marginTop: 4, width: '100%', padding: '5px 7px' }} />}
+                  </td>
                   <td style={{ padding: '6px 10px' }}>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <button onClick={() => descargarCotizacionPDF(c)} title="Descargar cotización PDF" style={{ background: C.carbon, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 4 }}><Download size={12} /> Cotización</button>
-                      {c.estado === 'Aprobada'
-                        ? <button onClick={() => descargarOTPDF(c)} title="Descargar OT sin valores" style={{ background: C.azul, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 4 }}><Download size={12} /> OT (sin valores)</button>
-                        : <button onClick={() => aprobar(c)} title="Aprobar y generar OT" style={{ background: C.verde, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle2 size={12} /> Aprobar</button>}
+                      {c.estado === 'Aprobada' && <button onClick={() => descargarOTPDF(c)} title="Descargar OT sin valores" style={{ background: C.azul, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 4 }}><Download size={12} /> OT (sin valores)</button>}
                       <button onClick={() => setEditId(c.id)} title="Editar" style={{ background: 'none', border: '1px solid #CBD2D6', padding: '5px 8px', cursor: 'pointer', fontSize: 11.5 }}><FileText size={12} /></button>
                       <button onClick={() => eliminar(c.id)} title="Eliminar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
                     </div>
