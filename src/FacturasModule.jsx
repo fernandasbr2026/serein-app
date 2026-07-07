@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react'
 import { Plus, Trash2, Receipt, Upload, Search } from 'lucide-react'
 import * as XLSX from 'xlsx'
-import { calcularPerdidaFactoring } from './ParametrosModule.jsx'
+import { calcularPerdidaFactoring, perdidaFactoringFactura } from './ParametrosModule.jsx'
 export { FACTURAS_SEED } from './facturas-data.js'
 const CONDICIONES_DIAS = [{ label: '30 días', dias: 30 }, { label: '45 días', dias: 45 }, { label: '60 días', dias: 60 }, { label: '90 días', dias: 90 }]
 const norm = s => (s || '').toString().toLowerCase()
@@ -93,6 +93,8 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
   const totalComision = mostradas.reduce((a, x) => a + comisionDe(x), 0)
   const totalNeto = mostradas.reduce((a, x) => a + (x.neto || 0), 0)
   const totalPPM = Math.round(totalNeto * (ppmPct / 100))
+  const totalPerdFact = mostradas.reduce((a, x) => a + perdidaFactoringFactura(x, params), 0)
+  const ventasMario = mostradas.filter(x => x.vendedor === 'Mario').reduce((a, x) => a + (x.neto || 0), 0)
 
   return (
     <div style={{ marginTop: 16 }}>
@@ -122,6 +124,25 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
             <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.xls" style={{ display: 'none' }} onChange={e => { const file = e.target.files[0]; if (file) importarExcel(file); e.target.value = '' }} />
             <button onClick={() => fileRef.current && fileRef.current.click()} style={{ background: C.carbon, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Upload size={13} /> Importar Excel</button>
             {!creando && <button onClick={() => setCreando(true)} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Nueva factura</button>}
+          </div>
+        </div>
+
+        <div style={{ padding: '10px 16px', display: 'flex', gap: 26, flexWrap: 'wrap', borderBottom: '1px solid #EEE9DF', background: '#FAF7F3' }}>
+          <div>
+            <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>Ventas Mario (neto)</div>
+            <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: C.carbon }}>{clp(ventasMario)}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>Comisión Mario ({comisionPct}%)</div>
+            <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: totalComision > 0 ? C.rojo : C.gris }}>{clp(totalComision)}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>Pérdida factoring</div>
+            <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: totalPerdFact > 0 ? C.rojo : C.gris }}>{clp(totalPerdFact)}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>PPM ({ppmPct}%)</div>
+            <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: C.teal }}>{clp(totalPPM)}</div>
           </div>
         </div>
 

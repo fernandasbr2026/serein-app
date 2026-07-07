@@ -13,7 +13,7 @@ import CotizadorModule from './CotizadorModule.jsx'
 import ProduccionModule, { AVANCES_SEED } from './ProduccionModule.jsx'
 import ComprasOperativasModule, { COMPRAS_OP_SEED, CONFIG_COMPRAS_DEFAULT } from './ComprasOperativasModule.jsx'
 import ProveedoresPagosModule, { PP_SEED } from './ProveedoresPagosModule.jsx'
-import ParametrosModule, { PARAMS_SEED } from './ParametrosModule.jsx'
+import ParametrosModule, { PARAMS_SEED, perdidaFactoringFactura } from './ParametrosModule.jsx'
 import ClientesModule, { CLIENTES_SEED } from './ClientesModule.jsx'
 import FacturasModule, { FACTURAS_SEED } from './FacturasModule.jsx'
 import { MO_SEED } from './ManoObraModule.jsx'
@@ -164,7 +164,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const kVenta = esTODAS ? areasFact.reduce((s, a) => s + facNeto(a), 0) : (esAreaFact ? facNeto(areaSel) : vista.venta)
   const kCobrado = esTODAS ? areasFact.reduce((s, a) => s + facCobN(a), 0) : (esAreaFact ? facCobN(areaSel) : vista.cobrado)
   const kPend = (esTODAS || esAreaFact) ? (kVenta - kCobrado) : vista.pendiente
-  const kPerd = vista.perdidaFact
+  const perdFactArea = a => (facturas[a] || []).reduce((s, f) => s + perdidaFactoringFactura(f, params), 0)
+  const kPerd = esTODAS ? areasFact.reduce((s, a) => s + perdFactArea(a), 0) : (esAreaFact ? perdFactArea(areaSel) : vista.perdidaFact)
   const kNFact = esTODAS ? areasFact.reduce((s, a) => s + facCount(a), 0) : (esAreaFact ? facCount(areaSel) : vista.nFacturas)
   const ventaAreaLive = areasFact.map(a => ({ area: a, venta: facNeto(a) }))
 

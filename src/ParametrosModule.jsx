@@ -35,6 +35,18 @@ export function calcularPerdidaFactoring(baseTotal, dias, diasMora, f) {
   return { interes: Math.round(interes), mora: Math.round(mora), costoOp, total: Math.round(interes + mora + costoOp) }
 }
 
+// Pérdida de factoring de UNA factura (según su medio/estado, banco de factoring y plazo)
+export function perdidaFactoringFactura(fac, params) {
+  if (!fac) return 0
+  const esFact = fac.estado === 'Factoring' || /factor/i.test(fac.medio || '')
+  if (!esFact) return 0
+  const facs = (params && params.factoring) || []
+  const nb = (fac.banco || '').toLowerCase()
+  const fc = facs.find(x => nb && nb.includes((x.nombre || '').toLowerCase().split(' ')[0])) || facs[0]
+  if (!fc) return 0
+  return calcularPerdidaFactoring(fac.monto || 0, fac.plazo || fac.dias || 30, fac.diasMora || 0, fc).total
+}
+
 function SeccionFactoring({ params, setParams }) {
   const lista = params.factoring || []
   const [nuevo, setNuevo] = useState({ nombre: '', tasa: '', tasaMora: '', costoOp: '' })

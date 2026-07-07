@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { ChevronDown, ChevronUp, Target, Receipt, Hammer, ShoppingCart, Pencil, Plus, Trash2, X, AlertTriangle, LayoutGrid, Table2 } from 'lucide-react'
 import { PROYECTOS, CC_DEFS } from './proyectos-data.js'
-import { calcularPerdidaFactoring } from './ParametrosModule.jsx'
+import { calcularPerdidaFactoring, perdidaFactoringFactura } from './ParametrosModule.jsx'
 import FacturasModule from './FacturasModule.jsx'
 // Engancha una factura de Proyectos a su OT comparando los números (≥3 dígitos) de OT/OC
 const _toks = x => (String(x || '').match(/\d{3,}/g) || [])
@@ -492,7 +492,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
   const totPorFac = proyectos.reduce((a, p) => a + porFacturarDe(p), 0)
   const totCostoEst = proyectos.reduce((a, p) => a + costoEstDe(p), 0)
   const totCostoReal = proyectos.reduce((a, p) => a + comprasDe(p), 0)
-  const totPerdidaFact = proyectos.reduce((a, p) => a + perdidaFactDe(p), 0)
+  const totPerdidaFact = facturasProy.reduce((a, f) => a + perdidaFactoringFactura(f, params), 0)
   const kpi = (label, valor, color) => (
     <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 14, flex: '1 1 140px' }}>
       <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{label}</div>
