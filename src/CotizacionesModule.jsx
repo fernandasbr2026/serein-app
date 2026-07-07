@@ -361,6 +361,7 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
   const setEstadoCot = (c, nuevo) => { if (nuevo === 'Aprobada' && c.estado !== 'Aprobada') aprobar(c); else updateCot(c.id, { estado: nuevo }) }
 
   const mostradas = cotizaciones.filter(c => !busca || (String(c.folio) + ' ' + (c.cliente || '')).toLowerCase().includes(busca.toLowerCase()))
+    .sort((a, b) => (parseInt(String(b.folio).replace(/\D/g, ''), 10) || 0) - (parseInt(String(a.folio).replace(/\D/g, ''), 10) || 0))
 
   if (creando || editId) {
     const inicial = editId ? cotizaciones.find(c => c.id === editId) : nuevaCot(maxFolio + 1)

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Plus, Trash2, Search, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Trash2, Search, ChevronDown, ChevronUp, Download } from 'lucide-react'
 
 // ============================================================
 // MÓDULO: Órdenes de Compra a PROVEEDORES (emitidas por Serein)
@@ -19,9 +19,54 @@ const ESTADOS_PAGO = ['Pendiente', 'Parcialmente pagada', 'Pagada', 'Vencida', '
 const AREAS = ['Santa Rosa', 'Istria', 'Proyectos', 'Producción / Planta', 'General empresa']
 
 // ---- Cálculos (compatibles con las OC importadas que sólo traían "monto") ----
-export const ocNeto = oc => (oc.neto != null && oc.neto !== '') ? num(oc.neto) : Math.round(num(oc.monto) / 1.19)
+const itemTotalOC = it => Math.max(0, Math.round(num(it.cantidad) * num(it.precio) - num(it.descuento)))
+export const ocNeto = oc => (oc.items && oc.items.length) ? oc.items.reduce((a, it) => a + itemTotalOC(it), 0) : ((oc.neto != null && oc.neto !== '') ? num(oc.neto) : Math.round(num(oc.monto) / 1.19))
 export const ocIva = oc => Math.round(ocNeto(oc) * 0.19)
 export const ocTotal = oc => ocNeto(oc) + ocIva(oc)
+
+// ---- Documento OC en PDF (formato SEREIN) ----
+const EMPRESA_OC = { nombre: 'SERVICIOS REVESTIMIENTOS INDUSTRIALES SPA', rut: '76.860.656-0', giro: 'Revestimientos Industriales y habitacionales', dir: 'Santa Rosa 70, RENCA', tel: '56999369503', email: 'administracion@sereinspa.com' }
+function htmlOC(oc) {
+  const items = (oc.items && oc.items.length) ? oc.items : [{ codigo: oc.categoria === 'Pintura' ? '' : '', producto: oc.detalle || oc.categoria || 'Compra a proveedor', cantidad: 1, precio: ocNeto(oc), comentario: '' }]
+  const filas = items.map(it => `<tr><td>${it.codigo || ''}</td><td><b>${it.producto || ''}</b>${it.comentario ? '<br><span style="color:#777">Comentario: ' + it.comentario + '</span>' : ''}</td><td class="r">${num(it.cantidad) || 1}</td><td class="r">${clp(it.precio)}</td><td class="r">$0</td><td class="r">${clp(itemTotalOC(it) || it.precio)}</td></tr>`).join('')
+  const cond = oc.condicionPago || ('CRÉDITO ' + (num(oc.plazo) || 30) + ' DÍAS')
+  const est = `body{font-family:Arial,Helvetica,sans-serif;color:#161616;font-size:12px;margin:24px}
+  .head{display:flex;justify-content:space-between;border-bottom:2px solid #161616;padding-bottom:8px}
+  .emp b{font-size:13px}.emp div{color:#333;line-height:1.4}
+  .doc{text-align:right}.doc .t{font-size:20px;font-weight:bold;color:#A8501F}.doc .f{font-size:14px;font-weight:bold}
+  .cli td{padding:3px 8px;font-size:11px;vertical-align:top}.cli .lbl{color:#7A8288}
+  table.items{width:100%;border-collapse:collapse;margin-top:10px}
+  table.items th{background:#161616;color:#fff;padding:6px;font-size:10px;text-align:left}
+  table.items td{border-bottom:1px solid #ddd;padding:6px;font-size:11px;vertical-align:top}
+  table.items .r{text-align:right}
+  .tot{margin-left:auto;margin-top:10px}.tot td{padding:3px 10px;font-size:12px}.tot .lbl{text-align:right;color:#7A8288}.tot .big{font-weight:bold;font-size:14px}
+  .firma{margin-top:40px;border-top:1px solid #ccc;padding-top:10px;font-size:11px;color:#555}`
+  return `<!doctype html><html><head><meta charset="utf-8"><title>OC ${oc.numero}</title><style>${est}</style></head><body>
+    <div class="head">
+      <div class="emp"><b>${EMPRESA_OC.nombre}</b><div>R.U.T: ${EMPRESA_OC.rut}</div><div>${EMPRESA_OC.giro}</div><div>${EMPRESA_OC.dir}</div><div>Teléfono: ${EMPRESA_OC.tel}</div><div>Email: ${EMPRESA_OC.email}</div></div>
+      <div class="doc"><div class="t">Orden de Compra</div><div class="f">Folio N° ${oc.numero || ''}</div></div>
+    </div>
+    <table class="cli"><tbody>
+      <tr><td><span class="lbl">Señor(es):</span> ${oc.proveedor || ''}</td><td><span class="lbl">R.U.T:</span> ${oc.rut || ''}</td></tr>
+      <tr><td><span class="lbl">Dirección:</span> ${oc.direccion || ''}</td><td><span class="lbl">Emisión:</span> ${oc.fecha || ''}</td></tr>
+      <tr><td><span class="lbl">Despacho:</span> ${oc.despacho || 'Santa Rosa 70, Lampa'}</td><td><span class="lbl">Vencimiento:</span> ${vencOC(oc)}</td></tr>
+      <tr><td><span class="lbl">Condición de pago:</span> ${cond}</td><td><span class="lbl">Centro de negocio:</span> ${oc.area || ''}</td></tr>
+    </tbody></table>
+    <table class="items"><thead><tr><th>Código</th><th>Producto o servicio</th><th>Cantidad</th><th>Precio</th><th>Rec/Desc</th><th>Total</th></tr></thead><tbody>${filas}</tbody></table>
+    <table class="tot"><tr><td class="lbl">Neto:</td><td class="r">${clp(ocNeto(oc))}</td></tr>
+      <tr><td class="lbl">Exento:</td><td class="r">$0</td></tr>
+      <tr><td class="lbl">IVA:</td><td class="r">${clp(ocIva(oc))}</td></tr>
+      <tr><td class="lbl big">Total:</td><td class="r big">${clp(ocTotal(oc))}</td></tr></table>
+    ${oc.obs ? '<div style="margin-top:8px;font-size:11px"><b>Comentario:</b> ' + oc.obs + '</div>' : ''}
+    <div class="firma">Recepción conforme — Nombre: __________________  R.U.T: ____________  Fecha: __________  Firma: __________</div>
+  </body></html>`
+}
+export function descargarOCPDF(oc) {
+  const w = window.open('', '_blank')
+  if (!w) { window.alert('Habilita las ventanas emergentes para descargar la OC.'); return }
+  w.document.write(htmlOC(oc)); w.document.close()
+  setTimeout(() => { w.focus(); w.print() }, 400)
+}
 export const ocPorPagar = oc => !['Pagada', 'Anulada'].includes(oc.estadoPago) && ocTotal(oc) > 0
 export const vencOC = oc => oc.vencimiento || (oc.fecha ? sumarDias(oc.fecha, num(oc.plazo)) : '')
 // Costo neto que una OT recibe desde las OC (según asignación %)
@@ -42,6 +87,10 @@ function FilaOC({ oc, otsDisponibles, upd, onDelete }) {
   const addAsig = () => upd(oc.id, { asignaciones: [...asigs, { ot: otsDisponibles[0] || '', pct: asigs.length === 0 ? 100 : 0 }] })
   const updAsig = (i, k, val) => upd(oc.id, { asignaciones: asigs.map((x, j) => j === i ? { ...x, [k]: val } : x) })
   const delAsig = i => upd(oc.id, { asignaciones: asigs.filter((_, j) => j !== i) })
+  const items = oc.items || []
+  const addItem = () => upd(oc.id, { items: [...items, { codigo: '', producto: '', cantidad: 1, precio: 0, comentario: '' }] })
+  const updItem = (i, k, val) => upd(oc.id, { items: items.map((x, j) => j === i ? { ...x, [k]: val } : x) })
+  const delItem = i => upd(oc.id, { items: items.filter((_, j) => j !== i) })
   return (
     <>
       <tr style={{ borderBottom: '1px solid #EEE9DF', background: vencido ? '#FDF3F0' : 'transparent' }}>
@@ -50,14 +99,15 @@ function FilaOC({ oc, otsDisponibles, upd, onDelete }) {
         <td style={{ padding: '4px 6px' }}><input value={oc.rut || ''} onChange={e => upd(oc.id, { rut: e.target.value })} style={{ ...inp, width: 100, padding: '5px 6px' }} /></td>
         <td style={{ padding: '4px 6px' }}><select value={oc.categoria || ''} onChange={e => upd(oc.id, { categoria: e.target.value })} style={{ ...inp, width: 120, padding: '5px 6px' }}><option value="">—</option>{CATEGORIAS.map(x => <option key={x}>{x}</option>)}</select></td>
         <td style={{ padding: '4px 6px' }}><input type="date" value={oc.fecha || ''} onChange={e => upd(oc.id, { fecha: e.target.value })} style={{ ...inp, width: 132, padding: '5px 6px' }} /></td>
-        <td style={{ padding: '4px 6px', textAlign: 'right' }}><input value={ocNeto(oc)} onChange={e => upd(oc.id, { neto: num(e.target.value), monto: undefined })} style={{ ...inp, width: 100, padding: '5px 6px', textAlign: 'right', fontWeight: 600 }} /></td>
+        <td style={{ padding: '4px 6px', textAlign: 'right' }}><input value={ocNeto(oc)} readOnly={items.length > 0} title={items.length > 0 ? 'Se calcula desde los ítems' : ''} onChange={e => upd(oc.id, { neto: num(e.target.value), monto: undefined })} style={{ ...inp, width: 100, padding: '5px 6px', textAlign: 'right', fontWeight: 600, background: items.length > 0 ? '#F1EDE6' : '#fff' }} /></td>
         <td style={{ padding: '4px 6px', textAlign: 'right', color: C.gris, whiteSpace: 'nowrap' }}>{clp(ocIva(oc))}</td>
         <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }}>{clp(ocTotal(oc))}</td>
         <td style={{ padding: '4px 6px' }}><input value={oc.plazo != null ? oc.plazo : 30} onChange={e => upd(oc.id, { plazo: num(e.target.value), vencimiento: sumarDias(oc.fecha, num(e.target.value)) })} style={{ ...inp, width: 50, padding: '5px 6px', textAlign: 'right' }} /></td>
         <td style={{ padding: '4px 6px' }}><input type="date" value={v} onChange={e => upd(oc.id, { vencimiento: e.target.value })} style={{ ...inp, width: 132, padding: '5px 6px', color: vencido ? C.rojo : C.carbon }} /></td>
         <td style={{ padding: '4px 6px' }}><select value={oc.estadoPago} onChange={e => upd(oc.id, { estadoPago: e.target.value })} style={{ border: 'none', background: fondoEstado(oc.estadoPago), color: colorEstado(oc.estadoPago), padding: '4px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{ESTADOS_PAGO.map(x => <option key={x}>{x}</option>)}</select></td>
         <td style={{ padding: '4px 4px', whiteSpace: 'nowrap', textAlign: 'right' }}>
-          <button onClick={() => setAbierta(!abierta)} title="Detalle y asignación a OT" style={{ background: 'none', border: '1px solid #CBD2D6', cursor: 'pointer', padding: '3px 6px', marginRight: 4 }}>{abierta ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</button>
+          <button onClick={() => descargarOCPDF(oc)} title="Descargar OC (PDF)" style={{ background: C.azul, color: '#fff', border: 'none', cursor: 'pointer', padding: '4px 7px', marginRight: 4 }}><Download size={13} /></button>
+          <button onClick={() => setAbierta(!abierta)} title="Detalle, ítems y asignación a OT" style={{ background: 'none', border: '1px solid #CBD2D6', cursor: 'pointer', padding: '3px 6px', marginRight: 4 }}>{abierta ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</button>
           <button onClick={() => window.confirm('¿Eliminar esta OC?') && onDelete(oc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
         </td>
       </tr>
@@ -68,8 +118,32 @@ function FilaOC({ oc, otsDisponibles, upd, onDelete }) {
               <label style={{ fontSize: 11, color: C.gris }}>Área principal<select value={oc.area || ''} onChange={e => upd(oc.id, { area: e.target.value })} style={{ ...inp, width: '100%', marginTop: 3 }}><option value="">—</option>{AREAS.map(a => <option key={a}>{a}</option>)}</select></label>
               <label style={{ fontSize: 11, color: C.gris }}>Detalle<input value={oc.detalle || ''} onChange={e => upd(oc.id, { detalle: e.target.value })} placeholder="Detalle de la compra" style={{ ...inp, width: '100%', marginTop: 3 }} /></label>
               <label style={{ fontSize: 11, color: C.gris }}>Adjunto (nombre / enlace)<input value={oc.adjunto || ''} onChange={e => upd(oc.id, { adjunto: e.target.value })} placeholder="OC_11375.pdf" style={{ ...inp, width: '100%', marginTop: 3 }} /></label>
+              <label style={{ fontSize: 11, color: C.gris }}>Dirección proveedor<input value={oc.direccion || ''} onChange={e => upd(oc.id, { direccion: e.target.value })} style={{ ...inp, width: '100%', marginTop: 3 }} /></label>
+              <label style={{ fontSize: 11, color: C.gris }}>Lugar de despacho<input value={oc.despacho || ''} onChange={e => upd(oc.id, { despacho: e.target.value })} placeholder="Santa Rosa 70, Lampa" style={{ ...inp, width: '100%', marginTop: 3 }} /></label>
+              <label style={{ fontSize: 11, color: C.gris }}>Adjunto (nombre / enlace)<input value={oc.adjunto || ''} onChange={e => upd(oc.id, { adjunto: e.target.value })} placeholder="OC_11375.pdf" style={{ ...inp, width: '100%', marginTop: 3 }} /></label>
               <label style={{ fontSize: 11, color: C.gris }}>Observaciones<input value={oc.obs || ''} onChange={e => upd(oc.id, { obs: e.target.value })} style={{ ...inp, width: '100%', marginTop: 3 }} /></label>
             </div>
+
+            <div style={{ fontSize: 11.5, fontWeight: 600, color: C.gris, textTransform: 'uppercase', margin: '4px 0 6px' }}>Ítems de la OC (aparecen en el PDF; si agregas ítems, el neto se calcula solo)</div>
+            {items.length > 0 && (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 6 }}>
+                <thead><tr style={{ borderBottom: '1px solid #CBD2D6' }}>{['Código', 'Producto o servicio', 'Cant', 'Precio', 'Comentario', ''].map((h, i) => <th key={i} style={{ textAlign: ['Cant', 'Precio'].includes(h) ? 'right' : 'left', padding: '3px 6px', fontSize: 10, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {items.map((it, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                      <td style={{ padding: '2px 4px' }}><input value={it.codigo} onChange={e => updItem(i, 'codigo', e.target.value)} style={{ ...inp, width: 60, padding: '5px 6px' }} /></td>
+                      <td style={{ padding: '2px 4px' }}><input value={it.producto} onChange={e => updItem(i, 'producto', e.target.value)} style={{ ...inp, width: 210, padding: '5px 6px' }} /></td>
+                      <td style={{ padding: '2px 4px', textAlign: 'right' }}><input value={it.cantidad} onChange={e => updItem(i, 'cantidad', num(e.target.value))} style={{ ...inp, width: 55, padding: '5px 6px', textAlign: 'right' }} /></td>
+                      <td style={{ padding: '2px 4px', textAlign: 'right' }}><input value={it.precio} onChange={e => updItem(i, 'precio', num(e.target.value))} style={{ ...inp, width: 90, padding: '5px 6px', textAlign: 'right' }} /></td>
+                      <td style={{ padding: '2px 4px' }}><input value={it.comentario} onChange={e => updItem(i, 'comentario', e.target.value)} placeholder="Ej: RAL 5005" style={{ ...inp, width: 130, padding: '5px 6px' }} /></td>
+                      <td style={{ padding: '2px 2px', textAlign: 'right' }}><button onClick={() => delItem(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <button onClick={addItem} style={{ background: 'none', border: '1px dashed #CBD2D6', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris, marginBottom: 12 }}>+ Agregar ítem</button>
+
             <div style={{ fontSize: 11.5, fontWeight: 600, color: C.gris, textTransform: 'uppercase', marginBottom: 6 }}>Asignación a OT (reparto del costo)</div>
             {asigs.map((x, i) => (
               <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
@@ -99,7 +173,8 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
   const setOcs = arr => setPp({ ...pp, ocs: arr })
   const upd = (id, cambios) => setOcs(ocs.map(o => o.id === id ? { ...o, ...cambios } : o))
   const eliminar = id => setOcs(ocs.filter(o => o.id !== id))
-  const agregar = () => setOcs([{ id: 'oc' + Date.now(), numero: '', proveedor: '', rut: '', categoria: 'Pintura', detalle: '', area: 'Santa Rosa', fecha: hoy(), neto: 0, plazo: 30, vencimiento: sumarDias(hoy(), 30), estadoPago: 'Pendiente', asignaciones: [], adjunto: '', obs: '' }, ...ocs])
+  const maxOC = ocs.reduce((m, o) => Math.max(m, parseInt(String(o.numero).replace(/\D/g, ''), 10) || 0), 517)
+  const agregar = () => setOcs([{ id: 'oc' + Date.now(), numero: String(maxOC + 1), proveedor: '', rut: '', categoria: 'Pintura', detalle: '', area: 'Santa Rosa', fecha: hoy(), neto: 0, plazo: 30, vencimiento: sumarDias(hoy(), 30), estadoPago: 'Pendiente', asignaciones: [], items: [], direccion: '', despacho: '', adjunto: '', obs: '' }, ...ocs])
   const [busca, setBusca] = useState('')
   const [fEst, setFEst] = useState('')
   const mostradas = ocs.filter(o =>
