@@ -1,48 +1,66 @@
-import React, { useState, useMemo } from 'react'
-import { Plus, Trash2, CalendarDays, Clock3, Users, Wallet, History, CheckCircle2, EyeOff, Download } from 'lucide-react'
+import React, { useState, useMemo, useEffect } from 'react'
+import { Plus, Trash2, CalendarDays, Clock3, Users, Wallet, Table2, EyeOff, Download, FileText, FileSpreadsheet } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 const C = { naranja: '#D2642F', carbon: '#161616', verde: '#3D7A4E', rojo: '#B5432E', gris: '#7A8288' }
-const clp = n => '$' + Math.round(n).toLocaleString('es-CL')
+const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
 const hoy = () => new Date().toISOString().slice(0, 10)
 const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
 
-// ================= DATOS DE PRUEBA =================
+// ============================================================
+// NÓMINA / ASISTENCIA · SEREIN 2026
+// - Todos los datos son editables; las columnas de fórmula se
+//   calculan solas y no se pueden escribir.
+// - Fórmulas (verificadas con la planilla real):
+//     Valor día bruto        = (Sueldo + Imposiciones) / 30
+//     Valor día sin imposic.  = Sueldo / 30
+//     Valor hora              = Valor día bruto / 9
+//     Valor hora extra        = Valor hora × 1,5
+//     Valor Sábado y Domingo  = se ingresan a mano
+// - Grupos: Istria / Planta / Administrativos
+// - SOLO GERENCIA ve valores. Los supervisores solo ven la
+//   lista de trabajadores (nombre, cargo, grupo, nacionalidad).
+// ============================================================
+
+export const MO_VER = 'nomina-real-2026-07'
+export const GRUPOS = ['Istria', 'Planta', 'Administrativos']
+
+// Datos reales cargados desde la planilla (editables en pantalla).
+// Complete/ajuste los que falten directamente en la tabla de Nómina.
 export const MO_SEED = {
-  cargos: [
-    // Cada cargo guarda su historial de valores: el último activo es el vigente
-    { id: 'c1', nombre: 'Maestro', valores: [{ desde: '2026-01-01', diario: 45000, hora: 5625, hex: 8400, activo: true }] },
-    { id: 'c2', nombre: 'Ayudante', valores: [{ desde: '2026-01-01', diario: 32000, hora: 4000, hex: 6000, activo: true }] },
-    { id: 'c3', nombre: 'Pintor', valores: [{ desde: '2026-01-01', diario: 40000, hora: 5000, hex: 7500, activo: true }] },
-    { id: 'c4', nombre: 'Granallador', valores: [{ desde: '2026-01-01', diario: 42000, hora: 5250, hex: 7900, activo: true }] },
-    { id: 'c5', nombre: 'Supervisor', valores: [{ desde: '2026-01-01', diario: 55000, hora: 6875, hex: 10300, activo: true }] },
-    { id: 'c6', nombre: 'Operador', valores: [{ desde: '2026-01-01', diario: 38000, hora: 4750, hex: 7100, activo: true }] },
-  ],
+  ver: MO_VER,
+  cargos: [], // se conserva por compatibilidad; ya no se usa
   trabajadores: [
-    { id: 't1', nombre: 'Juan Pérez', cargoId: 'c1', valorDiarioEspecifico: null },
-    { id: 't2', nombre: 'Pedro Soto', cargoId: 'c2', valorDiarioEspecifico: null },
-    { id: 't3', nombre: 'Luis González', cargoId: 'c3', valorDiarioEspecifico: null },
-    { id: 't4', nombre: 'Carlos Muñoz', cargoId: 'c2', valorDiarioEspecifico: null },
-    { id: 't5', nombre: 'Miguel Rojas', cargoId: 'c4', valorDiarioEspecifico: null },
+    { id: 't1', grupo: 'Istria', nombre: 'Daniel Matos', cargo: 'Supervisor', nacionalidad: 'Chilena', sueldo: 800000, imposiciones: 270981, sabado: 60000, domingo: 0 },
+    { id: 't2', grupo: 'Istria', nombre: 'Dario Daza', cargo: 'Maestro Granallador', nacionalidad: 'Chilena', sueldo: 900000, imposiciones: 207675, sabado: 60000, domingo: 0 },
+    { id: 't3', grupo: 'Administrativos', nombre: 'Fernanda Soto', cargo: 'Gerente administrativa', nacionalidad: 'Chilena', sueldo: 2000000, imposiciones: 0, sabado: 0, domingo: 0 },
+    { id: 't4', grupo: 'Administrativos', nombre: 'Mario Vidal', cargo: 'Gerente de Proyectos', nacionalidad: 'Chilena', sueldo: 3200000, imposiciones: 0, sabado: 0, domingo: 0 },
+    { id: 't5', grupo: 'Administrativos', nombre: 'Carolina Marillanca', cargo: 'Gerente comercial', nacionalidad: 'Chilena', sueldo: 3200000, imposiciones: 0, sabado: 0, domingo: 0 },
   ],
-  asistencias: [
-    {
-      id: 'a1', fecha: '2026-07-06', supervisor: 'supervisor@serein.cl', area: 'Santa Rosa', jornada: 'Completa',
-      trabajadorIds: ['t1', 't2', 't4'], ots: ['OT-2026-114', 'OT-2026-115'], obs: 'Granallado y primera mano',
-      // Snapshot congelado al guardar (solo lo ve gerencia):
-      costo: { total: 109000, detalle: [{ tId: 't1', valor: 45000 }, { tId: 't2', valor: 32000 }, { tId: 't4', valor: 32000 }], porOT: { 'OT-2026-114': 54500, 'OT-2026-115': 54500 } },
-    },
-  ],
-  horasExtras: [
-    { id: 'h1', fecha: '2026-07-06', trabajadorId: 't1', horas: 2, ot: 'OT-2026-114', obs: 'Término de retoque', costo: { valorHex: 8400, total: 16800 } },
-  ],
+  asistencias: [],
+  horasExtras: [],
 }
 
-// ================= HELPERS =================
-const vigente = cargo => cargo.valores.filter(v => v.activo).slice(-1)[0] || cargo.valores.slice(-1)[0]
-const valorDiarioDe = (t, cargos) => t.valorDiarioEspecifico ?? vigente(cargos.find(c => c.id === t.cargoId))?.diario ?? 0
-const valorHexDe = (t, cargos) => vigente(cargos.find(c => c.id === t.cargoId))?.hex ?? 0
+// ================= FÓRMULAS =================
+export function calc(t) {
+  const s = num(t.sueldo), imp = num(t.imposiciones)
+  const diaBrutoRaw = (s + imp) / 30
+  const diaSinImpRaw = s / 30
+  const horaRaw = diaBrutoRaw / 9
+  const hexRaw = horaRaw * 1.5
+  return {
+    diaBruto: Math.round(diaBrutoRaw),
+    diaSinImp: Math.round(diaSinImpRaw),
+    hora: Math.round(horaRaw),
+    horaExtra: Math.round(hexRaw),
+    sabado: num(t.sabado),
+    domingo: num(t.domingo),
+  }
+}
+const valorDiarioDe = t => calc(t).diaBruto
+const valorHexDe = t => calc(t).horaExtra
+const cargoDe = t => t.cargo || ''
 
 function Aviso({ hijo }) { return <div style={{ background: '#F9E9DE', color: '#8C4519', padding: '8px 12px', fontSize: 12, marginTop: 8 }}>{hijo}</div> }
 
@@ -63,17 +81,15 @@ function TabsInternos({ tabs, sel, onSel }) {
 function RegistroDiario({ mo, setMo, otsDisponibles, esGerencia, usuario, areas }) {
   const [f, setF] = useState({ fecha: hoy(), area: areas[0] || 'Santa Rosa', jornada: 'Completa', trabajadorIds: [], ots: [], otManual: '', obs: '' })
   const [guardado, setGuardado] = useState(false)
-
   const toggle = (lista, v) => lista.includes(v) ? lista.filter(x => x !== v) : [...lista, v]
 
   function guardar() {
     if (f.trabajadorIds.length === 0 || (f.ots.length === 0 && !f.otManual.trim())) return
     const ots = [...f.ots, ...f.otManual.split(',').map(s => s.trim()).filter(Boolean)]
     const factor = f.jornada === 'Media' ? 0.5 : 1
-    // Snapshot de costos con los valores vigentes HOY (queda congelado)
     const detalle = f.trabajadorIds.map(tid => {
       const t = mo.trabajadores.find(x => x.id === tid)
-      return { tId: tid, valor: Math.round(valorDiarioDe(t, mo.cargos) * factor) }
+      return { tId: tid, valor: Math.round(valorDiarioDe(t) * factor) }
     })
     const total = detalle.reduce((a, d) => a + d.valor, 0)
     const porOT = Object.fromEntries(ots.map(o => [o, Math.round(total / ots.length)]))
@@ -105,11 +121,10 @@ function RegistroDiario({ mo, setMo, otsDisponibles, esGerencia, usuario, areas 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
         {mo.trabajadores.map(t => {
           const sel = f.trabajadorIds.includes(t.id)
-          const cargo = mo.cargos.find(c => c.id === t.cargoId)?.nombre
           return (
             <button key={t.id} onClick={() => setF({ ...f, trabajadorIds: toggle(f.trabajadorIds, t.id) })}
               style={{ background: sel ? C.naranja : '#fff', color: sel ? '#fff' : C.carbon, border: `1px solid ${sel ? C.naranja : '#CBD2D6'}`, padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>
-              {t.nombre} ({cargo})
+              {t.nombre}{cargoDe(t) ? ` (${cargoDe(t)})` : ''}
             </button>
           )
         })}
@@ -139,7 +154,7 @@ function RegistroDiario({ mo, setMo, otsDisponibles, esGerencia, usuario, areas 
           style={{ background: C.naranja, color: '#fff', border: 'none', padding: '10px 22px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
           Guardar registro
         </button>
-        {guardado && <span style={{ color: C.verde, fontSize: 13, display: 'flex', alignItems: 'center', gap: 5 }}><CheckCircle2 size={15} /> Registro guardado correctamente</span>}
+        {guardado && <span style={{ color: C.verde, fontSize: 13 }}>✓ Registro guardado correctamente</span>}
       </div>
       {!esGerencia && <Aviso hijo={<><EyeOff size={12} style={{ verticalAlign: -2 }} /> Los valores y costos de mano de obra los calcula el sistema y solo son visibles para Gerencia.</>} />}
     </div>
@@ -156,7 +171,7 @@ function HorasExtras({ mo, setMo, otsDisponibles, esGerencia, usuario }) {
     const horas = parseFloat(f.horas)
     if (!ot || !horas || horas <= 0) return
     const t = mo.trabajadores.find(x => x.id === f.trabajadorId)
-    const valorHex = valorHexDe(t, mo.cargos)
+    const valorHex = valorHexDe(t)
     const reg = { id: 'h' + Date.now(), fecha: f.fecha, trabajadorId: f.trabajadorId, horas, ot, obs: f.obs, costo: { valorHex, total: Math.round(valorHex * horas) } }
     setMo({ ...mo, horasExtras: [reg, ...mo.horasExtras] })
     setF({ ...f, horas: '', ot: '', otManual: '', obs: '' })
@@ -193,7 +208,7 @@ function HorasExtras({ mo, setMo, otsDisponibles, esGerencia, usuario }) {
           style={{ background: C.naranja, color: '#fff', border: 'none', padding: '10px 22px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
           Guardar horas extras
         </button>
-        {guardado && <span style={{ color: C.verde, fontSize: 13, display: 'flex', alignItems: 'center', gap: 5 }}><CheckCircle2 size={15} /> Registro guardado correctamente</span>}
+        {guardado && <span style={{ color: C.verde, fontSize: 13 }}>✓ Registro guardado correctamente</span>}
       </div>
       {!esGerencia && <Aviso hijo="El costo de las horas extras se calcula internamente y se carga a la OT indicada. Solo Gerencia ve los montos." />}
     </div>
@@ -203,7 +218,7 @@ function HorasExtras({ mo, setMo, otsDisponibles, esGerencia, usuario }) {
 // ================= LISTA DE REGISTROS =================
 function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
   const visibles = esGerencia ? mo.asistencias : mo.asistencias.filter(a => a.supervisor === usuario)
-  const hexVisibles = esGerencia ? mo.horasExtras : mo.horasExtras
+  const hexVisibles = mo.horasExtras
   const nombreDe = id => mo.trabajadores.find(t => t.id === id)?.nombre || id
 
   return (
@@ -215,7 +230,7 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-                  {['Fecha', 'Área', 'Supervisor', 'Trabajadores', 'OT/OC', esGerencia ? 'Costo día' : null, esGerencia ? 'Por OT' : null, ''].filter(Boolean).map((h, i) => (
+                  {['Fecha', 'Área', 'Supervisor', 'Trabajadores', 'OT/OC', esGerencia ? 'Costo día' : null, esGerencia ? 'Por OT' : null, ''].filter(x => x !== null).map((h, i) => (
                     <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
                   ))}
                 </tr>
@@ -247,7 +262,7 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-                {['Fecha', 'Trabajador', 'Horas', 'OT/OC', esGerencia ? 'Costo' : null, ''].filter(Boolean).map((h, i) => (
+                {['Fecha', 'Trabajador', 'Horas', 'OT/OC', esGerencia ? 'Costo' : null, ''].filter(x => x !== null).map((h, i) => (
                   <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
                 ))}
               </tr>
@@ -269,6 +284,43 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
           </table>
         )}
       </div>
+    </div>
+  )
+}
+
+// ================= TRABAJADORES (VISTA SUPERVISOR, SIN VALORES) =================
+function TrabajadoresView({ mo }) {
+  return (
+    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}>
+      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Trabajadores</div>
+      <div style={{ fontSize: 12, color: C.gris, marginBottom: 12 }}>Listado del personal. Los valores de sueldo y asistencia solo son visibles para Gerencia.</div>
+      {GRUPOS.map(g => {
+        const lista = mo.trabajadores.filter(t => t.grupo === g)
+        if (lista.length === 0) return null
+        return (
+          <div key={g} style={{ marginBottom: 16 }}>
+            <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, color: C.naranja, textTransform: 'uppercase', marginBottom: 6 }}>{g}</div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                  {['Nombre', 'Cargo', 'Nacionalidad'].map(h => (
+                    <th key={h} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {lista.map(t => (
+                  <tr key={t.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                    <td style={{ padding: '8px', fontWeight: 500 }}>{t.nombre}</td>
+                    <td style={{ padding: '8px' }}>{t.cargo}</td>
+                    <td style={{ padding: '8px', color: C.gris }}>{t.nacionalidad}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -321,137 +373,73 @@ function CostosPorOT({ mo }) {
           </table>
         </div>
       )}
-      <Aviso hijo="Este total se puede volcar como línea de costo 'Mano de obra' dentro de cada OT del módulo Órdenes de Trabajo (siguiente iteración, cuando conectemos la base de datos)." />
     </div>
   )
 }
 
-// ================= VALORES DE MANO DE OBRA (GERENCIA) =================
-function ValoresMO({ mo, setMo }) {
-  const [nuevoCargo, setNuevoCargo] = useState('')
-  const [edits, setEdits] = useState({})
-  const [verHistorial, setVerHistorial] = useState(null)
+// ================= NÓMINA / VALORES (GERENCIA) =================
+function NominaMO({ mo, setMo }) {
+  const setTrab = (id, campo, valor) => setMo({ ...mo, trabajadores: mo.trabajadores.map(t => t.id === id ? { ...t, [campo]: valor } : t) })
+  const setNum = (id, campo, valor) => setTrab(id, campo, num(valor))
+  const addTrab = grupo => setMo({ ...mo, trabajadores: [...mo.trabajadores, { id: 't' + Date.now(), grupo, nombre: '', cargo: '', nacionalidad: 'Chilena', sueldo: 0, imposiciones: 0, sabado: 0, domingo: 0 }] })
+  const delTrab = id => window.confirm('¿Eliminar este trabajador?') && setMo({ ...mo, trabajadores: mo.trabajadores.filter(t => t.id !== id) })
 
-  function actualizarValores(cargoId) {
-    const e = edits[cargoId]
-    if (!e) return
-    setMo({
-      ...mo,
-      cargos: mo.cargos.map(c => {
-        if (c.id !== cargoId) return c
-        const actual = vigente(c)
-        const nuevo = {
-          desde: hoy(),
-          diario: e.diario !== undefined ? num(e.diario) : actual.diario,
-          hora: e.hora !== undefined ? num(e.hora) : actual.hora,
-          hex: e.hex !== undefined ? num(e.hex) : actual.hex,
-          activo: true,
-        }
-        // El valor anterior queda inactivo pero NO se borra (historial)
-        return { ...c, valores: [...c.valores.map(v => ({ ...v, activo: false })), nuevo] }
-      }),
-    })
-    setEdits({ ...edits, [cargoId]: undefined })
-  }
-
-  function crearCargo() {
-    if (!nuevoCargo.trim()) return
-    setMo({ ...mo, cargos: [...mo.cargos, { id: 'c' + Date.now(), nombre: nuevoCargo.trim(), valores: [{ desde: hoy(), diario: 0, hora: 0, hex: 0, activo: true }] }] })
-    setNuevoCargo('')
-  }
+  const auto = { color: C.gris, background: '#F7F4EE', fontStyle: 'italic', whiteSpace: 'nowrap' }
+  const th = t => <th style={{ textAlign: 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{t}</th>
 
   return (
     <div>
-      <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18, marginBottom: 14 }}>
-        <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Valores por cargo</div>
-        <div style={{ fontSize: 12, color: C.gris, marginBottom: 12 }}>Al guardar un cambio se crea un valor nuevo con vigencia desde hoy. Los registros antiguos conservan el valor que tenían al momento de guardarse.</div>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-                {['Cargo', 'Valor diario', 'Valor hora', 'Valor hora extra', 'Vigente desde', ''].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {mo.cargos.map(c => {
-                const v = vigente(c)
-                const e = edits[c.id] || {}
-                return (
-                  <React.Fragment key={c.id}>
-                    <tr style={{ borderBottom: '1px solid #EEE9DF' }}>
-                      <td style={{ padding: '8px', fontWeight: 600 }}>{c.nombre}</td>
-                      <td style={{ padding: '8px' }}><input value={e.diario ?? v.diario} onChange={ev => setEdits({ ...edits, [c.id]: { ...e, diario: ev.target.value } })} style={{ ...inp, width: 100 }} /></td>
-                      <td style={{ padding: '8px' }}><input value={e.hora ?? v.hora} onChange={ev => setEdits({ ...edits, [c.id]: { ...e, hora: ev.target.value } })} style={{ ...inp, width: 90 }} /></td>
-                      <td style={{ padding: '8px' }}><input value={e.hex ?? v.hex} onChange={ev => setEdits({ ...edits, [c.id]: { ...e, hex: ev.target.value } })} style={{ ...inp, width: 90 }} /></td>
-                      <td style={{ padding: '8px', color: C.gris, fontSize: 12 }}>{v.desde}</td>
-                      <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>
-                        <button onClick={() => actualizarValores(c.id)} disabled={!edits[c.id]}
-                          style={{ background: edits[c.id] ? C.naranja : '#E5E1DA', color: '#fff', border: 'none', padding: '6px 12px', cursor: edits[c.id] ? 'pointer' : 'default', fontSize: 12 }}>Guardar</button>
-                        <button onClick={() => setVerHistorial(verHistorial === c.id ? null : c.id)}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris, marginLeft: 6 }} title="Historial"><History size={15} /></button>
-                      </td>
-                    </tr>
-                    {verHistorial === c.id && c.valores.slice(0, -0).map((h, i) => (
-                      <tr key={i} style={{ background: '#FAF7F3', fontSize: 12, color: C.gris }}>
-                        <td style={{ padding: '4px 8px 4px 24px' }}>↳ histórico</td>
-                        <td style={{ padding: '4px 8px' }}>{clp(h.diario)}</td>
-                        <td style={{ padding: '4px 8px' }}>{clp(h.hora)}</td>
-                        <td style={{ padding: '4px 8px' }}>{clp(h.hex)}</td>
-                        <td style={{ padding: '4px 8px' }}>{h.desde}{h.activo ? ' · vigente' : ''}</td>
-                        <td></td>
+      <div style={{ background: '#F7F4EE', border: '1px solid #E2DED4', padding: '10px 14px', fontSize: 12.5, color: '#5A5148', marginBottom: 14 }}>
+        Todos los campos en blanco son editables. Las columnas en gris (día bruto, día sin imposiciones, hora, hora extra) se calculan solas:
+        <b> día bruto = (sueldo + imposiciones) ÷ 30</b>, <b>día s/imp = sueldo ÷ 30</b>, <b>hora = día bruto ÷ 9</b>, <b>hora extra = hora × 1,5</b>. Sábado y Domingo se ingresan a mano.
+      </div>
+      {GRUPOS.map(g => {
+        const lista = mo.trabajadores.filter(t => t.grupo === g)
+        return (
+          <div key={g} style={{ background: '#fff', border: '1px solid #E2DED4', padding: 16, marginBottom: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>{g} <span style={{ color: C.gris, fontWeight: 400 }}>· {lista.length}</span></span>
+              <button onClick={() => addTrab(g)} style={{ background: C.carbon, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Agregar trabajador</button>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                <thead>
+                  <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                    {th('Nombre')}{th('Cargo')}{th('Nacionalidad')}{th('Sueldo')}{th('Imposiciones')}{th('Día bruto')}{th('Día s/imp')}{th('Hora')}{th('Hora extra')}{th('Sábado')}{th('Domingo')}<th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lista.map(t => {
+                    const c = calc(t)
+                    return (
+                      <tr key={t.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                        <td style={{ padding: '4px 6px' }}><input value={t.nombre} onChange={e => setTrab(t.id, 'nombre', e.target.value)} style={{ ...inp, width: 150, fontWeight: 600 }} /></td>
+                        <td style={{ padding: '4px 6px' }}><input value={t.cargo} onChange={e => setTrab(t.id, 'cargo', e.target.value)} style={{ ...inp, width: 150 }} /></td>
+                        <td style={{ padding: '4px 6px' }}><input value={t.nacionalidad} onChange={e => setTrab(t.id, 'nacionalidad', e.target.value)} style={{ ...inp, width: 90 }} /></td>
+                        <td style={{ padding: '4px 6px' }}><input value={t.sueldo || ''} onChange={e => setNum(t.id, 'sueldo', e.target.value)} style={{ ...inp, width: 100, textAlign: 'right' }} /></td>
+                        <td style={{ padding: '4px 6px' }}><input value={t.imposiciones || ''} onChange={e => setNum(t.id, 'imposiciones', e.target.value)} style={{ ...inp, width: 100, textAlign: 'right' }} /></td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', ...auto }}>{clp(c.diaBruto)}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', ...auto }}>{clp(c.diaSinImp)}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', ...auto }}>{clp(c.hora)}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', ...auto }}>{clp(c.horaExtra)}</td>
+                        <td style={{ padding: '4px 6px' }}><input value={t.sabado || ''} onChange={e => setNum(t.id, 'sabado', e.target.value)} style={{ ...inp, width: 90, textAlign: 'right' }} /></td>
+                        <td style={{ padding: '4px 6px' }}><input value={t.domingo || ''} onChange={e => setNum(t.id, 'domingo', e.target.value)} style={{ ...inp, width: 90, textAlign: 'right' }} /></td>
+                        <td style={{ padding: '4px 4px', textAlign: 'right' }}><button onClick={() => delTrab(t.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button></td>
                       </tr>
-                    ))}
-                  </React.Fragment>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-          <input placeholder="Nuevo cargo (ej: Soldador)" value={nuevoCargo} onChange={e => setNuevoCargo(e.target.value)} style={{ ...inp, width: 220 }} />
-          <button onClick={crearCargo} style={{ background: C.carbon, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Crear cargo</button>
-        </div>
-      </div>
-
-      <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}>
-        <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Trabajadores y valores específicos</div>
-        <div style={{ fontSize: 12, color: C.gris, marginBottom: 12 }}>Si un trabajador tiene valor específico, ese prima sobre el de su cargo. Déjalo vacío para usar el valor del cargo.</div>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-              {['Trabajador', 'Cargo', 'Valor diario específico'].map(h => (
-                <th key={h} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {mo.trabajadores.map(t => (
-              <tr key={t.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
-                <td style={{ padding: '8px', fontWeight: 500 }}>{t.nombre}</td>
-                <td style={{ padding: '8px' }}>
-                  <select value={t.cargoId} onChange={e => setMo({ ...mo, trabajadores: mo.trabajadores.map(x => x.id === t.id ? { ...x, cargoId: e.target.value } : x) })} style={inp}>
-                    {mo.cargos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                  </select>
-                </td>
-                <td style={{ padding: '8px' }}>
-                  <input placeholder={`(usa cargo: ${clp(valorDiarioDe({ ...t, valorDiarioEspecifico: null }, mo.cargos))})`}
-                    value={t.valorDiarioEspecifico ?? ''}
-                    onChange={e => setMo({ ...mo, trabajadores: mo.trabajadores.map(x => x.id === t.id ? { ...x, valorDiarioEspecifico: e.target.value === '' ? null : num(e.target.value) } : x) })}
-                    style={{ ...inp, width: 170 }} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                    )
+                  })}
+                  {lista.length === 0 && <tr><td colSpan={12} style={{ padding: 14, textAlign: 'center', color: '#9AA0A6' }}>Sin trabajadores en este grupo. Usa “Agregar trabajador”.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
 
-
-// ================= PAGO MENSUAL + EXPORTAR EXCEL (GERENCIA) =================
+// ================= PAGO MENSUAL (GERENCIA) =================
 function diasHabilesDelMes(anioMes) {
   const [a, m] = anioMes.split('-').map(Number)
   const ult = new Date(a, m, 0).getDate()
@@ -465,7 +453,6 @@ function diasHabilesDelMes(anioMes) {
 
 function PagoMensual({ mo }) {
   const [mes, setMes] = useState(hoy().slice(0, 7))
-
   const resumen = useMemo(() => {
     const habiles = diasHabilesDelMes(mes)
     return mo.trabajadores.map(t => {
@@ -475,69 +462,12 @@ function PagoMensual({ mo }) {
       const hex = mo.horasExtras.filter(h => h.fecha.startsWith(mes) && h.trabajadorId === t.id)
       const horasHex = hex.reduce((s, h) => s + h.horas, 0)
       const pagoHex = hex.reduce((s, h) => s + h.costo.total, 0)
-      const cargo = mo.cargos.find(c => c.id === t.cargoId)?.nombre || ''
-      return {
-        nombre: t.nombre, cargo,
-        diasTrabajados: fechas.length,
-        inasistencias: Math.max(0, habiles - fechas.length),
-        horasExtras: horasHex,
-        pagoDias, pagoHex,
-        total: pagoDias + pagoHex,
-        fechas,
-      }
+      return { nombre: t.nombre, cargo: cargoDe(t), diasTrabajados: fechas.length, inasistencias: Math.max(0, habiles - fechas.length), horasExtras: horasHex, pagoDias, pagoHex, total: pagoDias + pagoHex, fechas }
     })
   }, [mo, mes])
 
   const habiles = diasHabilesDelMes(mes)
   const totalGeneral = resumen.reduce((s, r) => s + r.total, 0)
-
-  function descargarExcel() {
-    // Hoja 1: resumen de pago
-    const filas = resumen.map(r => ({
-      'Trabajador': r.nombre,
-      'Cargo': r.cargo,
-      'Días trabajados': r.diasTrabajados,
-      'Inasistencias': r.inasistencias,
-      'Horas extras': r.horasExtras,
-      'Pago días (CLP)': r.pagoDias,
-      'Pago horas extras (CLP)': r.pagoHex,
-      'Total a pagar (CLP)': r.total,
-    }))
-    filas.push({ 'Trabajador': 'TOTAL', 'Cargo': '', 'Días trabajados': '', 'Inasistencias': '', 'Horas extras': '',
-      'Pago días (CLP)': resumen.reduce((s, r) => s + r.pagoDias, 0),
-      'Pago horas extras (CLP)': resumen.reduce((s, r) => s + r.pagoHex, 0),
-      'Total a pagar (CLP)': totalGeneral })
-
-    // Hoja 2: detalle día a día
-    const detalle = []
-    mo.asistencias.filter(a => a.fecha.startsWith(mes)).forEach(a => {
-      a.trabajadorIds.forEach(tid => {
-        const t = mo.trabajadores.find(x => x.id === tid)
-        detalle.push({
-          'Fecha': a.fecha, 'Trabajador': t?.nombre || tid,
-          'Área': a.area, 'Jornada': a.jornada,
-          'OT/OC': a.ots.join(', '),
-          'Valor día aplicado (CLP)': a.costo.detalle.find(d => d.tId === tid)?.valor || 0,
-          'Supervisor': a.supervisor, 'Observación': a.obs || '',
-        })
-      })
-    })
-
-    // Hoja 3: horas extras
-    const hexRows = mo.horasExtras.filter(h => h.fecha.startsWith(mes)).map(h => ({
-      'Fecha': h.fecha,
-      'Trabajador': mo.trabajadores.find(t => t.id === h.trabajadorId)?.nombre || h.trabajadorId,
-      'Horas': h.horas, 'OT/OC': h.ot,
-      'Valor hora extra (CLP)': h.costo.valorHex, 'Costo total (CLP)': h.costo.total,
-      'Observación': h.obs || '',
-    }))
-
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filas), 'Resumen Pago')
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalle.length ? detalle : [{ Nota: 'Sin asistencias este mes' }]), 'Detalle Asistencia')
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hexRows.length ? hexRows : [{ Nota: 'Sin horas extras este mes' }]), 'Horas Extras')
-    XLSX.writeFile(wb, `Pago_ManoObra_${mes}.xlsx`)
-  }
 
   return (
     <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}>
@@ -546,13 +476,7 @@ function PagoMensual({ mo }) {
           <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Planilla de pago mensual</div>
           <div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>{habiles} días hábiles (lun–vie) en el mes seleccionado · feriados no descontados</div>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input type="month" value={mes} onChange={e => setMes(e.target.value)} style={inp} />
-          <button onClick={descargarExcel}
-            style={{ background: C.verde, color: '#fff', border: 'none', padding: '9px 16px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Download size={15} /> Descargar Excel
-          </button>
-        </div>
+        <input type="month" value={mes} onChange={e => setMes(e.target.value)} style={inp} />
       </div>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -583,7 +507,177 @@ function PagoMensual({ mo }) {
           </tbody>
         </table>
       </div>
-      <Aviso hijo="Los montos usan los valores congelados al momento de cada registro (histórico protegido). El Excel incluye 3 hojas: Resumen de Pago, Detalle de Asistencia día a día, y Horas Extras." />
+      <Aviso hijo="Los montos usan el valor día bruto vigente de cada trabajador y las asistencias registradas. Para descargar informes usa la pestaña “Informes”." />
+    </div>
+  )
+}
+
+// ================= INFORMES (GERENCIA) — EXCEL / PDF =================
+function rangoPeriodo(tipo, mes, fecha) {
+  if (tipo === 'mes') {
+    const [a, m] = mes.split('-').map(Number)
+    const ult = new Date(a, m, 0).getDate()
+    return { desde: mes + '-01', hasta: `${mes}-${String(ult).padStart(2, '0')}`, etiqueta: 'Mensual · ' + mes }
+  }
+  if (tipo === 'dia') return { desde: fecha, hasta: fecha, etiqueta: 'Día · ' + fecha }
+  // semana lunes-domingo que contiene 'fecha'
+  const d = new Date(fecha + 'T00:00:00')
+  const dow = (d.getDay() + 6) % 7
+  const lun = new Date(d); lun.setDate(d.getDate() - dow)
+  const dom = new Date(lun); dom.setDate(lun.getDate() + 6)
+  const f = x => x.toISOString().slice(0, 10)
+  return { desde: f(lun), hasta: f(dom), etiqueta: `Semana · ${f(lun)} a ${f(dom)}` }
+}
+
+function Informes({ mo }) {
+  const [tipo, setTipo] = useState('mes')
+  const [mes, setMes] = useState(hoy().slice(0, 7))
+  const [fecha, setFecha] = useState(hoy())
+  const [grupos, setGrupos] = useState([...GRUPOS])
+  const [todos, setTodos] = useState(true)
+  const [sel, setSel] = useState([])
+
+  const toggle = (arr, v, setter) => setter(arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v])
+  const trabsDeGrupos = mo.trabajadores.filter(t => grupos.includes(t.grupo))
+  const trabsSel = todos ? trabsDeGrupos : trabsDeGrupos.filter(t => sel.includes(t.id))
+  const { desde, hasta, etiqueta } = rangoPeriodo(tipo, mes, fecha)
+
+  function construirDatos() {
+    const idSet = new Set(trabsSel.map(t => t.id))
+    const nombreDe = id => mo.trabajadores.find(t => t.id === id)?.nombre || id
+
+    const nomina = trabsSel.map(t => {
+      const c = calc(t)
+      return {
+        Grupo: t.grupo, Nombre: t.nombre, Cargo: cargoDe(t), Nacionalidad: t.nacionalidad,
+        Sueldo: num(t.sueldo), Imposiciones: num(t.imposiciones),
+        'Valor día bruto': c.diaBruto, 'Valor día s/imp': c.diaSinImp,
+        'Valor hora': c.hora, 'Valor hora extra': c.horaExtra,
+        'Valor sábado': c.sabado, 'Valor domingo': c.domingo,
+      }
+    })
+
+    const asis = mo.asistencias.filter(a => a.fecha >= desde && a.fecha <= hasta)
+    const detalle = []
+    asis.forEach(a => a.trabajadorIds.filter(id => idSet.has(id)).forEach(id => {
+      detalle.push({
+        Fecha: a.fecha, Trabajador: nombreDe(id), Área: a.area, Jornada: a.jornada,
+        'OT/OC': a.ots.join(', '),
+        'Valor día aplicado': a.costo.detalle.find(d => d.tId === id)?.valor || 0,
+        Supervisor: a.supervisor, Observación: a.obs || '',
+      })
+    }))
+
+    const hexRows = mo.horasExtras.filter(h => h.fecha >= desde && h.fecha <= hasta && idSet.has(h.trabajadorId)).map(h => ({
+      Fecha: h.fecha, Trabajador: nombreDe(h.trabajadorId), Horas: h.horas, 'OT/OC': h.ot,
+      'Valor hora extra': h.costo.valorHex, 'Costo total': h.costo.total, Observación: h.obs || '',
+    }))
+
+    const resumen = trabsSel.map(t => {
+      const a = asis.filter(x => x.trabajadorIds.includes(t.id))
+      const fechas = [...new Set(a.map(x => x.fecha))]
+      const pagoDias = a.reduce((s, x) => s + (x.costo.detalle.find(d => d.tId === t.id)?.valor || 0), 0)
+      const hx = mo.horasExtras.filter(h => h.fecha >= desde && h.fecha <= hasta && h.trabajadorId === t.id)
+      const pagoHex = hx.reduce((s, h) => s + h.costo.total, 0)
+      return {
+        Grupo: t.grupo, Trabajador: t.nombre, Cargo: cargoDe(t),
+        'Días trabajados': fechas.length, 'Horas extras': hx.reduce((s, h) => s + h.horas, 0),
+        'Pago días': pagoDias, 'Pago horas extras': pagoHex, 'Total período': pagoDias + pagoHex,
+      }
+    })
+
+    return { nomina, detalle, hexRows, resumen }
+  }
+
+  function descargarExcel() {
+    if (trabsSel.length === 0) { alert('Selecciona al menos un trabajador y un área.'); return }
+    const { nomina, detalle, hexRows, resumen } = construirDatos()
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(nomina.length ? nomina : [{ Nota: 'Sin trabajadores' }]), 'Nómina')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumen.length ? resumen : [{ Nota: 'Sin datos' }]), 'Resumen período')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalle.length ? detalle : [{ Nota: 'Sin asistencias en el período' }]), 'Asistencia')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hexRows.length ? hexRows : [{ Nota: 'Sin horas extras en el período' }]), 'Horas extras')
+    XLSX.writeFile(wb, `Informe_Asistencia_${tipo}_${desde}.xlsx`)
+  }
+
+  function descargarPDF() {
+    if (trabsSel.length === 0) { alert('Selecciona al menos un trabajador y un área.'); return }
+    const { nomina, resumen } = construirDatos()
+    const money = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
+    const filasNom = nomina.map(r => `<tr><td>${r.Grupo}</td><td>${r.Nombre}</td><td>${r.Cargo}</td><td style="text-align:right">${money(r.Sueldo)}</td><td style="text-align:right">${money(r.Imposiciones)}</td><td style="text-align:right">${money(r['Valor día bruto'])}</td><td style="text-align:right">${money(r['Valor día s/imp'])}</td><td style="text-align:right">${money(r['Valor hora'])}</td><td style="text-align:right">${money(r['Valor hora extra'])}</td><td style="text-align:right">${money(r['Valor sábado'])}</td><td style="text-align:right">${money(r['Valor domingo'])}</td></tr>`).join('')
+    const filasRes = resumen.map(r => `<tr><td>${r.Trabajador}</td><td>${r.Cargo}</td><td style="text-align:right">${r['Días trabajados']}</td><td style="text-align:right">${r['Horas extras']}</td><td style="text-align:right">${money(r['Pago días'])}</td><td style="text-align:right">${money(r['Pago horas extras'])}</td><td style="text-align:right"><b>${money(r['Total período'])}</b></td></tr>`).join('')
+    const totalPeriodo = resumen.reduce((s, r) => s + r['Total período'], 0)
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Informe Asistencia SEREIN</title>
+      <style>body{font-family:Arial,Helvetica,sans-serif;color:#161616;padding:26px;font-size:12px}
+      h1{font-size:18px;margin:0}h2{font-size:13px;text-transform:uppercase;border-bottom:2px solid #161616;padding-bottom:4px;margin:22px 0 8px}
+      .sub{color:#7A8288;font-size:12px;margin-top:4px}
+      table{width:100%;border-collapse:collapse;font-size:11px}th{background:#161616;color:#fff;text-align:left;padding:5px 6px;font-size:10px;text-transform:uppercase}
+      td{padding:4px 6px;border-bottom:1px solid #E2DED4}
+      .tot{text-align:right;font-size:14px;font-weight:bold;color:#D2642F;margin-top:8px}</style></head>
+      <body>
+      <h1>SEREIN SpA · Informe de Asistencia y Nómina</h1>
+      <div class="sub">${etiqueta} &nbsp;·&nbsp; Áreas: ${grupos.join(', ')} &nbsp;·&nbsp; ${trabsSel.length} trabajador(es) &nbsp;·&nbsp; Emitido ${hoy()}</div>
+      <h2>Nómina y valores</h2>
+      <table><thead><tr><th>Grupo</th><th>Nombre</th><th>Cargo</th><th>Sueldo</th><th>Imposic.</th><th>Día bruto</th><th>Día s/imp</th><th>Hora</th><th>H. extra</th><th>Sábado</th><th>Domingo</th></tr></thead><tbody>${filasNom || '<tr><td colspan="11">Sin datos</td></tr>'}</tbody></table>
+      <h2>Resumen del período</h2>
+      <table><thead><tr><th>Trabajador</th><th>Cargo</th><th>Días trab.</th><th>Hrs. extra</th><th>Pago días</th><th>Pago hrs. extra</th><th>Total</th></tr></thead><tbody>${filasRes || '<tr><td colspan="7">Sin asistencias en el período</td></tr>'}</tbody></table>
+      <div class="tot">Total del período: ${money(totalPeriodo)}</div>
+      <script>window.onload=function(){window.print()}</script>
+      </body></html>`
+    const w = window.open('', '_blank')
+    if (!w) { alert('Permite las ventanas emergentes para descargar el PDF.'); return }
+    w.document.open(); w.document.write(html); w.document.close()
+  }
+
+  const btnP = activo => ({ background: activo ? C.carbon : '#fff', color: activo ? '#fff' : C.carbon, border: '1px solid #CBD2D6', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 })
+
+  return (
+    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}>
+      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Informes de asistencia y nómina</div>
+      <div style={{ fontSize: 12, color: C.gris, marginBottom: 14 }}>Elige período, áreas y trabajadores, y descarga en Excel o PDF.</div>
+
+      <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase', marginBottom: 6 }}>Período</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
+        <button onClick={() => setTipo('mes')} style={btnP(tipo === 'mes')}>Mensual</button>
+        <button onClick={() => setTipo('semana')} style={btnP(tipo === 'semana')}>Semanal</button>
+        <button onClick={() => setTipo('dia')} style={btnP(tipo === 'dia')}>Por día</button>
+        {tipo === 'mes'
+          ? <input type="month" value={mes} onChange={e => setMes(e.target.value)} style={inp} />
+          : <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={inp} />}
+        <span style={{ fontSize: 12, color: C.gris }}>{etiqueta}</span>
+      </div>
+
+      <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase', marginBottom: 6 }}>Áreas</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        {GRUPOS.map(g => (
+          <button key={g} onClick={() => toggle(grupos, g, setGrupos)} style={btnP(grupos.includes(g))}>{g}</button>
+        ))}
+      </div>
+
+      <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase', marginBottom: 6 }}>Trabajadores</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+        <button onClick={() => setTodos(true)} style={btnP(todos)}>Todos</button>
+        <button onClick={() => setTodos(false)} style={btnP(!todos)}>Seleccionar…</button>
+      </div>
+      {!todos && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8, padding: 10, background: '#FAF7F3' }}>
+          {trabsDeGrupos.length === 0 && <span style={{ fontSize: 12, color: C.gris }}>No hay trabajadores en las áreas elegidas.</span>}
+          {trabsDeGrupos.map(t => {
+            const on = sel.includes(t.id)
+            return <button key={t.id} onClick={() => toggle(sel, t.id, setSel)} style={{ background: on ? C.naranja : '#fff', color: on ? '#fff' : C.carbon, border: `1px solid ${on ? C.naranja : '#CBD2D6'}`, padding: '5px 10px', cursor: 'pointer', fontSize: 12.5 }}>{t.nombre}</button>
+          })}
+        </div>
+      )}
+      <div style={{ fontSize: 12, color: C.gris, marginBottom: 14 }}>{trabsSel.length} trabajador(es) en el informe.</div>
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <button onClick={descargarExcel} style={{ background: C.verde, color: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <FileSpreadsheet size={16} /> Descargar Excel
+        </button>
+        <button onClick={descargarPDF} style={{ background: C.carbon, color: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <FileText size={16} /> Descargar PDF
+        </button>
+      </div>
     </div>
   )
 }
@@ -594,17 +688,27 @@ export default function ManoObraModule({ esGerencia, otsDisponibles = [], usuari
   const mo = moExt ?? moInt
   const setMo = setMoExt ?? setMoInt
 
-  const tabs = [
+  // Migración: si los datos guardados son de una versión anterior, se reemplazan por la nómina real.
+  const necesitaMigrar = moExt && moExt.ver !== MO_VER
+  useEffect(() => { if (necesitaMigrar) setMoExt(MO_SEED) }, [necesitaMigrar])
+
+  const tabs = esGerencia ? [
     { id: 'registro', label: 'Registro diario', icono: <CalendarDays size={13} /> },
     { id: 'hex', label: 'Horas extras', icono: <Clock3 size={13} /> },
-    { id: 'lista', label: esGerencia ? 'Todos los registros' : 'Mis registros', icono: <Users size={13} /> },
-    ...(esGerencia ? [
-      { id: 'costos', label: 'Costos por OT', icono: <Wallet size={13} /> },
-      { id: 'pago', label: 'Pago mensual', icono: <Download size={13} /> },
-      { id: 'valores', label: 'Valores de Mano de Obra', icono: <History size={13} /> },
-    ] : []),
+    { id: 'lista', label: 'Todos los registros', icono: <Users size={13} /> },
+    { id: 'costos', label: 'Costos por OT', icono: <Wallet size={13} /> },
+    { id: 'pago', label: 'Pago mensual', icono: <Table2 size={13} /> },
+    { id: 'nomina', label: 'Nómina / Valores', icono: <Table2 size={13} /> },
+    { id: 'informes', label: 'Informes', icono: <Download size={13} /> },
+  ] : [
+    { id: 'registro', label: 'Registro diario', icono: <CalendarDays size={13} /> },
+    { id: 'hex', label: 'Horas extras', icono: <Clock3 size={13} /> },
+    { id: 'lista', label: 'Mis registros', icono: <Users size={13} /> },
+    { id: 'trabajadores', label: 'Trabajadores', icono: <Users size={13} /> },
   ]
   const [tab, setTab] = useState('registro')
+
+  if (necesitaMigrar) return <div style={{ padding: 24, color: C.gris, fontSize: 13 }}>Actualizando datos de nómina…</div>
 
   return (
     <div>
@@ -612,9 +716,11 @@ export default function ManoObraModule({ esGerencia, otsDisponibles = [], usuari
       {tab === 'registro' && <RegistroDiario mo={mo} setMo={setMo} otsDisponibles={otsDisponibles} esGerencia={esGerencia} usuario={usuario} areas={areas} />}
       {tab === 'hex' && <HorasExtras mo={mo} setMo={setMo} otsDisponibles={otsDisponibles} esGerencia={esGerencia} usuario={usuario} />}
       {tab === 'lista' && <ListaRegistros mo={mo} setMo={setMo} esGerencia={esGerencia} usuario={usuario} />}
+      {tab === 'trabajadores' && !esGerencia && <TrabajadoresView mo={mo} />}
       {tab === 'costos' && esGerencia && <CostosPorOT mo={mo} />}
       {tab === 'pago' && esGerencia && <PagoMensual mo={mo} />}
-      {tab === 'valores' && esGerencia && <ValoresMO mo={mo} setMo={setMo} />}
+      {tab === 'nomina' && esGerencia && <NominaMO mo={mo} setMo={setMo} />}
+      {tab === 'informes' && esGerencia && <Informes mo={mo} />}
     </div>
   )
 }
