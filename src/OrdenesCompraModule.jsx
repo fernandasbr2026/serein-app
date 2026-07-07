@@ -167,6 +167,93 @@ function FilaOC({ oc, otsDisponibles, upd, onDelete }) {
   )
 }
 
+// ---- Formulario para crear / editar una OC en una mini ventana ----
+function FormOC({ inicial, otsDisponibles, onGuardar, onCancelar }) {
+  const [f, setF] = useState(inicial)
+  const set = (k, v) => setF({ ...f, [k]: v })
+  const setFecha = v => setF({ ...f, fecha: v, vencimiento: sumarDias(v, num(f.plazo)) })
+  const setPlazo = v => setF({ ...f, plazo: num(v), vencimiento: sumarDias(f.fecha, num(v)) })
+  const items = f.items || []
+  const setItem = (i, k, v) => setF({ ...f, items: items.map((x, j) => j === i ? { ...x, [k]: v } : x) })
+  const addItem = () => setF({ ...f, items: [...items, { codigo: '', producto: '', cantidad: 1, precio: 0, comentario: '' }] })
+  const delItem = i => setF({ ...f, items: items.filter((_, j) => j !== i) })
+  const asigs = f.asignaciones || []
+  const setAsig = (i, k, v) => setF({ ...f, asignaciones: asigs.map((x, j) => j === i ? { ...x, [k]: v } : x) })
+  const addAsig = () => setF({ ...f, asignaciones: [...asigs, { ot: otsDisponibles[0] || '', pct: asigs.length === 0 ? 100 : 0 }] })
+  const delAsig = i => setF({ ...f, asignaciones: asigs.filter((_, j) => j !== i) })
+  const lab = { fontSize: 11, color: C.gris, display: 'flex', flexDirection: 'column', gap: 3 }
+  const sumaPct = asigs.reduce((a, x) => a + (num(x.pct) || 0), 0)
+  const conItems = items.length > 0
+  const guardar = () => { if (f.proveedor.trim() && (ocNeto(f) > 0)) onGuardar(f) }
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 70, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '30px 16px' }} onClick={onCancelar}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', border: `2px solid ${C.naranja}`, width: '100%', maxWidth: 780, padding: 18 }}>
+        <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, textTransform: 'uppercase', marginBottom: 12 }}>Orden de compra · N° {f.numero}</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
+          <label style={lab}>N° OC (correlativo)<input style={{ ...inp, background: '#F1EDE6', fontWeight: 600 }} value={f.numero} onChange={e => set('numero', e.target.value)} /></label>
+          <label style={lab}>Proveedor *<input style={inp} value={f.proveedor} onChange={e => set('proveedor', e.target.value)} /></label>
+          <label style={lab}>RUT proveedor<input style={inp} value={f.rut} onChange={e => set('rut', e.target.value)} /></label>
+          <label style={lab}>Categoría<select style={inp} value={f.categoria} onChange={e => set('categoria', e.target.value)}>{CATEGORIAS.map(x => <option key={x}>{x}</option>)}</select></label>
+          <label style={lab}>Centro de negocio / Área<select style={inp} value={f.area} onChange={e => set('area', e.target.value)}>{AREAS.map(a => <option key={a}>{a}</option>)}</select></label>
+          <label style={lab}>Fecha emisión<input type="date" style={inp} value={f.fecha} onChange={e => setFecha(e.target.value)} /></label>
+          <label style={lab}>Plazo (días)<input style={inp} value={f.plazo} onChange={e => setPlazo(e.target.value)} /></label>
+          <label style={lab}>Vencimiento<input type="date" style={inp} value={f.vencimiento} onChange={e => set('vencimiento', e.target.value)} /></label>
+          <label style={lab}>Estado de pago<select style={inp} value={f.estadoPago} onChange={e => set('estadoPago', e.target.value)}>{ESTADOS_PAGO.map(x => <option key={x}>{x}</option>)}</select></label>
+          <label style={lab}>Dirección proveedor<input style={inp} value={f.direccion} onChange={e => set('direccion', e.target.value)} /></label>
+          <label style={lab}>Lugar de despacho<input style={inp} value={f.despacho} onChange={e => set('despacho', e.target.value)} placeholder="Santa Rosa 70, Lampa" /></label>
+          <label style={lab}>Adjunto (nombre / enlace)<input style={inp} value={f.adjunto} onChange={e => set('adjunto', e.target.value)} /></label>
+        </div>
+
+        <div style={{ fontSize: 12, fontWeight: 600, color: C.gris, textTransform: 'uppercase', margin: '14px 0 6px' }}>Ítems (aparecen en el PDF; si agregas, el neto se calcula solo)</div>
+        {conItems && (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 6 }}>
+            <thead><tr style={{ borderBottom: '1px solid #CBD2D6' }}>{['Código', 'Producto o servicio', 'Cant', 'Precio', 'Comentario', ''].map((h, i) => <th key={i} style={{ textAlign: ['Cant', 'Precio'].includes(h) ? 'right' : 'left', padding: '3px 6px', fontSize: 10, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+            <tbody>
+              {items.map((it, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                  <td style={{ padding: '2px 4px' }}><input value={it.codigo} onChange={e => setItem(i, 'codigo', e.target.value)} style={{ ...inp, width: 60, padding: '5px 6px' }} /></td>
+                  <td style={{ padding: '2px 4px' }}><input value={it.producto} onChange={e => setItem(i, 'producto', e.target.value)} style={{ ...inp, width: 210, padding: '5px 6px' }} /></td>
+                  <td style={{ padding: '2px 4px', textAlign: 'right' }}><input value={it.cantidad} onChange={e => setItem(i, 'cantidad', num(e.target.value))} style={{ ...inp, width: 55, padding: '5px 6px', textAlign: 'right' }} /></td>
+                  <td style={{ padding: '2px 4px', textAlign: 'right' }}><input value={it.precio} onChange={e => setItem(i, 'precio', num(e.target.value))} style={{ ...inp, width: 90, padding: '5px 6px', textAlign: 'right' }} /></td>
+                  <td style={{ padding: '2px 4px' }}><input value={it.comentario} onChange={e => setItem(i, 'comentario', e.target.value)} placeholder="Ej: RAL 5005" style={{ ...inp, width: 130, padding: '5px 6px' }} /></td>
+                  <td style={{ padding: '2px 2px', textAlign: 'right' }}><button onClick={() => delItem(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
+          <button onClick={addItem} style={{ background: 'none', border: '1px dashed #CBD2D6', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Agregar ítem</button>
+          {!conItems && <label style={{ fontSize: 12, color: C.gris, display: 'flex', alignItems: 'center', gap: 6 }}>o Monto neto directo: <input value={f.neto} onChange={e => set('neto', num(e.target.value))} style={{ ...inp, width: 120, textAlign: 'right' }} /></label>}
+        </div>
+
+        <div style={{ fontSize: 12, fontWeight: 600, color: C.gris, textTransform: 'uppercase', margin: '10px 0 6px' }}>Asignación a OT (reparto del costo)</div>
+        {asigs.map((x, i) => (
+          <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+            <select value={x.ot} onChange={e => setAsig(i, 'ot', e.target.value)} style={{ ...inp, width: 170 }}><option value="">(elige OT)</option>{otsDisponibles.map(o => <option key={o}>{o}</option>)}</select>
+            <input value={x.pct} onChange={e => setAsig(i, 'pct', num(e.target.value))} style={{ ...inp, width: 60, textAlign: 'right' }} />%
+            <span style={{ fontSize: 12, color: C.gris }}>= {clp(ocNeto(f) * (num(x.pct) || 0) / 100)}</span>
+            <button onClick={() => delAsig(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button>
+          </div>
+        ))}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button onClick={addAsig} style={{ background: 'none', border: '1px dashed #CBD2D6', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Asignar a OT</button>
+          {asigs.length > 0 && <span style={{ fontSize: 12, fontWeight: 600, color: sumaPct === 100 ? C.verde : C.rojo }}>Suma: {sumaPct}%</span>}
+        </div>
+
+        <input style={{ ...inp, width: '100%', marginTop: 10 }} placeholder="Observaciones" value={f.obs} onChange={e => set('obs', e.target.value)} />
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 20, marginTop: 10, fontSize: 13 }}>
+          <span>Neto: <b>{clp(ocNeto(f))}</b></span><span>IVA: <b>{clp(ocIva(f))}</b></span><span>Total: <b style={{ color: C.naranja }}>{clp(ocTotal(f))}</b></span>
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <button onClick={guardar} style={{ background: C.verde, color: '#fff', border: 'none', padding: '9px 18px', cursor: 'pointer', fontSize: 13 }}>Guardar OC</button>
+          <button onClick={onCancelar} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}, ots = [] }) {
   const ocs = pp.ocs || []
   const otsDisponibles = [...new Set((ots || []).map(o => o.numero).filter(Boolean))]
@@ -174,7 +261,8 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
   const upd = (id, cambios) => setOcs(ocs.map(o => o.id === id ? { ...o, ...cambios } : o))
   const eliminar = id => setOcs(ocs.filter(o => o.id !== id))
   const maxOC = ocs.reduce((m, o) => Math.max(m, parseInt(String(o.numero).replace(/\D/g, ''), 10) || 0), 517)
-  const agregar = () => setOcs([{ id: 'oc' + Date.now(), numero: String(maxOC + 1), proveedor: '', rut: '', categoria: 'Pintura', detalle: '', area: 'Santa Rosa', fecha: hoy(), neto: 0, plazo: 30, vencimiento: sumarDias(hoy(), 30), estadoPago: 'Pendiente', asignaciones: [], items: [], direccion: '', despacho: '', adjunto: '', obs: '' }, ...ocs])
+  const [creando, setCreando] = useState(false)
+  const nueva = () => ({ id: 'oc' + Date.now(), numero: String(maxOC + 1), proveedor: '', rut: '', categoria: 'Pintura', detalle: '', area: 'Santa Rosa', fecha: hoy(), neto: 0, plazo: 30, vencimiento: sumarDias(hoy(), 30), estadoPago: 'Pendiente', asignaciones: [], items: [], direccion: '', despacho: '', adjunto: '', obs: '' })
   const [busca, setBusca] = useState('')
   const [fEst, setFEst] = useState('')
   const mostradas = ocs.filter(o =>
@@ -186,11 +274,12 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
 
   return (
     <div>
+      {creando && <FormOC inicial={nueva()} otsDisponibles={otsDisponibles} onGuardar={oc => { setOcs([oc, ...ocs]); setCreando(false) }} onCancelar={() => setCreando(false)} />}
       <div style={{ fontSize: 12, color: '#8C4519', background: '#F9E9DE', padding: '8px 12px', marginBottom: 12 }}>
         <b>Órdenes de compra a proveedores</b> (emitidas por Serein). Cada OC puede asociarse a una o varias OT con reparto porcentual; su costo neto se carga a esas OT. Las OC pendientes alimentan cuentas por pagar y el flujo de caja del Consolidado.
       </div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
-        <button onClick={agregar} style={{ background: C.naranja, color: '#fff', border: 'none', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Agregar OC</button>
+        <button onClick={() => setCreando(true)} style={{ background: C.naranja, color: '#fff', border: 'none', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Agregar OC</button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, border: '1px solid #CBD2D6', padding: '2px 6px' }}>
           <Search size={13} color={C.gris} />
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar N°/proveedor/RUT/categoría…" style={{ border: 'none', outline: 'none', fontSize: 12.5, width: 190 }} />
