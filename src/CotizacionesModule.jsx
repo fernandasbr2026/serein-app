@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Plus, Trash2, FileText, Download, CheckCircle2, Search, X } from 'lucide-react'
+import * as XLSX from 'xlsx'
 
 // ============================================================
 // MÓDULO: Cotizaciones (formato PDF descargable) + generación de OT
@@ -304,6 +305,31 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
   const [creando, setCreando] = useState(false)
   const [editId, setEditId] = useState(null)
   const [busca, setBusca] = useState('')
+  const [rep, setRep] = useState(false)
+  const [repDesde, setRepDesde] = useState('')
+  const [repHasta, setRepHasta] = useState('')
+  const [repCliente, setRepCliente] = useState('')
+  const [repAreas, setRepAreas] = useState(['Santa Rosa', 'Istria', 'Proyectos'])
+  const toggleArea = a => setRepAreas(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a])
+  const _n = s => (s || '').trim().toLowerCase()
+  const nombresBusca = [...new Set([...(clientes || []).map(c => (c.nombre || '').trim()), ...cotizaciones.map(c => (c.cliente || '').trim())].filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  const clientesActivos = [...new Set((clientes || []).filter(c => (c.estado || 'Activo') === 'Activo').map(c => (c.nombre || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+
+  function generarInformeCot() {
+    const lista = cotizaciones.filter(c => {
+      if (repCliente && _n(c.cliente) !== _n(repCliente)) return false
+      if (repAreas.length && !repAreas.includes(c.area)) return false
+      if (repDesde && (!c.fecha || c.fecha < repDesde)) return false
+      if (repHasta && (!c.fecha || c.fecha > repHasta)) return false
+      return true
+    })
+    if (!lista.length) { window.alert('No hay cotizaciones que cumplan el filtro seleccionado.'); return }
+    const header = ['Folio', 'Cliente', 'Área', 'Fecha', 'Vencimiento', 'Estado', 'Vendedor', 'Condición pago', 'Afecto', 'IVA 19%', 'Total']
+    const rows = lista.map(c => { const t = totales(c); return ['N° ' + c.folio, c.cliente, c.area, c.fecha, c.vencimiento, c.estado === 'Otro' ? ('Otro: ' + (c.estadoOtro || '')) : c.estado, c.vendedor, c.condicionPago, t.afecto, t.iva, t.total] })
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([header, ...rows]), 'Cotizaciones')
+    XLSX.writeFile(wb, `Cotizaciones_${new Date().toISOString().slice(0, 10)}.xlsx`)
+  }
 
   const maxFolio = cotizaciones.reduce((m, c) => Math.max(m, parseInt(String(c.folio).replace(/\D/g, ''), 10) || 0), 792)
   const guardar = cot => {
@@ -347,10 +373,28 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
         <button onClick={() => setCreando(true)} style={{ background: C.teal, color: '#fff', border: 'none', padding: '9px 16px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Nueva cotización</button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, border: '1px solid #CBD2D6', padding: '2px 6px' }}>
           <Search size={13} color={C.gris} />
-          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar folio/cliente…" style={{ border: 'none', outline: 'none', fontSize: 12.5, width: 150 }} />
+          <input value={busca} list="dl-cot-busca" onChange={e => setBusca(e.target.value)} placeholder="Buscar folio/cliente…" style={{ border: 'none', outline: 'none', fontSize: 12.5, width: 170 }} />
+          <datalist id="dl-cot-busca">{nombresBusca.map(n => <option key={n} value={n} />)}</datalist>
         </div>
+        <button onClick={() => { setRep(v => !v); setRepCliente('') }} style={{ background: C.carbon, color: '#fff', border: 'none', padding: '8px 14px', cursor: 'pointer', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}><Download size={14} /> Informe Excel</button>
         <span style={{ fontSize: 12.5, color: C.gris }}>{mostradas.length} cotización(es)</span>
       </div>
+      {rep && (
+        <div style={{ background: '#FAF7F3', border: '1px solid #E2DED4', padding: 12, marginBottom: 14, display: 'flex', gap: 14, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <label style={{ fontSize: 11, color: C.gris }}>Desde<input type="date" value={repDesde} onChange={e => setRepDesde(e.target.value)} style={{ ...inp, display: 'block', marginTop: 3 }} /></label>
+          <label style={{ fontSize: 11, color: C.gris }}>Hasta<input type="date" value={repHasta} onChange={e => setRepHasta(e.target.value)} style={{ ...inp, display: 'block', marginTop: 3 }} /></label>
+          <label style={{ fontSize: 11, color: C.gris }}>Cliente<select value={repCliente} onChange={e => setRepCliente(e.target.value)} style={{ ...inp, display: 'block', marginTop: 3 }}><option value="">Todos</option>{clientesActivos.map(c => <option key={c} value={c}>{c}</option>)}</select></label>
+          <div style={{ fontSize: 11, color: C.gris }}>Áreas
+            <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+              {AREAS.map(a => (
+                <button key={a} type="button" onClick={() => toggleArea(a)} style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600, border: '1px solid ' + (repAreas.includes(a) ? C.teal : '#CBD2D6'), background: repAreas.includes(a) ? C.teal : '#fff', color: repAreas.includes(a) ? '#fff' : C.carbon }}>{a}</button>
+              ))}
+            </div>
+          </div>
+          <button onClick={generarInformeCot} style={{ background: C.verde, color: '#fff', border: 'none', padding: '8px 16px', cursor: 'pointer', fontSize: 13 }}>Generar Excel</button>
+          <span style={{ fontSize: 11.5, color: '#9AA0A6' }}>Fechas vacías = todo. Toca las áreas para incluirlas o excluirlas.</span>
+        </div>
+      )}
 
       <div style={{ background: '#fff', border: '1px solid #E2DED4', overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
