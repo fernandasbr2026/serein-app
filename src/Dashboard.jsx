@@ -440,8 +440,6 @@ export default function Dashboard({ perfil, email, onLogout }) {
 
             <ResumenModulos ots={ots} proyectos={proyectos} />
 
-            <PipelineOT ots={ots.filter(o => o.area === 'Santa Rosa' || o.area === 'Istria')} />
-            <PipelineProyectos proyectos={proyectos} />
             <ResumenFinancieroCard fin={fin} onIr={() => setAreaSel('FINANZAS')} />
             <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `4px solid ${C.verde}`, marginBottom: 16 }}>
               <div style={{ padding: '14px 18px 6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
