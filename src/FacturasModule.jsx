@@ -67,6 +67,7 @@ export default function FacturasModule({ area, facturas, setFacturas }) {
               <label style={{ fontSize: 11, color: C.gris }}>Emisión<input type="date" style={{ ...inp, width: '100%' }} value={f.fecha_emision} onChange={e => setF({ ...f, fecha_emision: e.target.value })} /></label>
               <input style={inp} placeholder="Monto CLP *" value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} />
             </div>
+            <input style={{ ...inp, width: '100%', marginTop: 8 }} placeholder="Observación / comentario (opcional)" value={f.comentarios} onChange={e => setF({ ...f, comentarios: e.target.value })} />
             <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
               <button onClick={agregar} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Agregar</button>
               <button onClick={() => { setF(nueva()); setCreando(false) }} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>

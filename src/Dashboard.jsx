@@ -85,8 +85,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const tabs = esSupervisor ? ['PRODUCCION', 'COMPRAS_OP', 'ASISTENCIA'] : [
     ...(esGerencia ? ['TODAS'] : []),
     ...areasUsuario.filter(a => a !== 'Proyectos'),
-    ...(areasOT.length > 0 ? ['GESTION_OT'] : []),
     ...(tieneProyectos ? ['GESTION_PROYECTOS'] : []),
+    ...(areasOT.length > 0 ? ['GESTION_OT'] : []),
     'CLIENTES',
     'COTIZADOR',
     ...(areasOT.length > 0 || esGerencia ? ['PRODUCCION'] : []),

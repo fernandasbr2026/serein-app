@@ -37,7 +37,7 @@ function Barra({ pct, color, alto = 8 }) {
 // ---------- Form venta (EDP) con método de pago y factoring ----------
 function FormEdp({ params, onAdd, onCancel }) {
   const facs = params.factoring || []
-  const [f, setF] = useState({ nombre: '', fecha: '', venta: '', metodo: 'Contado', condicion: 'Contado', factoringId: facs[0]?.id || '', diasMora: '' })
+  const [f, setF] = useState({ nombre: '', fecha: '', venta: '', metodo: 'Contado', condicion: 'Contado', factoringId: facs[0]?.id || '', diasMora: '', obs: '' })
   const dias = (CONDICIONES.find(c => c.label === f.condicion)?.dias) ?? 0
   const facSel = facs.find(x => x.id === f.factoringId)
   const baseTotal = Math.round(num(f.venta) * 1.19)
@@ -46,7 +46,7 @@ function FormEdp({ params, onAdd, onCancel }) {
 
   function guardar() {
     if (!f.nombre || num(f.venta) <= 0) return
-    onAdd({ edp: f.nombre, fecha: f.fecha || '—', venta: num(f.venta), estado, metodo: f.metodo, condicion: f.condicion, dias, factoringId: f.metodo === 'Factoring' ? f.factoringId : '', diasMora: num(f.diasMora), perdidaFact: perd.total })
+    onAdd({ edp: f.nombre, fecha: f.fecha || '—', venta: num(f.venta), estado, metodo: f.metodo, condicion: f.condicion, dias, factoringId: f.metodo === 'Factoring' ? f.factoringId : '', diasMora: num(f.diasMora), perdidaFact: perd.total, obs: f.obs })
   }
 
   return (
@@ -79,6 +79,7 @@ function FormEdp({ params, onAdd, onCancel }) {
           </>
         )}
       </div>
+      <input style={{ ...inp, width: '100%', marginTop: 8 }} placeholder="Observación / comentario (opcional)" value={f.obs} onChange={e => setF({ ...f, obs: e.target.value })} />
       {f.metodo === 'Factoring' && num(f.venta) > 0 && (
         <div style={{ fontSize: 12, color: '#8C4519', background: '#F9E9DE', padding: '8px 10px', marginTop: 8 }}>
           Pérdida por factoring estimada: <b>{clp(perd.total)}</b> — interés {clp(perd.interes)} ({dias} días) + costo op. {clp(perd.costoOp)}{perd.mora > 0 ? ` + mora ${clp(perd.mora)}` : ''}. (Base total con IVA: {clp(baseTotal)})
