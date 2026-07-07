@@ -145,7 +145,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const kPerd = esTODAS ? proyPerd : vista.perdidaFact
   const ventaAreaLive = [{ area: 'Santa Rosa', venta: facSum('Santa Rosa') }, { area: 'Istria', venta: facSum('Istria') }, { area: 'Proyectos', venta: proyFact }]
 
-  const nombreTab = t => t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? '⚙ Gestión Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Clientes' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t
+  const nombreTab = t => t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Clientes' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: C.niebla, fontFamily: "'Inter',sans-serif" }}>
@@ -348,7 +348,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
           </>
         )}
         {(areaSel === 'Santa Rosa' || areaSel === 'Istria') && (
-          <FacturasModule area={areaSel} facturas={facturas} setFacturas={setFacturas} />
+          <FacturasModule area={areaSel} facturas={facturas} setFacturas={setFacturas} params={params} />
         )}
         </>
         )}

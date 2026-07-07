@@ -1,5 +1,7 @@
 import React, { useState } from 'react'
 import { Plus, Trash2, Receipt } from 'lucide-react'
+import { calcularPerdidaFactoring } from './ParametrosModule.jsx'
+const CONDICIONES_DIAS = [{ label: '30 días', dias: 30 }, { label: '45 días', dias: 45 }, { label: '60 días', dias: 60 }, { label: '90 días', dias: 90 }]
 
 // ============================================================
 // MÓDULO: Facturas por área (Santa Rosa / Istria)
@@ -29,7 +31,7 @@ export const FACTURAS_SEED = {
 const fondoEstado = e => ({ Pagado: '#E7F2EA', Factoring: '#F9E9DE', Vencida: '#F6E0DA', Anulada: '#EEE', Pendiente: '#F9E9DE' }[e] || '#EEE')
 const colorEstado = e => ({ Pagado: C.verde, Factoring: C.ambar, Vencida: C.rojo, Anulada: C.gris, Pendiente: '#8C4519' }[e] || C.gris)
 
-export default function FacturasModule({ area, facturas, setFacturas }) {
+export default function FacturasModule({ area, facturas, setFacturas, params = { factoring: [] } }) {
   const lista = (facturas && facturas[area]) || []
   const [creando, setCreando] = useState(false)
   const nueva = () => ({ numero: '', cliente: '', ot: '', fecha_emision: '', monto: '', estado: 'Pendiente', fecha_pago: '', banco: '', comentarios: '' })
@@ -83,8 +85,13 @@ export default function FacturasModule({ area, facturas, setFacturas }) {
               ))}
             </tr></thead>
             <tbody>
-              {lista.map(x => (
-                <tr key={x.id} style={{ borderBottom: '1px solid #EEE9DF', opacity: x.estado === 'Anulada' ? 0.5 : 1 }}>
+              {lista.map(x => {
+                const facs = params.factoring || []
+                const fSel = facs.find(ff => ff.id === x.factoringId) || facs[0]
+                const perd = x.estado === 'Factoring' ? calcularPerdidaFactoring(x.monto, x.dias || 30, x.diasMora || 0, fSel) : null
+                return (
+                <React.Fragment key={x.id}>
+                <tr style={{ borderBottom: '1px solid #EEE9DF', opacity: x.estado === 'Anulada' ? 0.5 : 1 }}>
                   <td style={{ padding: '5px 6px', fontWeight: 600, whiteSpace: 'nowrap' }}>{x.numero}</td>
                   <td style={{ padding: '5px 6px' }}>{x.cliente}</td>
                   <td style={{ padding: '5px 6px', color: C.gris }}>{x.ot || '—'}</td>
@@ -104,7 +111,27 @@ export default function FacturasModule({ area, facturas, setFacturas }) {
                   <td style={{ padding: '5px 6px' }}><input value={x.comentarios} onChange={e => actualizar(x.id, 'comentarios', e.target.value)} placeholder="Comentario…" style={{ ...inp, width: 160 }} /></td>
                   <td style={{ padding: '5px 4px', textAlign: 'right' }}><button onClick={() => window.confirm(`¿Eliminar factura ${x.numero}?`) && setLista(lista.filter(y => y.id !== x.id))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button></td>
                 </tr>
-              ))}
+                {x.estado === 'Factoring' && (
+                  <tr style={{ background: '#FBF3EE' }}>
+                    <td colSpan={10} style={{ padding: '8px 10px' }}>
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12 }}>
+                        <span style={{ color: C.gris, fontWeight: 600 }}>Factoring:</span>
+                        <select value={x.factoringId || (fSel ? fSel.id : '')} onChange={e => actualizar(x.id, 'factoringId', e.target.value)} style={inp}>
+                          {facs.length === 0 && <option value="">(define en Parámetros)</option>}
+                          {facs.map(ff => <option key={ff.id} value={ff.id}>{ff.nombre}</option>)}
+                        </select>
+                        <select value={x.dias || 30} onChange={e => actualizar(x.id, 'dias', parseInt(e.target.value))} style={inp}>
+                          {CONDICIONES_DIAS.map(cd => <option key={cd.dias} value={cd.dias}>{cd.label}</option>)}
+                        </select>
+                        <input placeholder="Días mora" value={x.diasMora || ''} onChange={e => actualizar(x.id, 'diasMora', num(e.target.value))} style={{ ...inp, width: 90 }} />
+                        <span style={{ color: C.rojo, fontWeight: 600 }}>Descuento factoring: {clp(perd ? perd.total : 0)}</span>
+                        <span style={{ color: C.gris }}>(interés {clp(perd ? perd.interes : 0)} + costo op {clp(perd ? perd.costoOp : 0)}{perd && perd.mora ? ` + mora ${clp(perd.mora)}` : ''}) → Neto a recibir: <b style={{ color: C.carbon }}>{clp(x.monto - (perd ? perd.total : 0))}</b></span>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </React.Fragment>
+              ) })}
               {lista.length === 0 && <tr><td colSpan={10} style={{ padding: 14, textAlign: 'center', color: '#9AA0A6' }}>Sin facturas en esta área.</td></tr>}
             </tbody>
           </table>
