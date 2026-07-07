@@ -30,6 +30,9 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
   const nueva = () => ({ numero: '', cliente: '', ot: '', fecha_emision: '', monto: '', estado: 'Pendiente', fecha_pago: '', banco: '', comentarios: '' })
   const [f, setF] = useState(nueva())
   const [busca, setBusca] = useState('')
+  const [fCli, setFCli] = useState('')
+  const [fEst, setFEst] = useState('')
+  const [fMes, setFMes] = useState('')
   const fileRef = useRef(null)
 
   const setLista = nuevaLista => setFacturas({ ...(facturas || {}), [area]: nuevaLista })
@@ -74,23 +77,34 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
     reader.readAsArrayBuffer(file)
   }
 
-  const mostradas = busca ? lista.filter(x => (norm(x.numero) + ' ' + norm(x.cliente) + ' ' + norm(x.ot)).includes(norm(busca))) : lista
-  const totalMonto = lista.reduce((a, x) => a + x.monto, 0)
-  const cobrado = lista.filter(x => x.estado === 'Pagado').reduce((a, x) => a + x.monto, 0)
+  const clientesUnicos = [...new Set(lista.map(x => x.cliente).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  const mostradas = lista.filter(x =>
+    (!busca || (norm(x.numero) + ' ' + norm(x.cliente) + ' ' + norm(x.ot)).includes(norm(busca))) &&
+    (!fCli || x.cliente === fCli) &&
+    (!fEst || x.estado === fEst) &&
+    (!fMes || (x.fecha_emision || '').slice(0, 7) === fMes)
+  )
+  const hayFiltro = busca || fCli || fEst || fMes
+  const totalMonto = mostradas.reduce((a, x) => a + x.monto, 0)
+  const cobrado = mostradas.filter(x => x.estado === 'Pagado').reduce((a, x) => a + x.monto, 0)
 
   return (
     <div style={{ marginTop: 16 }}>
       <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `3px solid ${C.teal}` }}>
         <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, borderBottom: '1px solid #EEE9DF' }}>
           <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Receipt size={15} /> Facturas · {area}</span>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 12, color: C.gris, flexWrap: 'wrap' }}>
-            <span>{lista.length} facturas</span>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 12, color: C.gris, flexWrap: 'wrap' }}>
+            <span>{hayFiltro ? `${mostradas.length} de ${lista.length}` : lista.length} facturas</span>
             <span>Total: <b style={{ color: C.carbon }}>{clp(totalMonto)}</b></span>
             <span>Cobrado: <b style={{ color: C.verde }}>{clp(cobrado)}</b></span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, border: '1px solid #CBD2D6', padding: '2px 6px' }}>
               <Search size={13} color={C.gris} />
-              <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar N°/cliente/OT…" style={{ border: 'none', outline: 'none', fontSize: 12.5, width: 150 }} />
+              <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar N°/cliente/OT…" style={{ border: 'none', outline: 'none', fontSize: 12.5, width: 130 }} />
             </div>
+            <select value={fCli} onChange={e => setFCli(e.target.value)} style={inp}><option value="">Todos los clientes</option>{clientesUnicos.map(c => <option key={c} value={c}>{c}</option>)}</select>
+            <select value={fEst} onChange={e => setFEst(e.target.value)} style={inp}><option value="">Todos los estados</option>{ESTADOS.map(s => <option key={s} value={s}>{s}</option>)}</select>
+            <input type="month" value={fMes} onChange={e => setFMes(e.target.value)} style={inp} title="Filtrar por mes de emisión" />
+            {hayFiltro && <button onClick={() => { setBusca(''); setFCli(''); setFEst(''); setFMes('') }} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '5px 8px', cursor: 'pointer', fontSize: 12 }}>Limpiar</button>}
             <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.xls" style={{ display: 'none' }} onChange={e => { const file = e.target.files[0]; if (file) importarExcel(file); e.target.value = '' }} />
             <button onClick={() => fileRef.current && fileRef.current.click()} style={{ background: C.carbon, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Upload size={13} /> Importar Excel</button>
             {!creando && <button onClick={() => setCreando(true)} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Nueva factura</button>}
