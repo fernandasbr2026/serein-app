@@ -24,6 +24,26 @@ const AREA_COLOR = { 'Santa Rosa': '#A8501F', 'Proyectos': '#D2642F', 'Istria': 
 const clp = n => '$' + Math.round(n).toLocaleString('es-CL')
 const clpM = n => '$' + Math.round(n / 1000000).toLocaleString('es-CL') + 'M'
 
+// ---- Guardado local (persistencia en el navegador) ----
+// Los datos que la usuaria ingresa/edita quedan guardados en localStorage y
+// se recargan al abrir la app. Cambiar LS_VER limpia los datos si cambia la estructura de los SEED.
+const LS_VER = '2026-07-08'
+try {
+  if (typeof localStorage !== 'undefined' && localStorage.getItem('serein_ver') !== LS_VER) {
+    Object.keys(localStorage).filter(k => k.startsWith('serein_')).forEach(k => localStorage.removeItem(k))
+    localStorage.setItem('serein_ver', LS_VER)
+  }
+} catch (e) {}
+const LS = (k, fb) => {
+  try { const v = localStorage.getItem('serein_' + k); return v ? JSON.parse(v) : fb } catch (e) { return fb }
+}
+const guardarSerein = obj => {
+  try { Object.entries(obj).forEach(([k, v]) => localStorage.setItem('serein_' + k, JSON.stringify(v))) } catch (e) {}
+}
+export function borrarDatosLocales() {
+  try { Object.keys(localStorage).filter(k => k.startsWith('serein_')).forEach(k => localStorage.removeItem(k)); location.reload() } catch (e) {}
+}
+
 function Kpi({ label, valor, sub, color, icon: Icon }) {
   return (
     <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 16, flex: '1 1 180px', minWidth: 0 }}>
@@ -107,20 +127,25 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const esModuloClientes = areaSel === 'CLIENTES'
   const esModuloCot = areaSel === 'COTIZADOR'
   const esModuloProd = areaSel === 'PRODUCCION'
-  const [avances, setAvances] = useState(AVANCES_SEED)
-  const [mo, setMo] = useState(MO_SEED)
+  const [avances, setAvances] = useState(() => LS('avances', AVANCES_SEED))
+  const [mo, setMo] = useState(() => LS('mo', MO_SEED))
   const esModuloComprasOp = areaSel === 'COMPRAS_OP'
-  const [comprasOp, setComprasOp] = useState(COMPRAS_OP_SEED)
-  const [configCompras, setConfigCompras] = useState(CONFIG_COMPRAS_DEFAULT)
-  const [fin, setFin] = useState(FIN_SEED)
-  const [pp, setPp] = useState(PP_SEED)
-  const [params, setParams] = useState(PARAMS_SEED)
-  const [clientes, setClientes] = useState(CLIENTES_SEED)
-  const [facturas, setFacturas] = useState(FACTURAS_SEED)
-  const [comisiones, setComisiones] = useState({ 'Santa Rosa': 3, 'Istria': 2, 'Proyectos': 2 })
-  const [ppmPct, setPpmPct] = useState(2)
-  const [ots, setOts] = useState(OTS_INICIALES)
-  const [proyectos, setProyectos] = useState(PROYECTOS)
+  const [comprasOp, setComprasOp] = useState(() => LS('comprasOp', COMPRAS_OP_SEED))
+  const [configCompras, setConfigCompras] = useState(() => LS('configCompras', CONFIG_COMPRAS_DEFAULT))
+  const [fin, setFin] = useState(() => LS('fin', FIN_SEED))
+  const [pp, setPp] = useState(() => LS('pp', PP_SEED))
+  const [params, setParams] = useState(() => LS('params', PARAMS_SEED))
+  const [clientes, setClientes] = useState(() => LS('clientes', CLIENTES_SEED))
+  const [facturas, setFacturas] = useState(() => LS('facturas', FACTURAS_SEED))
+  const [comisiones, setComisiones] = useState(() => LS('comisiones', { 'Santa Rosa': 3, 'Istria': 2, 'Proyectos': 2 }))
+  const [ppmPct, setPpmPct] = useState(() => LS('ppmPct', 2))
+  const [ots, setOts] = useState(() => LS('ots', OTS_INICIALES))
+  const [proyectos, setProyectos] = useState(() => LS('proyectos', PROYECTOS))
+
+  // Guarda automáticamente en el navegador cada vez que cambian los datos
+  useEffect(() => {
+    guardarSerein({ avances, mo, comprasOp, configCompras, fin, pp, params, clientes, facturas, comisiones, ppmPct, ots, proyectos })
+  }, [avances, mo, comprasOp, configCompras, fin, pp, params, clientes, facturas, comisiones, ppmPct, ots, proyectos])
 
   // Trae la UF (valor del día) al cargar la app, desde mindicador.cl (Banco Central)
   useEffect(() => {
@@ -213,9 +238,13 @@ export default function Dashboard({ perfil, email, onLogout }) {
             </button>
           ))}
         </nav>
-        <button onClick={onLogout} style={{ margin: 16, background: 'transparent', border: '1px solid #3A4045', color: '#B8C0C6', padding: '8px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 12 }}>
+        <button onClick={onLogout} style={{ margin: '16px 16px 4px', background: 'transparent', border: '1px solid #3A4045', color: '#B8C0C6', padding: '8px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 12 }}>
           <LogOut size={13} /> Salir
         </button>
+        <div style={{ margin: '0 16px 12px', fontSize: 10, color: '#6B7176', textAlign: 'center', lineHeight: 1.4 }}>
+          Datos guardados en este navegador
+          <button onClick={() => { if (window.confirm('¿Borrar los datos guardados y volver a los valores base? Esta acción no se puede deshacer.')) borrarDatosLocales() }} style={{ display: 'block', margin: '4px auto 0', background: 'transparent', border: 'none', color: '#7A8288', cursor: 'pointer', fontSize: 10, textDecoration: 'underline' }}>Restablecer datos</button>
+        </div>
       </aside>
 
       <main style={{ flex: 1, minWidth: 0, height: '100vh', overflowY: 'auto' }}>
