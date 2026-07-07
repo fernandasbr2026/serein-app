@@ -106,7 +106,7 @@ function FilaOC({ oc, otsDisponibles, upd, onDelete }) {
         <td style={{ padding: '4px 6px' }}><input value={oc.plazo != null ? oc.plazo : 30} onChange={e => upd(oc.id, { plazo: num(e.target.value), vencimiento: sumarDias(oc.fecha, num(e.target.value)) })} style={{ ...inp, width: 50, padding: '5px 6px', textAlign: 'right' }} /></td>
         <td style={{ padding: '4px 6px' }}><input type="date" value={v} onChange={e => upd(oc.id, { vencimiento: e.target.value })} style={{ ...inp, width: 132, padding: '5px 6px', color: vencido ? C.rojo : C.carbon }} /></td>
         <td style={{ padding: '4px 6px' }}><select value={oc.estadoPago} onChange={e => upd(oc.id, { estadoPago: e.target.value })} style={{ border: 'none', background: fondoEstado(oc.estadoPago), color: colorEstado(oc.estadoPago), padding: '4px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{ESTADOS_PAGO.map(x => <option key={x}>{x}</option>)}</select></td>
-        <td style={{ padding: '4px 4px', whiteSpace: 'nowrap', textAlign: 'right' }}>
+        <td style={{ padding: '4px 6px', whiteSpace: 'nowrap', textAlign: 'right', position: 'sticky', right: 0, background: vencido ? '#FDF3F0' : '#fff', zIndex: 1, boxShadow: '-6px 0 6px -4px rgba(0,0,0,.12)' }}>
           <button onClick={() => descargarOCPDF(oc)} title="Descargar OC (PDF)" style={{ background: C.azul, color: '#fff', border: 'none', cursor: 'pointer', padding: '4px 7px', marginRight: 4 }}><Download size={13} /></button>
           <button onClick={() => setAbierta(!abierta)} title="Detalle, ítems y asignación a OT" style={{ background: 'none', border: '1px solid #CBD2D6', cursor: 'pointer', padding: '3px 6px', marginRight: 4 }}>{abierta ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</button>
           <button onClick={() => window.confirm('¿Eliminar esta OC?') && onDelete(oc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
@@ -293,7 +293,7 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
       <div style={{ background: '#fff', border: '1px solid #E2DED4', overflowX: 'auto', padding: 8 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
           <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-            {['Nº OC', 'Proveedor', 'RUT', 'Categoría', 'Fecha', 'Neto', 'IVA', 'Total', 'Plazo', 'Vencimiento', 'Estado de pago', ''].map(h => <th key={h} style={{ textAlign: ['Neto', 'IVA', 'Total'].includes(h) ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>)}
+            {['Nº OC', 'Proveedor', 'RUT', 'Categoría', 'Fecha', 'Neto', 'IVA', 'Total', 'Plazo', 'Vencimiento', 'Estado de pago', ''].map((h, hi) => <th key={hi} style={{ textAlign: ['Neto', 'IVA', 'Total'].includes(h) ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap', ...(h === '' ? { position: 'sticky', right: 0, background: '#fff', zIndex: 3 } : {}) }}>{h || 'Acciones'}</th>)}
           </tr></thead>
           <tbody>
             {pg.items.map(o => <FilaOC key={o.id} oc={o} otsDisponibles={otsDisponibles} upd={upd} onDelete={eliminar} />)}
