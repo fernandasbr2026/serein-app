@@ -145,6 +145,26 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const kPerd = esTODAS ? proyPerd : vista.perdidaFact
   const ventaAreaLive = [{ area: 'Santa Rosa', venta: facSum('Santa Rosa') }, { area: 'Istria', venta: facSum('Istria') }, { area: 'Proyectos', venta: proyFact }]
 
+  // ----- Flujo de caja proyectado (consolidado): lo que se debe pagar vs lo que va a entrar -----
+  const _hoy = new Date().toISOString().slice(0, 10)
+  const _en7 = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+  const gastosPend = (fin.gastos || []).filter(g => g.estado !== 'Pagado' && g.estado !== 'Anulado')
+  const cuotasPend = (fin.obligaciones || []).flatMap(o => o.cuotas || []).filter(c => c.estado !== 'Pagada')
+  const docsPend = (pp.docs || []).filter(d => !d.anulado).map(d => ({ venc: d.fecha_vencimiento, monto: Math.max(0, (d.total || 0) - (d.pagos || []).reduce((a, p) => a + (p.monto || 0), 0)) })).filter(d => d.monto > 0)
+  const totalPagar = gastosPend.reduce((a, g) => a + (g.neto || 0), 0) + cuotasPend.reduce((a, c) => a + (c.total || 0), 0) + docsPend.reduce((a, d) => a + d.monto, 0)
+  const pagar7 = gastosPend.filter(g => g.vencimiento >= _hoy && g.vencimiento <= _en7).reduce((a, g) => a + (g.neto || 0), 0) + cuotasPend.filter(c => c.vencimiento >= _hoy && c.vencimiento <= _en7).reduce((a, c) => a + (c.total || 0), 0) + docsPend.filter(d => d.venc >= _hoy && d.venc <= _en7).reduce((a, d) => a + d.monto, 0)
+  const cobrosPend = (pp.cobros || []).filter(c => c.estado === 'Pendiente' || c.estado === 'Factoring')
+  const factPend = ['Santa Rosa', 'Istria'].flatMap(a => (facturas[a] || [])).filter(f => f.estado !== 'Pagado' && f.estado !== 'Anulada')
+  const proyPorCobrar = proyectos.flatMap(p => (p.edps || [])).filter(e => e.estado !== 'Pagado')
+  const totalEntrar = cobrosPend.reduce((a, c) => a + (c.total || 0), 0) + factPend.reduce((a, f) => a + (f.monto || 0), 0) + proyPorCobrar.reduce((a, e) => a + (e.venta || 0), 0)
+  const saldoProy = totalEntrar - totalPagar
+  const flujoItem = (label, valor, color) => (
+    <div>
+      <div style={{ fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>{label}</div>
+      <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 22, fontWeight: 600, color: color || '#161616', whiteSpace: 'nowrap' }}>{valor}</div>
+    </div>
+  )
+
   const nombreTab = t => t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Clientes' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t
 
   return (
@@ -236,6 +256,18 @@ export default function Dashboard({ perfil, email, onLogout }) {
             <PipelineOT ots={ots.filter(o => o.area === 'Santa Rosa' || o.area === 'Istria')} />
             <PipelineProyectos proyectos={proyectos} />
             <ResumenFinancieroCard fin={fin} onIr={() => setAreaSel('FINANZAS')} />
+            <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `4px solid ${C.verde}`, marginBottom: 16 }}>
+              <div style={{ padding: '14px 18px 6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>💵 Flujo de caja proyectado · todas las áreas</span>
+                <span style={{ fontSize: 11, color: '#7A8288' }}>pagos: gastos + cuotas + proveedores · ingresos: cobros + facturas por cobrar</span>
+              </div>
+              <div style={{ padding: '0 18px 16px', display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                {flujoItem('Total a pagar', clp(totalPagar), C.rojo)}
+                {flujoItem('Vence en 7 días', clp(pagar7), C.ambar)}
+                {flujoItem('Total a entrar', clp(totalEntrar), C.verde)}
+                {flujoItem('Saldo proyectado', clp(saldoProy), saldoProy >= 0 ? C.verde : C.rojo)}
+              </div>
+            </div>
           </>
         )}
 

@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { Plus, Trash2, Landmark, Info } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { Plus, Trash2, Landmark, Info, TrendingUp, RefreshCw } from 'lucide-react'
 
 // ============================================================
 // MÓDULO: Parámetros (SOLO GERENCIA)
@@ -20,6 +20,7 @@ export const PARAMS_SEED = {
     { id: 'f1', nombre: 'Defontana', tasa: 0.83, tasaMora: 3.5, costoOp: 50000 },
     { id: 'f2', nombre: 'ACF Capital', tasa: 0.83, tasaMora: 3.5, costoOp: 50000 },
   ],
+  uf: { valor: 0, fecha: '' },
 }
 
 // Cálculo de pérdida por factoring (reutilizable desde otros módulos)
@@ -100,13 +101,57 @@ function SeccionFactoring({ params, setParams }) {
   )
 }
 
+function SeccionUF({ params, setParams }) {
+  const uf = params.uf || { valor: 0, fecha: '' }
+  const [cargando, setCargando] = useState(false)
+  const [error, setError] = useState('')
+  async function traer() {
+    setCargando(true); setError('')
+    try {
+      const r = await fetch('https://mindicador.cl/api/uf')
+      const d = await r.json()
+      const s = d.serie && d.serie[0]
+      if (s) setParams({ ...params, uf: { valor: Math.round(s.valor), fecha: (s.fecha || '').slice(0, 10) } })
+      else setError('Sin datos de UF.')
+    } catch (e) { setError('No se pudo actualizar la UF en línea. Puedes ingresarla a mano.') }
+    setCargando(false)
+  }
+  useEffect(() => { if (!uf.valor) traer() }, [])
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <TrendingUp size={16} color={C.naranja} />
+        <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, textTransform: 'uppercase' }}>Valor UF (actualizado en línea)</span>
+      </div>
+      <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18, maxWidth: 460 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>UF de hoy</span>
+          <span style={{ fontFamily: "'Oswald',sans-serif", fontSize: 26, fontWeight: 600, color: C.carbon }}>{clp(uf.valor)}</span>
+          {uf.fecha && <span style={{ fontSize: 12, color: C.gris }}>al {uf.fecha}</span>}
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}>
+          <button onClick={traer} disabled={cargando} style={{ background: C.carbon, color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <RefreshCw size={13} /> {cargando ? 'Actualizando…' : 'Actualizar UF'}
+          </button>
+          <span style={{ fontSize: 12, color: C.gris }}>o ingresar a mano:</span>
+          <input value={uf.valor || ''} onChange={e => setParams({ ...params, uf: { valor: num(e.target.value), fecha: uf.fecha } })} style={{ ...inp, width: 110, textAlign: 'right' }} />
+        </div>
+        {error && <div style={{ fontSize: 12, color: C.rojo, marginTop: 8 }}>{error}</div>}
+        <div style={{ fontSize: 12, color: C.gris, marginTop: 12, background: '#FAF7F3', padding: 10 }}>
+          Fuente: mindicador.cl (UF diaria del Banco Central). Este valor se usa para gastos en UF (ej. arriendo de Santa Rosa): el monto se calcula como <b>UF × valor de hoy</b>, y al registrar el pago se guarda la UF del día.
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ParametrosModule({ params: pExt, setParams: setPExt }) {
   const [pInt, setPInt] = useState(PARAMS_SEED)
   const params = pExt ?? pInt
   const setParams = setPExt ?? setPInt
   const [tab, setTab] = useState('factoring')
 
-  const tabs = [{ id: 'factoring', label: 'Factoring', icono: <Landmark size={13} /> }]
+  const tabs = [{ id: 'factoring', label: 'Factoring', icono: <Landmark size={13} /> }, { id: 'uf', label: 'Valor UF', icono: <TrendingUp size={13} /> }]
 
   return (
     <div>
@@ -119,6 +164,7 @@ export default function ParametrosModule({ params: pExt, setParams: setPExt }) {
         ))}
       </div>
       {tab === 'factoring' && <SeccionFactoring params={params} setParams={setParams} />}
+      {tab === 'uf' && <SeccionUF params={params} setParams={setParams} />}
     </div>
   )
 }
