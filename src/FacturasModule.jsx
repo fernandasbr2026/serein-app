@@ -24,10 +24,13 @@ const BANCOS = ['', 'Banco de Chile', 'BCI', 'Santander', 'Estado', 'Scotiabank'
 const fondoEstado = e => ({ Pagado: '#E7F2EA', Factoring: '#F9E9DE', Vencida: '#F6E0DA', Anulada: '#EEE', Pendiente: '#F9E9DE' }[e] || '#EEE')
 const colorEstado = e => ({ Pagado: C.verde, Factoring: C.ambar, Vencida: C.rojo, Anulada: C.gris, Pendiente: '#8C4519' }[e] || C.gris)
 
-export default function FacturasModule({ area, facturas, setFacturas, params = { factoring: [] } }) {
+const VENDEDORES = ['General', 'Mario']
+
+export default function FacturasModule({ area, facturas, setFacturas, params = { factoring: [] }, comisionPct = 0, setComisionPct = () => {} }) {
   const lista = (facturas && facturas[area]) || []
   const [creando, setCreando] = useState(false)
-  const nueva = () => ({ numero: '', cliente: '', ot: '', fecha_emision: '', monto: '', estado: 'Pendiente', fecha_pago: '', banco: '', comentarios: '' })
+  const nueva = () => ({ numero: '', cliente: '', ot: '', fecha_emision: '', monto: '', estado: 'Pendiente', fecha_pago: '', banco: '', comentarios: '', vendedor: 'General' })
+  const comisionDe = x => x.vendedor === 'Mario' ? Math.round((x.neto || x.monto || 0) * (comisionPct / 100)) : 0
   const [f, setF] = useState(nueva())
   const [busca, setBusca] = useState('')
   const [fCli, setFCli] = useState('')
@@ -87,6 +90,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
   const hayFiltro = busca || fCli || fEst || fMes
   const totalMonto = mostradas.reduce((a, x) => a + x.monto, 0)
   const cobrado = mostradas.filter(x => x.estado === 'Pagado').reduce((a, x) => a + x.monto, 0)
+  const totalComision = mostradas.reduce((a, x) => a + comisionDe(x), 0)
 
   return (
     <div style={{ marginTop: 16 }}>
@@ -97,6 +101,10 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
             <span>{hayFiltro ? `${mostradas.length} de ${lista.length}` : lista.length} facturas</span>
             <span>Total: <b style={{ color: C.carbon }}>{clp(totalMonto)}</b></span>
             <span>Cobrado: <b style={{ color: C.verde }}>{clp(cobrado)}</b></span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>Comisión Mario
+              <input value={comisionPct} onChange={e => setComisionPct(parseFloat(String(e.target.value).replace(',', '.')) || 0)} style={{ ...inp, width: 46, textAlign: 'right' }} />%
+              {totalComision > 0 && <b style={{ color: C.rojo }}>= {clp(totalComision)}</b>}
+            </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, border: '1px solid #CBD2D6', padding: '2px 6px' }}>
               <Search size={13} color={C.gris} />
               <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar N°/cliente/OT…" style={{ border: 'none', outline: 'none', fontSize: 12.5, width: 130 }} />
@@ -119,6 +127,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
               <input style={inp} placeholder="OT" value={f.ot} onChange={e => setF({ ...f, ot: e.target.value })} />
               <label style={{ fontSize: 11, color: C.gris }}>Emisión<input type="date" style={{ ...inp, width: '100%' }} value={f.fecha_emision} onChange={e => setF({ ...f, fecha_emision: e.target.value })} /></label>
               <input style={inp} placeholder="Monto CLP *" value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} />
+              <select style={inp} value={f.vendedor} onChange={e => setF({ ...f, vendedor: e.target.value })}>{VENDEDORES.map(v => <option key={v} value={v}>Vendedor: {v}</option>)}</select>
             </div>
             <input style={{ ...inp, width: '100%', marginTop: 8 }} placeholder="Observación / comentario (opcional)" value={f.comentarios} onChange={e => setF({ ...f, comentarios: e.target.value })} />
             <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
@@ -131,8 +140,8 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
         <div style={{ overflowX: 'auto', padding: 12 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
             <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-              {['N° factura', 'Cliente', 'OT', 'Emisión', 'Monto', 'Estado', 'Fecha pago', 'Banco depósito', 'Comentarios', ''].map((h, i) => (
-                <th key={i} style={{ textAlign: h === 'Monto' ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+              {['N° factura', 'Cliente', 'OT', 'Emisión', 'Monto', 'Estado', 'Fecha pago', 'Banco depósito', 'Comentarios', 'Vendedor', 'Comisión', ''].map((h, i) => (
+                <th key={i} style={{ textAlign: ['Monto', 'Comisión'].includes(h) ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
@@ -157,12 +166,18 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                   <td style={{ padding: '5px 6px' }}>
                     <input value={x.banco} onChange={e => actualizar(x.id, 'banco', e.target.value)} placeholder="Banco…" style={{ ...inp, width: 130 }} />
                   </td>
-                  <td style={{ padding: '5px 6px' }}><input value={x.comentarios} onChange={e => actualizar(x.id, 'comentarios', e.target.value)} placeholder="Comentario…" style={{ ...inp, width: 160 }} /></td>
+                  <td style={{ padding: '5px 6px' }}><input value={x.comentarios} onChange={e => actualizar(x.id, 'comentarios', e.target.value)} placeholder="Comentario…" style={{ ...inp, width: 150 }} /></td>
+                  <td style={{ padding: '5px 6px' }}>
+                    <select value={x.vendedor || 'General'} onChange={e => actualizar(x.id, 'vendedor', e.target.value)} style={{ ...inp, width: 92 }}>
+                      {VENDEDORES.map(v => <option key={v}>{v}</option>)}
+                    </select>
+                  </td>
+                  <td style={{ padding: '5px 6px', textAlign: 'right', color: comisionDe(x) > 0 ? C.rojo : C.gris, whiteSpace: 'nowrap' }}>{comisionDe(x) > 0 ? clp(comisionDe(x)) : '—'}</td>
                   <td style={{ padding: '5px 4px', textAlign: 'right' }}><button onClick={() => window.confirm(`¿Eliminar factura ${x.numero}?`) && setLista(lista.filter(y => y.id !== x.id))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button></td>
                 </tr>
                 {x.estado === 'Factoring' && (
                   <tr style={{ background: '#FBF3EE' }}>
-                    <td colSpan={10} style={{ padding: '8px 10px' }}>
+                    <td colSpan={12} style={{ padding: '8px 10px' }}>
                       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12 }}>
                         <span style={{ color: C.gris, fontWeight: 600 }}>Factoring:</span>
                         <select value={x.factoringId || (fSel ? fSel.id : '')} onChange={e => actualizar(x.id, 'factoringId', e.target.value)} style={inp}>
@@ -181,7 +196,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                 )}
                 </React.Fragment>
               ) })}
-              {mostradas.length === 0 && <tr><td colSpan={10} style={{ padding: 14, textAlign: 'center', color: '#9AA0A6' }}>{busca ? 'Sin resultados para la búsqueda.' : 'Sin facturas en esta área.'}</td></tr>}
+              {mostradas.length === 0 && <tr><td colSpan={12} style={{ padding: 14, textAlign: 'center', color: '#9AA0A6' }}>{busca ? 'Sin resultados para la búsqueda.' : 'Sin facturas en esta área.'}</td></tr>}
             </tbody>
           </table>
         </div>

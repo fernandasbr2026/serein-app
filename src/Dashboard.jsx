@@ -117,6 +117,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const [params, setParams] = useState(PARAMS_SEED)
   const [clientes, setClientes] = useState(CLIENTES_SEED)
   const [facturas, setFacturas] = useState(FACTURAS_SEED)
+  const [comisiones, setComisiones] = useState({ 'Santa Rosa': 3, 'Istria': 2, 'Proyectos': 2 })
   const [ots, setOts] = useState(OTS_INICIALES)
   const [proyectos, setProyectos] = useState(PROYECTOS)
 
@@ -152,20 +153,19 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const estados = Object.entries(vista.estados || {})
   const totalEst = estados.reduce((a, [, n]) => a + n, 0) || 1
 
-  // ----- Consolidado EN VIVO: suma las 3 áreas (Santa Rosa + Istria por facturas, Proyectos por OT) -----
-  const facSum = area => (facturas[area] || []).reduce((a, f) => a + (f.monto || 0), 0)
-  const facCob = area => (facturas[area] || []).filter(f => f.estado === 'Pagado').reduce((a, f) => a + (f.monto || 0), 0)
-  const proyFact = proyectos.reduce((a, p) => a + (p.edps || []).reduce((x, e) => x + e.venta, 0), 0)
-  const proyCob = proyectos.reduce((a, p) => a + (p.edps || []).filter(e => e.estado === 'Pagado').reduce((x, e) => x + e.venta, 0), 0)
-  const proyPerd = proyectos.reduce((a, p) => a + (p.edps || []).reduce((x, e) => x + (e.perdidaFact || 0), 0), 0)
-  const liveVenta = facSum('Santa Rosa') + facSum('Istria') + proyFact
-  const liveCobrado = facCob('Santa Rosa') + facCob('Istria') + proyCob
+  // ----- Consolidado y áreas: suman desde las FACTURAS consolidadas (Venta Neta) -----
+  const areasFact = ['Santa Rosa', 'Istria', 'Proyectos']
+  const facNeto = a => (facturas[a] || []).reduce((s, x) => s + (x.neto || 0), 0)
+  const facCobN = a => (facturas[a] || []).filter(x => x.estado === 'Pagado').reduce((s, x) => s + (x.neto || 0), 0)
+  const facCount = a => (facturas[a] || []).length
   const esTODAS = esGerencia && areaSel === 'TODAS'
-  const kVenta = esTODAS ? liveVenta : vista.venta
-  const kCobrado = esTODAS ? liveCobrado : vista.cobrado
-  const kPend = esTODAS ? (liveVenta - liveCobrado) : vista.pendiente
-  const kPerd = esTODAS ? proyPerd : vista.perdidaFact
-  const ventaAreaLive = [{ area: 'Santa Rosa', venta: facSum('Santa Rosa') }, { area: 'Istria', venta: facSum('Istria') }, { area: 'Proyectos', venta: proyFact }]
+  const esAreaFact = areasFact.includes(areaSel)
+  const kVenta = esTODAS ? areasFact.reduce((s, a) => s + facNeto(a), 0) : (esAreaFact ? facNeto(areaSel) : vista.venta)
+  const kCobrado = esTODAS ? areasFact.reduce((s, a) => s + facCobN(a), 0) : (esAreaFact ? facCobN(areaSel) : vista.cobrado)
+  const kPend = (esTODAS || esAreaFact) ? (kVenta - kCobrado) : vista.pendiente
+  const kPerd = vista.perdidaFact
+  const kNFact = esTODAS ? areasFact.reduce((s, a) => s + facCount(a), 0) : (esAreaFact ? facCount(areaSel) : vista.nFacturas)
+  const ventaAreaLive = areasFact.map(a => ({ area: a, venta: facNeto(a) }))
 
   // ----- Flujo de caja proyectado (consolidado): lo que se debe pagar vs lo que va a entrar -----
   const _hoy = new Date().toISOString().slice(0, 10)
@@ -267,10 +267,10 @@ export default function Dashboard({ perfil, email, onLogout }) {
         ) : (
         <>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-          <Kpi label="Venta Neta" valor={clp(vista.venta)} sub={`${vista.nFacturas} facturas`} color={C.azul} icon={TrendingUp} />
-          <Kpi label="Cobrado" valor={clp(vista.cobrado)} sub={`${((vista.cobrado / (vista.cobrado + vista.pendiente)) * 100).toFixed(0)}% de la cartera`} color={C.verde} icon={Wallet} />
-          <Kpi label="Por Cobrar" valor={clp(vista.pendiente)} sub="pendiente con IVA" color={C.rojo} icon={AlertTriangle} />
-          <Kpi label="Pérdida Factoring" valor={clp(vista.perdidaFact)} sub={`${((vista.perdidaFact / vista.venta) * 100).toFixed(2)}% s/ venta`} color={C.ambar} icon={Landmark} />
+          <Kpi label="Venta Neta" valor={clp(kVenta)} sub={`${kNFact} facturas`} color={C.azul} icon={TrendingUp} />
+          <Kpi label="Cobrado" valor={clp(kCobrado)} sub={`${((kCobrado / ((kCobrado + kPend) || 1)) * 100).toFixed(0)}% de la cartera`} color={C.verde} icon={Wallet} />
+          <Kpi label="Por Cobrar" valor={clp(kPend)} sub="pendiente" color={C.rojo} icon={AlertTriangle} />
+          <Kpi label="Pérdida Factoring" valor={clp(kPerd)} sub={kVenta > 0 ? `${((kPerd / kVenta) * 100).toFixed(2)}% s/ venta` : '—'} color={C.ambar} icon={Landmark} />
         </div>
 
         {esGerencia && areaSel === 'TODAS' && (
@@ -332,15 +332,15 @@ export default function Dashboard({ perfil, email, onLogout }) {
 
         {esGerencia && areaSel === 'TODAS' && (
           <div style={{ marginBottom: 16 }}>
-            <Panel title="Venta por área">
+            <Panel title="Venta por área (facturas)">
               <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={areasUsuario.map(a => ({ area: a, venta: DATA.areas[a].venta }))} margin={{ left: 4 }}>
+                <BarChart data={ventaAreaLive} margin={{ left: 4 }}>
                   <CartesianGrid stroke="#EEE9DF" vertical={false} />
                   <XAxis dataKey="area" tick={{ fontSize: 11, fill: '#7A8288' }} />
                   <YAxis tickFormatter={v => `${Math.round(v / 1e6)}M`} tick={{ fontSize: 11, fill: '#7A8288' }} />
                   <Tooltip formatter={v => clp(v)} />
                   <Bar dataKey="venta" name="Venta neta">
-                    {areasUsuario.map(a => <Cell key={a} fill={AREA_COLOR[a]} />)}
+                    {ventaAreaLive.map(d => <Cell key={d.area} fill={AREA_COLOR[d.area]} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -402,7 +402,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
           </>
         )}
         {(areaSel === 'Santa Rosa' || areaSel === 'Istria') && (
-          <FacturasModule area={areaSel} facturas={facturas} setFacturas={setFacturas} params={params} />
+          <FacturasModule area={areaSel} facturas={facturas} setFacturas={setFacturas} params={params} comisionPct={comisiones[areaSel] ?? 0} setComisionPct={v => setComisiones(c => ({ ...c, [areaSel]: v }))} />
         )}
         </>
         )}
