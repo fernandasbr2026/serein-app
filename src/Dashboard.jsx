@@ -14,6 +14,8 @@ import ProduccionModule, { AVANCES_SEED } from './ProduccionModule.jsx'
 import ComprasOperativasModule, { COMPRAS_OP_SEED, CONFIG_COMPRAS_DEFAULT } from './ComprasOperativasModule.jsx'
 import ProveedoresPagosModule, { PP_SEED } from './ProveedoresPagosModule.jsx'
 import ParametrosModule, { PARAMS_SEED } from './ParametrosModule.jsx'
+import ClientesModule, { CLIENTES_SEED } from './ClientesModule.jsx'
+import FacturasModule, { FACTURAS_SEED } from './FacturasModule.jsx'
 import { MO_SEED } from './ManoObraModule.jsx'
 import { PROYECTOS } from './proyectos-data.js'
 
@@ -85,6 +87,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     ...areasUsuario.filter(a => a !== 'Proyectos'),
     ...(areasOT.length > 0 ? ['GESTION_OT'] : []),
     ...(tieneProyectos ? ['GESTION_PROYECTOS'] : []),
+    'CLIENTES',
     'COTIZADOR',
     ...(areasOT.length > 0 || esGerencia ? ['PRODUCCION'] : []),
     ...(esGerencia ? ['COMPRAS_OP'] : []),
@@ -101,6 +104,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const esModuloFin = areaSel === 'FINANZAS'
   const esModuloPagos = areaSel === 'PAGOS'
   const esModuloParams = areaSel === 'PARAMETROS'
+  const esModuloClientes = areaSel === 'CLIENTES'
   const esModuloCot = areaSel === 'COTIZADOR'
   const esModuloProd = areaSel === 'PRODUCCION'
   const [avances, setAvances] = useState(AVANCES_SEED)
@@ -111,6 +115,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const [fin, setFin] = useState(FIN_SEED)
   const [pp, setPp] = useState(PP_SEED)
   const [params, setParams] = useState(PARAMS_SEED)
+  const [clientes, setClientes] = useState(CLIENTES_SEED)
+  const [facturas, setFacturas] = useState(FACTURAS_SEED)
   const [ots, setOts] = useState(OTS_INICIALES)
   const [proyectos, setProyectos] = useState(PROYECTOS)
   const vista = useMemo(() => (esGerencia && areaSel === 'TODAS') ? DATA.global : (DATA.areas[areaSel] || DATA.global), [areaSel, esGerencia])
@@ -191,6 +197,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
           <ProveedoresPagosModule pp={pp} setPp={setPp} />
         ) : esModuloParams && esGerencia ? (
           <ParametrosModule params={params} setParams={setParams} />
+        ) : esModuloClientes ? (
+          <ClientesModule clientes={clientes} setClientes={setClientes} proyectos={proyectos} ots={ots} />
         ) : esModuloMO ? (
           <ManoObraModule
             esGerencia={esGerencia}
@@ -323,6 +331,9 @@ export default function Dashboard({ perfil, email, onLogout }) {
               )}
             </Panel>
           </>
+        )}
+        {(areaSel === 'Santa Rosa' || areaSel === 'Istria') && (
+          <FacturasModule area={areaSel} facturas={facturas} setFacturas={setFacturas} />
         )}
         </>
         )}
