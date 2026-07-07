@@ -118,6 +118,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const [clientes, setClientes] = useState(CLIENTES_SEED)
   const [facturas, setFacturas] = useState(FACTURAS_SEED)
   const [comisiones, setComisiones] = useState({ 'Santa Rosa': 3, 'Istria': 2, 'Proyectos': 2 })
+  const [ppmPct, setPpmPct] = useState(2)
   const [ots, setOts] = useState(OTS_INICIALES)
   const [proyectos, setProyectos] = useState(PROYECTOS)
 
@@ -219,7 +220,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
       <main style={{ flex: 1, minWidth: 0, height: '100vh', overflowY: 'auto' }}>
       <div style={{ padding: 20, maxWidth: 1200, margin: '0 auto' }}>
         {esModuloProyectos ? (
-          <ProyectosModule proyectos={proyectos} setProyectos={setProyectos} params={params} />
+          <ProyectosModule proyectos={proyectos} setProyectos={setProyectos} params={params} facturas={facturas} setFacturas={setFacturas} comisionPct={comisiones['Proyectos'] ?? 2} setComisionPct={v => setComisiones(c => ({ ...c, Proyectos: v }))} ppmPct={ppmPct} setPpmPct={setPpmPct} />
         ) : esModuloOT ? (
           <OTModule areasPermitidas={areasOT} ots={ots} setOts={setOts} />
         ) : esModuloComprasOp ? (
@@ -402,7 +403,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
           </>
         )}
         {(areaSel === 'Santa Rosa' || areaSel === 'Istria') && (
-          <FacturasModule area={areaSel} facturas={facturas} setFacturas={setFacturas} params={params} comisionPct={comisiones[areaSel] ?? 0} setComisionPct={v => setComisiones(c => ({ ...c, [areaSel]: v }))} />
+          <FacturasModule area={areaSel} facturas={facturas} setFacturas={setFacturas} params={params} comisionPct={comisiones[areaSel] ?? 0} setComisionPct={v => setComisiones(c => ({ ...c, [areaSel]: v }))} ppmPct={ppmPct} setPpmPct={setPpmPct} />
         )}
         </>
         )}

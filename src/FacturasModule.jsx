@@ -26,10 +26,10 @@ const colorEstado = e => ({ Pagado: C.verde, Factoring: C.ambar, Vencida: C.rojo
 
 const VENDEDORES = ['General', 'Mario']
 
-export default function FacturasModule({ area, facturas, setFacturas, params = { factoring: [] }, comisionPct = 0, setComisionPct = () => {} }) {
+export default function FacturasModule({ area, facturas, setFacturas, params = { factoring: [] }, comisionPct = 0, setComisionPct = () => {}, ppmPct = 2, setPpmPct = () => {} }) {
   const lista = (facturas && facturas[area]) || []
   const [creando, setCreando] = useState(false)
-  const nueva = () => ({ numero: '', cliente: '', ot: '', fecha_emision: '', monto: '', estado: 'Pendiente', fecha_pago: '', banco: '', comentarios: '', vendedor: 'General' })
+  const nueva = () => ({ numero: '', cliente: '', ot: '', fecha_emision: '', neto: '', monto: '', estado: 'Pendiente', fecha_pago: '', banco: '', comentarios: '', vendedor: 'General' })
   const comisionDe = x => x.vendedor === 'Mario' ? Math.round((x.neto || x.monto || 0) * (comisionPct / 100)) : 0
   const [f, setF] = useState(nueva())
   const [busca, setBusca] = useState('')
@@ -42,7 +42,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
   const actualizar = (id, campo, valor) => setLista(lista.map(x => x.id === id ? { ...x, [campo]: valor } : x))
   function agregar() {
     if (!f.numero || num(f.monto) <= 0) return
-    setLista([{ id: 'f' + Date.now(), ...f, monto: num(f.monto) }, ...lista])
+    setLista([{ id: 'f' + Date.now(), ...f, neto: num(f.neto) || Math.round(num(f.monto) / 1.19), monto: num(f.monto) }, ...lista])
     setF(nueva()); setCreando(false)
   }
 
@@ -91,6 +91,8 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
   const totalMonto = mostradas.reduce((a, x) => a + x.monto, 0)
   const cobrado = mostradas.filter(x => x.estado === 'Pagado').reduce((a, x) => a + x.monto, 0)
   const totalComision = mostradas.reduce((a, x) => a + comisionDe(x), 0)
+  const totalNeto = mostradas.reduce((a, x) => a + (x.neto || 0), 0)
+  const totalPPM = Math.round(totalNeto * (ppmPct / 100))
 
   return (
     <div style={{ marginTop: 16 }}>
@@ -104,6 +106,10 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>Comisión Mario
               <input value={comisionPct} onChange={e => setComisionPct(parseFloat(String(e.target.value).replace(',', '.')) || 0)} style={{ ...inp, width: 46, textAlign: 'right' }} />%
               {totalComision > 0 && <b style={{ color: C.rojo }}>= {clp(totalComision)}</b>}
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>PPM
+              <input value={ppmPct} onChange={e => setPpmPct(parseFloat(String(e.target.value).replace(',', '.')) || 0)} style={{ ...inp, width: 46, textAlign: 'right' }} />%
+              <b style={{ color: C.teal }}>= {clp(totalPPM)}</b>
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, border: '1px solid #CBD2D6', padding: '2px 6px' }}>
               <Search size={13} color={C.gris} />
@@ -126,7 +132,8 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
               <input style={inp} placeholder="Cliente" value={f.cliente} onChange={e => setF({ ...f, cliente: e.target.value })} />
               <input style={inp} placeholder="OT" value={f.ot} onChange={e => setF({ ...f, ot: e.target.value })} />
               <label style={{ fontSize: 11, color: C.gris }}>Emisión<input type="date" style={{ ...inp, width: '100%' }} value={f.fecha_emision} onChange={e => setF({ ...f, fecha_emision: e.target.value })} /></label>
-              <input style={inp} placeholder="Monto CLP *" value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} />
+              <input style={inp} placeholder="Neto CLP" value={f.neto} onChange={e => setF({ ...f, neto: e.target.value })} />
+              <input style={inp} placeholder="Total CLP *" value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} />
               <select style={inp} value={f.vendedor} onChange={e => setF({ ...f, vendedor: e.target.value })}>{VENDEDORES.map(v => <option key={v} value={v}>Vendedor: {v}</option>)}</select>
             </div>
             <input style={{ ...inp, width: '100%', marginTop: 8 }} placeholder="Observación / comentario (opcional)" value={f.comentarios} onChange={e => setF({ ...f, comentarios: e.target.value })} />
@@ -140,8 +147,8 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
         <div style={{ overflowX: 'auto', padding: 12 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
             <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-              {['N° factura', 'Cliente', 'OT', 'Emisión', 'Monto', 'Estado', 'Fecha pago', 'Banco depósito', 'Comentarios', 'Vendedor', 'Comisión', ''].map((h, i) => (
-                <th key={i} style={{ textAlign: ['Monto', 'Comisión'].includes(h) ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+              {['N° factura', 'Cliente', 'OT / OC', 'Emisión', 'Neto', 'IVA', 'Total', `PPM ${ppmPct}%`, 'Estado', 'Fecha pago', 'Banco depósito', 'Comentarios', 'Vendedor', 'Comisión', ''].map((h, i) => (
+                <th key={i} style={{ textAlign: ['Neto', 'IVA', 'Total', 'Comisión'].includes(h) || h.startsWith('PPM') ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
@@ -152,11 +159,14 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                 return (
                 <React.Fragment key={x.id}>
                 <tr style={{ borderBottom: '1px solid #EEE9DF', opacity: x.estado === 'Anulada' ? 0.5 : 1 }}>
-                  <td style={{ padding: '5px 6px', fontWeight: 600, whiteSpace: 'nowrap' }}>{x.numero}</td>
-                  <td style={{ padding: '5px 6px' }}>{x.cliente}</td>
-                  <td style={{ padding: '5px 6px', color: C.gris }}>{x.ot || '—'}</td>
-                  <td style={{ padding: '5px 6px', color: C.gris, whiteSpace: 'nowrap' }}>{x.fecha_emision || '—'}</td>
-                  <td style={{ padding: '5px 6px', textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }}>{clp(x.monto)}</td>
+                  <td style={{ padding: '4px 6px' }}><input value={x.numero} onChange={e => actualizar(x.id, 'numero', e.target.value)} style={{ ...inp, width: 80, fontWeight: 600 }} /></td>
+                  <td style={{ padding: '4px 6px' }}><input value={x.cliente} onChange={e => actualizar(x.id, 'cliente', e.target.value)} style={{ ...inp, width: 150 }} /></td>
+                  <td style={{ padding: '4px 6px' }}><input value={x.ot} onChange={e => actualizar(x.id, 'ot', e.target.value)} placeholder="OT/OC" style={{ ...inp, width: 100 }} /></td>
+                  <td style={{ padding: '4px 6px' }}><input type="date" value={x.fecha_emision} onChange={e => actualizar(x.id, 'fecha_emision', e.target.value)} style={{ ...inp, width: 130 }} /></td>
+                  <td style={{ padding: '4px 6px', textAlign: 'right' }}><input value={x.neto} onChange={e => actualizar(x.id, 'neto', num(e.target.value))} style={{ ...inp, width: 100, textAlign: 'right' }} /></td>
+                  <td style={{ padding: '4px 6px', textAlign: 'right', color: C.gris, whiteSpace: 'nowrap' }}>{clp((x.monto || 0) - (x.neto || 0))}</td>
+                  <td style={{ padding: '4px 6px', textAlign: 'right' }}><input value={x.monto} onChange={e => actualizar(x.id, 'monto', num(e.target.value))} style={{ ...inp, width: 110, textAlign: 'right', fontWeight: 600 }} /></td>
+                  <td style={{ padding: '4px 6px', textAlign: 'right', color: C.teal, whiteSpace: 'nowrap' }}>{clp(Math.round((x.neto || 0) * (ppmPct / 100)))}</td>
                   <td style={{ padding: '5px 6px' }}>
                     <select value={x.estado} onChange={e => actualizar(x.id, 'estado', e.target.value)} style={{ border: 'none', background: fondoEstado(x.estado), color: colorEstado(x.estado), padding: '3px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                       {ESTADOS.map(s => <option key={s}>{s}</option>)}
@@ -177,7 +187,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                 </tr>
                 {x.estado === 'Factoring' && (
                   <tr style={{ background: '#FBF3EE' }}>
-                    <td colSpan={12} style={{ padding: '8px 10px' }}>
+                    <td colSpan={15} style={{ padding: '8px 10px' }}>
                       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12 }}>
                         <span style={{ color: C.gris, fontWeight: 600 }}>Factoring:</span>
                         <select value={x.factoringId || (fSel ? fSel.id : '')} onChange={e => actualizar(x.id, 'factoringId', e.target.value)} style={inp}>
@@ -196,7 +206,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                 )}
                 </React.Fragment>
               ) })}
-              {mostradas.length === 0 && <tr><td colSpan={12} style={{ padding: 14, textAlign: 'center', color: '#9AA0A6' }}>{busca ? 'Sin resultados para la búsqueda.' : 'Sin facturas en esta área.'}</td></tr>}
+              {mostradas.length === 0 && <tr><td colSpan={15} style={{ padding: 14, textAlign: 'center', color: '#9AA0A6' }}>{busca ? 'Sin resultados para la búsqueda.' : 'Sin facturas en esta área.'}</td></tr>}
             </tbody>
           </table>
         </div>

@@ -2,6 +2,11 @@ import React, { useState, useMemo } from 'react'
 import { ChevronDown, ChevronUp, Target, Receipt, Hammer, ShoppingCart, Pencil, Plus, Trash2, X, AlertTriangle, LayoutGrid, Table2 } from 'lucide-react'
 import { PROYECTOS, CC_DEFS } from './proyectos-data.js'
 import { calcularPerdidaFactoring } from './ParametrosModule.jsx'
+import FacturasModule from './FacturasModule.jsx'
+// Engancha una factura de Proyectos a su OT comparando los números (≥3 dígitos) de OT/OC
+const _toks = x => (String(x || '').match(/\d{3,}/g) || [])
+const otMatch = (p, f) => { const pt = new Set([..._toks(p.ot), ..._toks(p.oc)]); return [..._toks(f.ot), ..._toks(f.oc)].some(t => pt.has(t)) }
+const facturasDeOT = (facturasProy, p) => (facturasProy || []).filter(f => otMatch(p, f))
 
 const C = { azul: '#1D1D1B', teal: '#A8501F', ambar: '#D2642F', rojo: '#B5432E', verde: '#3D7A4E', carbon: '#161616', gris: '#7A8288' }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
@@ -191,7 +196,9 @@ function StatHeader({ label, valor, color }) {
   )
 }
 
-function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params }) {
+function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasProy = [] }) {
+  const facturasOT = facturasDeOT(facturasProy, p)
+  const factNetoOT = facturasOT.reduce((a, f) => a + (f.neto || 0), 0)
   const [abierto, setAbierto] = useState(false)
   const [addEdp, setAddEdp] = useState(false)
   const [addCompra, setAddCompra] = useState(false)
@@ -214,7 +221,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params }) {
       <div onClick={() => setAbierto(!abierto)} style={{ padding: '16px 18px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, color: C.carbon }}>{p.nombre}</div>
-          <div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>{p.cliente}{p.m2 ? ` · ${p.m2} m²` : ''}{p.periodo ? ` · ${p.periodo}` : ''}</div>
+          <div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>{p.cliente}{p.m2 ? ` · ${p.m2} m²` : ''}{p.periodo ? ` · ${p.periodo}` : ''}{facturasOT.length > 0 && <span style={{ color: C.teal }}> · 🧾 {facturasOT.length} factura{facturasOT.length > 1 ? 's' : ''} ({clp(factNetoOT)})</span>}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           <StatHeader label="Venta cotizada" valor={clp(venta)} />
@@ -263,6 +270,27 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params }) {
 
       {abierto && (
         <div style={{ borderTop: '1px solid #EEE9DF', padding: 18 }}>
+          {facturasOT.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.teal, marginBottom: 6 }}>🧾 Facturas de esta OT (automáticas)</div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                  <thead><tr style={{ borderBottom: `1px solid ${C.carbon}` }}>{['N° factura', 'Fecha', 'Neto', 'Estado'].map(h => <th key={h} style={{ textAlign: h === 'Neto' ? 'right' : 'left', padding: '4px 6px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {facturasOT.map(fx => (
+                      <tr key={fx.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                        <td style={{ padding: '4px 6px', fontWeight: 600 }}>{fx.numero}</td>
+                        <td style={{ padding: '4px 6px', color: C.gris }}>{fx.fecha_emision || '—'}</td>
+                        <td style={{ padding: '4px 6px', textAlign: 'right' }}>{clp(fx.neto)}</td>
+                        <td style={{ padding: '4px 6px', color: C.gris }}>{fx.estado}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ fontSize: 12, color: C.gris, marginTop: 4 }}>Facturado (facturas): <b>{clp(factNetoOT)}</b> — se cargan solas al ingresarlas en la pestaña Facturas con esta OT.</div>
+            </div>
+          )}
           {/* VENTAS / EDP */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.gris }}>Ventas · Estados de pago (EDP)</span>
@@ -438,10 +466,11 @@ function Consolidado({ proyectos }) {
   )
 }
 
-export default function ProyectosModule({ proyectos: proyExt, setProyectos: setProyExt, params = { factoring: [] } }) {
+export default function ProyectosModule({ proyectos: proyExt, setProyectos: setProyExt, params = { factoring: [] }, facturas = {}, setFacturas = () => {}, comisionPct = 2, setComisionPct = () => {}, ppmPct = 2, setPpmPct = () => {} }) {
   const [proyInt, setProyInt] = useState(PROYECTOS)
   const proyectos = proyExt ?? proyInt
   const setProyectos = setProyExt ?? setProyInt
+  const facturasProy = (facturas && facturas['Proyectos']) || []
   const [creando, setCreando] = useState(false)
   const [vista, setVista] = useState('tarjetas')
 
@@ -484,7 +513,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-        {[['tarjetas', 'Tarjetas', LayoutGrid], ['consolidado', 'Consolidado', Table2]].map(([id, lbl, Icon]) => (
+        {[['tarjetas', 'Tarjetas', LayoutGrid], ['consolidado', 'Consolidado', Table2], ['facturas', 'Facturas', Receipt]].map(([id, lbl, Icon]) => (
           <button key={id} onClick={() => setVista(id)} style={{ background: vista === id ? C.carbon : '#fff', color: vista === id ? '#fff' : C.carbon, border: '1px solid #CBD2D6', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Icon size={14} />{lbl}</button>
         ))}
         {!creando && vista === 'tarjetas' && (
@@ -496,8 +525,10 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
 
       {vista === 'consolidado' ? (
         <Consolidado proyectos={proyectos} />
+      ) : vista === 'facturas' ? (
+        <FacturasModule area="Proyectos" facturas={facturas} setFacturas={setFacturas} params={params} comisionPct={comisionPct} setComisionPct={setComisionPct} ppmPct={ppmPct} setPpmPct={setPpmPct} />
       ) : (
-        proyectos.map(p => <TarjetaProyecto key={p.id} p={p} onUpdate={actualizar} onDelete={eliminar} onAddCompra={agregarCompra} params={params} />)
+        proyectos.map(p => <TarjetaProyecto key={p.id} p={p} onUpdate={actualizar} onDelete={eliminar} onAddCompra={agregarCompra} params={params} facturasProy={facturasProy} />)
       )}
 
       <div style={{ fontSize: 12, color: '#9AA0A6', textAlign: 'center', marginTop: 8 }}>
