@@ -79,9 +79,39 @@ function estilosDoc() {
   .tot{width:auto;margin-left:auto;margin-top:10px}
   .tot td{padding:4px 10px;font-size:12px}.tot .lbl{color:#7A8288;text-align:right}.tot .big{font-weight:bold;font-size:14px}
   .words{margin-top:6px;font-size:10px;color:#555}
-  .badge{display:inline-block;border:1px solid #A8501F;color:#A8501F;padding:2px 8px;font-size:10px;margin-top:6px}`
+  .badge{display:inline-block;border:1px solid #A8501F;color:#A8501F;padding:2px 8px;font-size:10px;margin-top:6px}
+  .pb{page-break-before:always;padding-top:10px}
+  .cond h2{font-size:15px;border-bottom:2px solid #161616;padding-bottom:6px;margin:0 0 10px}
+  .cond ol{padding-left:18px;font-size:11px;line-height:1.5}.cond li{margin-bottom:6px}.cond li b{color:#161616}
+  .cond .datos{margin-top:14px;border:1px solid #ddd;padding:10px;font-size:11px;line-height:1.6}`
 }
-function htmlDoc(cot, { conValores, esOT }) {
+
+// Condiciones comerciales y operativas (se adjuntan a la cotización)
+function htmlCondiciones() {
+  return `<div class="pb cond">
+    <h2>Condiciones comerciales y operativas — SEREIN</h2>
+    <ol>
+      <li><b>Alcance y horario de ejecución:</b> los valores corresponden a trabajos realizados en horario normal y días hábiles.</li>
+      <li><b>Trabajos fuera de horario regular:</b> se aplicará recargo por horas extraordinarias y disponibilidad, informado previamente.</li>
+      <li><b>Condición del material recepcionado:</b> valores válidos para material nuevo y libre de contaminantes (aceites, grasas, lacas, etc.). Si no cumple, se debe informar para revalorizar.</li>
+      <li><b>Superficie mínima a cobrar:</b> piezas menores a 1 m² se valorizan como 1 m². Esquemas de pintura: cobro mínimo 18 m² (por compra mínima de pintura).</li>
+      <li><b>Piezas especiales y complejidad:</b> elementos no estándar se valorizan según complejidad (peso/masa, geometría, dimensiones, manipulación, puntos de izaje, protección o preparación adicional).</li>
+      <li><b>Cálculo de cubicación:</b> Parrillas estándar: A×B×2 + 30%. Parrillas especiales: desarrollo + 40%. Barandas: A×B + 40%. Enrejados/cerchas/reticulado: desarrollo + 30%. Cañerías hasta 3": +15%.</li>
+      <li><b>Exclusiones del servicio:</b> no se consideran trabajos adicionales como mecánicos, enmasillados, silicona, tapas, etiquetado, u otros no mencionados en la cotización.</li>
+      <li><b>Plazo de retiro y bodegaje:</b> el material puede permanecer en planta máx. 7 días terminado el proceso. Luego: bodegaje 2 UF/día.</li>
+      <li><b>Entrega y condiciones de carga:</b> SEREIN entrega el material puesto sobre camión. Capacidad grúa: 7 toneladas (sobre eso, corre por cuenta del cliente).</li>
+      <li><b>Responsabilidad del cliente para carguío:</b> el cliente debe contar con eslingas, maderas, cartón y elementos para carguío. Si se requiere embalaje, tiene costo adicional y debe solicitarse con 48 hrs de anticipación.</li>
+      <li><b>Orden de Compra (OC):</b> es obligatorio el envío de la OC para iniciar producción.</li>
+    </ol>
+    <div class="datos"><b>Datos de transferencia</b><br>
+      SERVICIOS REVESTIMIENTOS INDUSTRIALES SpA · RUT 76.860.656-0<br>
+      Banco de Chile · Cuenta Corriente N° 532147409<br>
+      administracion@sereinspa.com · Carolina Marillanca, Gerente Comercial<br>
+      Dirección: Santa Rosa 70, Lampa · sereingroup.cl · Tel: 56 9 7647 1744
+    </div>
+  </div>`
+}
+function htmlDoc(cot, { conValores, esOT, conCondiciones }) {
   const t = totales(cot)
   const titulo = esOT ? 'ORDEN DE TRABAJO' : 'Cotización'
   const foliolbl = esOT ? ('OT N° ' + cot.folio) : ('Folio N° ' + cot.folio)
@@ -115,6 +145,7 @@ function htmlDoc(cot, { conValores, esOT }) {
     <table class="items"><thead><tr>${cols.map(c => '<th>' + c + '</th>').join('')}</tr></thead><tbody>${filas}</tbody></table>
     ${totalesHtml}
     ${cot.comentario ? '<div style="margin-top:10px;font-size:11px"><b>Comentario:</b> ' + cot.comentario + '</div>' : ''}
+    ${conCondiciones ? htmlCondiciones() : ''}
   </body></html>`
 }
 function imprimir(html) {
@@ -124,7 +155,7 @@ function imprimir(html) {
   w.document.close()
   setTimeout(() => { w.focus(); w.print() }, 400)
 }
-export function descargarCotizacionPDF(cot) { imprimir(htmlDoc(cot, { conValores: true, esOT: false })) }
+export function descargarCotizacionPDF(cot) { imprimir(htmlDoc(cot, { conValores: true, esOT: false, conCondiciones: true })) }
 export function descargarOTPDF(cot) { imprimir(htmlDoc(cot, { conValores: false, esOT: true })) }
 
 // Cotización vacía nueva
@@ -145,8 +176,14 @@ function FormCotizacion({ inicial, onGuardar, onCancelar }) {
     <div style={{ background: '#fff', border: `2px solid ${C.teal}`, padding: 16, marginBottom: 16 }}>
       <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, textTransform: 'uppercase', marginBottom: 12 }}>Cotización · Folio N° {f.folio || '—'}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
-        <label style={lab}>Folio N° *<input style={inp} value={f.folio} onChange={e => set('folio', e.target.value)} /></label>
-        <label style={lab}>Área<select style={inp} value={f.area} onChange={e => set('area', e.target.value)}>{AREAS.map(a => <option key={a}>{a}</option>)}</select></label>
+        <label style={lab}>Folio N° (correlativo automático)<input style={{ ...inp, background: '#F1EDE6', fontWeight: 600 }} value={f.folio} readOnly /></label>
+        <div style={{ ...lab, gridColumn: '1 / -1' }}>Área / módulo al que irá la OT *
+          <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+            {AREAS.map(a => (
+              <button key={a} type="button" onClick={() => set('area', a)} style={{ padding: '8px 16px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, border: '1px solid ' + (f.area === a ? C.teal : '#CBD2D6'), background: f.area === a ? C.teal : '#fff', color: f.area === a ? '#fff' : C.carbon }}>{a}</button>
+            ))}
+          </div>
+        </div>
         <label style={lab}>Cliente / Señor(es) *<input style={inp} value={f.cliente} onChange={e => set('cliente', e.target.value)} /></label>
         <label style={lab}>R.U.T<input style={inp} value={f.rut} onChange={e => set('rut', e.target.value)} /></label>
         <label style={lab}>Giro<input style={inp} value={f.giro} onChange={e => set('giro', e.target.value)} /></label>

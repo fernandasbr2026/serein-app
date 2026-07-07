@@ -157,7 +157,15 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const esSupervisor = perfil.tipo === 'supervisor'
   const tieneProyectos = areasUsuario.includes('Proyectos')
   const areasOT = areasUsuario.filter(a => a === 'Santa Rosa' || a === 'Istria')
-  const tabs = esSupervisor ? ['PRODUCCION', 'COMPRAS_OP', 'ASISTENCIA'] : [
+  // Cada usuario ve en paralelo las OT de su área asignada
+  const EMAIL_AREA = { 'joce@sereinspa.com': 'Santa Rosa', 'jose@sereinspa.com': 'Santa Rosa', 'produccion@sereinspa.com': 'Istria', 'mario@sereinspa.com': 'Proyectos' }
+  const _email = (email || '').toLowerCase()
+  const areaPorEmail = EMAIL_AREA[_email] || null
+  const veTodasLasOT = esGerencia || _email === 'caro@sereinspa.com'
+  const areasOTUsuario = veTodasLasOT
+    ? ['Santa Rosa', 'Istria', 'Proyectos']
+    : [...new Set([...areasUsuario.filter(a => ['Santa Rosa', 'Istria', 'Proyectos'].includes(a)), ...(areaPorEmail ? [areaPorEmail] : [])])]
+  const tabs = esSupervisor ? [...(areasOTUsuario.length > 0 ? ['GESTION_OT'] : []), 'PRODUCCION', 'COMPRAS_OP', 'ASISTENCIA'] : [
     ...(esGerencia ? ['TODAS'] : []),
     ...areasUsuario.filter(a => a !== 'Proyectos'),
     ...(tieneProyectos ? ['GESTION_PROYECTOS'] : []),
@@ -165,7 +173,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     ...(esGerencia ? ['FINANZAS'] : []),
     'CLIENTES',
     'COTIZADOR',
-    ...(areasOT.length > 0 ? ['GESTION_OT'] : []),
+    ...(areasOTUsuario.length > 0 ? ['GESTION_OT'] : []),
     ...(esGerencia ? ['COMPRAS_OP'] : []),
     ...(areasOT.length > 0 || esGerencia ? ['PRODUCCION'] : []),
     'ASISTENCIA',
@@ -372,7 +380,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
           <ProyectosModule proyectos={proyectos} setProyectos={setProyectos} params={params} facturas={facturas} setFacturas={setFacturas} comisionPct={comisiones['Proyectos'] ?? 2} setComisionPct={v => setComisiones(c => ({ ...c, Proyectos: v }))} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={nombresClientes(contactos)} />
           </>
         ) : esModuloOT ? (
-          <OTModule areasPermitidas={areasOT} ots={ots} setOts={setOts} verValores={verValoresOT} />
+          <OTModule areasPermitidas={areasOTUsuario} ots={ots} setOts={setOts} verValores={verValoresOT} />
         ) : esModuloComprasOp ? (
           <ComprasOperativasModule
             esGerencia={esGerencia}

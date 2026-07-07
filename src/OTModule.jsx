@@ -310,10 +310,41 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true }) {
                 {PREPARACIONES.map(s => <option key={s}>{s}</option>)}
               </select>
             </label>
+          </div>
+
+          {/* Esquema de pintura y servicios (visible para todos) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10, marginBottom: 16 }}>
             <label style={{ fontSize: 12, color: '#7A8288' }}>Esquema de pintura
-              <input value={ot.esquema} onChange={e => onUpdate(ot.id, { esquema: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }} />
+              <textarea value={ot.esquema === '—' ? '' : (ot.esquema || '')} onChange={e => onUpdate(ot.id, { esquema: e.target.value })} placeholder="Detalle del esquema: preparación, capas, productos, espesores (µm)…" style={{ ...inp, width: '100%', marginTop: 4, minHeight: 72, resize: 'vertical', fontFamily: 'inherit' }} />
+            </label>
+            <label style={{ fontSize: 12, color: '#7A8288' }}>Servicios necesarios / observaciones
+              <textarea value={ot.servicios || ''} onChange={e => onUpdate(ot.id, { servicios: e.target.value })} placeholder="Servicios adicionales, requerimientos y notas para el taller…" style={{ ...inp, width: '100%', marginTop: 4, minHeight: 72, resize: 'vertical', fontFamily: 'inherit' }} />
             </label>
           </div>
+
+          {/* PARTIDAS / ENTREGAS DE MATERIAL (visible para todos) */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '4px 0 8px' }}>
+            <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: '#7A8288' }}>Partidas / entregas de material</span>
+            <button onClick={() => onUpdate(ot.id, { partidas: [...(ot.partidas || []), { id: 'pa' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente' }] })} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Agregar partida</button>
+          </div>
+          {(ot.partidas || []).length === 0 ? (
+            <div style={{ fontSize: 13, color: '#9AA0A6', marginBottom: 10 }}>Sin partidas. Indica en cuántas entregas llegará el material.</div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 10 }}>
+              <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['N°', 'Detalle del material', 'Fecha estimada', 'Estado', ''].map((h, i) => <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+              <tbody>
+                {(ot.partidas || []).map((p, i) => (
+                  <tr key={p.id || i} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                    <td style={{ padding: '4px 8px', fontWeight: 600 }}>{i + 1}</td>
+                    <td style={{ padding: '4px 8px' }}><input value={p.detalle} onChange={e => onUpdate(ot.id, { partidas: ot.partidas.map((x, j) => j === i ? { ...x, detalle: e.target.value } : x) })} placeholder="Ej: 16 barandas / 33 soportes" style={{ ...inp, width: '100%', padding: '5px 7px' }} /></td>
+                    <td style={{ padding: '4px 8px' }}><input type="date" value={p.fecha} onChange={e => onUpdate(ot.id, { partidas: ot.partidas.map((x, j) => j === i ? { ...x, fecha: e.target.value } : x) })} style={{ ...inp, width: 140, padding: '5px 7px' }} /></td>
+                    <td style={{ padding: '4px 8px' }}><select value={p.estado} onChange={e => onUpdate(ot.id, { partidas: ot.partidas.map((x, j) => j === i ? { ...x, estado: e.target.value } : x) })} style={{ border: 'none', background: p.estado === 'Recibida' ? '#E7F2EA' : '#F9E9DE', color: p.estado === 'Recibida' ? C.verde : '#8C4519', padding: '3px 8px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}><option>Pendiente</option><option>Recibida</option></select></td>
+                    <td style={{ padding: '4px 4px', textAlign: 'right' }}><button onClick={() => onUpdate(ot.id, { partidas: ot.partidas.filter((_, j) => j !== i) })} style={btnMini}><Trash2 size={13} /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
 
           {verValores && (
             <>
