@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { LogOut, TrendingUp, Wallet, AlertTriangle, Landmark, User } from 'lucide-react'
 import { DATA } from './data.js'
@@ -119,6 +119,28 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const [facturas, setFacturas] = useState(FACTURAS_SEED)
   const [ots, setOts] = useState(OTS_INICIALES)
   const [proyectos, setProyectos] = useState(PROYECTOS)
+
+  // Trae la UF (valor del día) al cargar la app, desde mindicador.cl (Banco Central)
+  useEffect(() => {
+    fetch('https://mindicador.cl/api/uf')
+      .then(r => r.json())
+      .then(d => { const s = d.serie && d.serie[0]; if (s) setParams(p => ({ ...p, uf: { valor: Math.round(s.valor), fecha: (s.fecha || '').slice(0, 10) } })) })
+      .catch(() => {})
+  }, [])
+
+  // Sincroniza los gastos en UF (arriendo Santa Rosa = 180 UF) con el valor vigente
+  useEffect(() => {
+    const ufv = (params.uf && params.uf.valor) || 0
+    if (!ufv) return
+    setFin(f => ({
+      ...f,
+      gastos: (f.gastos || []).map(g => {
+        if (g.id === 'g1') return { ...g, uf: 180, tipo: 'fijo', categoria: 'Arriendo', nombre: 'Arriendo Santa Rosa · 180 UF', dist: [{ area: 'Santa Rosa', pct: 100 }], neto: Math.round(180 * ufv), iva: 0, obs: '180 UF × $' + Math.round(ufv).toLocaleString('es-CL') + ' (vence el 5 de cada mes)' }
+        if (g.uf > 0) return { ...g, neto: Math.round(g.uf * ufv) }
+        return g
+      }),
+    }))
+  }, [params.uf && params.uf.valor])
   const vista = useMemo(() => (esGerencia && areaSel === 'TODAS') ? DATA.global : (DATA.areas[areaSel] || DATA.global), [areaSel, esGerencia])
   const rentab = vista.venta > 0 ? (vista.utilidad / vista.venta) * 100 : 0
 
