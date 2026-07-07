@@ -192,7 +192,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const [pp, setPp] = useState(() => LS('pp', PP_SEED))
   const [params, setParams] = useState(() => LS('params', PARAMS_SEED))
   const [clientes, setClientes] = useState(() => LS('clientes', CLIENTES_SEED))
-  const [contactos, setContactos] = useState(() => LS('contactos', CONTACTOS_SEED))
+  const [contactos, setContactos] = useState(() => { const s = LS('contactos', null); return (s && s.ver === CONTACTOS_SEED.ver) ? s : CONTACTOS_SEED })
   const [facturas, setFacturas] = useState(() => LS('facturas', FACTURAS_SEED))
   const [comisiones, setComisiones] = useState(() => LS('comisiones', { 'Santa Rosa': 3, 'Istria': 2, 'Proyectos': 2 }))
   const [ppmPct, setPpmPct] = useState(() => LS('ppmPct', 2))
