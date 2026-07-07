@@ -268,7 +268,7 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
   const mostradas = ocs.filter(o =>
     (!busca || (String(o.numero) + ' ' + (o.proveedor || '') + ' ' + (o.rut || '') + ' ' + (o.categoria || '')).toLowerCase().includes(busca.toLowerCase())) &&
     (!fEst || o.estadoPago === fEst)
-  )
+  ).sort((a, b) => (parseInt(String(b.numero).replace(/\D/g, ''), 10) || 0) - (parseInt(String(a.numero).replace(/\D/g, ''), 10) || 0))
   const totalTodas = mostradas.reduce((a, o) => a + ocTotal(o), 0)
   const totalPend = mostradas.filter(ocPorPagar).reduce((a, o) => a + ocTotal(o), 0)
 
