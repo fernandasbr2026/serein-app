@@ -189,7 +189,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const [comprasOp, setComprasOp] = useState(() => LS('comprasOp', COMPRAS_OP_SEED))
   const [configCompras, setConfigCompras] = useState(() => LS('configCompras', CONFIG_COMPRAS_DEFAULT))
   const [fin, setFin] = useState(() => LS('fin', FIN_SEED))
-  const [pp, setPp] = useState(() => LS('pp', PP_SEED))
+  const [pp, setPp] = useState(() => { const s = LS('pp', null); if (!s) return PP_SEED; return (s.ocsVer === PP_SEED.ocsVer) ? s : { ...s, ocs: PP_SEED.ocs, ocsVer: PP_SEED.ocsVer } })
   const [params, setParams] = useState(() => LS('params', PARAMS_SEED))
   const [clientes, setClientes] = useState(() => LS('clientes', CLIENTES_SEED))
   const [contactos, setContactos] = useState(() => { const s = LS('contactos', null); return (s && s.ver === CONTACTOS_SEED.ver) ? s : CONTACTOS_SEED })
@@ -257,8 +257,11 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const gastosPend = (fin.gastos || []).filter(g => g.estado !== 'Pagado' && g.estado !== 'Anulado')
   const cuotasPend = (fin.obligaciones || []).flatMap(o => o.cuotas || []).filter(c => c.estado !== 'Pagada')
   const docsPend = (pp.docs || []).filter(d => !d.anulado).map(d => ({ venc: d.fecha_vencimiento, monto: Math.max(0, (d.total || 0) - (d.pagos || []).reduce((a, p) => a + (p.monto || 0), 0)) })).filter(d => d.monto > 0)
-  const totalPagar = gastosPend.reduce((a, g) => a + (g.neto || 0), 0) + cuotasPend.reduce((a, c) => a + (c.total || 0), 0) + docsPend.reduce((a, d) => a + d.monto, 0)
-  const pagar7 = gastosPend.filter(g => g.vencimiento >= _hoy && g.vencimiento <= _en7).reduce((a, g) => a + (g.neto || 0), 0) + cuotasPend.filter(c => c.vencimiento >= _hoy && c.vencimiento <= _en7).reduce((a, c) => a + (c.total || 0), 0) + docsPend.filter(d => d.venc >= _hoy && d.venc <= _en7).reduce((a, d) => a + d.monto, 0)
+  // Órdenes de compra pendientes (no Pagadas/Canceladas/Anuladas) → cuentas por pagar y flujo
+  const ocsPend = (pp.ocs || []).filter(o => !['Pagada', 'Cancelada', 'Anulada'].includes(o.estadoPago) && (o.monto || 0) > 0).map(o => ({ venc: o.vencimiento || o.fecha, monto: o.monto || 0 }))
+  const porPagarDocs = docsPend.concat(ocsPend)
+  const totalPagar = gastosPend.reduce((a, g) => a + (g.neto || 0), 0) + cuotasPend.reduce((a, c) => a + (c.total || 0), 0) + porPagarDocs.reduce((a, d) => a + d.monto, 0)
+  const pagar7 = gastosPend.filter(g => g.vencimiento >= _hoy && g.vencimiento <= _en7).reduce((a, g) => a + (g.neto || 0), 0) + cuotasPend.filter(c => c.vencimiento >= _hoy && c.vencimiento <= _en7).reduce((a, c) => a + (c.total || 0), 0) + porPagarDocs.filter(d => d.venc >= _hoy && d.venc <= _en7).reduce((a, d) => a + d.monto, 0)
   const cobrosPend = (pp.cobros || []).filter(c => c.estado === 'Pendiente' || c.estado === 'Factoring')
   const factPend = ['Santa Rosa', 'Istria'].flatMap(a => (facturas[a] || [])).filter(f => f.estado !== 'Pagado' && f.estado !== 'Anulada')
   const proyPorCobrar = proyectos.flatMap(p => (p.edps || [])).filter(e => e.estado !== 'Pagado')
@@ -273,7 +276,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   // Cuentas por cobrar (bruto): facturas no pagadas de las tres áreas
   const cxcTotal = areasFact.reduce((s, a) => s + facBrutoArea(a, noPagada), 0)
   // Cuentas por pagar (bruto): gastos + cuotas + facturas de proveedores pendientes
-  const cxpTotal = gastosPend.reduce((a, g) => a + ((g.neto || 0) + (g.iva || 0)), 0) + cuotasPend.reduce((a, c) => a + (c.total || 0), 0) + docsPend.reduce((a, d) => a + d.monto, 0)
+  const cxpTotal = gastosPend.reduce((a, g) => a + ((g.neto || 0) + (g.iva || 0)), 0) + cuotasPend.reduce((a, c) => a + (c.total || 0), 0) + porPagarDocs.reduce((a, d) => a + d.monto, 0)
   // OT en curso por facturar: OT (SR/Istria) + saldo de proyectos vs presupuesto
   const meOT = o => (o.montoCotizado > 0 ? o.montoCotizado : (o.ventas || []).reduce((x, v) => x + (v.neta || 0), 0))
   const otEnCurso = (ots || []).filter(o => ['Cotizada', 'En ejecución', 'Terminada'].includes(o.estado)).reduce((a, o) => a + meOT(o), 0)

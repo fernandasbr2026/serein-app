@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react'
-import { Plus, Trash2, X, Truck, ReceiptText, CalendarClock, CalendarDays, TrendingUp, TrendingDown, FileText, BarChart3, Wallet, AlertTriangle } from 'lucide-react'
+import { Plus, Trash2, X, Truck, ReceiptText, CalendarClock, CalendarDays, TrendingUp, TrendingDown, FileText, BarChart3, Wallet, AlertTriangle, Search } from 'lucide-react'
+import { OC_SEED } from './ordenes-compra-data.js'
 
 // ============================================================
 // MÓDULO: Proveedores, Pagos y Calendario de Flujo de Caja
@@ -22,7 +23,11 @@ const AREAS = ['Santa Rosa', 'Istria', 'Producción / Planta', 'Proyectos', 'Adm
 const TIPOS_DOC = ['Factura', 'Boleta', 'Nota de débito', 'Orden de compra', 'Comprobante', 'Cuota', 'Otro']
 const FORMAS_PAGO = ['Transferencia', 'Cheque', 'Tarjeta', 'Efectivo', 'Otro']
 const ESTADOS_OC = ['Pendiente', 'Parcialmente pagada', 'Pagada', 'Vencida', 'Anulada']
+const ESTADOS_PAGO_OC = ['Pendiente', 'Pagada', 'Cancelada', 'Vencida', 'Anulada']
 const ESTADOS_COBRO = ['Pendiente', 'Pagada', 'Vencida', 'Factoring', 'Anulada']
+// Una OC deja de estar por pagar cuando está Pagada, Cancelada o Anulada
+const ocPorPagar = o => !['Pagada', 'Cancelada', 'Anulada'].includes(o.estadoPago) && (o.monto || 0) > 0
+const vencOC = o => o.vencimiento || (o.fecha ? sumarDias(o.fecha, parseInt(o.plazo, 10) || 0) : '')
 
 // Días según condición de pago (para calcular vencimientos y fecha esperada)
 const diasCond = c => ({ 'Contado': 0, '7 días': 7, '15 días': 15, '30 días': 30, '45 días': 45, '60 días': 60 }[c] ?? 0)
@@ -40,20 +45,22 @@ function estadoDoc(d) {
   if (d.fecha_vencimiento && d.fecha_vencimiento < hoy()) return 'Vencido'
   return 'Pendiente'
 }
-const colorEstado = e => ({ Pagado: C.verde, Parcial: C.naranja, Vencido: C.rojo, Pendiente: '#8C4519', Anulado: C.gris, Factoring: C.naranja, Pagada: C.verde, Vencida: C.rojo }[e] || C.gris)
-const fondoEstado = e => ({ Pagado: '#E7F2EA', Parcial: '#F9E9DE', Vencido: '#F6E0DA', Pendiente: '#F9E9DE', Anulado: '#EEE', Factoring: '#F9E9DE', Pagada: '#E7F2EA', Vencida: '#F6E0DA' }[e] || '#EEE')
+const colorEstado = e => ({ Pagado: C.verde, Parcial: C.naranja, Vencido: C.rojo, Pendiente: '#8C4519', Anulado: C.gris, Anulada: C.gris, Factoring: C.naranja, Pagada: C.verde, Cancelada: C.verde, Vencida: C.rojo }[e] || C.gris)
+const fondoEstado = e => ({ Pagado: '#E7F2EA', Parcial: '#F9E9DE', Vencido: '#F6E0DA', Pendiente: '#F9E9DE', Anulado: '#EEE', Anulada: '#EEE', Factoring: '#F9E9DE', Pagada: '#E7F2EA', Cancelada: '#E7F2EA', Vencida: '#F6E0DA' }[e] || '#EEE')
 
 // ============================================================
 // DATOS DE PRUEBA (los que entregó Gerencia)
 // ============================================================
+export const PP_OCS_VER = 'oc-defontana-2026-07'
 export const PP_SEED = {
   saldoInicial: 0,
+  ocsVer: PP_OCS_VER,
   proveedores: [
     { id: 'pv1', nombre: 'Pinturas Industriales', rut: '', giro: 'Venta de pinturas', contacto: '', telefono: '', correo: '', direccion: '', tipo: 'Pintura', condicion: '30 días', estado: 'Activo', obs: '' },
     { id: 'pv2', nombre: 'Ferretería Central', rut: '', giro: 'Ferretería', contacto: '', telefono: '', correo: '', direccion: '', tipo: 'Ferretería', condicion: '15 días', estado: 'Activo', obs: '' },
     { id: 'pv3', nombre: 'Transporte Norte', rut: '', giro: 'Transporte de carga', contacto: '', telefono: '', correo: '', direccion: '', tipo: 'Transporte', condicion: '7 días', estado: 'Activo', obs: '' },
   ],
-  ocs: [],
+  ocs: OC_SEED,
   docs: [
     { id: 'd1', tipo_doc: 'Factura', numero: 'FP-001', proveedor: 'Pinturas Industriales', oc: '', fecha_emision: '2026-07-01', fecha_recepcion: '2026-07-01', fecha_vencimiento: '2026-07-31', neto: 1260504, iva: 239496, total: 1500000, area: 'Producción / Planta', ref_ot: '', forma_pago: 'Transferencia', pagos: [], anulado: false, obs: '' },
     { id: 'd2', tipo_doc: 'Factura', numero: 'FP-002', proveedor: 'Ferretería Central', oc: '', fecha_emision: '2026-07-05', fecha_recepcion: '2026-07-05', fecha_vencimiento: '2026-07-20', neto: 378151, iva: 71849, total: 450000, area: 'Santa Rosa', ref_ot: '', forma_pago: 'Transferencia', pagos: [], anulado: false, obs: '' },
@@ -159,67 +166,67 @@ function SeccionProveedores({ pp, setPp }) {
 // 2) ÓRDENES DE COMPRA A PROVEEDOR
 // ============================================================
 function SeccionOC({ pp, setPp }) {
-  const [creando, setCreando] = useState(false)
-  const nuevo = () => ({ numero_oc: '', fecha_emision: hoy(), proveedor: pp.proveedores[0]?.nombre || '', categoria: '', detalle: '', area: AREAS[0], ref_ot: '', neto: '', conIva: true, condicion: '30 días', fecha_vencimiento: sumarDias(hoy(), 30), estado: 'Pendiente', obs: '' })
-  const [f, setF] = useState(nuevo())
+  const ocs = pp.ocs || []
+  const setOcs = arr => setPp({ ...pp, ocs: arr })
+  const [busca, setBusca] = useState('')
+  const [fEst, setFEst] = useState('')
+  const upd = (id, cambios) => setOcs(ocs.map(o => {
+    if (o.id !== id) return o
+    const n = { ...o, ...cambios }
+    if (('fecha' in cambios || 'plazo' in cambios) && n.fecha) n.vencimiento = sumarDias(n.fecha, parseInt(n.plazo, 10) || 0)
+    return n
+  }))
+  const agregar = () => setOcs([{ id: 'oc' + Date.now(), numero: '', proveedor: '', rut: '', fecha: hoy(), monto: 0, plazo: 30, vencimiento: sumarDias(hoy(), 30), estadoPago: 'Pendiente', estadoOC: '', obs: '' }, ...ocs])
+  const eliminar = id => { if (window.confirm('¿Eliminar esta OC?')) setOcs(ocs.filter(o => o.id !== id)) }
 
-  function guardar() {
-    if (!f.numero_oc || num(f.neto) <= 0) return
-    const neto = num(f.neto), iva = f.conIva ? Math.round(neto * 0.19) : 0
-    setPp({ ...pp, ocs: [{ id: 'oc' + Date.now(), ...f, neto, iva, total: neto + iva }, ...pp.ocs] })
-    setF(nuevo()); setCreando(false)
-  }
+  const mostradas = ocs.filter(o =>
+    (!busca || (String(o.numero) + ' ' + (o.proveedor || '') + ' ' + (o.rut || '')).toLowerCase().includes(busca.toLowerCase())) &&
+    (!fEst || o.estadoPago === fEst)
+  )
+  const totalTodas = mostradas.reduce((a, o) => a + (o.monto || 0), 0)
+  const totalPend = mostradas.filter(ocPorPagar).reduce((a, o) => a + (o.monto || 0), 0)
 
   return (
     <div>
       <div style={{ fontSize: 12, color: '#8C4519', background: '#F9E9DE', padding: '8px 12px', marginBottom: 12 }}>
-        Esta sección es para <b>OC emitidas a proveedores</b> (compras que Serein debe pagar). Las OC recibidas de clientes se gestionan en Órdenes de Trabajo.
+        Órdenes de compra a proveedores (importadas de Defontana). Todo es editable: fecha, monto, <b>plazo de crédito</b> (días) y <b>vencimiento</b> (se calcula solo = fecha + plazo). Las OC pendientes se suman al flujo de caja y a las cuentas por pagar del Consolidado.
       </div>
-      {!creando && <BotonNuevo onClick={() => setCreando(true)}>Nueva OC a proveedor</BotonNuevo>}
-      {creando && (
-        <div style={{ background: '#fff', border: `2px solid ${C.naranja}`, padding: 16, marginBottom: 14 }}>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Nueva orden de compra a proveedor</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
-            <input style={inp} placeholder="Número de OC *" value={f.numero_oc} onChange={e => setF({ ...f, numero_oc: e.target.value })} />
-            <label style={{ fontSize: 12, color: C.gris }}>Fecha emisión<input type="date" style={{ ...inp, width: '100%' }} value={f.fecha_emision} onChange={e => setF({ ...f, fecha_emision: e.target.value })} /></label>
-            <select style={inp} value={f.proveedor} onChange={e => setF({ ...f, proveedor: e.target.value })}>{pp.proveedores.map(p => <option key={p.id}>{p.nombre}</option>)}</select>
-            <input style={inp} placeholder="Categoría" value={f.categoria} onChange={e => setF({ ...f, categoria: e.target.value })} />
-            <select style={inp} value={f.area} onChange={e => setF({ ...f, area: e.target.value })}>{AREAS.map(a => <option key={a}>{a}</option>)}</select>
-            <input style={inp} placeholder="OT/OC/proyecto asociado" value={f.ref_ot} onChange={e => setF({ ...f, ref_ot: e.target.value })} />
-            <input style={inp} placeholder="Monto neto CLP *" value={f.neto} onChange={e => setF({ ...f, neto: e.target.value })} />
-            <label style={{ ...inp, display: 'flex', alignItems: 'center', gap: 6, border: 'none' }}><input type="checkbox" checked={f.conIva} onChange={e => setF({ ...f, conIva: e.target.checked })} /> Aplica IVA 19%</label>
-            <select style={inp} value={f.condicion} onChange={e => { const c = e.target.value; setF({ ...f, condicion: c, fecha_vencimiento: sumarDias(f.fecha_emision, diasCond(c)) }) }}>{CONDICIONES_PAGO.map(x => <option key={x}>{x}</option>)}</select>
-            <label style={{ fontSize: 12, color: C.gris }}>Vencimiento<input type="date" style={{ ...inp, width: '100%' }} value={f.fecha_vencimiento} onChange={e => setF({ ...f, fecha_vencimiento: e.target.value })} /></label>
-            <select style={inp} value={f.estado} onChange={e => setF({ ...f, estado: e.target.value })}>{ESTADOS_OC.map(x => <option key={x}>{x}</option>)}</select>
-          </div>
-          <input style={{ ...inp, width: '100%', marginTop: 8 }} placeholder="Detalle de compra o servicio" value={f.detalle} onChange={e => setF({ ...f, detalle: e.target.value })} />
-          <input style={{ ...inp, width: '100%', marginTop: 8 }} placeholder="Observaciones" value={f.obs} onChange={e => setF({ ...f, obs: e.target.value })} />
-          {num(f.neto) > 0 && <div style={{ fontSize: 12, color: C.gris, marginTop: 6 }}>Total: {clp(num(f.neto) * (f.conIva ? 1.19 : 1))}</div>}
-          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-            <button onClick={guardar} disabled={!f.numero_oc || num(f.neto) <= 0} style={{ background: (f.numero_oc && num(f.neto) > 0) ? C.verde : '#CBD2D6', color: '#fff', border: 'none', padding: '9px 18px', cursor: 'pointer', fontSize: 13 }}>Guardar OC</button>
-            <button onClick={() => { setF(nuevo()); setCreando(false) }} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
-          </div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+        <button onClick={agregar} style={{ background: C.naranja, color: '#fff', border: 'none', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Agregar OC</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, border: '1px solid #CBD2D6', padding: '2px 6px' }}>
+          <Search size={13} color={C.gris} />
+          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar N°/proveedor/RUT…" style={{ border: 'none', outline: 'none', fontSize: 12.5, width: 160 }} />
         </div>
-      )}
+        <select style={inp} value={fEst} onChange={e => setFEst(e.target.value)}><option value="">Todos los estados</option>{ESTADOS_PAGO_OC.map(x => <option key={x}>{x}</option>)}</select>
+        <span style={{ fontSize: 12.5, color: C.gris }}>{mostradas.length} OC · Total {clp(totalTodas)} · <b style={{ color: C.rojo }}>Por pagar {clp(totalPend)}</b></span>
+      </div>
       <Caja>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
           <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-            {['Nº OC', 'Emisión', 'Proveedor', 'Área', 'Total', 'Vence', 'Estado', ''].map(h => <th key={h} style={{ textAlign: ['Total'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}
+            {['Nº OC', 'Proveedor', 'RUT', 'Fecha', 'Monto', 'Plazo (días)', 'Vencimiento', 'Estado de pago', ''].map(h => <th key={h} style={{ textAlign: h === 'Monto' ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>)}
           </tr></thead>
           <tbody>
-            {pp.ocs.map(o => (
-              <tr key={o.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
-                <td style={{ padding: 8, fontWeight: 500 }}>{o.numero_oc}</td>
-                <td style={{ padding: 8, color: C.gris }}>{o.fecha_emision}</td>
-                <td style={{ padding: 8 }}>{o.proveedor}</td>
-                <td style={{ padding: 8, color: C.gris }}>{o.area}</td>
-                <td style={{ padding: 8, textAlign: 'right', fontWeight: 600 }}>{clp(o.total)}</td>
-                <td style={{ padding: 8, color: C.gris }}>{o.fecha_vencimiento}</td>
-                <td style={{ padding: 8 }}><span style={{ background: fondoEstado(o.estado), color: colorEstado(o.estado), padding: '2px 8px', fontSize: 12, fontWeight: 600 }}>{o.estado}</span></td>
-                <td style={{ padding: 8 }}><button onClick={() => window.confirm('¿Eliminar esta OC?') && setPp({ ...pp, ocs: pp.ocs.filter(x => x.id !== o.id) })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button></td>
-              </tr>
-            ))}
-            {pp.ocs.length === 0 && <tr><td colSpan={8} style={{ padding: 16, textAlign: 'center', color: '#9AA0A6' }}>Sin órdenes de compra registradas.</td></tr>}
+            {mostradas.map(o => {
+              const v = vencOC(o), vencido = ocPorPagar(o) && v && v < hoy()
+              return (
+                <tr key={o.id} style={{ borderBottom: '1px solid #EEE9DF', background: vencido ? '#FDF3F0' : 'transparent' }}>
+                  <td style={{ padding: '4px 6px' }}><input value={o.numero} onChange={e => upd(o.id, { numero: e.target.value })} style={{ ...inp, width: 70, padding: '5px 7px', fontWeight: 600 }} /></td>
+                  <td style={{ padding: '4px 6px' }}><input value={o.proveedor} onChange={e => upd(o.id, { proveedor: e.target.value })} style={{ ...inp, width: 200, padding: '5px 7px' }} /></td>
+                  <td style={{ padding: '4px 6px' }}><input value={o.rut || ''} onChange={e => upd(o.id, { rut: e.target.value })} style={{ ...inp, width: 110, padding: '5px 7px' }} /></td>
+                  <td style={{ padding: '4px 6px' }}><input type="date" value={o.fecha || ''} onChange={e => upd(o.id, { fecha: e.target.value })} style={{ ...inp, width: 140, padding: '5px 7px' }} /></td>
+                  <td style={{ padding: '4px 6px', textAlign: 'right' }}><input value={o.monto} onChange={e => upd(o.id, { monto: num(e.target.value) })} style={{ ...inp, width: 110, padding: '5px 7px', textAlign: 'right', fontWeight: 600 }} /></td>
+                  <td style={{ padding: '4px 6px' }}><input value={o.plazo} onChange={e => upd(o.id, { plazo: num(e.target.value) })} style={{ ...inp, width: 70, padding: '5px 7px', textAlign: 'right' }} /></td>
+                  <td style={{ padding: '4px 6px' }}><input type="date" value={v} onChange={e => upd(o.id, { vencimiento: e.target.value })} style={{ ...inp, width: 140, padding: '5px 7px', color: vencido ? C.rojo : C.carbon }} /></td>
+                  <td style={{ padding: '4px 6px' }}>
+                    <select value={o.estadoPago} onChange={e => upd(o.id, { estadoPago: e.target.value })} style={{ border: 'none', background: fondoEstado(o.estadoPago), color: colorEstado(o.estadoPago), padding: '4px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      {ESTADOS_PAGO_OC.map(x => <option key={x}>{x}</option>)}
+                    </select>
+                  </td>
+                  <td style={{ padding: '4px 4px', textAlign: 'right' }}><button onClick={() => eliminar(o.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button></td>
+                </tr>
+              )
+            })}
+            {mostradas.length === 0 && <tr><td colSpan={9} style={{ padding: 16, textAlign: 'center', color: '#9AA0A6' }}>Sin órdenes de compra.</td></tr>}
           </tbody>
         </table>
       </Caja>
@@ -507,8 +514,10 @@ function SeccionCobros({ pp, setPp }) {
 // 6) FLUJO DE CAJA PROYECTADO (día / semana / mes)
 // ============================================================
 export function calcularFlujo(pp, mes) {
-  const salidas = pp.docs.filter(d => !d.anulado && saldoDe(d) > 0 && mesDe(d.fecha_vencimiento) === mes)
-    .map(d => ({ fecha: d.fecha_vencimiento, monto: saldoDe(d) }))
+  const salidas = [
+    ...pp.docs.filter(d => !d.anulado && saldoDe(d) > 0 && mesDe(d.fecha_vencimiento) === mes).map(d => ({ fecha: d.fecha_vencimiento, monto: saldoDe(d) })),
+    ...(pp.ocs || []).filter(ocPorPagar).filter(o => mesDe(vencOC(o)) === mes).map(o => ({ fecha: vencOC(o), monto: o.monto || 0 })),
+  ]
   const entradas = pp.cobros.filter(c => c.estado !== 'Anulada' && c.estado !== 'Pagada' && mesDe(c.fecha_estimada) === mes)
     .map(c => ({ fecha: c.fecha_estimada, monto: c.total }))
   const totalSalidas = salidas.reduce((a, x) => a + x.monto, 0)
@@ -629,11 +638,15 @@ function SeccionReportes({ pp }) {
 export function calcularResumenPP(pp) {
   const h = hoy(), mes = mesDe(h)
   const docsAbiertos = pp.docs.filter(d => !d.anulado && saldoDe(d) > 0)
+  const pagos = [
+    ...docsAbiertos.map(d => ({ venc: d.fecha_vencimiento, monto: saldoDe(d) })),
+    ...(pp.ocs || []).filter(ocPorPagar).map(o => ({ venc: vencOC(o), monto: o.monto || 0 })),
+  ]
   const cobrosAbiertos = pp.cobros.filter(c => c.estado === 'Pendiente' || c.estado === 'Factoring')
-  const pagosHoy = docsAbiertos.filter(d => d.fecha_vencimiento === h).reduce((a, d) => a + saldoDe(d), 0)
-  const pagos7 = docsAbiertos.filter(d => d.fecha_vencimiento >= h && d.fecha_vencimiento <= sumarDias(h, 7)).reduce((a, d) => a + saldoDe(d), 0)
-  const pagosVencidos = docsAbiertos.filter(d => d.fecha_vencimiento < h).reduce((a, d) => a + saldoDe(d), 0)
-  const pagosMes = docsAbiertos.filter(d => mesDe(d.fecha_vencimiento) === mes).reduce((a, d) => a + saldoDe(d), 0)
+  const pagosHoy = pagos.filter(p => p.venc === h).reduce((a, p) => a + p.monto, 0)
+  const pagos7 = pagos.filter(p => p.venc >= h && p.venc <= sumarDias(h, 7)).reduce((a, p) => a + p.monto, 0)
+  const pagosVencidos = pagos.filter(p => p.venc && p.venc < h).reduce((a, p) => a + p.monto, 0)
+  const pagosMes = pagos.filter(p => mesDe(p.venc) === mes).reduce((a, p) => a + p.monto, 0)
   const cobrosHoy = cobrosAbiertos.filter(c => c.fecha_estimada === h).reduce((a, c) => a + c.total, 0)
   const cobros7 = cobrosAbiertos.filter(c => c.fecha_estimada >= h && c.fecha_estimada <= sumarDias(h, 7)).reduce((a, c) => a + c.total, 0)
   const cobrosVencidos = cobrosAbiertos.filter(c => c.fecha_estimada < h).reduce((a, c) => a + c.total, 0)
@@ -686,8 +699,7 @@ export default function ProveedoresPagosModule({ pp: ppExt, setPp: setPpExt }) {
 
   const tabs = [
     { id: 'resumen', label: 'Resumen y flujo', icono: <BarChart3 size={13} /> },
-    { id: 'proveedores', label: 'Proveedores', icono: <Truck size={13} /> },
-    { id: 'oc', label: 'OC a proveedor', icono: <FileText size={13} /> },
+    { id: 'oc', label: 'Órdenes de compra', icono: <FileText size={13} /> },
     { id: 'porpagar', label: 'Por pagar', icono: <ReceiptText size={13} /> },
     { id: 'calpagos', label: 'Calendario de pagos', icono: <CalendarClock size={13} /> },
     { id: 'cobros', label: 'Cobros esperados', icono: <Wallet size={13} /> },
@@ -707,7 +719,6 @@ export default function ProveedoresPagosModule({ pp: ppExt, setPp: setPpExt }) {
         ))}
       </div>
       {tab === 'resumen' && <SeccionResumen pp={pp} />}
-      {tab === 'proveedores' && <SeccionProveedores pp={pp} setPp={setPp} />}
       {tab === 'oc' && <SeccionOC pp={pp} setPp={setPp} />}
       {tab === 'porpagar' && <SeccionPorPagar pp={pp} setPp={setPp} />}
       {tab === 'calpagos' && <SeccionCalendarioPagos pp={pp} />}
