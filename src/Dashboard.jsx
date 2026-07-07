@@ -13,6 +13,7 @@ import CotizadorModule from './CotizadorModule.jsx'
 import ProduccionModule, { AVANCES_SEED } from './ProduccionModule.jsx'
 import ComprasOperativasModule, { COMPRAS_OP_SEED, CONFIG_COMPRAS_DEFAULT } from './ComprasOperativasModule.jsx'
 import ProveedoresPagosModule, { PP_SEED } from './ProveedoresPagosModule.jsx'
+import ParametrosModule, { PARAMS_SEED } from './ParametrosModule.jsx'
 import { MO_SEED } from './ManoObraModule.jsx'
 import { PROYECTOS } from './proyectos-data.js'
 
@@ -90,6 +91,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     'ASISTENCIA',
     ...(esGerencia ? ['FINANZAS'] : []),
     ...(esGerencia ? ['PAGOS'] : []),
+    ...(esGerencia ? ['PARAMETROS'] : []),
   ]
   const [areaSel, setAreaSel] = useState(tabs[0])
 
@@ -98,6 +100,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const esModuloMO = areaSel === 'ASISTENCIA'
   const esModuloFin = areaSel === 'FINANZAS'
   const esModuloPagos = areaSel === 'PAGOS'
+  const esModuloParams = areaSel === 'PARAMETROS'
   const esModuloCot = areaSel === 'COTIZADOR'
   const esModuloProd = areaSel === 'PRODUCCION'
   const [avances, setAvances] = useState(AVANCES_SEED)
@@ -107,6 +110,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const [configCompras, setConfigCompras] = useState(CONFIG_COMPRAS_DEFAULT)
   const [fin, setFin] = useState(FIN_SEED)
   const [pp, setPp] = useState(PP_SEED)
+  const [params, setParams] = useState(PARAMS_SEED)
   const [ots, setOts] = useState(OTS_INICIALES)
   const [proyectos, setProyectos] = useState(PROYECTOS)
   const vista = useMemo(() => (esGerencia && areaSel === 'TODAS') ? DATA.global : (DATA.areas[areaSel] || DATA.global), [areaSel, esGerencia])
@@ -141,14 +145,14 @@ export default function Dashboard({ perfil, email, onLogout }) {
         {tabs.map(t => (
           <button key={t} onClick={() => setAreaSel(t)}
             style={{ background: 'transparent', border: 'none', borderBottom: areaSel === t ? `3px solid ${C.ambar}` : '3px solid transparent', padding: '14px 16px', cursor: 'pointer', fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 13, letterSpacing: 0.5, color: areaSel === t ? C.carbon : '#9AA0A6', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-            {t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? '⚙ Gestión Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia y Mano de Obra' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t}
+            {t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? '⚙ Gestión Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia y Mano de Obra' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t}
           </button>
         ))}
       </div>
 
       <div style={{ padding: 20, maxWidth: 1200, margin: '0 auto' }}>
         {esModuloProyectos ? (
-          <ProyectosModule proyectos={proyectos} setProyectos={setProyectos} />
+          <ProyectosModule proyectos={proyectos} setProyectos={setProyectos} params={params} />
         ) : esModuloOT ? (
           <OTModule areasPermitidas={areasOT} ots={ots} setOts={setOts} />
         ) : esModuloComprasOp ? (
@@ -181,6 +185,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
           <FinanzasModule otsDisponibles={ots.map(o => o.numero)} fin={fin} setFin={setFin} />
         ) : esModuloPagos && esGerencia ? (
           <ProveedoresPagosModule pp={pp} setPp={setPp} />
+        ) : esModuloParams && esGerencia ? (
+          <ParametrosModule params={params} setParams={setParams} />
         ) : esModuloMO ? (
           <ManoObraModule
             esGerencia={esGerencia}

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { ChevronDown, ChevronUp, Target, Receipt, Hammer, ShoppingCart, Pencil, Plus, Trash2, X, AlertTriangle, LayoutGrid, Table2 } from 'lucide-react'
 import { PROYECTOS, CC_DEFS } from './proyectos-data.js'
+import { calcularPerdidaFactoring } from './ParametrosModule.jsx'
 
 const C = { azul: '#1D1D1B', teal: '#A8501F', ambar: '#D2642F', rojo: '#B5432E', verde: '#3D7A4E', carbon: '#161616', gris: '#7A8288' }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
@@ -16,6 +17,8 @@ const cobradoDe = p => (p.edps || []).filter(e => e.estado === 'Pagado').reduce(
 const comprasDe = p => (p.compras || []).reduce((a, c) => a + c.monto, 0)
 const ventaDe = p => (p.venta_cotizada != null && p.venta_cotizada > 0) ? p.venta_cotizada : facturadoDe(p)
 const porFacturarDe = p => Math.max(0, ventaDe(p) - facturadoDe(p))
+const perdidaFactDe = p => (p.edps || []).reduce((a, e) => a + (e.perdidaFact || 0), 0)
+const CONDICIONES = [{ label: 'Contado', dias: 0 }, { label: '30 días', dias: 30 }, { label: '45 días', dias: 45 }, { label: '60 días', dias: 60 }, { label: '90 días', dias: 90 }]
 const consumoCC = (p, ccId) => (p.compras || []).filter(c => c.cc === ccId).reduce((a, c) => a + c.monto, 0)
 const topeCC = (p, ccId) => (p.cc && p.cc[ccId]) || 0
 const costoEstDe = p => CC_DEFS.reduce((a, cc) => a + topeCC(p, cc.id), 0)   // costo estimado = suma de topes
@@ -31,20 +34,60 @@ function Barra({ pct, color, alto = 8 }) {
   )
 }
 
-// ---------- Form venta (EDP) ----------
-function FormEdp({ onAdd, onCancel }) {
-  const [f, setF] = useState({ nombre: '', fecha: '', venta: '', estado: 'Pendiente' })
+// ---------- Form venta (EDP) con método de pago y factoring ----------
+function FormEdp({ params, onAdd, onCancel }) {
+  const facs = params.factoring || []
+  const [f, setF] = useState({ nombre: '', fecha: '', venta: '', metodo: 'Contado', condicion: 'Contado', factoringId: facs[0]?.id || '', diasMora: '' })
+  const dias = (CONDICIONES.find(c => c.label === f.condicion)?.dias) ?? 0
+  const facSel = facs.find(x => x.id === f.factoringId)
+  const baseTotal = Math.round(num(f.venta) * 1.19)
+  const perd = f.metodo === 'Factoring' ? calcularPerdidaFactoring(baseTotal, dias, num(f.diasMora), facSel) : { interes: 0, mora: 0, costoOp: 0, total: 0 }
+  const estado = f.metodo === 'Factoring' ? 'Factoring' : 'Pendiente'
+
+  function guardar() {
+    if (!f.nombre || num(f.venta) <= 0) return
+    onAdd({ edp: f.nombre, fecha: f.fecha || '—', venta: num(f.venta), estado, metodo: f.metodo, condicion: f.condicion, dias, factoringId: f.metodo === 'Factoring' ? f.factoringId : '', diasMora: num(f.diasMora), perdidaFact: perd.total })
+  }
+
   return (
-    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', background: '#F7F4EE', padding: 10, marginTop: 8, alignItems: 'center' }}>
-      <input style={{ ...inp, width: 110 }} placeholder="EDP / Nº" value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} />
-      <input style={{ ...inp, width: 130 }} type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} />
-      <input style={{ ...inp, width: 130 }} placeholder="Venta neta CLP" value={f.venta} onChange={e => setF({ ...f, venta: e.target.value })} />
-      <select style={{ ...inp }} value={f.estado} onChange={e => setF({ ...f, estado: e.target.value })}>
-        <option>Pendiente</option><option>Pagado</option><option>Factoring</option>
-      </select>
-      <button onClick={() => f.nombre && num(f.venta) > 0 && onAdd({ edp: f.nombre, fecha: f.fecha || '—', venta: num(f.venta), estado: f.estado })}
-        style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Agregar</button>
-      <button onClick={onCancel} style={{ ...btnMini, color: C.gris }}><X size={16} /></button>
+    <div style={{ background: '#F7F4EE', padding: 12, marginTop: 8 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input style={{ ...inp, width: 110 }} placeholder="EDP / N° factura" value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} />
+        <input style={{ ...inp, width: 130 }} type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} />
+        <input style={{ ...inp, width: 130 }} placeholder="Venta neta CLP" value={f.venta} onChange={e => setF({ ...f, venta: e.target.value })} />
+        <label style={{ fontSize: 12, color: C.gris }}>Método de pago
+          <select style={{ ...inp, width: '100%' }} value={f.metodo} onChange={e => setF({ ...f, metodo: e.target.value })}>
+            <option>Contado</option><option>Crédito</option><option>Factoring</option>
+          </select>
+        </label>
+        {(f.metodo === 'Crédito' || f.metodo === 'Factoring') && (
+          <label style={{ fontSize: 12, color: C.gris }}>Condición
+            <select style={{ ...inp, width: '100%' }} value={f.condicion} onChange={e => setF({ ...f, condicion: e.target.value })}>
+              {CONDICIONES.map(c => <option key={c.label}>{c.label}</option>)}
+            </select>
+          </label>
+        )}
+        {f.metodo === 'Factoring' && (
+          <>
+            <label style={{ fontSize: 12, color: C.gris }}>Factoring
+              <select style={{ ...inp, width: '100%' }} value={f.factoringId} onChange={e => setF({ ...f, factoringId: e.target.value })}>
+                {facs.length === 0 && <option value="">(define en Parámetros)</option>}
+                {facs.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+              </select>
+            </label>
+            <input style={{ ...inp, width: 110 }} placeholder="Días de mora" value={f.diasMora} onChange={e => setF({ ...f, diasMora: e.target.value })} />
+          </>
+        )}
+      </div>
+      {f.metodo === 'Factoring' && num(f.venta) > 0 && (
+        <div style={{ fontSize: 12, color: '#8C4519', background: '#F9E9DE', padding: '8px 10px', marginTop: 8 }}>
+          Pérdida por factoring estimada: <b>{clp(perd.total)}</b> — interés {clp(perd.interes)} ({dias} días) + costo op. {clp(perd.costoOp)}{perd.mora > 0 ? ` + mora ${clp(perd.mora)}` : ''}. (Base total con IVA: {clp(baseTotal)})
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <button onClick={guardar} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Agregar factura</button>
+        <button onClick={onCancel} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+      </div>
     </div>
   )
 }
@@ -147,18 +190,18 @@ function StatHeader({ label, valor, color }) {
   )
 }
 
-function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra }) {
+function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params }) {
   const [abierto, setAbierto] = useState(false)
   const [addEdp, setAddEdp] = useState(false)
   const [addCompra, setAddCompra] = useState(false)
 
   const facturado = facturadoDe(p), cobrado = cobradoDe(p), pendiente = facturado - cobrado
   const venta = ventaDe(p), porFacturar = porFacturarDe(p)
-  const costoEst = costoEstDe(p), costoReal = comprasDe(p)
+  const costoEst = costoEstDe(p), costoReal = comprasDe(p), perdidaFact = perdidaFactDe(p)
   const utEst = venta - costoEst, pctUtEst = pct(utEst, venta)
-  const utReal = venta - costoReal, pctUtReal = pct(utReal, venta)
+  const utReal = venta - costoReal - perdidaFact, pctUtReal = pct(utReal, venta)
   const pctFact = pct(facturado, venta)
-  const hayCompras = costoReal > 0
+  const hayCompras = costoReal > 0 || perdidaFact > 0
 
   const alertasCC = ccActivos(p).map(cc => {
     const t = topeCC(p, cc.id), cons = consumoCC(p, cc.id)
@@ -199,7 +242,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra }) {
           <div style={{ fontSize: 12, marginTop: 4, color: C.gris }}>{clp(facturado)} de {clp(venta)}{porFacturar > 0 && <span style={{ color: C.ambar }}> · por facturar {clp(porFacturar)}</span>}</div>
           <div style={{ fontSize: 12, marginTop: 10, color: C.gris }}>
             Costo estimado (topes CC): <b>{clp(costoEst)}</b> → UT est. <b style={{ color: colorUT(pctUtEst) }}>{clp(utEst)} ({pctUtEst.toFixed(1)}%)</b><br />
-            Costo real (compras): <b>{clp(costoReal)}</b> → UT real <b style={{ color: colorUT(pctUtReal) }}>{clp(utReal)} ({pctUtReal.toFixed(1)}%)</b>
+            Costo real (compras): <b>{clp(costoReal)}</b>{perdidaFact > 0 && <> + pérdida factoring <b style={{ color: C.rojo }}>{clp(perdidaFact)}</b></>} → UT real <b style={{ color: colorUT(pctUtReal) }}>{clp(utReal)} ({pctUtReal.toFixed(1)}%)</b>
           </div>
         </div>
         <div onClick={e => e.stopPropagation()}><BloqueCC p={p} onUpdate={onUpdate} /></div>
@@ -226,13 +269,14 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra }) {
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['EDP', 'Fecha', 'Venta neta', 'Estado', ''].map((h, i) => <th key={i} style={{ textAlign: h === 'Venta neta' ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+              <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['EDP', 'Fecha', 'Venta neta', 'Método', 'Estado', ''].map((h, i) => <th key={i} style={{ textAlign: h === 'Venta neta' ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
               <tbody>
                 {(p.edps || []).map((e, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
                     <td style={{ padding: '7px 8px', fontWeight: 500 }}>{e.edp}</td>
                     <td style={{ padding: '7px 8px', color: C.gris }}>{e.fecha}</td>
                     <td style={{ padding: '7px 8px', textAlign: 'right' }}>{clp(e.venta)}</td>
+                    <td style={{ padding: '7px 8px', color: C.gris, fontSize: 12 }}>{e.metodo || '—'}{e.metodo === 'Crédito' && e.dias ? ` ${e.dias}d` : ''}{e.perdidaFact > 0 && <div style={{ color: C.rojo, fontSize: 11 }}>pérdida {clp(e.perdidaFact)}</div>}</td>
                     <td style={{ padding: '7px 8px' }}>
                       <select value={e.estado} onChange={ev => onUpdate(p.id, { edps: p.edps.map((x, j) => j === i ? { ...x, estado: ev.target.value } : x) })}
                         style={{ border: 'none', background: e.estado === 'Pagado' ? '#E7F2EA' : e.estado === 'Factoring' ? '#F9E9DE' : '#F6E0DA', color: e.estado === 'Pagado' ? C.verde : e.estado === 'Factoring' ? C.ambar : C.rojo, padding: '3px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
@@ -242,11 +286,11 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra }) {
                     <td style={{ padding: '7px 4px', textAlign: 'right' }}><button onClick={() => window.confirm(`¿Eliminar ${e.edp} (${clp(e.venta)})?`) && onUpdate(p.id, { edps: p.edps.filter((_, j) => j !== i) })} style={btnMini}><Trash2 size={14} /></button></td>
                   </tr>
                 ))}
-                {(p.edps || []).length === 0 && <tr><td colSpan={5} style={{ padding: 12, color: '#9AA0A6', textAlign: 'center' }}>Sin ventas registradas.</td></tr>}
+                {(p.edps || []).length === 0 && <tr><td colSpan={6} style={{ padding: 12, color: '#9AA0A6', textAlign: 'center' }}>Sin ventas registradas.</td></tr>}
               </tbody>
             </table>
           </div>
-          {addEdp && <FormEdp onAdd={e => { onUpdate(p.id, { edps: [...(p.edps || []), e] }); setAddEdp(false) }} onCancel={() => setAddEdp(false)} />}
+          {addEdp && <FormEdp params={params} onAdd={e => { onUpdate(p.id, { edps: [...(p.edps || []), e] }); setAddEdp(false) }} onCancel={() => setAddEdp(false)} />}
 
           {/* COMPRAS */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0 8px' }}>
@@ -284,6 +328,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra }) {
             <span>Por facturar: <b style={{ color: porFacturar > 0 ? C.ambar : C.verde }}>{clp(porFacturar)}</b></span>
             <span>Costo est.: <b>{clp(costoEst)}</b></span>
             <span>Costo real: <b>{clp(costoReal)}</b></span>
+            <span>Pérdida factoring: <b style={{ color: perdidaFact > 0 ? C.rojo : C.gris }}>{clp(perdidaFact)}</b></span>
             <span>UT est.: <b style={{ color: colorUT(pctUtEst) }}>{clp(utEst)} ({pctUtEst.toFixed(1)}%)</b></span>
             <span>UT real: <b style={{ color: colorUT(pctUtReal) }}>{clp(utReal)} ({pctUtReal.toFixed(1)}%)</b></span>
           </div>
@@ -343,16 +388,16 @@ function Consolidado({ proyectos }) {
     <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 12, overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
         <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-          {['OT', 'Cliente', 'Venta', 'Facturado', 'Por facturar', 'Costo est.', 'Costo real', 'UT est.', '%', ...CC_DEFS.map(c => c.id)].map((h, i) => (
+          {['OT', 'Cliente', 'Venta', 'Facturado', 'Por facturar', 'Costo est.', 'Costo real', 'Pérdida fact.', 'UT est.', '%', ...CC_DEFS.map(c => c.id)].map((h, i) => (
             <th key={i} style={{ textAlign: i < 2 ? 'left' : 'right', padding: '6px 8px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
           ))}
         </tr></thead>
         <tbody>
           {periodos.map(([per, ps]) => {
-            const sub = { venta: 0, fact: 0, porFac: 0, costoEst: 0, costoReal: 0 }
+            const sub = { venta: 0, fact: 0, porFac: 0, costoEst: 0, costoReal: 0, perdFact: 0 }
             const filas = ps.map(p => {
-              const venta = ventaDe(p), fact = facturadoDe(p), porFac = porFacturarDe(p), costoEst = costoEstDe(p), costoReal = comprasDe(p)
-              sub.venta += venta; sub.fact += fact; sub.porFac += porFac; sub.costoEst += costoEst; sub.costoReal += costoReal
+              const venta = ventaDe(p), fact = facturadoDe(p), porFac = porFacturarDe(p), costoEst = costoEstDe(p), costoReal = comprasDe(p), perdFact = perdidaFactDe(p)
+              sub.venta += venta; sub.fact += fact; sub.porFac += porFac; sub.costoEst += costoEst; sub.costoReal += costoReal; sub.perdFact += perdFact
               const ut = venta - costoEst, p2 = pct(ut, venta)
               return (
                 <tr key={p.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
@@ -363,6 +408,7 @@ function Consolidado({ proyectos }) {
                   {celda(clp(porFac), true, false, porFac > 0 ? C.ambar : C.gris)}
                   {celda(clp(costoEst))}
                   {celda(costoReal ? clp(costoReal) : '—', true, false, C.gris)}
+                  {celda(perdFact ? clp(perdFact) : '—', true, false, perdFact > 0 ? C.rojo : C.gris)}
                   {celda(clp(ut), true, true)}
                   {celda(p2.toFixed(0) + '%', true, false, colorUT(p2))}
                   {CC_DEFS.map(c => celda(consumoCC(p, c.id) ? clp(consumoCC(p, c.id)) : '—', true, false, C.gris))}
@@ -372,12 +418,12 @@ function Consolidado({ proyectos }) {
             const utSub = sub.venta - sub.costoEst
             return (
               <React.Fragment key={per}>
-                <tr style={{ background: '#F7F4EE' }}><td colSpan={9 + CC_DEFS.length} style={{ padding: '5px 8px', fontWeight: 600, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', fontSize: 12 }}>{per}</td></tr>
+                <tr style={{ background: '#F7F4EE' }}><td colSpan={10 + CC_DEFS.length} style={{ padding: '5px 8px', fontWeight: 600, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', fontSize: 12 }}>{per}</td></tr>
                 {filas}
                 <tr style={{ borderTop: `2px solid ${C.carbon}`, borderBottom: `2px solid ${C.carbon}` }}>
                   {celda('COT', false, true)}{celda('', false)}
                   {celda(clp(sub.venta), true, true)}{celda(clp(sub.fact), true, true)}{celda(clp(sub.porFac), true, true, C.ambar)}
-                  {celda(clp(sub.costoEst), true, true)}{celda(clp(sub.costoReal), true, true)}
+                  {celda(clp(sub.costoEst), true, true)}{celda(clp(sub.costoReal), true, true)}{celda(clp(sub.perdFact), true, true, sub.perdFact > 0 ? C.rojo : undefined)}
                   {celda(clp(utSub), true, true)}
                   {celda(sub.venta > 0 ? ((utSub / sub.venta) * 100).toFixed(0) + '%' : '—', true, true)}
                   {CC_DEFS.map(c => celda('', true))}
@@ -391,7 +437,7 @@ function Consolidado({ proyectos }) {
   )
 }
 
-export default function ProyectosModule({ proyectos: proyExt, setProyectos: setProyExt }) {
+export default function ProyectosModule({ proyectos: proyExt, setProyectos: setProyExt, params = { factoring: [] } }) {
   const [proyInt, setProyInt] = useState(PROYECTOS)
   const proyectos = proyExt ?? proyInt
   const setProyectos = setProyExt ?? setProyInt
@@ -416,6 +462,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
   const totPorFac = proyectos.reduce((a, p) => a + porFacturarDe(p), 0)
   const totCostoEst = proyectos.reduce((a, p) => a + costoEstDe(p), 0)
   const totCostoReal = proyectos.reduce((a, p) => a + comprasDe(p), 0)
+  const totPerdidaFact = proyectos.reduce((a, p) => a + perdidaFactDe(p), 0)
   const kpi = (label, valor, color) => (
     <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 14, flex: '1 1 140px' }}>
       <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{label}</div>
@@ -431,6 +478,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
         {kpi('Por facturar', clp(totPorFac), C.ambar)}
         {kpi('Costo est.', clp(totCostoEst))}
         {kpi('Costo real', clp(totCostoReal))}
+        {kpi('Pérdida factoring', clp(totPerdidaFact), totPerdidaFact > 0 ? C.rojo : C.carbon)}
         {kpi('UT est. global', totVenta > 0 ? (((totVenta - totCostoEst) / totVenta) * 100).toFixed(0) + '%' : '0%', C.verde)}
       </div>
 
@@ -448,7 +496,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
       {vista === 'consolidado' ? (
         <Consolidado proyectos={proyectos} />
       ) : (
-        proyectos.map(p => <TarjetaProyecto key={p.id} p={p} onUpdate={actualizar} onDelete={eliminar} onAddCompra={agregarCompra} />)
+        proyectos.map(p => <TarjetaProyecto key={p.id} p={p} onUpdate={actualizar} onDelete={eliminar} onAddCompra={agregarCompra} params={params} />)
       )}
 
       <div style={{ fontSize: 12, color: '#9AA0A6', textAlign: 'center', marginTop: 8 }}>
