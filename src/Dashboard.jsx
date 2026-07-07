@@ -82,7 +82,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const areasOT = areasUsuario.filter(a => a === 'Santa Rosa' || a === 'Istria')
   const tabs = esSupervisor ? ['PRODUCCION', 'COMPRAS_OP', 'ASISTENCIA'] : [
     ...(esGerencia ? ['TODAS'] : []),
-    ...areasUsuario,
+    ...areasUsuario.filter(a => a !== 'Proyectos'),
     ...(areasOT.length > 0 ? ['GESTION_OT'] : []),
     ...(tieneProyectos ? ['GESTION_PROYECTOS'] : []),
     'COTIZADOR',
@@ -124,32 +124,36 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const estados = Object.entries(vista.estados || {})
   const totalEst = estados.reduce((a, [, n]) => a + n, 0) || 1
 
+  const nombreTab = t => t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? '⚙ Gestión Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Clientes' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t
+
   return (
-    <div style={{ minHeight: '100vh', background: C.niebla, fontFamily: "'Inter',sans-serif" }}>
-      <div style={{ background: C.carbon, padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <LogoSerein alto={34} oscuro />
-          <span style={{ color: '#6B747A', fontSize: 12, letterSpacing: 1, borderLeft: '1px solid #3A4045', paddingLeft: 14 }}>PANEL 2026</span>
+    <div style={{ display: 'flex', minHeight: '100vh', background: C.niebla, fontFamily: "'Inter',sans-serif" }}>
+      <aside style={{ width: 234, flexShrink: 0, background: C.carbon, display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh' }}>
+        <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid #2A2F33' }}>
+          <LogoSerein alto={30} oscuro />
+          <div style={{ color: '#6B747A', fontSize: 11, letterSpacing: 1, marginTop: 6 }}>PANEL 2026</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#B8C0C6', fontSize: 13 }}>
-            <User size={15} /> {perfil.nombre || email} <span style={{ color: '#6B747A' }}>· {perfil.rol}</span>
+        <div style={{ padding: '10px 16px', borderBottom: '1px solid #2A2F33', color: '#B8C0C6', fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <User size={15} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{perfil.nombre || email}</div>
+            <div style={{ color: '#6B747A', fontSize: 11 }}>{perfil.rol}</div>
           </div>
-          <button onClick={onLogout} style={{ background: 'transparent', border: '1px solid #3A4045', color: '#B8C0C6', padding: '5px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
-            <LogOut size={13} /> Salir
-          </button>
         </div>
-      </div>
+        <nav style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+          {tabs.map(t => (
+            <button key={t} onClick={() => setAreaSel(t)}
+              style={{ display: 'flex', alignItems: 'center', width: '100%', textAlign: 'left', background: areaSel === t ? '#22282C' : 'transparent', border: 'none', borderLeft: areaSel === t ? `3px solid ${C.ambar}` : '3px solid transparent', color: areaSel === t ? '#fff' : '#9AA0A6', padding: '11px 16px', cursor: 'pointer', fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+              {nombreTab(t)}
+            </button>
+          ))}
+        </nav>
+        <button onClick={onLogout} style={{ margin: 16, background: 'transparent', border: '1px solid #3A4045', color: '#B8C0C6', padding: '8px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 12 }}>
+          <LogOut size={13} /> Salir
+        </button>
+      </aside>
 
-      <div style={{ background: '#fff', borderBottom: '1px solid #E2DED4', padding: '0 20px', display: 'flex', gap: 4, overflowX: 'auto' }}>
-        {tabs.map(t => (
-          <button key={t} onClick={() => setAreaSel(t)}
-            style={{ background: 'transparent', border: 'none', borderBottom: areaSel === t ? `3px solid ${C.ambar}` : '3px solid transparent', padding: '14px 16px', cursor: 'pointer', fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 13, letterSpacing: 0.5, color: areaSel === t ? C.carbon : '#9AA0A6', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-            {t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? '⚙ Gestión Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia y Mano de Obra' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t}
-          </button>
-        ))}
-      </div>
-
+      <main style={{ flex: 1, minWidth: 0, height: '100vh', overflowY: 'auto' }}>
       <div style={{ padding: 20, maxWidth: 1200, margin: '0 auto' }}>
         {esModuloProyectos ? (
           <ProyectosModule proyectos={proyectos} setProyectos={setProyectos} params={params} />
@@ -327,6 +331,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
           SEREIN SpA · Datos: VENTAS_SEREIN_SPA_2026
         </div>
       </div>
+      </main>
     </div>
   )
 }
