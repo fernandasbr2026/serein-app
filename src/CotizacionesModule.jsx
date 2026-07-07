@@ -406,7 +406,16 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
               return (
                 <tr key={c.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
                   <td style={{ padding: '8px 10px', fontWeight: 700, fontFamily: "'JetBrains Mono',monospace" }}>N° {c.folio}</td>
-                  <td style={{ padding: '8px 10px' }}>{c.cliente}</td>
+                  <td style={{ padding: '8px 10px' }}>{c.cliente}
+                    {(() => {
+                      const ot = (ots || []).find(o => o.numero === 'OT-' + c.folio)
+                      if (!ot) return c.estado === 'Aprobada' ? <div style={{ fontSize: 11, color: C.rojo, marginTop: 2 }}>Aprobada · falta crear OT</div> : null
+                      const ventas = ot.ventas || []
+                      const fact = (ventas.length > 0 || ['Facturada', 'Cerrada'].includes(ot.estado)) ? 'Facturada' : 'Pendiente'
+                      const cobro = ventas.length === 0 ? '—' : (ventas.every(v => v.estadoPago === 'Pagado') ? 'Cobrado' : 'Pendiente')
+                      return <div style={{ fontSize: 11, color: C.gris, marginTop: 2 }}>🔧 {ot.numero} · {ot.estado} · Fact: {fact} · Cobro: {cobro}</div>
+                    })()}
+                  </td>
                   <td style={{ padding: '8px 10px', color: C.gris }}>{c.area}</td>
                   <td style={{ padding: '8px 10px', color: C.gris }}>{c.fecha}</td>
                   <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600 }}>{clp(t.total)}</td>

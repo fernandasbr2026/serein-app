@@ -15,6 +15,7 @@ import ProduccionModule, { AVANCES_SEED } from './ProduccionModule.jsx'
 import ComprasOperativasModule, { COMPRAS_OP_SEED, CONFIG_COMPRAS_DEFAULT } from './ComprasOperativasModule.jsx'
 import ProveedoresPagosModule, { PP_SEED } from './ProveedoresPagosModule.jsx'
 import OrdenesCompraModule, { ocTotal, costoOCdeOT } from './OrdenesCompraModule.jsx'
+import TrazabilidadModule from './TrazabilidadModule.jsx'
 import ParametrosModule, { PARAMS_SEED, perdidaFactoringFactura } from './ParametrosModule.jsx'
 import ClientesModule, { CLIENTES_SEED } from './ClientesModule.jsx'
 import ContactosModule, { CONTACTOS_SEED, nombresClientes } from './ContactosModule.jsx'
@@ -172,6 +173,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     ...(tieneProyectos ? ['GESTION_PROYECTOS'] : []),
     ...(esGerencia ? ['PAGOS'] : []),
     ...(esGerencia ? ['ORDENES_COMPRA'] : []),
+    ...(esGerencia ? ['TRAZABILIDAD'] : []),
     ...(esGerencia ? ['FINANZAS'] : []),
     'CLIENTES',
     'COTIZADOR',
@@ -190,6 +192,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const esModuloFin = areaSel === 'FINANZAS'
   const esModuloPagos = areaSel === 'PAGOS'
   const esModuloOC = areaSel === 'ORDENES_COMPRA'
+  const esModuloTraza = areaSel === 'TRAZABILIDAD'
   const esModuloParams = areaSel === 'PARAMETROS'
   const esModuloClientes = areaSel === 'CLIENTES'
   const esModuloContactos = areaSel === 'CONTACTOS'
@@ -342,7 +345,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     </div>
   )
 
-  const nombreTab = t => t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'ORDENES_COMPRA' ? '🧾 Órdenes de Compra' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Resumen ventas por cliente' : t === 'CONTACTOS' ? '📇 Clientes y Proveedores' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t
+  const nombreTab = t => t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'ORDENES_COMPRA' ? '🧾 Órdenes de Compra' : t === 'TRAZABILIDAD' ? '🔗 Trazabilidad y Alertas' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Resumen ventas por cliente' : t === 'CONTACTOS' ? '📇 Clientes y Proveedores' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: C.niebla, fontFamily: "'Inter',sans-serif" }}>
@@ -416,6 +419,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
           <ProveedoresPagosModule pp={pp} setPp={setPp} />
         ) : esModuloOC && esGerencia ? (
           <OrdenesCompraModule pp={pp} setPp={setPp} ots={ots} />
+        ) : esModuloTraza && esGerencia ? (
+          <TrazabilidadModule cotizaciones={cotizaciones} ots={ots} ordenesCompra={pp.ocs || []} />
         ) : esModuloParams && esGerencia ? (
           <ParametrosModule params={params} setParams={setParams} />
         ) : esModuloClientes ? (
