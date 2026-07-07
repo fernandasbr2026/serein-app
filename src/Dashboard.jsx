@@ -97,6 +97,59 @@ function ResumenFinancieroCard({ fin, onIr }) {
   )
 }
 
+function CardModulo({ titulo, color, abiertasN, abiertasMonto, porFacturar, facturadoPorCobrar }) {
+  const it = (label, val, col) => (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ fontSize: 10.5, color: '#7A8288', textTransform: 'uppercase' }}>{label}</div>
+      <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 18, fontWeight: 600, color: col || '#161616', whiteSpace: 'nowrap' }}>{val}</div>
+    </div>
+  )
+  return (
+    <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `4px solid ${color}`, padding: '14px 16px' }}>
+      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 12 }}>{titulo}</div>
+      {it(`Abiertas · ${abiertasN} en curso`, clp(abiertasMonto) + ' por facturar', color)}
+      {it('Cerradas por facturar', clp(porFacturar), '#D2642F')}
+      {it('Facturado, aún por cobrar', clp(facturadoPorCobrar), '#B5432E')}
+    </div>
+  )
+}
+
+function ResumenModulos({ ots, proyectos }) {
+  const meOT = o => (o.montoCotizado > 0 ? o.montoCotizado : (o.ventas || []).reduce((a, v) => a + (v.neta || 0), 0))
+  const areaData = a => {
+    const list = (ots || []).filter(o => o.area === a)
+    const abiertas = list.filter(o => ['Cotizada', 'En ejecución'].includes(o.estado))
+    const terminadas = list.filter(o => o.estado === 'Terminada')
+    const facturadas = list.filter(o => ['Facturada', 'Cerrada'].includes(o.estado))
+    return {
+      abiertasN: abiertas.length,
+      abiertasMonto: abiertas.reduce((s, o) => s + meOT(o), 0),
+      porFacturar: terminadas.reduce((s, o) => s + meOT(o), 0),
+      facturadoPorCobrar: facturadas.reduce((s, o) => s + (o.ventas || []).filter(v => v.estadoPago === 'Pendiente').reduce((x, v) => x + (v.neta || 0), 0), 0),
+    }
+  }
+  const facturadoDe = p => (p.edps || []).reduce((a, e) => a + (e.venta || 0), 0)
+  const proyList = proyectos || []
+  const saldoP = p => (p.presupuesto > 0) ? Math.max(0, p.presupuesto - facturadoDe(p)) : null
+  const proyAbiertas = proyList.filter(p => { const s = saldoP(p); return (s !== null && s > 0) || (s === null && p.avance < 100) })
+  const proyData = {
+    abiertasN: proyAbiertas.length,
+    abiertasMonto: proyAbiertas.reduce((a, p) => a + (saldoP(p) || 0), 0),
+    porFacturar: proyList.reduce((a, p) => a + (saldoP(p) || 0), 0),
+    facturadoPorCobrar: proyList.reduce((a, p) => a + (p.edps || []).filter(e => e.estado !== 'Pagado').reduce((x, e) => x + (e.venta || 0), 0), 0),
+  }
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>OT y proyectos por módulo</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
+        <CardModulo titulo="Santa Rosa" color="#A8501F" {...areaData('Santa Rosa')} />
+        <CardModulo titulo="Istria" color="#1D1D1B" {...areaData('Istria')} />
+        <CardModulo titulo="Proyectos" color="#D2642F" {...proyData} />
+      </div>
+    </div>
+  )
+}
+
 export default function Dashboard({ perfil, email, onLogout }) {
   const areasUsuario = perfil.areas || []
   const esGerencia = areasUsuario.length > 1 && perfil.tipo !== 'supervisor'
@@ -211,6 +264,59 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const proyPorCobrar = proyectos.flatMap(p => (p.edps || [])).filter(e => e.estado !== 'Pagado')
   const totalEntrar = cobrosPend.reduce((a, c) => a + (c.total || 0), 0) + factPend.reduce((a, f) => a + (f.monto || 0), 0) + proyPorCobrar.reduce((a, e) => a + (e.venta || 0), 0)
   const saldoProy = totalEntrar - totalPagar
+
+  // ===== RESUMEN FINANCIERO TOTAL (montos con IVA / bruto) =====
+  const brutoF = f => { const n = f.neto || 0; return n + Math.round(n * 0.19) }
+  const noPagada = f => f.estado !== 'Pagado' && f.estado !== 'Anulada'
+  const esPagada = f => f.estado === 'Pagado'
+  const facBrutoArea = (a, filtro) => (facturas[a] || []).filter(filtro).reduce((s, f) => s + brutoF(f), 0)
+  // Cuentas por cobrar (bruto): facturas no pagadas de las tres áreas
+  const cxcTotal = areasFact.reduce((s, a) => s + facBrutoArea(a, noPagada), 0)
+  // Cuentas por pagar (bruto): gastos + cuotas + facturas de proveedores pendientes
+  const cxpTotal = gastosPend.reduce((a, g) => a + ((g.neto || 0) + (g.iva || 0)), 0) + cuotasPend.reduce((a, c) => a + (c.total || 0), 0) + docsPend.reduce((a, d) => a + d.monto, 0)
+  // OT en curso por facturar: OT (SR/Istria) + saldo de proyectos vs presupuesto
+  const meOT = o => (o.montoCotizado > 0 ? o.montoCotizado : (o.ventas || []).reduce((x, v) => x + (v.neta || 0), 0))
+  const otEnCurso = (ots || []).filter(o => ['Cotizada', 'En ejecución', 'Terminada'].includes(o.estado)).reduce((a, o) => a + meOT(o), 0)
+  const facturadoDeP = p => (p.edps || []).reduce((a, e) => a + (e.venta || 0), 0)
+  const proyPorFacturar = (proyectos || []).reduce((a, p) => a + ((p.presupuesto > 0) ? Math.max(0, p.presupuesto - facturadoDeP(p)) : 0), 0)
+  const otEnCursoTotal = otEnCurso + proyPorFacturar
+  // Caja = saldo inicial + cobros registrados − pagos registrados (desde Finanzas/Pagos)
+  const cobrosReg = (pp.cobros || []).filter(c => c.estado === 'Cobrado' || c.estado === 'Pagado').reduce((a, c) => a + (c.total || 0), 0)
+  const pagosReg = (fin.gastos || []).filter(g => g.estado === 'Pagado').reduce((a, g) => a + ((g.neto || 0) + (g.iva || 0)), 0)
+    + (fin.obligaciones || []).flatMap(o => o.cuotas || []).filter(c => c.estado === 'Pagada').reduce((a, c) => a + (c.total || 0), 0)
+    + (pp.docs || []).flatMap(d => d.pagos || []).reduce((a, p) => a + (p.monto || 0), 0)
+  const caja = (pp.saldoInicial || 0) + cobrosReg - pagosReg
+  const posicionFin = caja + cxcTotal - cxpTotal + otEnCursoTotal
+  // % factorizado sobre venta neta total
+  const netoFactTotal = areasFact.reduce((s, a) => s + (facturas[a] || []).filter(f => f.estado === 'Factoring' || /factor/i.test(f.medio || '')).reduce((x, f) => x + (f.neto || 0), 0), 0)
+  const netoTotalFact = areasFact.reduce((s, a) => s + facNeto(a), 0)
+  const pctFactorizado = netoTotalFact > 0 ? (netoFactTotal / netoTotalFact * 100) : 0
+  // Cuentas por pagar atribuidas a un área (para el resumen por módulo)
+  const pagarArea = a => {
+    const g = (fin.gastos || []).filter(x => x.estado !== 'Pagado' && x.estado !== 'Anulado').reduce((s, x) => s + ((x.neto || 0) + (x.iva || 0)) * (((x.dist || []).find(d => d.area === a) || {}).pct || 0) / 100, 0)
+    const doc = (pp.docs || []).filter(d => !d.anulado && d.area === a).reduce((s, d) => s + Math.max(0, (d.total || 0) - (d.pagos || []).reduce((x, p) => x + (p.monto || 0), 0)), 0)
+    const cuo = (fin.obligaciones || []).flatMap(o => (o.cuotas || []).filter(c => c.estado !== 'Pagada').map(c => ({ c, o }))).reduce((s, { c, o }) => s + (c.total || 0) * (((o.dist || []).find(d => d.area === a) || {}).pct || 0) / 100, 0)
+    return g + doc + cuo
+  }
+  // Recuadro reutilizable: resumen financiero de un área
+  const resumenFinancieroArea = a => {
+    const venta = facNeto(a), cobradoA = facBrutoArea(a, esPagada), porCobrarA = facBrutoArea(a, noPagada), porPagarA = pagarArea(a)
+    const resultadoA = porCobrarA - porPagarA
+    const it = (l, v, c) => (<div><div style={{ fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>{l}</div><div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: c || C.carbon, whiteSpace: 'nowrap' }}>{clp(v)}</div></div>)
+    return (
+      <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `4px solid ${AREA_COLOR[a] || C.teal}`, marginBottom: 16 }}>
+        <div style={{ padding: '14px 18px 6px', fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Resumen financiero · {a}</div>
+        <div style={{ padding: '0 18px 16px', display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          {it('Venta neta', venta, C.azul)}
+          {it('Cobrado', cobradoA, C.verde)}
+          {it('Por cobrar', porCobrarA, C.rojo)}
+          {it('Por pagar', porPagarA, C.ambar)}
+          {it('Resultado (por cobrar − por pagar)', resultadoA, resultadoA >= 0 ? C.verde : C.rojo)}
+        </div>
+      </div>
+    )
+  }
+
   const flujoItem = (label, valor, color) => (
     <div>
       <div style={{ fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>{label}</div>
@@ -254,7 +360,10 @@ export default function Dashboard({ perfil, email, onLogout }) {
       <main style={{ flex: 1, minWidth: 0, height: '100vh', overflowY: 'auto' }}>
       <div style={{ padding: 20, maxWidth: 1200, margin: '0 auto' }}>
         {esModuloProyectos ? (
+          <>
+          {resumenFinancieroArea('Proyectos')}
           <ProyectosModule proyectos={proyectos} setProyectos={setProyectos} params={params} facturas={facturas} setFacturas={setFacturas} comisionPct={comisiones['Proyectos'] ?? 2} setComisionPct={v => setComisiones(c => ({ ...c, Proyectos: v }))} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={nombresClientes(contactos)} />
+          </>
         ) : esModuloOT ? (
           <OTModule areasPermitidas={areasOT} ots={ots} setOts={setOts} />
         ) : esModuloComprasOp ? (
@@ -308,10 +417,29 @@ export default function Dashboard({ perfil, email, onLogout }) {
           <Kpi label="Cobrado" valor={clp(kCobrado)} sub={`${((kCobrado / ((kCobrado + kPend) || 1)) * 100).toFixed(0)}% de la cartera`} color={C.verde} icon={Wallet} />
           <Kpi label="Por Cobrar" valor={clp(kPend)} sub="pendiente" color={C.rojo} icon={AlertTriangle} />
           <Kpi label="Pérdida Factoring" valor={clp(kPerd)} sub={kVenta > 0 ? `${((kPerd / kVenta) * 100).toFixed(2)}% s/ venta` : '—'} color={C.ambar} icon={Landmark} />
+          {esTODAS && <Kpi label="% Factorizado" valor={`${pctFactorizado.toFixed(1)}%`} sub={`${clp(netoFactTotal)} de ${clp(netoTotalFact)}`} color={C.teal} icon={Landmark} />}
         </div>
 
         {esGerencia && areaSel === 'TODAS' && (
           <>
+            <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `4px solid ${C.verde}`, marginBottom: 16 }}>
+              <div style={{ padding: '14px 18px 6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>📊 Resumen financiero total</span>
+                <span style={{ fontSize: 11, color: '#7A8288' }}>caja + por cobrar − por pagar + OT en curso · montos con IVA</span>
+              </div>
+              <div style={{ padding: '0 18px 16px', display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                {flujoItem('Caja', clp(caja), caja >= 0 ? C.verde : C.rojo)}
+                {flujoItem('Cuentas por cobrar', clp(cxcTotal), C.azul)}
+                {flujoItem('Cuentas por pagar', clp(cxpTotal), C.rojo)}
+                {flujoItem('OT en curso (por facturar)', clp(otEnCursoTotal), C.ambar)}
+                <div style={{ borderLeft: '2px solid #E2DED4', paddingLeft: 20 }}>
+                  {flujoItem('Posición financiera', clp(posicionFin), posicionFin >= 0 ? C.verde : C.rojo)}
+                </div>
+              </div>
+            </div>
+
+            <ResumenModulos ots={ots} proyectos={proyectos} />
+
             <PipelineOT ots={ots.filter(o => o.area === 'Santa Rosa' || o.area === 'Istria')} />
             <PipelineProyectos proyectos={proyectos} />
             <ResumenFinancieroCard fin={fin} onIr={() => setAreaSel('FINANZAS')} />
@@ -329,6 +457,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
             </div>
           </>
         )}
+
+        {(areaSel === 'Santa Rosa' || areaSel === 'Istria') && resumenFinancieroArea(areaSel)}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16, marginBottom: 16 }}>
           <div style={{ gridColumn: 'span 1' }}>
