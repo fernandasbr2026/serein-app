@@ -501,7 +501,7 @@ function FormOT({ area, siguienteNumero, onAdd, onCancel }) {
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
         <button onClick={() => f.cliente && onAdd({
-          id: 'ot' + Date.now(), numero: siguienteNumero, area,
+          id: 'ot' + Date.now(), numero: siguienteNumero, area, fecha: new Date().toISOString().slice(0, 10),
           cliente: f.cliente, cotizacion: f.cotizacion || '—', oc: f.oc || '—',
           m2: num(f.m2), montoCotizado: num(f.montoCotizado), preparacion: f.preparacion, esquema: f.esquema || '—',
           estado: 'Cotizada', ventas: [], costos: [],
@@ -513,18 +513,44 @@ function FormOT({ area, siguienteNumero, onAdd, onCancel }) {
 }
 
 // ---------- Módulo principal ----------
-export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], ots: otsExt, setOts: setOtsExt, verValores = true }) {
+export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], ots: otsExt, setOts: setOtsExt, verValores = true, clientes = [] }) {
   const [otsInt, setOtsInt] = useState(OTS_INICIALES)
   const otsAll = otsExt ?? otsInt
   const setOts = setOtsExt ?? setOtsInt
   const ots = otsAll.filter(o => areasPermitidas.includes(o.area))
   const [areaSel, setAreaSel] = useState(areasPermitidas[0])
   const [creando, setCreando] = useState(false)
+  const [fCliente, setFCliente] = useState('')
+  const [rep, setRep] = useState(false)
+  const [repDesde, setRepDesde] = useState('')
+  const [repHasta, setRepHasta] = useState('')
+  const [repCliente, setRepCliente] = useState('')
+  const _norm = s => (s || '').trim().toLowerCase()
+  const otFecha = o => o.fecha || ((o.ventas || []).map(v => v.fecha).filter(f => f && f !== '—').sort()[0]) || ''
+  const clientesActivos = [...new Set((clientes || []).filter(c => (c.estado || 'Activo') === 'Activo').map(c => (c.nombre || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+
+  function generarInforme() {
+    const enRango = o => { const f = otFecha(o); if (repDesde && (!f || f < repDesde)) return false; if (repHasta && (!f || f > repHasta)) return false; return true }
+    const lista = ots.filter(o => (!repCliente || _norm(o.cliente) === _norm(repCliente)) && enRango(o))
+    if (lista.length === 0) { window.alert('No hay OT que cumplan el filtro seleccionado.'); return }
+    const header = verValores
+      ? ['N° OT', 'Cliente', 'Área', 'Estado', 'Fecha', 'Cotización', 'Monto cotizado', 'Venta neta', 'Costos', 'Utilidad', 'Esquema', 'N° partidas']
+      : ['N° OT', 'Cliente', 'Área', 'Estado', 'Fecha', 'Cotización', 'Esquema', 'N° partidas']
+    const rows = lista.map(o => {
+      const venta = (o.ventas || []).reduce((a, v) => a + (v.neta || 0), 0)
+      const costo = (o.costos || []).reduce((a, c) => a + (c.monto || 0), 0)
+      const base = [o.numero, o.cliente, o.area, o.estado, otFecha(o), o.cotizacion || '']
+      return verValores ? [...base, o.montoCotizado || 0, venta, costo, venta - costo, o.esquema || '', (o.partidas || []).length] : [...base, o.esquema || '', (o.partidas || []).length]
+    })
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([header, ...rows]), 'Informe OT')
+    XLSX.writeFile(wb, `Informe_OT_${new Date().toISOString().slice(0, 10)}.xlsx`)
+  }
 
   const actualizar = (id, cambios) => setOts(xs => xs.map(o => o.id === id ? { ...o, ...cambios } : o))
   const eliminar = id => setOts(xs => xs.filter(o => o.id !== id))
 
-  const visibles = ots.filter(o => o.area === areaSel)
+  const visibles = ots.filter(o => o.area === areaSel && (!fCliente || _norm(o.cliente) === _norm(fCliente)))
   const ventaTot = visibles.reduce((a, o) => a + o.ventas.reduce((x, v) => x + v.neta, 0), 0)
   const costoTot = visibles.reduce((a, o) => a + o.costos.reduce((x, c) => x + c.monto, 0), 0)
   const utilTot = ventaTot - costoTot
@@ -547,6 +573,26 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
               {a}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Filtro por cliente activo + informe Excel */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+        <label style={{ fontSize: 12, color: '#7A8288', display: 'flex', alignItems: 'center', gap: 6 }}>Cliente
+          <select value={fCliente} onChange={e => setFCliente(e.target.value)} style={inp}>
+            <option value="">Todos</option>
+            {clientesActivos.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </label>
+        <button onClick={() => { setRep(v => !v); setRepCliente(fCliente) }} style={{ background: C.carbon, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}><Download size={14} /> Informe Excel</button>
+      </div>
+      {rep && (
+        <div style={{ background: '#FAF7F3', border: '1px solid #E2DED4', padding: 12, marginBottom: 14, display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <label style={{ fontSize: 11, color: '#7A8288' }}>Desde<input type="date" value={repDesde} onChange={e => setRepDesde(e.target.value)} style={{ ...inp, display: 'block', marginTop: 3 }} /></label>
+          <label style={{ fontSize: 11, color: '#7A8288' }}>Hasta<input type="date" value={repHasta} onChange={e => setRepHasta(e.target.value)} style={{ ...inp, display: 'block', marginTop: 3 }} /></label>
+          <label style={{ fontSize: 11, color: '#7A8288' }}>Cliente<select value={repCliente} onChange={e => setRepCliente(e.target.value)} style={{ ...inp, display: 'block', marginTop: 3 }}><option value="">Todos</option>{clientesActivos.map(c => <option key={c} value={c}>{c}</option>)}</select></label>
+          <button onClick={generarInforme} style={{ background: C.verde, color: '#fff', border: 'none', padding: '8px 16px', cursor: 'pointer', fontSize: 13 }}>Generar Excel</button>
+          <span style={{ fontSize: 11.5, color: '#9AA0A6' }}>Deja las fechas vacías para incluir todo. Cubre tus áreas visibles.</span>
         </div>
       )}
 
