@@ -267,10 +267,10 @@ export default function Dashboard({ perfil, email, onLogout }) {
         ) : (
         <>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-          <Kpi label="Venta Neta" valor={clp(kVenta)} sub={esTODAS ? 'en vivo · 3 áreas' : `${vista.nFacturas} facturas`} color={C.azul} icon={TrendingUp} />
-          <Kpi label="Cobrado" valor={clp(kCobrado)} sub={`${((kCobrado / ((kCobrado + kPend) || 1)) * 100).toFixed(0)}% de la cartera`} color={C.verde} icon={Wallet} />
-          <Kpi label="Por Cobrar" valor={clp(kPend)} sub="pendiente" color={C.rojo} icon={AlertTriangle} />
-          <Kpi label="Pérdida Factoring" valor={clp(kPerd)} sub={kVenta > 0 ? `${((kPerd / kVenta) * 100).toFixed(2)}% s/ venta` : '—'} color={C.ambar} icon={Landmark} />
+          <Kpi label="Venta Neta" valor={clp(vista.venta)} sub={`${vista.nFacturas} facturas`} color={C.azul} icon={TrendingUp} />
+          <Kpi label="Cobrado" valor={clp(vista.cobrado)} sub={`${((vista.cobrado / (vista.cobrado + vista.pendiente)) * 100).toFixed(0)}% de la cartera`} color={C.verde} icon={Wallet} />
+          <Kpi label="Por Cobrar" valor={clp(vista.pendiente)} sub="pendiente con IVA" color={C.rojo} icon={AlertTriangle} />
+          <Kpi label="Pérdida Factoring" valor={clp(vista.perdidaFact)} sub={`${((vista.perdidaFact / vista.venta) * 100).toFixed(2)}% s/ venta`} color={C.ambar} icon={Landmark} />
         </div>
 
         {esGerencia && areaSel === 'TODAS' && (
@@ -332,15 +332,15 @@ export default function Dashboard({ perfil, email, onLogout }) {
 
         {esGerencia && areaSel === 'TODAS' && (
           <div style={{ marginBottom: 16 }}>
-            <Panel title="Venta por área (en vivo)">
+            <Panel title="Venta por área">
               <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={ventaAreaLive} margin={{ left: 4 }}>
+                <BarChart data={areasUsuario.map(a => ({ area: a, venta: DATA.areas[a].venta }))} margin={{ left: 4 }}>
                   <CartesianGrid stroke="#EEE9DF" vertical={false} />
                   <XAxis dataKey="area" tick={{ fontSize: 11, fill: '#7A8288' }} />
                   <YAxis tickFormatter={v => `${Math.round(v / 1e6)}M`} tick={{ fontSize: 11, fill: '#7A8288' }} />
                   <Tooltip formatter={v => clp(v)} />
                   <Bar dataKey="venta" name="Venta neta">
-                    {ventaAreaLive.map(d => <Cell key={d.area} fill={AREA_COLOR[d.area]} />)}
+                    {areasUsuario.map(a => <Cell key={a} fill={AREA_COLOR[a]} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
