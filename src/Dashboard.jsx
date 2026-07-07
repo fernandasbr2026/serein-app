@@ -14,6 +14,7 @@ import CotizacionesModule from './CotizacionesModule.jsx'
 import ProduccionModule, { AVANCES_SEED } from './ProduccionModule.jsx'
 import ComprasOperativasModule, { COMPRAS_OP_SEED, CONFIG_COMPRAS_DEFAULT } from './ComprasOperativasModule.jsx'
 import ProveedoresPagosModule, { PP_SEED } from './ProveedoresPagosModule.jsx'
+import OrdenesCompraModule, { ocTotal, costoOCdeOT } from './OrdenesCompraModule.jsx'
 import ParametrosModule, { PARAMS_SEED, perdidaFactoringFactura } from './ParametrosModule.jsx'
 import ClientesModule, { CLIENTES_SEED } from './ClientesModule.jsx'
 import ContactosModule, { CONTACTOS_SEED, nombresClientes } from './ContactosModule.jsx'
@@ -170,6 +171,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     ...areasUsuario.filter(a => a !== 'Proyectos'),
     ...(tieneProyectos ? ['GESTION_PROYECTOS'] : []),
     ...(esGerencia ? ['PAGOS'] : []),
+    ...(esGerencia ? ['ORDENES_COMPRA'] : []),
     ...(esGerencia ? ['FINANZAS'] : []),
     'CLIENTES',
     'COTIZADOR',
@@ -187,6 +189,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const esModuloMO = areaSel === 'ASISTENCIA'
   const esModuloFin = areaSel === 'FINANZAS'
   const esModuloPagos = areaSel === 'PAGOS'
+  const esModuloOC = areaSel === 'ORDENES_COMPRA'
   const esModuloParams = areaSel === 'PARAMETROS'
   const esModuloClientes = areaSel === 'CLIENTES'
   const esModuloContactos = areaSel === 'CONTACTOS'
@@ -270,7 +273,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const cuotasPend = (fin.obligaciones || []).flatMap(o => o.cuotas || []).filter(c => c.estado !== 'Pagada')
   const docsPend = (pp.docs || []).filter(d => !d.anulado).map(d => ({ venc: d.fecha_vencimiento, monto: Math.max(0, (d.total || 0) - (d.pagos || []).reduce((a, p) => a + (p.monto || 0), 0)) })).filter(d => d.monto > 0)
   // Órdenes de compra pendientes (no Pagadas/Canceladas/Anuladas) → cuentas por pagar y flujo
-  const ocsPend = (pp.ocs || []).filter(o => !['Pagada', 'Cancelada', 'Anulada'].includes(o.estadoPago) && (o.monto || 0) > 0).map(o => ({ venc: o.vencimiento || o.fecha, monto: o.monto || 0 }))
+  const ocsPend = (pp.ocs || []).filter(o => !['Pagada', 'Anulada'].includes(o.estadoPago) && ocTotal(o) > 0).map(o => ({ venc: o.vencimiento || o.fecha, monto: ocTotal(o) }))
   const porPagarDocs = docsPend.concat(ocsPend)
   const totalPagar = gastosPend.reduce((a, g) => a + (g.neto || 0), 0) + cuotasPend.reduce((a, c) => a + (c.total || 0), 0) + porPagarDocs.reduce((a, d) => a + d.monto, 0)
   const pagar7 = gastosPend.filter(g => g.vencimiento >= _hoy && g.vencimiento <= _en7).reduce((a, g) => a + (g.neto || 0), 0) + cuotasPend.filter(c => c.vencimiento >= _hoy && c.vencimiento <= _en7).reduce((a, c) => a + (c.total || 0), 0) + porPagarDocs.filter(d => d.venc >= _hoy && d.venc <= _en7).reduce((a, d) => a + d.monto, 0)
@@ -339,7 +342,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     </div>
   )
 
-  const nombreTab = t => t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Resumen ventas por cliente' : t === 'CONTACTOS' ? '📇 Clientes y Proveedores' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t
+  const nombreTab = t => t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'ORDENES_COMPRA' ? '🧾 Órdenes de Compra' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Resumen ventas por cliente' : t === 'CONTACTOS' ? '📇 Clientes y Proveedores' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: C.niebla, fontFamily: "'Inter',sans-serif" }}>
@@ -380,7 +383,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
           <ProyectosModule proyectos={proyectos} setProyectos={setProyectos} params={params} facturas={facturas} setFacturas={setFacturas} comisionPct={comisiones['Proyectos'] ?? 2} setComisionPct={v => setComisiones(c => ({ ...c, Proyectos: v }))} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={nombresClientes(contactos)} />
           </>
         ) : esModuloOT ? (
-          <OTModule areasPermitidas={areasOTUsuario} ots={ots} setOts={setOts} verValores={verValoresOT} clientes={contactos.clientes || []} />
+          <OTModule areasPermitidas={areasOTUsuario} ots={ots} setOts={setOts} verValores={verValoresOT} clientes={contactos.clientes || []} ordenesCompra={pp.ocs || []} />
         ) : esModuloComprasOp ? (
           <ComprasOperativasModule
             esGerencia={esGerencia}
@@ -411,6 +414,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
           <FinanzasModule otsDisponibles={ots.map(o => o.numero)} fin={fin} setFin={setFin} />
         ) : esModuloPagos && esGerencia ? (
           <ProveedoresPagosModule pp={pp} setPp={setPp} />
+        ) : esModuloOC && esGerencia ? (
+          <OrdenesCompraModule pp={pp} setPp={setPp} ots={ots} />
         ) : esModuloParams && esGerencia ? (
           <ParametrosModule params={params} setParams={setParams} />
         ) : esModuloClientes ? (

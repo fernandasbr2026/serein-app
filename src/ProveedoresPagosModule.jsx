@@ -699,7 +699,6 @@ export default function ProveedoresPagosModule({ pp: ppExt, setPp: setPpExt }) {
 
   const tabs = [
     { id: 'resumen', label: 'Resumen y flujo', icono: <BarChart3 size={13} /> },
-    { id: 'oc', label: 'Órdenes de compra', icono: <FileText size={13} /> },
     { id: 'porpagar', label: 'Por pagar', icono: <ReceiptText size={13} /> },
     { id: 'calpagos', label: 'Calendario de pagos', icono: <CalendarClock size={13} /> },
     { id: 'cobros', label: 'Cobros esperados', icono: <Wallet size={13} /> },
@@ -719,7 +718,6 @@ export default function ProveedoresPagosModule({ pp: ppExt, setPp: setPpExt }) {
         ))}
       </div>
       {tab === 'resumen' && <SeccionResumen pp={pp} />}
-      {tab === 'oc' && <SeccionOC pp={pp} setPp={setPp} />}
       {tab === 'porpagar' && <SeccionPorPagar pp={pp} setPp={setPp} />}
       {tab === 'calpagos' && <SeccionCalendarioPagos pp={pp} />}
       {tab === 'cobros' && <SeccionCobros pp={pp} setPp={setPp} />}

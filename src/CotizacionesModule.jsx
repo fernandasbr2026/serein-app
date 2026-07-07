@@ -342,7 +342,7 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
   function aprobar(cot) {
     if (cot.estado === 'Aprobada') { window.alert('Esta cotización ya fue aprobada y su OT ya existe.'); return }
     const numeroOT = 'OT-' + cot.folio
-    if ((ots || []).some(o => o.numero === numeroOT)) { window.alert('Ya existe una OT con el número ' + numeroOT + '.') }
+    if ((ots || []).some(o => o.numero === numeroOT)) { window.alert('Ya existe una OT creada para esta cotización (' + numeroOT + '). No se creó otra.') }
     else {
       const t = totales(cot)
       const nuevaOT = {

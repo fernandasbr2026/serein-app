@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { ChevronDown, ChevronUp, Plus, Trash2, X, Ruler, Paintbrush, FileText, Receipt, ShoppingCart, CircleDollarSign, Download, Camera } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { descargarOTDesdeOT } from './CotizacionesModule.jsx'
+import { costoOCdeOT } from './OrdenesCompraModule.jsx'
 
 const C = { azul: '#1D1D1B', teal: '#A8501F', ambar: '#D2642F', rojo: '#B5432E', verde: '#3D7A4E', carbon: '#161616', gris: '#7A8288' }
 const clp = n => '$' + Math.round(n).toLocaleString('es-CL')
@@ -228,13 +229,14 @@ function descargarOT(ot) {
   XLSX.writeFile(wb, `${ot.numero}.xlsx`)
 }
 
-function TarjetaOT({ ot, onUpdate, onDelete, verValores = true }) {
+function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = [] }) {
   const [abierta, setAbierta] = useState(false)
   const [addVenta, setAddVenta] = useState(false)
   const [addCosto, setAddCosto] = useState(false)
 
   const ventaTotal = ot.ventas.reduce((a, v) => a + v.neta, 0)
-  const costoTotal = ot.costos.reduce((a, c) => a + c.monto, 0)
+  const costoOC = costoOCdeOT(ordenesCompra, ot.numero)
+  const costoTotal = ot.costos.reduce((a, c) => a + c.monto, 0) + costoOC
   const utilidad = ventaTotal - costoTotal
   const margen = ventaTotal > 0 ? (utilidad / ventaTotal) * 100 : 0
   const precioM2 = ot.m2 > 0 && ventaTotal > 0 ? ventaTotal / ot.m2 : null
@@ -253,7 +255,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true }) {
             <ChipEstado estado={ot.estado} />
           </div>
           <div style={{ fontSize: 12, color: '#7A8288', marginTop: 5, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-            <span><FileText size={11} style={{ verticalAlign: -1 }} /> {ot.cotizacion} · OC {ot.oc}</span>
+            <span><FileText size={11} style={{ verticalAlign: -1 }} /> {ot.cotizacion}{ot.oc && ot.oc !== '—' ? ' · Aprob. cliente ' + ot.oc : ''}</span>
             {ot.m2 > 0 && <span><Ruler size={11} style={{ verticalAlign: -1 }} /> {ot.m2} m²</span>}
             <span><Paintbrush size={11} style={{ verticalAlign: -1 }} /> {ot.esquema}</span>
           </div>
@@ -451,6 +453,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true }) {
                 <CircleDollarSign size={16} color={margen >= 30 ? C.verde : C.ambar} />
                 <span>Venta neta: <b>{clp(ventaTotal)}</b></span>
                 <span>Costos: <b>{clp(costoTotal)}</b></span>
+                {costoOC > 0 && <span style={{ color: C.teal }}>(incluye {clp(costoOC)} de OC proveedores)</span>}
                 <span>Utilidad real: <b style={{ color: margen >= 30 ? C.verde : margen >= 15 ? C.ambar : C.rojo }}>{clp(utilidad)} ({margen.toFixed(1)}%)</b></span>
               </div>
             </>
@@ -491,7 +494,7 @@ function FormOT({ area, siguienteNumero, onAdd, onCancel }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
         <input style={inp} placeholder="Cliente *" value={f.cliente} onChange={e => setF({ ...f, cliente: e.target.value })} />
         <input style={inp} placeholder="Cotización" value={f.cotizacion} onChange={e => setF({ ...f, cotizacion: e.target.value })} />
-        <input style={inp} placeholder="OC / NV" value={f.oc} onChange={e => setF({ ...f, oc: e.target.value })} />
+        <input style={inp} placeholder="Respaldo aprobación cliente (opcional)" value={f.oc} onChange={e => setF({ ...f, oc: e.target.value })} />
         <input style={inp} placeholder="Metros cuadrados" value={f.m2} onChange={e => setF({ ...f, m2: e.target.value })} />
         <input style={inp} placeholder="Monto cotizado CLP" value={f.montoCotizado} onChange={e => setF({ ...f, montoCotizado: e.target.value })} />
         <select style={inp} value={f.preparacion} onChange={e => setF({ ...f, preparacion: e.target.value })}>
@@ -513,7 +516,7 @@ function FormOT({ area, siguienteNumero, onAdd, onCancel }) {
 }
 
 // ---------- Módulo principal ----------
-export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], ots: otsExt, setOts: setOtsExt, verValores = true, clientes = [] }) {
+export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], ots: otsExt, setOts: setOtsExt, verValores = true, clientes = [], ordenesCompra = [] }) {
   const [otsInt, setOtsInt] = useState(OTS_INICIALES)
   const otsAll = otsExt ?? otsInt
   const setOts = setOtsExt ?? setOtsInt
@@ -552,7 +555,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
 
   const visibles = ots.filter(o => o.area === areaSel && (!fCliente || _norm(o.cliente) === _norm(fCliente)))
   const ventaTot = visibles.reduce((a, o) => a + o.ventas.reduce((x, v) => x + v.neta, 0), 0)
-  const costoTot = visibles.reduce((a, o) => a + o.costos.reduce((x, c) => x + c.monto, 0), 0)
+  const costoTot = visibles.reduce((a, o) => a + o.costos.reduce((x, c) => x + c.monto, 0) + costoOCdeOT(ordenesCompra, o.numero), 0)
   const utilTot = ventaTot - costoTot
 
   const nums = ots.map(o => parseInt((o.numero.match(/(\d+)$/) || [0, 0])[1], 10))
@@ -615,7 +618,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
       {creando && <FormOT area={areaSel} siguienteNumero={siguiente} onAdd={o => { setOts(xs => [o, ...xs]); setCreando(false) }} onCancel={() => setCreando(false)} />}
 
       {visibles.length === 0 && <div style={{ color: '#9AA0A6', fontSize: 14, padding: 20, textAlign: 'center', background: '#fff', border: '1px dashed #CBD2D6' }}>Sin OTs en {areaSel}. Crea la primera.</div>}
-      {visibles.map(o => <TarjetaOT key={o.id} ot={o} onUpdate={actualizar} onDelete={eliminar} verValores={verValores} />)}
+      {visibles.map(o => <TarjetaOT key={o.id} ot={o} onUpdate={actualizar} onDelete={eliminar} verValores={verValores} ordenesCompra={ordenesCompra} />)}
 
       <div style={{ fontSize: 12, color: '#9AA0A6', textAlign: 'center', marginTop: 8 }}>
         Vista de prueba: los cambios se pierden al recargar. En la versión con base de datos todo queda guardado.
