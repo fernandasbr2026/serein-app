@@ -1,7 +1,10 @@
-import React, { useState } from 'react'
-import { Plus, Trash2, Receipt } from 'lucide-react'
+import React, { useState, useRef } from 'react'
+import { Plus, Trash2, Receipt, Upload, Search } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { calcularPerdidaFactoring } from './ParametrosModule.jsx'
+export { FACTURAS_SEED } from './facturas-data.js'
 const CONDICIONES_DIAS = [{ label: '30 días', dias: 30 }, { label: '45 días', dias: 45 }, { label: '60 días', dias: 60 }, { label: '90 días', dias: 90 }]
+const norm = s => (s || '').toString().toLowerCase()
 
 // ============================================================
 // MÓDULO: Facturas por área (Santa Rosa / Istria)
@@ -18,16 +21,6 @@ const inp = { padding: '6px 8px', border: '1px solid #CBD2D6', fontSize: 12.5, b
 const ESTADOS = ['Pendiente', 'Pagado', 'Factoring', 'Vencida', 'Anulada']
 const BANCOS = ['', 'Banco de Chile', 'BCI', 'Santander', 'Estado', 'Scotiabank', 'Itaú', 'Security', 'BICE', 'Otro']
 
-export const FACTURAS_SEED = {
-  'Santa Rosa': [
-    { id: 'sr1', numero: '2026-114', cliente: 'Viman', ot: 'OT-2026-114', fecha_emision: '2026-06-30', monto: 5518500, estado: 'Pendiente', fecha_pago: '', banco: '', comentarios: '' },
-    { id: 'sr2', numero: '2026-115', cliente: 'Viman', ot: 'OT-2026-115', fecha_emision: '2026-06-30', monto: 684000, estado: 'Pendiente', fecha_pago: '', banco: '', comentarios: '' },
-  ],
-  'Istria': [
-    { id: 'is1', numero: '2026-097', cliente: 'IMMA', ot: 'OT-304', fecha_emision: '2026-06-20', monto: 3200000, estado: 'Pendiente', fecha_pago: '', banco: '', comentarios: '' },
-  ],
-}
-
 const fondoEstado = e => ({ Pagado: '#E7F2EA', Factoring: '#F9E9DE', Vencida: '#F6E0DA', Anulada: '#EEE', Pendiente: '#F9E9DE' }[e] || '#EEE')
 const colorEstado = e => ({ Pagado: C.verde, Factoring: C.ambar, Vencida: C.rojo, Anulada: C.gris, Pendiente: '#8C4519' }[e] || C.gris)
 
@@ -36,6 +29,8 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
   const [creando, setCreando] = useState(false)
   const nueva = () => ({ numero: '', cliente: '', ot: '', fecha_emision: '', monto: '', estado: 'Pendiente', fecha_pago: '', banco: '', comentarios: '' })
   const [f, setF] = useState(nueva())
+  const [busca, setBusca] = useState('')
+  const fileRef = useRef(null)
 
   const setLista = nuevaLista => setFacturas({ ...(facturas || {}), [area]: nuevaLista })
   const actualizar = (id, campo, valor) => setLista(lista.map(x => x.id === id ? { ...x, [campo]: valor } : x))
@@ -45,6 +40,41 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
     setF(nueva()); setCreando(false)
   }
 
+  // Importar facturas desde Excel (.xlsx / .xlsm). Lee la hoja del área o la primera.
+  function importarExcel(file) {
+    const toInt = v => { const n = Math.round(Number(v)); return isNaN(n) ? num(v) : n }
+    const excelDate = v => {
+      if (v == null || v === '') return ''
+      if (typeof v === 'number') { const d = new Date(Math.round((v - 25569) * 86400 * 1000)); return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10) }
+      const m = String(v).match(/(\d{4})-(\d{2})-(\d{2})/); return m ? m[0] : ''
+    }
+    const estadoN = v => { const t = norm(v); if (t.includes('pag')) return 'Pagado'; if (t.includes('factor')) return 'Factoring'; if (t.includes('venc')) return 'Vencida'; if (t.includes('anul')) return 'Anulada'; return 'Pendiente' }
+    const reader = new FileReader()
+    reader.onload = ev => {
+      try {
+        const wb = XLSX.read(ev.target.result, { type: 'array' })
+        const sheet = wb.SheetNames.find(n => norm(n).trim() === norm(area).trim()) || wb.SheetNames[0]
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheet], { header: 1, raw: true, blankrows: false })
+        if (!rows.length) return
+        const hdr = (rows[0] || []).map(h => norm(h).trim())
+        const col = (...nn) => { for (const nm of nn) { const i = hdr.findIndex(h => h.includes(nm)); if (i >= 0) return i } return -1 }
+        const ci = { fecha: col('fecha'), doc: col('documento'), cli: col('cliente'), neto: col('venta neta', 'neto'), total: col('total'), oc: col('oc'), ent: col('entidad'), venc: col('vencimiento'), est: col('estado'), obs: col('observaci') }
+        const nuevas = []
+        for (let r = 1; r < rows.length; r++) {
+          const row = rows[r]; if (!row) continue
+          const numero = String(row[ci.doc] ?? '').replace(/\.0$/, '').trim()
+          const cliente = String(row[ci.cli] ?? '').trim()
+          if (!numero && !cliente) continue
+          nuevas.push({ id: 'imp' + r, numero, cliente, ot: String(row[ci.oc] ?? '').trim(), fecha_emision: excelDate(row[ci.fecha]), neto: toInt(row[ci.neto]), monto: toInt(row[ci.total]) || toInt(row[ci.neto]), estado: estadoN(row[ci.est]), fecha_pago: '', banco: String(row[ci.ent] ?? '').trim(), vencimiento: excelDate(row[ci.venc]), comentarios: String(row[ci.obs] ?? '').trim() })
+        }
+        if (!nuevas.length) { window.alert('No se encontraron facturas en la hoja "' + sheet + '".'); return }
+        if (window.confirm('Se importarán ' + nuevas.length + ' facturas de la hoja "' + sheet + '" y reemplazarán las de ' + area + '. ¿Continuar?')) setLista(nuevas)
+      } catch (err) { window.alert('No se pudo leer el Excel: ' + err) }
+    }
+    reader.readAsArrayBuffer(file)
+  }
+
+  const mostradas = busca ? lista.filter(x => (norm(x.numero) + ' ' + norm(x.cliente) + ' ' + norm(x.ot)).includes(norm(busca))) : lista
   const totalMonto = lista.reduce((a, x) => a + x.monto, 0)
   const cobrado = lista.filter(x => x.estado === 'Pagado').reduce((a, x) => a + x.monto, 0)
 
@@ -53,9 +83,16 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
       <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `3px solid ${C.teal}` }}>
         <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, borderBottom: '1px solid #EEE9DF' }}>
           <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Receipt size={15} /> Facturas · {area}</span>
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center', fontSize: 12, color: C.gris, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 12, color: C.gris, flexWrap: 'wrap' }}>
+            <span>{lista.length} facturas</span>
             <span>Total: <b style={{ color: C.carbon }}>{clp(totalMonto)}</b></span>
             <span>Cobrado: <b style={{ color: C.verde }}>{clp(cobrado)}</b></span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, border: '1px solid #CBD2D6', padding: '2px 6px' }}>
+              <Search size={13} color={C.gris} />
+              <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar N°/cliente/OT…" style={{ border: 'none', outline: 'none', fontSize: 12.5, width: 150 }} />
+            </div>
+            <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.xls" style={{ display: 'none' }} onChange={e => { const file = e.target.files[0]; if (file) importarExcel(file); e.target.value = '' }} />
+            <button onClick={() => fileRef.current && fileRef.current.click()} style={{ background: C.carbon, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Upload size={13} /> Importar Excel</button>
             {!creando && <button onClick={() => setCreando(true)} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Nueva factura</button>}
           </div>
         </div>
@@ -85,7 +122,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
               ))}
             </tr></thead>
             <tbody>
-              {lista.map(x => {
+              {mostradas.map(x => {
                 const facs = params.factoring || []
                 const fSel = facs.find(ff => ff.id === x.factoringId) || facs[0]
                 const perd = x.estado === 'Factoring' ? calcularPerdidaFactoring(x.monto, x.dias || 30, x.diasMora || 0, fSel) : null
@@ -104,9 +141,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                   </td>
                   <td style={{ padding: '5px 6px' }}><input type="date" value={x.fecha_pago} onChange={e => actualizar(x.id, 'fecha_pago', e.target.value)} style={{ ...inp, width: 130 }} /></td>
                   <td style={{ padding: '5px 6px' }}>
-                    <select value={x.banco} onChange={e => actualizar(x.id, 'banco', e.target.value)} style={{ ...inp, width: 140 }}>
-                      {BANCOS.map(b => <option key={b} value={b}>{b || '—'}</option>)}
-                    </select>
+                    <input value={x.banco} onChange={e => actualizar(x.id, 'banco', e.target.value)} placeholder="Banco…" style={{ ...inp, width: 130 }} />
                   </td>
                   <td style={{ padding: '5px 6px' }}><input value={x.comentarios} onChange={e => actualizar(x.id, 'comentarios', e.target.value)} placeholder="Comentario…" style={{ ...inp, width: 160 }} /></td>
                   <td style={{ padding: '5px 4px', textAlign: 'right' }}><button onClick={() => window.confirm(`¿Eliminar factura ${x.numero}?`) && setLista(lista.filter(y => y.id !== x.id))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button></td>
@@ -132,7 +167,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                 )}
                 </React.Fragment>
               ) })}
-              {lista.length === 0 && <tr><td colSpan={10} style={{ padding: 14, textAlign: 'center', color: '#9AA0A6' }}>Sin facturas en esta área.</td></tr>}
+              {mostradas.length === 0 && <tr><td colSpan={10} style={{ padding: 14, textAlign: 'center', color: '#9AA0A6' }}>{busca ? 'Sin resultados para la búsqueda.' : 'Sin facturas en esta área.'}</td></tr>}
             </tbody>
           </table>
         </div>
