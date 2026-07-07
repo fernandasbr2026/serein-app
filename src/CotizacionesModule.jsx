@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Plus, Trash2, FileText, Download, CheckCircle2, Search, X } from 'lucide-react'
 import * as XLSX from 'xlsx'
+import Paginador, { paginar } from './Paginador.jsx'
 
 // ============================================================
 // MÓDULO: Cotizaciones (formato PDF descargable) + generación de OT
@@ -362,6 +363,8 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
 
   const mostradas = cotizaciones.filter(c => !busca || (String(c.folio) + ' ' + (c.cliente || '')).toLowerCase().includes(busca.toLowerCase()))
     .sort((a, b) => (parseInt(String(b.folio).replace(/\D/g, ''), 10) || 0) - (parseInt(String(a.folio).replace(/\D/g, ''), 10) || 0))
+  const [page, setPage] = useState(1)
+  const pg = paginar(mostradas, page)
 
   if (creando || editId) {
     const inicial = editId ? cotizaciones.find(c => c.id === editId) : nuevaCot(maxFolio + 1)
@@ -401,7 +404,7 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Folio', 'Cliente', 'Área', 'Fecha', 'Total', 'Estado', 'Acciones'].map(h => <th key={h} style={{ textAlign: h === 'Total' ? 'right' : 'left', padding: '8px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
           <tbody>
-            {mostradas.map(c => {
+            {pg.items.map(c => {
               const t = totales(c)
               return (
                 <tr key={c.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
@@ -441,6 +444,7 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
             {mostradas.length === 0 && <tr><td colSpan={7} style={{ padding: 18, textAlign: 'center', color: '#9AA0A6' }}>Sin cotizaciones. Crea la primera con "Nueva cotización".</td></tr>}
           </tbody>
         </table>
+        <Paginador page={pg.page} paginas={pg.paginas} total={pg.total} setPage={setPage} />
       </div>
       <div style={{ fontSize: 12, color: '#9AA0A6', marginTop: 8 }}>
         "Descargar" abre el documento con formato y usa <b>Guardar como PDF</b> del navegador. Al aprobar, se genera la OT con el mismo número en Órdenes de Trabajo; la OT se descarga <b>sin valores</b> para los supervisores.

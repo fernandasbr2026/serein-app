@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react'
 import { Plus, Trash2, Receipt, Upload, Search } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { calcularPerdidaFactoring, perdidaFactoringFactura } from './ParametrosModule.jsx'
+import Paginador, { paginar } from './Paginador.jsx'
 export { FACTURAS_SEED } from './facturas-data.js'
 const CONDICIONES_DIAS = [{ label: '30 días', dias: 30 }, { label: '45 días', dias: 45 }, { label: '60 días', dias: 60 }, { label: '90 días', dias: 90 }]
 const norm = s => (s || '').toString().toLowerCase()
@@ -42,6 +43,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
   const [fEst, setFEst] = useState('')
   const [fMes, setFMes] = useState('')
   const fileRef = useRef(null)
+  const [page, setPage] = useState(1)
 
   const setLista = nuevaLista => setFacturas({ ...(facturas || {}), [area]: nuevaLista })
   const actualizar = (id, campo, valor) => setLista(lista.map(x => x.id === id ? { ...x, [campo]: valor } : x))
@@ -98,6 +100,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
     (!fMes || (x.fecha_emision || '').slice(0, 7) === fMes)
   )
   const hayFiltro = busca || fCli || fEst || fMes
+  const pg = paginar(mostradas, page)
   const totalMonto = mostradas.reduce((a, x) => a + brutoDe(x.neto), 0)
   const cobrado = mostradas.filter(x => x.estado === 'Pagado').reduce((a, x) => a + brutoDe(x.neto), 0)
   const totalComision = mostradas.reduce((a, x) => a + comisionDe(x), 0)
@@ -200,7 +203,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
               ))}
             </tr></thead>
             <tbody>
-              {mostradas.map(x => {
+              {pg.items.map(x => {
                 const facs = params.factoring || []
                 const fSel = facs.find(ff => ff.id === x.factoringId) || facs[0]
                 const perd = x.estado === 'Factoring' ? calcularPerdidaFactoring(brutoDe(x.neto), x.dias || 30, x.diasMora || 0, fSel) : null
@@ -258,6 +261,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
               {mostradas.length === 0 && <tr><td colSpan={esSR ? 16 : 15} style={{ padding: 14, textAlign: 'center', color: '#9AA0A6' }}>{busca ? 'Sin resultados para la búsqueda.' : 'Sin facturas en esta área.'}</td></tr>}
             </tbody>
           </table>
+          <Paginador page={pg.page} paginas={pg.paginas} total={pg.total} setPage={setPage} />
         </div>
         <datalist id={dlId}>{sugerencias.map(s => <option key={s} value={s} />)}</datalist>
       </div>

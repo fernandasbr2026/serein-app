@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, Plus, Trash2, X, Ruler, Paintbrush, FileText, R
 import * as XLSX from 'xlsx'
 import { descargarOTDesdeOT } from './CotizacionesModule.jsx'
 import { costoOCdeOT } from './OrdenesCompraModule.jsx'
+import Paginador, { paginar } from './Paginador.jsx'
 
 const C = { azul: '#1D1D1B', teal: '#A8501F', ambar: '#D2642F', rojo: '#B5432E', verde: '#3D7A4E', carbon: '#161616', gris: '#7A8288' }
 const clp = n => '$' + Math.round(n).toLocaleString('es-CL')
@@ -524,6 +525,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   const [areaSel, setAreaSel] = useState(areasPermitidas[0])
   const [creando, setCreando] = useState(false)
   const [fCliente, setFCliente] = useState('')
+  const [page, setPage] = useState(1)
   const [rep, setRep] = useState(false)
   const [repDesde, setRepDesde] = useState('')
   const [repHasta, setRepHasta] = useState('')
@@ -618,7 +620,8 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
       {creando && <FormOT area={areaSel} siguienteNumero={siguiente} onAdd={o => { setOts(xs => [o, ...xs]); setCreando(false) }} onCancel={() => setCreando(false)} />}
 
       {visibles.length === 0 && <div style={{ color: '#9AA0A6', fontSize: 14, padding: 20, textAlign: 'center', background: '#fff', border: '1px dashed #CBD2D6' }}>Sin OTs en {areaSel}. Crea la primera.</div>}
-      {visibles.map(o => <TarjetaOT key={o.id} ot={o} onUpdate={actualizar} onDelete={eliminar} verValores={verValores} ordenesCompra={ordenesCompra} />)}
+      {paginar(visibles, page).items.map(o => <TarjetaOT key={o.id} ot={o} onUpdate={actualizar} onDelete={eliminar} verValores={verValores} ordenesCompra={ordenesCompra} />)}
+      <Paginador page={paginar(visibles, page).page} paginas={paginar(visibles, page).paginas} total={visibles.length} setPage={setPage} />
 
       <div style={{ fontSize: 12, color: '#9AA0A6', textAlign: 'center', marginTop: 8 }}>
         Vista de prueba: los cambios se pierden al recargar. En la versión con base de datos todo queda guardado.

@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Plus, Trash2, Users, Truck, Search } from 'lucide-react'
 import { CLIENTES_FICHA } from './clientes-data.js'
 import { PROVEEDORES_FICHA } from './proveedores-data.js'
+import Paginador, { paginar } from './Paginador.jsx'
 
 // ============================================================
 // MÓDULO: Clientes y Proveedores
@@ -48,11 +49,13 @@ const COLS_PROVEEDORES = [
 
 function Tabla({ titulo, icono, items, setItems, color, cols }) {
   const [busca, setBusca] = useState('')
+  const [page, setPage] = useState(1)
   const vacio = () => cols.reduce((o, c) => ({ ...o, [c.key]: c.type === 'estado' ? 'Activo' : '' }), { id: 't' + Date.now() })
   const agregar = () => setItems([vacio(), ...items])
   const actualizar = (id, campo, valor) => setItems(items.map(x => x.id === id ? { ...x, [campo]: valor } : x))
   const eliminar = id => { if (window.confirm('¿Eliminar este registro?')) setItems(items.filter(x => x.id !== id)) }
   const mostrados = items.filter(x => !busca || cols.some(c => (norm(x[c.key])).toLowerCase().includes(busca.toLowerCase())))
+  const pg = paginar(mostrados, page)
   return (
     <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `3px solid ${color}` }}>
       <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, borderBottom: '1px solid #EEE9DF' }}>
@@ -73,7 +76,7 @@ function Tabla({ titulo, icono, items, setItems, color, cols }) {
             <th></th>
           </tr></thead>
           <tbody>
-            {mostrados.map(x => (
+            {pg.items.map(x => (
               <tr key={x.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
                 {cols.map(c => (
                   <td key={c.key} style={{ padding: '4px 6px' }}>
@@ -92,6 +95,7 @@ function Tabla({ titulo, icono, items, setItems, color, cols }) {
             {mostrados.length === 0 && <tr><td colSpan={cols.length + 1} style={{ padding: 14, textAlign: 'center', color: '#9AA0A6' }}>Sin registros.</td></tr>}
           </tbody>
         </table>
+        <Paginador page={pg.page} paginas={pg.paginas} total={pg.total} setPage={setPage} />
       </div>
     </div>
   )

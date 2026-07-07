@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Plus, Trash2, Search, ChevronDown, ChevronUp, Download } from 'lucide-react'
+import Paginador, { paginar } from './Paginador.jsx'
 
 // ============================================================
 // MÓDULO: Órdenes de Compra a PROVEEDORES (emitidas por Serein)
@@ -269,6 +270,8 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
     (!busca || (String(o.numero) + ' ' + (o.proveedor || '') + ' ' + (o.rut || '') + ' ' + (o.categoria || '')).toLowerCase().includes(busca.toLowerCase())) &&
     (!fEst || o.estadoPago === fEst)
   ).sort((a, b) => (parseInt(String(b.numero).replace(/\D/g, ''), 10) || 0) - (parseInt(String(a.numero).replace(/\D/g, ''), 10) || 0))
+  const [page, setPage] = useState(1)
+  const pg = paginar(mostradas, page)
   const totalTodas = mostradas.reduce((a, o) => a + ocTotal(o), 0)
   const totalPend = mostradas.filter(ocPorPagar).reduce((a, o) => a + ocTotal(o), 0)
 
@@ -293,10 +296,11 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
             {['Nº OC', 'Proveedor', 'RUT', 'Categoría', 'Fecha', 'Neto', 'IVA', 'Total', 'Plazo', 'Vencimiento', 'Estado de pago', ''].map(h => <th key={h} style={{ textAlign: ['Neto', 'IVA', 'Total'].includes(h) ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>)}
           </tr></thead>
           <tbody>
-            {mostradas.map(o => <FilaOC key={o.id} oc={o} otsDisponibles={otsDisponibles} upd={upd} onDelete={eliminar} />)}
+            {pg.items.map(o => <FilaOC key={o.id} oc={o} otsDisponibles={otsDisponibles} upd={upd} onDelete={eliminar} />)}
             {mostradas.length === 0 && <tr><td colSpan={12} style={{ padding: 16, textAlign: 'center', color: '#9AA0A6' }}>Sin órdenes de compra.</td></tr>}
           </tbody>
         </table>
+        <Paginador page={pg.page} paginas={pg.paginas} total={pg.total} setPage={setPage} />
       </div>
     </div>
   )
