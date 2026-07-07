@@ -12,6 +12,7 @@ import FinanzasModule, { FIN_SEED, calcularResumenFin } from './FinanzasModule.j
 import CotizadorModule from './CotizadorModule.jsx'
 import ProduccionModule, { AVANCES_SEED } from './ProduccionModule.jsx'
 import ComprasOperativasModule, { COMPRAS_OP_SEED, CONFIG_COMPRAS_DEFAULT } from './ComprasOperativasModule.jsx'
+import ProveedoresPagosModule, { PP_SEED } from './ProveedoresPagosModule.jsx'
 import { MO_SEED } from './ManoObraModule.jsx'
 import { PROYECTOS } from './proyectos-data.js'
 
@@ -88,6 +89,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     ...(esGerencia ? ['COMPRAS_OP'] : []),
     'ASISTENCIA',
     ...(esGerencia ? ['FINANZAS'] : []),
+    ...(esGerencia ? ['PAGOS'] : []),
   ]
   const [areaSel, setAreaSel] = useState(tabs[0])
 
@@ -95,6 +97,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const esModuloOT = areaSel === 'GESTION_OT'
   const esModuloMO = areaSel === 'ASISTENCIA'
   const esModuloFin = areaSel === 'FINANZAS'
+  const esModuloPagos = areaSel === 'PAGOS'
   const esModuloCot = areaSel === 'COTIZADOR'
   const esModuloProd = areaSel === 'PRODUCCION'
   const [avances, setAvances] = useState(AVANCES_SEED)
@@ -103,6 +106,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const [comprasOp, setComprasOp] = useState(COMPRAS_OP_SEED)
   const [configCompras, setConfigCompras] = useState(CONFIG_COMPRAS_DEFAULT)
   const [fin, setFin] = useState(FIN_SEED)
+  const [pp, setPp] = useState(PP_SEED)
   const [ots, setOts] = useState(OTS_INICIALES)
   const [proyectos, setProyectos] = useState(PROYECTOS)
   const vista = useMemo(() => (esGerencia && areaSel === 'TODAS') ? DATA.global : (DATA.areas[areaSel] || DATA.global), [areaSel, esGerencia])
@@ -137,7 +141,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
         {tabs.map(t => (
           <button key={t} onClick={() => setAreaSel(t)}
             style={{ background: 'transparent', border: 'none', borderBottom: areaSel === t ? `3px solid ${C.ambar}` : '3px solid transparent', padding: '14px 16px', cursor: 'pointer', fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 13, letterSpacing: 0.5, color: areaSel === t ? C.carbon : '#9AA0A6', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-            {t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? '⚙ Gestión Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia y Mano de Obra' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t}
+            {t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? '⚙ Gestión Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia y Mano de Obra' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t}
           </button>
         ))}
       </div>
@@ -175,6 +179,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
           <CotizadorModule areasPermitidas={areasUsuario} ots={ots} setOts={setOts} />
         ) : esModuloFin && esGerencia ? (
           <FinanzasModule otsDisponibles={ots.map(o => o.numero)} fin={fin} setFin={setFin} />
+        ) : esModuloPagos && esGerencia ? (
+          <ProveedoresPagosModule pp={pp} setPp={setPp} />
         ) : esModuloMO ? (
           <ManoObraModule
             esGerencia={esGerencia}
