@@ -685,12 +685,13 @@ function Informes({ mo }) {
 // ================= MÓDULO PRINCIPAL =================
 export default function ManoObraModule({ esGerencia, otsDisponibles = [], usuario = 'supervisor@serein.cl', areas = ['Santa Rosa', 'Istria', 'Proyectos'], mo: moExt, setMo: setMoExt }) {
   const [moInt, setMoInt] = useState(MO_SEED)
-  const mo = moExt ?? moInt
+  const moRaw = moExt ?? moInt
+  // Normaliza: si los datos guardados son de una versión anterior, se usa la nómina real al vuelo.
+  const mo = (moRaw && moRaw.ver === MO_VER) ? moRaw : MO_SEED
   const setMo = setMoExt ?? setMoInt
 
-  // Migración: si los datos guardados son de una versión anterior, se reemplazan por la nómina real.
-  const necesitaMigrar = moExt && moExt.ver !== MO_VER
-  useEffect(() => { if (necesitaMigrar) setMoExt(MO_SEED) }, [necesitaMigrar])
+  // Persiste la migración una vez (sin bloquear el render).
+  useEffect(() => { if (moExt && moExt.ver !== MO_VER && setMoExt) setMoExt(MO_SEED) }, [])
 
   const tabs = esGerencia ? [
     { id: 'registro', label: 'Registro diario', icono: <CalendarDays size={13} /> },
@@ -707,8 +708,6 @@ export default function ManoObraModule({ esGerencia, otsDisponibles = [], usuari
     { id: 'trabajadores', label: 'Trabajadores', icono: <Users size={13} /> },
   ]
   const [tab, setTab] = useState('registro')
-
-  if (necesitaMigrar) return <div style={{ padding: 24, color: C.gris, fontSize: 13 }}>Actualizando datos de nómina…</div>
 
   return (
     <div>
