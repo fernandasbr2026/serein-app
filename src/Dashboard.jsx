@@ -160,15 +160,15 @@ export default function Dashboard({ perfil, email, onLogout }) {
     ...(esGerencia ? ['TODAS'] : []),
     ...areasUsuario.filter(a => a !== 'Proyectos'),
     ...(tieneProyectos ? ['GESTION_PROYECTOS'] : []),
-    ...(areasOT.length > 0 ? ['GESTION_OT'] : []),
-    'CLIENTES',
-    'CONTACTOS',
-    'COTIZADOR',
-    ...(areasOT.length > 0 || esGerencia ? ['PRODUCCION'] : []),
-    ...(esGerencia ? ['COMPRAS_OP'] : []),
-    'ASISTENCIA',
-    ...(esGerencia ? ['FINANZAS'] : []),
     ...(esGerencia ? ['PAGOS'] : []),
+    ...(esGerencia ? ['FINANZAS'] : []),
+    'CLIENTES',
+    'COTIZADOR',
+    ...(areasOT.length > 0 ? ['GESTION_OT'] : []),
+    ...(esGerencia ? ['COMPRAS_OP'] : []),
+    ...(areasOT.length > 0 || esGerencia ? ['PRODUCCION'] : []),
+    'ASISTENCIA',
+    'CONTACTOS',
     ...(esGerencia ? ['PARAMETROS'] : []),
   ]
   const [areaSel, setAreaSel] = useState(tabs[0])
@@ -324,7 +324,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     </div>
   )
 
-  const nombreTab = t => t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Clientes' : t === 'CONTACTOS' ? '📇 Clientes y Proveedores' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t
+  const nombreTab = t => t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Resumen ventas por cliente' : t === 'CONTACTOS' ? '📇 Clientes y Proveedores' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: C.niebla, fontFamily: "'Inter',sans-serif" }}>
