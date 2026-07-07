@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { ChevronDown, ChevronUp, Plus, Trash2, X, Ruler, Paintbrush, FileText, Receipt, ShoppingCart, CircleDollarSign, Download, Camera } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
-const C = { azul: '#1D1D1B', teal: '#A8501F', ambar: '#D2642F', rojo: '#B5432E', verde: '#3D7A4E', carbon: '#161616' }
+const C = { azul: '#1D1D1B', teal: '#A8501F', ambar: '#D2642F', rojo: '#B5432E', verde: '#3D7A4E', carbon: '#161616', gris: '#7A8288' }
 const clp = n => '$' + Math.round(n).toLocaleString('es-CL')
 const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
 const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
@@ -227,7 +227,7 @@ function descargarOT(ot) {
   XLSX.writeFile(wb, `${ot.numero}.xlsx`)
 }
 
-function TarjetaOT({ ot, onUpdate, onDelete }) {
+function TarjetaOT({ ot, onUpdate, onDelete, verValores = true }) {
   const [abierta, setAbierta] = useState(false)
   const [addVenta, setAddVenta] = useState(false)
   const [addCosto, setAddCosto] = useState(false)
@@ -239,7 +239,6 @@ function TarjetaOT({ ot, onUpdate, onDelete }) {
   const precioM2 = ot.m2 > 0 && ventaTotal > 0 ? ventaTotal / ot.m2 : null
   const costoM2 = ot.m2 > 0 && costoTotal > 0 ? costoTotal / ot.m2 : null
 
-  // Costos agrupados por categoría para la mini-barra
   const porCat = CATEGORIAS_COSTO.map(cat => ({ cat, monto: ot.costos.filter(c => c.categoria === cat).reduce((a, c) => a + c.monto, 0) })).filter(x => x.monto > 0)
 
   return (
@@ -259,30 +258,35 @@ function TarjetaOT({ ot, onUpdate, onDelete }) {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>Utilidad real</div>
-            <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 17, color: margen >= 30 ? C.verde : margen >= 15 ? C.ambar : C.rojo }}>
-              {clp(utilidad)} <span style={{ fontSize: 13 }}>({margen.toFixed(0)}%)</span>
+          {verValores && (
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>Utilidad real</div>
+              <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 17, color: margen >= 30 ? C.verde : margen >= 15 ? C.ambar : C.rojo }}>
+                {clp(utilidad)} <span style={{ fontSize: 13 }}>({margen.toFixed(0)}%)</span>
+              </div>
             </div>
-          </div>
+          )}
           {abierta ? <ChevronUp size={18} color="#7A8288" /> : <ChevronDown size={18} color="#7A8288" />}
         </div>
       </div>
 
-      {/* Barra venta vs costo siempre visible */}
-      <div style={{ padding: '0 18px 14px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#7A8288', marginBottom: 4 }}>
-          <span>Venta {clp(ventaTotal)}</span>
-          <span>Costos {clp(costoTotal)}</span>
-        </div>
-        <Barra pct={ventaTotal > 0 ? (costoTotal / ventaTotal) * 100 : 0} color={margen >= 30 ? C.teal : margen >= 15 ? C.ambar : C.rojo} />
-        {(precioM2 || costoM2) && (
-          <div style={{ fontSize: 12, color: '#7A8288', marginTop: 4 }}>
-            {precioM2 && <>Venta: <b>{clp(precioM2)}/m²</b></>}{precioM2 && costoM2 && ' · '}
-            {costoM2 && <>Costo: <b>{clp(costoM2)}/m²</b></>}
+      {/* Barra venta vs costo (solo con permiso de valores) */}
+      {verValores && (
+        <div style={{ padding: '0 18px 14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#7A8288', marginBottom: 4 }}>
+            <span>Venta {clp(ventaTotal)}</span>
+            <span>Costos {clp(costoTotal)}</span>
           </div>
-        )}
-      </div>
+          <Barra pct={ventaTotal > 0 ? (costoTotal / ventaTotal) * 100 : 0} color={margen >= 30 ? C.teal : margen >= 15 ? C.ambar : C.rojo} />
+          {(precioM2 || costoM2) && (
+            <div style={{ fontSize: 12, color: '#7A8288', marginTop: 4 }}>
+              {precioM2 && <>Venta: <b>{clp(precioM2)}/m²</b></>}{precioM2 && costoM2 && ' · '}
+              {costoM2 && <>Costo: <b>{clp(costoM2)}/m²</b></>}
+            </div>
+          )}
+        </div>
+      )}
+      {!verValores && <div style={{ padding: '0 18px 14px' }}><span style={{ fontSize: 11.5, color: '#9AA0A6', fontStyle: 'italic' }}>Vista de taller · valores visibles solo para Gerencia.</span></div>}
 
       {abierta && (
         <div style={{ borderTop: '1px solid #EEE9DF', padding: 18 }}>
@@ -296,9 +300,11 @@ function TarjetaOT({ ot, onUpdate, onDelete }) {
             <label style={{ fontSize: 12, color: '#7A8288' }}>Metros cuadrados
               <input type="number" value={ot.m2} onChange={e => onUpdate(ot.id, { m2: Math.max(0, +e.target.value) })} style={{ ...inp, width: '100%', marginTop: 4 }} />
             </label>
-            <label style={{ fontSize: 12, color: '#7A8288' }}>Monto cotizado (CLP)
-              <input value={ot.montoCotizado || ''} onChange={e => onUpdate(ot.id, { montoCotizado: num(e.target.value) })} style={{ ...inp, width: '100%', marginTop: 4 }} />
-            </label>
+            {verValores && (
+              <label style={{ fontSize: 12, color: '#7A8288' }}>Monto cotizado (CLP)
+                <input value={ot.montoCotizado || ''} onChange={e => onUpdate(ot.id, { montoCotizado: num(e.target.value) })} style={{ ...inp, width: '100%', marginTop: 4 }} />
+              </label>
+            )}
             <label style={{ fontSize: 12, color: '#7A8288' }}>Preparación superficial
               <select value={ot.preparacion} onChange={e => onUpdate(ot.id, { preparacion: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }}>
                 {PREPARACIONES.map(s => <option key={s}>{s}</option>)}
@@ -309,120 +315,124 @@ function TarjetaOT({ ot, onUpdate, onDelete }) {
             </label>
           </div>
 
-          {/* VENTAS */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: '#7A8288', display: 'flex', alignItems: 'center', gap: 5 }}>
-              <Receipt size={13} /> Ventas facturadas
-            </span>
-            <button onClick={() => setAddVenta(true)} style={{ background: C.azul, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
-              <Plus size={13} /> Agregar venta
-            </button>
-          </div>
-          {ot.ventas.length === 0 ? (
-            <div style={{ fontSize: 13, color: '#9AA0A6' }}>Aún sin facturar.</div>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-                  {['Folio', 'Fecha', 'Neta', 'IVA', 'Total', 'Pago', ''].map((h, i) => (
-                    <th key={i} style={{ textAlign: ['Neta', 'IVA', 'Total'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {ot.ventas.map((v, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
-                    <td style={{ padding: '7px 8px', fontWeight: 500 }}>{v.folio}</td>
-                    <td style={{ padding: '7px 8px', color: '#7A8288' }}>{v.fecha}</td>
-                    <td style={{ padding: '7px 8px', textAlign: 'right' }}>{clp(v.neta)}</td>
-                    <td style={{ padding: '7px 8px', textAlign: 'right', color: '#7A8288' }}>{clp(v.neta * 0.19)}</td>
-                    <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 500 }}>{clp(v.neta * 1.19)}</td>
-                    <td style={{ padding: '7px 8px' }}>
-                      <select value={v.estadoPago}
-                        onChange={ev => onUpdate(ot.id, { ventas: ot.ventas.map((x, j) => j === i ? { ...x, estadoPago: ev.target.value } : x) })}
-                        style={{ border: 'none', background: v.estadoPago === 'Pagado' ? '#E7F2EA' : v.estadoPago === 'Factoring' ? '#F9E9DE' : '#F6E0DA', color: v.estadoPago === 'Pagado' ? C.verde : v.estadoPago === 'Factoring' ? C.ambar : C.rojo, padding: '3px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                        <option>Pendiente</option><option>Pagado</option><option>Factoring</option>
-                      </select>
-                    </td>
-                    <td style={{ padding: '7px 4px', textAlign: 'right' }}>
-                      <button onClick={() => window.confirm(`¿Eliminar factura ${v.folio} (${clp(v.neta)})?`) && onUpdate(ot.id, { ventas: ot.ventas.filter((_, j) => j !== i) })} style={btnMini}>
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          {addVenta && <FormVenta onAdd={v => { onUpdate(ot.id, { ventas: [...ot.ventas, v] }); setAddVenta(false) }} onCancel={() => setAddVenta(false)} />}
+          {verValores && (
+            <>
+              {/* VENTAS */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: '#7A8288', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Receipt size={13} /> Ventas facturadas
+                </span>
+                <button onClick={() => setAddVenta(true)} style={{ background: C.azul, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Plus size={13} /> Agregar venta
+                </button>
+              </div>
+              {ot.ventas.length === 0 ? (
+                <div style={{ fontSize: 13, color: '#9AA0A6' }}>Aún sin facturar.</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                      {['Folio', 'Fecha', 'Neta', 'IVA', 'Total', 'Pago', ''].map((h, i) => (
+                        <th key={i} style={{ textAlign: ['Neta', 'IVA', 'Total'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ot.ventas.map((v, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                        <td style={{ padding: '7px 8px', fontWeight: 500 }}>{v.folio}</td>
+                        <td style={{ padding: '7px 8px', color: '#7A8288' }}>{v.fecha}</td>
+                        <td style={{ padding: '7px 8px', textAlign: 'right' }}>{clp(v.neta)}</td>
+                        <td style={{ padding: '7px 8px', textAlign: 'right', color: '#7A8288' }}>{clp(v.neta * 0.19)}</td>
+                        <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 500 }}>{clp(v.neta * 1.19)}</td>
+                        <td style={{ padding: '7px 8px' }}>
+                          <select value={v.estadoPago}
+                            onChange={ev => onUpdate(ot.id, { ventas: ot.ventas.map((x, j) => j === i ? { ...x, estadoPago: ev.target.value } : x) })}
+                            style={{ border: 'none', background: v.estadoPago === 'Pagado' ? '#E7F2EA' : v.estadoPago === 'Factoring' ? '#F9E9DE' : '#F6E0DA', color: v.estadoPago === 'Pagado' ? C.verde : v.estadoPago === 'Factoring' ? C.ambar : C.rojo, padding: '3px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                            <option>Pendiente</option><option>Pagado</option><option>Factoring</option>
+                          </select>
+                        </td>
+                        <td style={{ padding: '7px 4px', textAlign: 'right' }}>
+                          <button onClick={() => window.confirm(`¿Eliminar factura ${v.folio} (${clp(v.neta)})?`) && onUpdate(ot.id, { ventas: ot.ventas.filter((_, j) => j !== i) })} style={btnMini}>
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {addVenta && <FormVenta onAdd={v => { onUpdate(ot.id, { ventas: [...ot.ventas, v] }); setAddVenta(false) }} onCancel={() => setAddVenta(false)} />}
 
-          {/* COSTOS */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0 8px' }}>
-            <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: '#7A8288', display: 'flex', alignItems: 'center', gap: 5 }}>
-              <ShoppingCart size={13} /> Compras y costos de la OT
-            </span>
-            <button onClick={() => setAddCosto(true)} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
-              <Plus size={13} /> Agregar costo
-            </button>
-          </div>
-          {ot.costos.length === 0 ? (
-            <div style={{ fontSize: 13, color: '#9AA0A6' }}>Sin costos registrados — la utilidad mostrada es bruta.</div>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-                  {['Categoría', 'Detalle', 'Monto', ''].map((h, i) => (
-                    <th key={i} style={{ textAlign: h === 'Monto' ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {ot.costos.map((c, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
-                    <td style={{ padding: '7px 8px', fontWeight: 500 }}>{c.categoria}</td>
-                    <td style={{ padding: '7px 8px', color: '#7A8288' }}>{c.detalle || '—'}</td>
-                    <td style={{ padding: '7px 8px', textAlign: 'right' }}>{clp(c.monto)}</td>
-                    <td style={{ padding: '7px 4px', textAlign: 'right' }}>
-                      <button onClick={() => window.confirm(`¿Eliminar costo ${c.categoria} (${clp(c.monto)})?`) && onUpdate(ot.id, { costos: ot.costos.filter((_, j) => j !== i) })} style={btnMini}>
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          {addCosto && <FormCosto onAdd={c => { onUpdate(ot.id, { costos: [...ot.costos, c] }); setAddCosto(false) }} onCancel={() => setAddCosto(false)} />}
+              {/* COSTOS */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0 8px' }}>
+                <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: '#7A8288', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <ShoppingCart size={13} /> Compras y costos de la OT
+                </span>
+                <button onClick={() => setAddCosto(true)} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Plus size={13} /> Agregar costo
+                </button>
+              </div>
+              {ot.costos.length === 0 ? (
+                <div style={{ fontSize: 13, color: '#9AA0A6' }}>Sin costos registrados — la utilidad mostrada es bruta.</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                      {['Categoría', 'Detalle', 'Monto', ''].map((h, i) => (
+                        <th key={i} style={{ textAlign: h === 'Monto' ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ot.costos.map((c, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                        <td style={{ padding: '7px 8px', fontWeight: 500 }}>{c.categoria}</td>
+                        <td style={{ padding: '7px 8px', color: '#7A8288' }}>{c.detalle || '—'}</td>
+                        <td style={{ padding: '7px 8px', textAlign: 'right' }}>{clp(c.monto)}</td>
+                        <td style={{ padding: '7px 4px', textAlign: 'right' }}>
+                          <button onClick={() => window.confirm(`¿Eliminar costo ${c.categoria} (${clp(c.monto)})?`) && onUpdate(ot.id, { costos: ot.costos.filter((_, j) => j !== i) })} style={btnMini}>
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {addCosto && <FormCosto onAdd={c => { onUpdate(ot.id, { costos: [...ot.costos, c] }); setAddCosto(false) }} onCancel={() => setAddCosto(false)} />}
 
-          {/* Desglose por categoría */}
-          {porCat.length > 0 && (
-            <div style={{ marginTop: 14 }}>
-              <div style={{ fontSize: 11, color: '#7A8288', textTransform: 'uppercase', marginBottom: 6 }}>Estructura de costos</div>
-              {porCat.map(x => (
-                <div key={x.cat} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, width: 130, color: C.carbon }}>{x.cat}</span>
-                  <div style={{ flex: 1 }}><Barra pct={(x.monto / costoTotal) * 100} color={C.teal} alto={6} /></div>
-                  <span style={{ fontSize: 12, color: '#7A8288', width: 90, textAlign: 'right' }}>{clp(x.monto)}</span>
+              {porCat.length > 0 && (
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ fontSize: 11, color: '#7A8288', textTransform: 'uppercase', marginBottom: 6 }}>Estructura de costos</div>
+                  {porCat.map(x => (
+                    <div key={x.cat} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                      <span style={{ fontSize: 12, width: 130, color: C.carbon }}>{x.cat}</span>
+                      <div style={{ flex: 1 }}><Barra pct={(x.monto / costoTotal) * 100} color={C.teal} alto={6} /></div>
+                      <span style={{ fontSize: 12, color: '#7A8288', width: 90, textAlign: 'right' }}>{clp(x.monto)}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
+              )}
 
-          {/* Resumen utilidad */}
-          <div style={{ marginTop: 16, padding: '12px 14px', background: '#F7F4EE', fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
-            <CircleDollarSign size={16} color={margen >= 30 ? C.verde : C.ambar} />
-            <span>Venta neta: <b>{clp(ventaTotal)}</b></span>
-            <span>Costos: <b>{clp(costoTotal)}</b></span>
-            <span>Utilidad real: <b style={{ color: margen >= 30 ? C.verde : margen >= 15 ? C.ambar : C.rojo }}>{clp(utilidad)} ({margen.toFixed(1)}%)</b></span>
-          </div>
+              <div style={{ marginTop: 16, padding: '12px 14px', background: '#F7F4EE', fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+                <CircleDollarSign size={16} color={margen >= 30 ? C.verde : C.ambar} />
+                <span>Venta neta: <b>{clp(ventaTotal)}</b></span>
+                <span>Costos: <b>{clp(costoTotal)}</b></span>
+                <span>Utilidad real: <b style={{ color: margen >= 30 ? C.verde : margen >= 15 ? C.ambar : C.rojo }}>{clp(utilidad)} ({margen.toFixed(1)}%)</b></span>
+              </div>
+            </>
+          )}
 
           <FotosOT ot={ot} onUpdate={onUpdate} />
 
           <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
-            <button onClick={() => descargarOT(ot)}
-              style={{ background: C.carbon, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Download size={13} /> Descargar OT (Excel)
-            </button>
+            {verValores && (
+              <button onClick={() => descargarOT(ot)}
+                style={{ background: C.carbon, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Download size={13} /> Descargar OT (Excel)
+              </button>
+            )}
             <button onClick={() => window.confirm(`¿Eliminar la ${ot.numero} completa?`) && onDelete(ot.id)}
               style={{ background: 'none', border: `1px solid ${C.rojo}`, color: C.rojo, padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
               <Trash2 size={13} /> Eliminar OT
@@ -467,7 +477,7 @@ function FormOT({ area, siguienteNumero, onAdd, onCancel }) {
 }
 
 // ---------- Módulo principal ----------
-export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], ots: otsExt, setOts: setOtsExt }) {
+export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], ots: otsExt, setOts: setOtsExt, verValores = true }) {
   const [otsInt, setOtsInt] = useState(OTS_INICIALES)
   const otsAll = otsExt ?? otsInt
   const setOts = setOtsExt ?? setOtsInt
@@ -486,6 +496,10 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   const nums = ots.map(o => parseInt((o.numero.match(/(\d+)$/) || [0, 0])[1], 10))
   const siguiente = `OT-2026-${String(Math.max(100, ...nums) + 1).padStart(3, '0')}`
 
+  const kpis = verValores
+    ? [['OTs', visibles.length], ['Venta neta', clp(ventaTot)], ['Costos', clp(costoTot)], ['Utilidad real', clp(utilTot)]]
+    : [['OTs', visibles.length]]
+
   return (
     <div>
       {/* Selector de área */}
@@ -502,7 +516,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
 
       {/* KPIs del área */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-        {[['OTs', visibles.length], ['Venta neta', clp(ventaTot)], ['Costos', clp(costoTot)], ['Utilidad real', clp(utilTot)]].map(([l, v], i) => (
+        {kpis.map(([l, v], i) => (
           <div key={i} style={{ background: '#fff', border: '1px solid #E2DED4', padding: 14, flex: '1 1 150px' }}>
             <div style={{ fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>{l}</div>
             <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 22, fontWeight: 600, color: l === 'Utilidad real' ? C.verde : C.carbon }}>{v}</div>
@@ -519,7 +533,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
       {creando && <FormOT area={areaSel} siguienteNumero={siguiente} onAdd={o => { setOts(xs => [o, ...xs]); setCreando(false) }} onCancel={() => setCreando(false)} />}
 
       {visibles.length === 0 && <div style={{ color: '#9AA0A6', fontSize: 14, padding: 20, textAlign: 'center', background: '#fff', border: '1px dashed #CBD2D6' }}>Sin OTs en {areaSel}. Crea la primera.</div>}
-      {visibles.map(o => <TarjetaOT key={o.id} ot={o} onUpdate={actualizar} onDelete={eliminar} />)}
+      {visibles.map(o => <TarjetaOT key={o.id} ot={o} onUpdate={actualizar} onDelete={eliminar} verValores={verValores} />)}
 
       <div style={{ fontSize: 12, color: '#9AA0A6', textAlign: 'center', marginTop: 8 }}>
         Vista de prueba: los cambios se pierden al recargar. En la versión con base de datos todo queda guardado.

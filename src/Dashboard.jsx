@@ -10,6 +10,7 @@ import PipelineProyectos from './PipelineProyectos.jsx'
 import ManoObraModule from './ManoObraModule.jsx'
 import FinanzasModule, { FIN_SEED, calcularResumenFin } from './FinanzasModule.jsx'
 import CotizadorModule from './CotizadorModule.jsx'
+import CotizacionesModule from './CotizacionesModule.jsx'
 import ProduccionModule, { AVANCES_SEED } from './ProduccionModule.jsx'
 import ComprasOperativasModule, { COMPRAS_OP_SEED, CONFIG_COMPRAS_DEFAULT } from './ComprasOperativasModule.jsx'
 import ProveedoresPagosModule, { PP_SEED } from './ProveedoresPagosModule.jsx'
@@ -194,6 +195,9 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const [clientes, setClientes] = useState(() => LS('clientes', CLIENTES_SEED))
   const [contactos, setContactos] = useState(() => { const s = LS('contactos', null); return (s && s.ver === CONTACTOS_SEED.ver) ? s : CONTACTOS_SEED })
   const [facturas, setFacturas] = useState(() => LS('facturas', FACTURAS_SEED))
+  const [cotizaciones, setCotizaciones] = useState(() => LS('cotizaciones', []))
+  // Valores de las OT visibles solo para Gerencia, Caro y Mario
+  const verValoresOT = esGerencia || ['caro@sereinspa.com', 'mario@sereinspa.com'].includes((email || '').toLowerCase())
   const [comisiones, setComisiones] = useState(() => LS('comisiones', { 'Santa Rosa': 3, 'Istria': 2, 'Proyectos': 2 }))
   const [ppmPct, setPpmPct] = useState(() => LS('ppmPct', 2))
   const [ots, setOts] = useState(() => LS('ots', OTS_INICIALES))
@@ -201,8 +205,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
 
   // Guarda automáticamente en el navegador cada vez que cambian los datos
   useEffect(() => {
-    guardarSerein({ avances, mo, comprasOp, configCompras, fin, pp, params, clientes, contactos, facturas, comisiones, ppmPct, ots, proyectos })
-  }, [avances, mo, comprasOp, configCompras, fin, pp, params, clientes, contactos, facturas, comisiones, ppmPct, ots, proyectos])
+    guardarSerein({ avances, mo, comprasOp, configCompras, fin, pp, params, clientes, contactos, facturas, cotizaciones, comisiones, ppmPct, ots, proyectos })
+  }, [avances, mo, comprasOp, configCompras, fin, pp, params, clientes, contactos, facturas, cotizaciones, comisiones, ppmPct, ots, proyectos])
 
   // Trae la UF (valor del día) al cargar la app, desde mindicador.cl (Banco Central)
   useEffect(() => {
@@ -368,7 +372,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
           <ProyectosModule proyectos={proyectos} setProyectos={setProyectos} params={params} facturas={facturas} setFacturas={setFacturas} comisionPct={comisiones['Proyectos'] ?? 2} setComisionPct={v => setComisiones(c => ({ ...c, Proyectos: v }))} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={nombresClientes(contactos)} />
           </>
         ) : esModuloOT ? (
-          <OTModule areasPermitidas={areasOT} ots={ots} setOts={setOts} />
+          <OTModule areasPermitidas={areasOT} ots={ots} setOts={setOts} verValores={verValoresOT} />
         ) : esModuloComprasOp ? (
           <ComprasOperativasModule
             esGerencia={esGerencia}
@@ -394,7 +398,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
             mo={mo}
           />
         ) : esModuloCot ? (
-          <CotizadorModule areasPermitidas={areasUsuario} ots={ots} setOts={setOts} />
+          <CotizacionesModule cotizaciones={cotizaciones} setCotizaciones={setCotizaciones} ots={ots} setOts={setOts} />
         ) : esModuloFin && esGerencia ? (
           <FinanzasModule otsDisponibles={ots.map(o => o.numero)} fin={fin} setFin={setFin} />
         ) : esModuloPagos && esGerencia ? (
