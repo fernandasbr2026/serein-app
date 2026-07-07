@@ -196,12 +196,43 @@ function StatHeader({ label, valor, color }) {
   )
 }
 
+// ---------- Editor de la ficha del proyecto (datos, no fórmulas) ----------
+function FichaEditor({ p, onUpdate, onClose }) {
+  const [f, setF] = useState({ nombre: p.nombre || '', cliente: p.cliente || '', ot: p.ot || '', oc: p.oc || '', m2: p.m2 || '', periodo: p.periodo || '', venta: (p.venta_cotizada != null ? p.venta_cotizada : '') })
+  const lab = { fontSize: 11, color: C.gris, display: 'flex', flexDirection: 'column', gap: 3 }
+  function guardar() {
+    onUpdate(p.id, { nombre: f.nombre.trim(), cliente: f.cliente.trim(), ot: f.ot.trim(), oc: f.oc.trim(), m2: num(f.m2) || null, periodo: f.periodo.trim(), venta_cotizada: num(f.venta) })
+    onClose()
+  }
+  return (
+    <div onClick={e => e.stopPropagation()} style={{ background: '#FAF7F3', border: '1px solid #E2DED4', padding: 12, margin: '0 18px 12px' }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: C.gris, textTransform: 'uppercase', marginBottom: 8 }}>Editar ficha del proyecto</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
+        <label style={{ ...lab, gridColumn: '1 / -1' }}>Nombre del proyecto<input style={inp} value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} /></label>
+        <label style={lab}>OT (N° cotización)<input style={inp} value={f.ot} onChange={e => setF({ ...f, ot: e.target.value })} /></label>
+        <label style={lab}>OC / NV<input style={inp} value={f.oc} onChange={e => setF({ ...f, oc: e.target.value })} /></label>
+        <label style={lab}>Cliente<input style={inp} value={f.cliente} onChange={e => setF({ ...f, cliente: e.target.value })} /></label>
+        <label style={lab}>m²<input style={inp} value={f.m2} onChange={e => setF({ ...f, m2: e.target.value })} /></label>
+        <label style={lab}>Período<input style={inp} value={f.periodo} onChange={e => setF({ ...f, periodo: e.target.value })} /></label>
+        <label style={lab}>Venta cotizada CLP<input style={inp} value={f.venta} onChange={e => setF({ ...f, venta: e.target.value })} /></label>
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+        <button onClick={guardar} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 16px', cursor: 'pointer', fontSize: 13 }}>Guardar ficha</button>
+        <button onClick={onClose} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+      </div>
+    </div>
+  )
+}
+
 function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasProy = [] }) {
   const facturasOT = facturasDeOT(facturasProy, p)
   const factNetoOT = facturasOT.reduce((a, f) => a + (f.neto || 0), 0)
   const [abierto, setAbierto] = useState(false)
   const [addEdp, setAddEdp] = useState(false)
   const [addCompra, setAddCompra] = useState(false)
+  const [editFicha, setEditFicha] = useState(false)
+  const updEdp = (i, cambios) => onUpdate(p.id, { edps: p.edps.map((x, j) => j === i ? { ...x, ...cambios } : x) })
+  const updCompra = (i, cambios) => onUpdate(p.id, { compras: p.compras.map((x, j) => j === i ? { ...x, ...cambios } : x) })
 
   const facturado = facturadoDe(p), cobrado = cobradoDe(p), pendiente = facturado - cobrado
   const venta = ventaDe(p), porFacturar = porFacturarDe(p)
@@ -228,10 +259,13 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
           <StatHeader label="Por facturar" valor={clp(porFacturar)} color={porFacturar > 0 ? C.ambar : C.verde} />
           <StatHeader label="UT est." valor={`${pctUtEst.toFixed(0)}%`} color={colorUT(pctUtEst)} />
           <StatHeader label="UT real" valor={hayCompras ? `${pctUtReal.toFixed(0)}%` : '—'} color={hayCompras ? colorUT(pctUtReal) : C.gris} />
+          <button onClick={e => { e.stopPropagation(); setEditFicha(v => !v) }} title="Editar ficha" style={{ background: 'none', border: '1px solid #CBD2D6', cursor: 'pointer', color: C.teal, padding: '5px 7px', display: 'flex', alignItems: 'center' }}><Pencil size={15} /></button>
           <button onClick={e => { e.stopPropagation(); window.confirm(`¿Eliminar la OT "${p.nombre}" completa? Esta acción no se puede deshacer.`) && onDelete(p.id) }} title="Eliminar OT" style={{ background: 'none', border: '1px solid #E2C9C2', cursor: 'pointer', color: C.rojo, padding: '5px 7px', display: 'flex', alignItems: 'center' }}><Trash2 size={15} /></button>
           {abierto ? <ChevronUp size={18} color={C.gris} /> : <ChevronDown size={18} color={C.gris} />}
         </div>
       </div>
+
+      {editFicha && <FichaEditor p={p} onUpdate={onUpdate} onClose={() => setEditFicha(false)} />}
 
       {alertasCC.length > 0 && (
         <div style={{ margin: '0 18px 10px', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -302,12 +336,17 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
               <tbody>
                 {(p.edps || []).map((e, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
-                    <td style={{ padding: '7px 8px', fontWeight: 500 }}>{e.edp}</td>
-                    <td style={{ padding: '7px 8px', color: C.gris }}>{e.fecha}</td>
-                    <td style={{ padding: '7px 8px', textAlign: 'right' }}>{clp(e.venta)}</td>
-                    <td style={{ padding: '7px 8px', color: C.gris, fontSize: 12 }}>{e.metodo || '—'}{e.metodo === 'Crédito' && e.dias ? ` ${e.dias}d` : ''}{e.perdidaFact > 0 && <div style={{ color: C.rojo, fontSize: 11 }}>pérdida {clp(e.perdidaFact)}</div>}</td>
+                    <td style={{ padding: '5px 8px' }}><input value={e.edp} onChange={ev => updEdp(i, { edp: ev.target.value })} style={{ ...inp, width: 120, padding: '5px 7px' }} /></td>
+                    <td style={{ padding: '5px 8px' }}><input type="date" value={e.fecha && e.fecha !== '—' ? e.fecha : ''} onChange={ev => updEdp(i, { fecha: ev.target.value || '—' })} style={{ ...inp, width: 140, padding: '5px 7px' }} /></td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right' }}><input value={e.venta} onChange={ev => updEdp(i, { venta: num(ev.target.value) })} style={{ ...inp, width: 110, padding: '5px 7px', textAlign: 'right' }} /></td>
+                    <td style={{ padding: '5px 8px' }}>
+                      <select value={e.metodo || 'Contado'} onChange={ev => updEdp(i, { metodo: ev.target.value })} style={{ ...inp, width: 100, padding: '5px 7px' }}>
+                        <option>Contado</option><option>Crédito</option><option>Factoring</option>
+                      </select>
+                      {e.perdidaFact > 0 && <div style={{ color: C.rojo, fontSize: 11 }}>pérdida {clp(e.perdidaFact)}</div>}
+                    </td>
                     <td style={{ padding: '7px 8px' }}>
-                      <select value={e.estado} onChange={ev => onUpdate(p.id, { edps: p.edps.map((x, j) => j === i ? { ...x, estado: ev.target.value } : x) })}
+                      <select value={e.estado} onChange={ev => updEdp(i, { estado: ev.target.value })}
                         style={{ border: 'none', background: e.estado === 'Pagado' ? '#E7F2EA' : e.estado === 'Factoring' ? '#F9E9DE' : '#F6E0DA', color: e.estado === 'Pagado' ? C.verde : e.estado === 'Factoring' ? C.ambar : C.rojo, padding: '3px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                         <option>Pendiente</option><option>Pagado</option><option>Factoring</option>
                       </select>
@@ -335,12 +374,12 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
                 <tbody>
                   {p.compras.map((c, i) => (
                     <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
-                      <td style={{ padding: '7px 8px' }}><span style={{ background: '#EEF1F0', padding: '2px 6px', fontSize: 12, fontWeight: 600 }} title={nombreCC(p, c.cc)}>{c.cc || '—'}</span></td>
-                      <td style={{ padding: '7px 8px', fontWeight: 500 }}>{c.proveedor}</td>
-                      <td style={{ padding: '7px 8px', color: C.gris }}>{c.folio || '—'}</td>
-                      <td style={{ padding: '7px 8px', color: C.gris }}>{c.detalle || '—'}</td>
-                      <td style={{ padding: '7px 8px', color: C.gris }}>{c.fecha}</td>
-                      <td style={{ padding: '7px 8px', textAlign: 'right' }}>{clp(c.monto)}</td>
+                      <td style={{ padding: '5px 8px' }}><select value={c.cc || CC_DEFS[0].id} onChange={ev => updCompra(i, { cc: ev.target.value })} style={{ ...inp, padding: '5px 7px' }}>{CC_DEFS.map(cc => <option key={cc.id} value={cc.id}>{cc.id} · {nombreCC(p, cc.id)}</option>)}</select></td>
+                      <td style={{ padding: '5px 8px' }}><input value={c.proveedor} onChange={ev => updCompra(i, { proveedor: ev.target.value })} style={{ ...inp, width: 130, padding: '5px 7px' }} /></td>
+                      <td style={{ padding: '5px 8px' }}><input value={c.folio || ''} onChange={ev => updCompra(i, { folio: ev.target.value })} placeholder="N° doc" style={{ ...inp, width: 90, padding: '5px 7px' }} /></td>
+                      <td style={{ padding: '5px 8px' }}><input value={c.detalle || ''} onChange={ev => updCompra(i, { detalle: ev.target.value })} placeholder="Detalle" style={{ ...inp, width: 130, padding: '5px 7px' }} /></td>
+                      <td style={{ padding: '5px 8px' }}><input type="date" value={c.fecha && c.fecha !== '—' ? c.fecha : ''} onChange={ev => updCompra(i, { fecha: ev.target.value || '—' })} style={{ ...inp, width: 140, padding: '5px 7px' }} /></td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right' }}><input value={c.monto} onChange={ev => updCompra(i, { monto: num(ev.target.value) })} style={{ ...inp, width: 110, padding: '5px 7px', textAlign: 'right' }} /></td>
                       <td style={{ padding: '7px 4px', textAlign: 'right' }}><button onClick={() => window.confirm(`¿Eliminar compra de ${c.proveedor} (${clp(c.monto)})?`) && onUpdate(p.id, { compras: p.compras.filter((_, j) => j !== i) })} style={btnMini}><Trash2 size={14} /></button></td>
                     </tr>
                   ))}
