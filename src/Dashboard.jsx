@@ -15,6 +15,7 @@ import ComprasOperativasModule, { COMPRAS_OP_SEED, CONFIG_COMPRAS_DEFAULT } from
 import ProveedoresPagosModule, { PP_SEED } from './ProveedoresPagosModule.jsx'
 import ParametrosModule, { PARAMS_SEED, perdidaFactoringFactura } from './ParametrosModule.jsx'
 import ClientesModule, { CLIENTES_SEED } from './ClientesModule.jsx'
+import ContactosModule, { CONTACTOS_SEED, nombresClientes } from './ContactosModule.jsx'
 import FacturasModule, { FACTURAS_SEED } from './FacturasModule.jsx'
 import { MO_SEED } from './ManoObraModule.jsx'
 import { PROYECTOS } from './proyectos-data.js'
@@ -108,6 +109,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     ...(tieneProyectos ? ['GESTION_PROYECTOS'] : []),
     ...(areasOT.length > 0 ? ['GESTION_OT'] : []),
     'CLIENTES',
+    'CONTACTOS',
     'COTIZADOR',
     ...(areasOT.length > 0 || esGerencia ? ['PRODUCCION'] : []),
     ...(esGerencia ? ['COMPRAS_OP'] : []),
@@ -125,6 +127,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const esModuloPagos = areaSel === 'PAGOS'
   const esModuloParams = areaSel === 'PARAMETROS'
   const esModuloClientes = areaSel === 'CLIENTES'
+  const esModuloContactos = areaSel === 'CONTACTOS'
   const esModuloCot = areaSel === 'COTIZADOR'
   const esModuloProd = areaSel === 'PRODUCCION'
   const [avances, setAvances] = useState(() => LS('avances', AVANCES_SEED))
@@ -136,6 +139,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const [pp, setPp] = useState(() => LS('pp', PP_SEED))
   const [params, setParams] = useState(() => LS('params', PARAMS_SEED))
   const [clientes, setClientes] = useState(() => LS('clientes', CLIENTES_SEED))
+  const [contactos, setContactos] = useState(() => LS('contactos', CONTACTOS_SEED))
   const [facturas, setFacturas] = useState(() => LS('facturas', FACTURAS_SEED))
   const [comisiones, setComisiones] = useState(() => LS('comisiones', { 'Santa Rosa': 3, 'Istria': 2, 'Proyectos': 2 }))
   const [ppmPct, setPpmPct] = useState(() => LS('ppmPct', 2))
@@ -144,8 +148,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
 
   // Guarda automáticamente en el navegador cada vez que cambian los datos
   useEffect(() => {
-    guardarSerein({ avances, mo, comprasOp, configCompras, fin, pp, params, clientes, facturas, comisiones, ppmPct, ots, proyectos })
-  }, [avances, mo, comprasOp, configCompras, fin, pp, params, clientes, facturas, comisiones, ppmPct, ots, proyectos])
+    guardarSerein({ avances, mo, comprasOp, configCompras, fin, pp, params, clientes, contactos, facturas, comisiones, ppmPct, ots, proyectos })
+  }, [avances, mo, comprasOp, configCompras, fin, pp, params, clientes, contactos, facturas, comisiones, ppmPct, ots, proyectos])
 
   // Trae la UF (valor del día) al cargar la app, desde mindicador.cl (Banco Central)
   useEffect(() => {
@@ -214,7 +218,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     </div>
   )
 
-  const nombreTab = t => t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Clientes' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t
+  const nombreTab = t => t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Clientes' : t === 'CONTACTOS' ? '📇 Clientes y Proveedores' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: C.niebla, fontFamily: "'Inter',sans-serif" }}>
@@ -250,7 +254,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
       <main style={{ flex: 1, minWidth: 0, height: '100vh', overflowY: 'auto' }}>
       <div style={{ padding: 20, maxWidth: 1200, margin: '0 auto' }}>
         {esModuloProyectos ? (
-          <ProyectosModule proyectos={proyectos} setProyectos={setProyectos} params={params} facturas={facturas} setFacturas={setFacturas} comisionPct={comisiones['Proyectos'] ?? 2} setComisionPct={v => setComisiones(c => ({ ...c, Proyectos: v }))} ppmPct={ppmPct} setPpmPct={setPpmPct} />
+          <ProyectosModule proyectos={proyectos} setProyectos={setProyectos} params={params} facturas={facturas} setFacturas={setFacturas} comisionPct={comisiones['Proyectos'] ?? 2} setComisionPct={v => setComisiones(c => ({ ...c, Proyectos: v }))} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={nombresClientes(contactos)} />
         ) : esModuloOT ? (
           <OTModule areasPermitidas={areasOT} ots={ots} setOts={setOts} />
         ) : esModuloComprasOp ? (
@@ -287,6 +291,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
           <ParametrosModule params={params} setParams={setParams} />
         ) : esModuloClientes ? (
           <ClientesModule clientes={clientes} setClientes={setClientes} proyectos={proyectos} ots={ots} />
+        ) : esModuloContactos ? (
+          <ContactosModule contactos={contactos} setContactos={setContactos} />
         ) : esModuloMO ? (
           <ManoObraModule
             esGerencia={esGerencia}
@@ -433,7 +439,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
           </>
         )}
         {(areaSel === 'Santa Rosa' || areaSel === 'Istria') && (
-          <FacturasModule area={areaSel} facturas={facturas} setFacturas={setFacturas} params={params} comisionPct={comisiones[areaSel] ?? 0} setComisionPct={v => setComisiones(c => ({ ...c, [areaSel]: v }))} ppmPct={ppmPct} setPpmPct={setPpmPct} />
+          <FacturasModule area={areaSel} facturas={facturas} setFacturas={setFacturas} params={params} comisionPct={comisiones[areaSel] ?? 0} setComisionPct={v => setComisiones(c => ({ ...c, [areaSel]: v }))} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={nombresClientes(contactos)} />
         )}
         </>
         )}
