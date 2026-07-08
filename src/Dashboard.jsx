@@ -423,7 +423,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
         ) : esModuloFin && esGerencia ? (
           <FinanzasModule otsDisponibles={ots.map(o => o.numero)} fin={fin} setFin={setFin} />
         ) : esModuloPagos && esGerencia ? (
-          <ProveedoresPagosModule pp={pp} setPp={setPp} />
+          <ProveedoresPagosModule pp={pp} setPp={setPp} gastos={fin.gastos || []} />
         ) : esModuloOC && esGerencia ? (
           <OrdenesCompraModule pp={pp} setPp={setPp} ots={ots} />
         ) : esModuloTraza && esGerencia ? (

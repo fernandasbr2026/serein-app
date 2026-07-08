@@ -692,7 +692,7 @@ function SeccionResumen({ pp }) {
 // ============================================================
 // MÓDULO PRINCIPAL
 // ============================================================
-export default function ProveedoresPagosModule({ pp: ppExt, setPp: setPpExt }) {
+export default function ProveedoresPagosModule({ pp: ppExt, setPp: setPpExt, gastos = [] }) {
   const [ppInt, setPpInt] = useState(PP_SEED)
   const pp = ppExt ?? ppInt
   const setPp = setPpExt ?? setPpInt
@@ -717,6 +717,30 @@ export default function ProveedoresPagosModule({ pp: ppExt, setPp: setPpExt }) {
           </button>
         ))}
       </div>
+      {(() => {
+        const hoyStr = hoy();
+        const en7 = sumarDias(hoyStr, 7);
+        const pend = (gastos || []).filter(g => g.tipo === 'fijo' && g.estado !== 'Pagada' && g.estado !== 'Anulado');
+        if (!pend.length) return null;
+        const hayVencido = pend.some(g => g.vencimiento && g.vencimiento < hoyStr);
+        return (<div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: '3px solid ' + (hayVencido ? '#DC2626' : '#FF6B00'), marginBottom: 16, padding: 14 }}>
+          <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 8 }}>Gastos fijos por pagar ({pend.length})</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}><tbody>
+          {pend.slice().sort((a, b) => (a.vencimiento || '').localeCompare(b.vencimiento || '')).map((g, i) => {
+            const venc = g.vencimiento || '';
+            const vencido = venc && venc < hoyStr;
+            const proximo = venc && !vencido && venc <= en7;
+            const color = vencido ? '#DC2626' : proximo ? '#FF6B00' : '#7A8288';
+            return (<tr key={i} style={{ borderBottom: '1px solid #EEE7DF' }}>
+              <td style={{ padding: '6px 8px', fontWeight: 600 }}>{g.nombre}</td>
+              <td style={{ padding: '6px 8px', color: '#7A8288' }}>{g.proveedor || '-'}</td>
+              <td style={{ padding: '6px 8px', textAlign: 'right' }}>{clp(g.neto || 0)}</td>
+              <td style={{ padding: '6px 8px', color: color, fontWeight: (vencido || proximo) ? 700 : 400, whiteSpace: 'nowrap' }}>{venc || '-'}{vencido ? ' - VENCIDO' : proximo ? ' - vence pronto' : ''}</td>
+            </tr>);
+          })}
+          </tbody></table>
+        </div>);
+      })()}
       {tab === 'resumen' && <SeccionResumen pp={pp} />}
       {tab === 'porpagar' && <SeccionPorPagar pp={pp} setPp={setPp} />}
       {tab === 'calpagos' && <SeccionCalendarioPagos pp={pp} />}

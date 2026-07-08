@@ -361,7 +361,7 @@ const netoEf = (g, uf) => g.esUF ? Math.round((g.uf || 0) * (uf || 0)) : (g.neto
 const flujoDe = c => (c.estado === 'Pagada' || c.aCargo === 'tercero_reembolsa') ? 0 : (c.total || 0)
 
 export function calcularResumenFin(fin, mes) {
-  const gastosMes = fin.gastos.filter(g => mesDe(g.vencimiento) === mes && g.estado !== 'Anulado')
+  const gastosMes = fin.gastos.filter(g => g.estado !== 'Anulado' && (g.frecuencia === 'Mensual' ? mes >= mesDe(g.vencimiento) : (g.frecuencia === 'Anual' ? (mes.slice(5) === (g.vencimiento || '').slice(5) && mes >= mesDe(g.vencimiento)) : mesDe(g.vencimiento) === mes)))
   const fijos = gastosMes.filter(g => g.tipo === 'fijo').reduce((a, g) => a + netoEf(g, fin.ufValor), 0)
   const variables = gastosMes.filter(g => g.tipo === 'variable').reduce((a, g) => a + netoEf(g, fin.ufValor), 0)
   const porArea = {}
