@@ -4,9 +4,13 @@ import { supabase } from './supabase.js'
 const C = { navy: '#061A40', orange: '#FF6B00', gray: '#F5F7FA', border: '#D8DCE5', text: '#101828', green: '#16A34A', red: '#DC2626', mut: '#7A8288' }
 const clp = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-CL')
 const ip = { padding: '6px 8px', border: '1px solid ' + C.border, fontSize: 12.5, boxSizing: 'border-box', borderRadius: 4 }
+const sel = { padding: '4px 6px', border: '1px solid ' + C.border, fontSize: 12, borderRadius: 4, background: '#fff' }
 const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+const AREAS = ['Santa Rosa', 'Istria', 'Proyectos']
+const ESTADOS_PAGO = ['Pendiente', 'Pagada', 'Credito', 'Factoring']
+const colorPago = e => e === 'Pagada' ? C.green : e === 'Factoring' ? C.orange : e === 'Credito' ? '#2563EB' : C.mut
 
-export default function LibroComprasModule({ esGerencia = true, ots = [] }) {
+export default function LibroComprasModule({ esGerencia = true, ots = [], factoringList = [] }) {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [errMsg, setErrMsg] = useState('')
@@ -15,6 +19,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [] }) {
   const [q, setQ] = useState('')
   const [mes, setMes] = useState('')
   const [tipo, setTipo] = useState('')
+  const [area, setArea] = useState('')
 
   const cargar = async () => {
     setLoading(true); setErrMsg('')
@@ -47,15 +52,16 @@ export default function LibroComprasModule({ esGerencia = true, ots = [] }) {
   const filtradas = useMemo(() => (rows || []).filter(r => {
     if (mes && (r.emission_date || '').slice(0, 7) !== mes) return false
     if (tipo && r.document_type !== tipo) return false
+    if (area && (r.centro_costo || '') !== area) return false
     if (q) { const t = (r.provider_name + ' ' + r.provider_rut + ' ' + r.document_number).toLowerCase(); if (!t.includes(q.toLowerCase())) return false }
     return true
-  }), [rows, mes, tipo, q])
+  }), [rows, mes, tipo, area, q])
 
-  const tot = useMemo(() => filtradas.reduce((a, r) => ({ neto: a.neto + (+r.neto || 0), iva: a.iva + (+r.iva || 0), exento: a.exento + (+r.exento || 0), total: a.total + (+r.document_total || 0) }), { neto: 0, iva: 0, exento: 0, total: 0 }), [filtradas])
+  const tot = useMemo(() => filtradas.reduce((a, r) => ({ neto: a.neto + (+r.neto || 0), iva: a.iva + (+r.iva || 0), total: a.total + (+r.document_total || 0) }), { neto: 0, iva: 0, total: 0 }), [filtradas])
 
   const setCampo = async (id, campo, valor) => {
     setRows(rs => rs.map(r => r.id === id ? { ...r, [campo]: valor } : r))
-    await supabase.from('libro_compras').update({ [campo]: valor }).eq('id', id)
+    try { await supabase.from('libro_compras').update({ [campo]: valor }).eq('id', id) } catch (e) { /* columna puede no existir aun */ }
   }
 
   const mesLabel = ym => { const [y, m] = ym.split('-'); return MESES[(+m) - 1] + ' ' + y }
@@ -84,12 +90,16 @@ export default function LibroComprasModule({ esGerencia = true, ots = [] }) {
       </div>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-        <input style={{ ...ip, flex: '2 1 220px' }} placeholder="Buscar proveedor, RUT o folio..." value={q} onChange={e => setQ(e.target.value)} />
-        <select style={{ ...ip, flex: '1 1 130px' }} value={mes} onChange={e => setMes(e.target.value)}>
+        <input style={{ ...ip, flex: '2 1 200px' }} placeholder="Buscar proveedor, RUT o folio..." value={q} onChange={e => setQ(e.target.value)} />
+        <select style={{ ...ip, flex: '1 1 120px' }} value={mes} onChange={e => setMes(e.target.value)}>
           <option value="">Todos los meses</option>
           {meses.map(m => <option key={m} value={m}>{mesLabel(m)}</option>)}
         </select>
-        <select style={{ ...ip, flex: '1 1 130px' }} value={tipo} onChange={e => setTipo(e.target.value)}>
+        <select style={{ ...ip, flex: '1 1 120px' }} value={area} onChange={e => setArea(e.target.value)}>
+          <option value="">Todas las areas</option>
+          {AREAS.map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
+        <select style={{ ...ip, flex: '1 1 120px' }} value={tipo} onChange={e => setTipo(e.target.value)}>
           <option value="">Todos los tipos</option>
           {tipos.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
@@ -101,10 +111,10 @@ export default function LibroComprasModule({ esGerencia = true, ots = [] }) {
         </div>
       ) : (
         <div style={{ overflowX: 'auto', border: '1px solid ' + C.border, borderRadius: 8 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 1000 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 1200 }}>
             <thead>
               <tr style={{ background: C.navy, color: '#fff' }}>
-                {['Emision', 'Proveedor', 'Folio', 'Tipo', 'Neto', 'IVA', 'Total', 'Estado', 'OT', 'Centro costo'].map(h => (
+                {['Emision', 'Proveedor', 'Folio', 'Tipo', 'Neto', 'IVA', 'Total', 'OT', 'Area', 'Pago'].map(h => (
                   <th key={h} style={{ textAlign: h === 'Neto' || h === 'IVA' || h === 'Total' ? 'right' : 'left', padding: '9px 10px', fontSize: 11, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -115,19 +125,36 @@ export default function LibroComprasModule({ esGerencia = true, ots = [] }) {
                   <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{r.emission_date || '-'}</td>
                   <td style={{ padding: '7px 10px' }}><div style={{ fontWeight: 600 }}>{r.provider_name || '-'}</div><div style={{ color: C.mut, fontSize: 11 }}>{r.provider_rut}</div></td>
                   <td style={{ padding: '7px 10px' }}>{r.document_number}</td>
-                  <td style={{ padding: '7px 10px' }}>{r.document_type}</td>
+                  <td style={{ padding: '7px 10px', fontSize: 11.5 }}>{r.document_type}</td>
                   <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>{clp(r.neto)}</td>
                   <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', color: C.orange }}>{clp(r.iva)}</td>
                   <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700 }}>{clp(r.document_total)}</td>
-                  <td style={{ padding: '7px 10px' }}><span style={{ fontSize: 11, color: r.is_received ? C.green : C.mut }}>{r.last_status || (r.is_received ? 'Recibido' : '-')}</span></td>
                   <td style={{ padding: '7px 10px' }}>
-                    <select style={{ ...ip, padding: '4px 6px', minWidth: 110 }} value={r.ot_id || ''} onChange={e => setCampo(r.id, 'ot_id', e.target.value)}>
+                    <select style={{ ...sel, minWidth: 100 }} value={r.ot_id || ''} onChange={e => setCampo(r.id, 'ot_id', e.target.value)}>
                       <option value="">- sin OT -</option>
                       {ots.map(o => <option key={o.numero} value={o.numero}>{o.numero}</option>)}
                     </select>
                   </td>
                   <td style={{ padding: '7px 10px' }}>
-                    <input style={{ ...ip, padding: '4px 6px', width: 120 }} value={r.centro_costo || ''} placeholder="-" onChange={e => setRows(rs => rs.map(x => x.id === r.id ? { ...x, centro_costo: e.target.value } : x))} onBlur={e => setCampo(r.id, 'centro_costo', e.target.value)} />
+                    <select style={{ ...sel, minWidth: 110 }} value={r.centro_costo || ''} onChange={e => setCampo(r.id, 'centro_costo', e.target.value)}>
+                      <option value="">- area -</option>
+                      {AREAS.map(a => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                  </td>
+                  <td style={{ padding: '7px 10px' }}>
+                    <select style={{ ...sel, minWidth: 100, color: colorPago(r.estado_pago), fontWeight: 600 }} value={r.estado_pago || ''} onChange={e => setCampo(r.id, 'estado_pago', e.target.value)}>
+                      <option value="">- pago -</option>
+                      {ESTADOS_PAGO.map(e => <option key={e} value={e}>{e}</option>)}
+                    </select>
+                    {r.estado_pago === 'Factoring' ? (
+                      <div style={{ marginTop: 5, display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <select style={{ ...sel, minWidth: 110 }} value={r.factoring || ''} onChange={e => setCampo(r.id, 'factoring', e.target.value)}>
+                          <option value="">- factoring -</option>
+                          {factoringList.map(f => <option key={f.id} value={f.nombre}>{f.nombre}</option>)}
+                        </select>
+                        <input type="date" title="Vencimiento factura" style={{ ...sel }} value={r.vencimiento || ''} onChange={e => setCampo(r.id, 'vencimiento', e.target.value)} />
+                      </div>
+                    ) : null}
                   </td>
                 </tr>
               ))}

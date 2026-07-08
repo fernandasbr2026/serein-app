@@ -168,7 +168,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const areasOTUsuario = veTodasLasOT
     ? ['Santa Rosa', 'Istria', 'Proyectos']
     : [...new Set([...areasUsuario.filter(a => ['Santa Rosa', 'Istria', 'Proyectos'].includes(a)), ...(areaPorEmail ? [areaPorEmail] : [])])]
-  const tabs = esSupervisor ? [...(areasOTUsuario.length > 0 ? ['GESTION_OT'] : []), 'PRODUCCION', 'COMPRAS_OP', 'ASISTENCIA'] : [
+  const tabs = esSupervisor ? [...(areasOTUsuario.length > 0 ? ['GESTION_OT'] : []), 'PRODUCCION', 'COMPRAS_OP', 'LIBRO_COMPRAS', 'ASISTENCIA'] : [
     ...(esGerencia ? ['TODAS'] : []),
     ...areasUsuario.filter(a => a !== 'Proyectos'),
     ...(tieneProyectos ? ['GESTION_PROYECTOS'] : []),
@@ -383,7 +383,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
 
       <main style={{ flex: 1, minWidth: 0, height: '100vh', overflowY: 'auto' }}>
       <div style={{ padding: 20, maxWidth: 1200, margin: '0 auto' }}>
-        {esModuloLibroCompras ? (<LibroComprasModule esGerencia={esGerencia} ots={ots} />) : esModuloProyectos ? (
+        {esModuloLibroCompras ? (<LibroComprasModule esGerencia={esGerencia} ots={ots} factoringList={params.factoring || []} />) : esModuloProyectos ? (
           <>
           {resumenFinancieroArea('Proyectos')}
           <ProyectosModule proyectos={proyectos} setProyectos={setProyectos} params={params} facturas={facturas} setFacturas={setFacturas} comisionPct={comisiones['Proyectos'] ?? 2} setComisionPct={v => setComisiones(c => ({ ...c, Proyectos: v }))} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={nombresClientes(contactos)} />
