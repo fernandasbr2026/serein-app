@@ -43,7 +43,7 @@ export function Sidebar({ tabs, areaSel, setAreaSel, nombreTab, perfil, email, o
   if (restantes.length) grupos.push({ nombre: 'Otros', items: restantes })
   const nom = (perfil && perfil.nombre) || email || 'Usuario'
   const rol = (perfil && perfil.rol) || ''
-  return (<aside style={{ width: W, flexShrink: 0, background: THEME.surface, borderRight: '1px solid ' + THEME.border, display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh', transition: 'width .18s ease', fontFamily: THEME.font }}>
+  return (<aside style={{ width: W, minWidth: W, maxWidth: W, overflowX: 'hidden', flexShrink: 0, background: THEME.surface, borderRight: '1px solid ' + THEME.border, display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh', transition: 'width .18s ease', fontFamily: THEME.font }}>
     <div style={{ padding: colapsado ? '16px 0' : '16px 16px 12px', display: 'flex', alignItems: 'center', justifyContent: colapsado ? 'center' : 'space-between', borderBottom: '1px solid ' + THEME.borderSoft }}>
       {!colapsado && <div><LogoSerein alto={26} /><div style={{ color: THEME.textMute, fontSize: 10, letterSpacing: 1.5, marginTop: 4, fontWeight: 600 }}>PANEL 2026</div></div>}
       <button onClick={() => setColapsado(!colapsado)} title="Colapsar menú" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: THEME.textSoft, display: 'flex', padding: 6, borderRadius: 8 }}>
