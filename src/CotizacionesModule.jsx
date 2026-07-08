@@ -116,6 +116,7 @@ function htmlDoc(cot, { conValores, esOT, conCondiciones }) {
   </table><div class="words">${enPalabras(t.total)}</div>` : '<div class="badge">DOCUMENTO SIN VALORES · USO INTERNO / TALLER</div>'
   return `<!doctype html><html><head><meta charset="utf-8"><title>${titulo} ${cot.folio}</title><style>${estilosDoc()}</style></head><body>
     <div class="head">
+      ${(function(){var _l='';try{_l=localStorage.getItem('serein_logo')||''}catch(e){}return _l?'<img src="'+_l+'" style="height:46px;display:block;margin-bottom:8px"/>':''})()}
       <div class="emp"><b>${EMPRESA.nombre}</b>
         <div>R.U.T: ${EMPRESA.rut}</div><div>${EMPRESA.giro}</div>
         <div>${EMPRESA.direccion}</div><div>Teléfono: ${EMPRESA.telefono}</div><div>Email: ${EMPRESA.email}</div>
@@ -155,6 +156,7 @@ function htmlOTDoc(ot) {
   const servicios = ot.servicios ? String(ot.servicios).replace(/\n/g, '<br>') : ''
   return `<!doctype html><html><head><meta charset="utf-8"><title>OT ${ot.numero || ''}</title><style>${estilosDoc()}</style></head><body>
     <div class="head">
+      ${(function(){var _l='';try{_l=localStorage.getItem('serein_logo')||''}catch(e){}return _l?'<img src="'+_l+'" style="height:46px;display:block;margin-bottom:8px"/>':''})()}
       <div class="emp"><b>${EMPRESA.nombre}</b><div>R.U.T: ${EMPRESA.rut}</div><div>${EMPRESA.direccion}</div><div>Tel: ${EMPRESA.telefono} · ${EMPRESA.email}</div></div>
       <div class="doc"><div class="t">Orden de trabajo</div><div class="f">${ot.numero || ''}</div></div>
     </div>
