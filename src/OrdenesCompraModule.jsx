@@ -35,39 +35,22 @@ export const ocTotal = oc => ocNeto(oc) + ocIva(oc)
 // ---- Documento OC en PDF (formato SEREIN) ----
 const EMPRESA_OC = { nombre: 'SERVICIOS REVESTIMIENTOS INDUSTRIALES SPA', rut: '76.860.656-0', giro: 'Revestimientos Industriales y habitacionales', dir: 'Santa Rosa 70, RENCA', tel: '56999369503', email: 'administracion@sereinspa.com' }
 function htmlOC(oc) {
-  const items = (oc.items && oc.items.length) ? oc.items : [{ codigo: oc.categoria === 'Pintura' ? '' : '', producto: oc.detalle || oc.categoria || 'Compra a proveedor', cantidad: 1, precio: ocNeto(oc), comentario: '' }]
-  const filas = items.map(it => `<tr><td>${it.codigo || ''}</td><td><b>${it.producto || ''}</b>${it.comentario ? '<br><span style="color:#777">Comentario: ' + it.comentario + '</span>' : ''}</td><td class="r">${num(it.cantidad) || 1}</td><td class="r">${clp(it.precio)}</td><td class="r">$0</td><td class="r">${clp(itemTotalOC(it) || it.precio)}</td></tr>`).join('')
-  const cond = oc.condicionPago || ('CRÉDITO ' + (num(oc.plazo) || 30) + ' DÍAS')
-  const est = `body{font-family:Arial,Helvetica,sans-serif;color:#161616;font-size:12px;margin:24px}
-  .head{display:flex;justify-content:space-between;border-bottom:2px solid #161616;padding-bottom:8px}
-  .emp b{font-size:13px}.emp div{color:#333;line-height:1.4}
-  .doc{text-align:right}.doc .t{font-size:20px;font-weight:bold;color:#A8501F}.doc .f{font-size:14px;font-weight:bold}
-  .cli td{padding:3px 8px;font-size:11px;vertical-align:top}.cli .lbl{color:#7A8288}
-  table.items{width:100%;border-collapse:collapse;margin-top:10px}
-  table.items th{background:#161616;color:#fff;padding:6px;font-size:10px;text-align:left}
-  table.items td{border-bottom:1px solid #ddd;padding:6px;font-size:11px;vertical-align:top}
-  table.items .r{text-align:right}
-  .tot{margin-left:auto;margin-top:10px}.tot td{padding:3px 10px;font-size:12px}.tot .lbl{text-align:right;color:#7A8288}.tot .big{font-weight:bold;font-size:14px}
-  .firma{margin-top:40px;border-top:1px solid #ccc;padding-top:10px;font-size:11px;color:#555}`
-  return `<!doctype html><html><head><meta charset="utf-8"><title>OC ${oc.numero}</title><style>${est}</style></head><body>
-    <div class="head">
-      <div class="emp"><b>${EMPRESA_OC.nombre}</b><div>R.U.T: ${EMPRESA_OC.rut}</div><div>${EMPRESA_OC.giro}</div><div>${EMPRESA_OC.dir}</div><div>Teléfono: ${EMPRESA_OC.tel}</div><div>Email: ${EMPRESA_OC.email}</div></div>
-      <div class="doc"><div class="t">Orden de Compra</div><div class="f">Folio N° ${oc.numero || ''}</div></div>
-    </div>
-    <table class="cli"><tbody>
-      <tr><td><span class="lbl">Señor(es):</span> ${oc.proveedor || ''}</td><td><span class="lbl">R.U.T:</span> ${oc.rut || ''}</td></tr>
-      <tr><td><span class="lbl">Dirección:</span> ${oc.direccion || ''}</td><td><span class="lbl">Emisión:</span> ${oc.fecha || ''}</td></tr>
-      <tr><td><span class="lbl">Despacho:</span> ${oc.despacho || 'Santa Rosa 70, Lampa'}</td><td><span class="lbl">Vencimiento:</span> ${vencOC(oc)}</td></tr>
-      <tr><td><span class="lbl">Condición de pago:</span> ${cond}</td><td><span class="lbl">Centro de negocio:</span> ${oc.area || ''}</td></tr>
-    </tbody></table>
-    <table class="items"><thead><tr><th>Código</th><th>Producto o servicio</th><th>Cantidad</th><th>Precio</th><th>Rec/Desc</th><th>Total</th></tr></thead><tbody>${filas}</tbody></table>
-    <table class="tot"><tr><td class="lbl">Neto:</td><td class="r">${clp(ocNeto(oc))}</td></tr>
-      <tr><td class="lbl">Exento:</td><td class="r">$0</td></tr>
-      <tr><td class="lbl">IVA:</td><td class="r">${clp(ocIva(oc))}</td></tr>
-      <tr><td class="lbl big">Total:</td><td class="r big">${clp(ocTotal(oc))}</td></tr></table>
-    ${oc.obs ? '<div style="margin-top:8px;font-size:11px"><b>Comentario:</b> ' + oc.obs + '</div>' : ''}
-    <div class="firma">Recepción conforme — Nombre: __________________  R.U.T: ____________  Fecha: __________  Firma: __________</div>
-  </body></html>`
+  var esc = function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') };
+  var items = (oc.items && oc.items.length) ? oc.items : [{ codigo: '', producto: oc.detalle || oc.categoria || 'Compra a proveedor', cantidad: 1, precio: ocNeto(oc), comentario: '' }];
+  var filas = ''; for (var i = 0; i < items.length; i++) { var it = items[i]; filas += '<tr><td>' + esc(it.codigo || '') + '</td><td><b>' + esc(it.producto || '') + '</b>' + (it.comentario ? '<br><span class="cmt">' + esc(it.comentario) + '</span>' : '') + '</td><td class="c">' + (num(it.cantidad) || 1) + '</td><td class="r">' + clp(it.precio) + '</td><td class="r">' + clp(itemTotalOC(it) || it.precio) + '</td></tr>' }
+  var cond = oc.condicionPago || ('CREDITO ' + (num(oc.plazo) || 30) + ' DIAS');
+  var CSS = '@page{size:A4;margin:20mm 15mm 15mm 15mm}*{box-sizing:border-box}body{font-family:Inter,Arial,Helvetica,sans-serif;color:#101828;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.page{position:relative}.rhead{position:relative;display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #061A40;padding:4px 0 10px;overflow:hidden}.logo{display:flex;align-items:baseline}.lg-a{color:#061A40;font-weight:800;font-size:22px;letter-spacing:1px}.lg-b{color:#FF6B00;font-weight:800;font-size:22px;margin-left:5px;letter-spacing:1px}.rh-mid{flex:1;text-align:center}.rh-title{color:#061A40;font-weight:800;font-size:18px;letter-spacing:.5px}.rh-sub{color:#FF6B00;font-weight:700;font-size:10px;letter-spacing:2px;margin-top:2px}.codebox{background:#061A40;color:#fff;padding:8px 12px;border-radius:6px;font-size:10px;min-width:150px}.cb-row{display:flex;justify-content:space-between;gap:12px;padding:1px 0}.cb-k{color:#9fb0cf}.cb-v{font-weight:700}.stripe{position:absolute;top:-10px;right:120px;width:60px;height:130%;background:#FF6B00;opacity:.10;transform:skewX(-22deg)}.emisor{font-size:10px;color:#5a6b85;margin:8px 0 2px}.infogrid{display:grid;grid-template-columns:1fr 1fr;gap:0 26px;margin:12px 0 4px}.info-item{display:flex;justify-content:space-between;border-bottom:1px solid #D8DCE5;padding:5px 2px;font-size:11px}.info-k{color:#5a6b85}.info-v{font-weight:700;color:#101828;text-align:right}.sec-title{color:#061A40;font-weight:800;font-size:12px;text-transform:uppercase;border-left:4px solid #FF6B00;padding-left:9px;margin:16px 0 7px}table.dt{width:100%;border-collapse:collapse;font-size:11px}table.dt th{background:#061A40;color:#fff;padding:6px 8px;text-align:left;font-size:10px}table.dt td{border:1px solid #D8DCE5;padding:6px 8px}table.dt td.c{text-align:center}table.dt td.r{text-align:right}.cmt{color:#7A8288;font-size:10px}.tot{display:flex;justify-content:flex-end;margin-top:8px}.tot table{border-collapse:collapse;min-width:230px}.tot td{padding:4px 10px;font-size:12px}.tot .tl{color:#5a6b85}.tot .tr{text-align:right;font-weight:700}.tot .big{font-weight:800;color:#061A40}.tot-badge{background:#FF6B00;color:#fff;padding:3px 12px;border-radius:4px;font-weight:800}.obs{margin-top:10px;font-size:11px}.firma{margin-top:34px;border-top:1px solid #D8DCE5;padding-top:10px;font-size:10px;color:#555}.rfooter{display:flex;margin-top:22px;border-radius:6px;overflow:hidden;border:1px solid #D8DCE5}.rf-navy{background:#061A40;color:#fff;flex:1;display:flex;gap:20px;justify-content:center;align-items:center;padding:10px;font-size:10px;font-weight:600}.rf-web{background:#FF6B00;color:#fff;padding:0 16px;font-weight:700;font-size:11px;display:flex;align-items:center}';
+  var s = '<!doctype html><html><head><meta charset="utf-8"><title>OC ' + esc(oc.numero) + '</title><style>' + CSS + '</style></head><body><div class="page">';
+  s += '<div class="rhead"><div class="stripe"></div><div class="logo"><span class="lg-a">SEREIN</span><span class="lg-b">GROUP</span></div><div class="rh-mid"><div class="rh-title">ORDEN DE COMPRA</div><div class="rh-sub">SEREIN GROUP</div></div><div class="codebox"><div class="cb-row"><span class="cb-k">Folio N</span><span class="cb-v">' + esc(oc.numero || '') + '</span></div><div class="cb-row"><span class="cb-k">Emision</span><span class="cb-v">' + esc(oc.fecha || '') + '</span></div></div></div>';
+  s += '<div class="emisor"><b>' + EMPRESA_OC.nombre + '</b> - RUT ' + EMPRESA_OC.rut + ' - ' + EMPRESA_OC.giro + ' - ' + EMPRESA_OC.dir + ' - Tel ' + EMPRESA_OC.tel + ' - ' + EMPRESA_OC.email + '</div>';
+  s += '<div class="infogrid"><div class="info-item"><span class="info-k">Proveedor</span><span class="info-v">' + esc(oc.proveedor || '') + '</span></div><div class="info-item"><span class="info-k">R.U.T.</span><span class="info-v">' + esc(oc.rut || '') + '</span></div><div class="info-item"><span class="info-k">Direccion</span><span class="info-v">' + esc(oc.direccion || '') + '</span></div><div class="info-item"><span class="info-k">Despacho</span><span class="info-v">' + esc(oc.despacho || 'Santa Rosa 70, Lampa') + '</span></div><div class="info-item"><span class="info-k">Vencimiento</span><span class="info-v">' + esc(vencOC(oc)) + '</span></div><div class="info-item"><span class="info-k">Condicion de pago</span><span class="info-v">' + esc(cond) + '</span></div><div class="info-item"><span class="info-k">Centro de negocio</span><span class="info-v">' + esc(oc.area || '') + '</span></div><div class="info-item"><span class="info-k">Categoria</span><span class="info-v">' + esc(oc.categoria || '') + '</span></div></div>';
+  s += '<div class="sec-title">Detalle de la compra</div>';
+  s += '<table class="dt"><thead><tr><th>Codigo</th><th>Producto o servicio</th><th>Cant.</th><th>Precio</th><th>Total</th></tr></thead><tbody>' + filas + '</tbody></table>';
+  s += '<div class="tot"><table><tr><td class="tl">Neto</td><td class="tr">' + clp(ocNeto(oc)) + '</td></tr><tr><td class="tl">IVA 19%</td><td class="tr">' + clp(ocIva(oc)) + '</td></tr><tr><td class="tl big">Total</td><td class="tr"><span class="tot-badge">' + clp(ocTotal(oc)) + '</span></td></tr></table></div>';
+  if (oc.obs) s += '<div class="obs"><b>Observaciones:</b> ' + esc(oc.obs) + '</div>';
+  s += '<div class="firma">Recepcion conforme &nbsp;&nbsp; Nombre: __________________ &nbsp; R.U.T: ____________ &nbsp; Fecha: __________ &nbsp; Firma: __________</div>';
+  s += '<div class="rfooter"><div class="rf-navy"><span>Compromiso con la calidad</span><span>Seguridad en cada proceso</span><span>Excelencia en resultados</span></div><div class="rf-web">www.sereingroup.cl</div></div>';
+  return s + '</div></body></html>';
 }
 export function descargarOCPDF(oc) {
   const w = window.open('', '_blank')
