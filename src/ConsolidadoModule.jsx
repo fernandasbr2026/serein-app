@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { calcularResumenFin } from './FinanzasModule.jsx'
 import { AlertTriangle, TrendingUp, TrendingDown, Wallet, Landmark, Receipt, Sparkles, CheckCircle2, ShieldAlert, Info } from 'lucide-react'
 
-const C = { navy: '#1A2733', carbon: '#22282C', orange: '#D2642F', azul: '#25506E', verde: '#3D7A4E', rojo: '#B5432E', ambar: '#C9860B', teal: '#2E7D77', gray: '#7A8288', line: '#E2DED4', soft: '#F7F4EE' }
+const C = { navy: '#061A40', carbon: '#0F1A2E', orange: '#FF6B00', azul: '#25608E', verde: '#12805C', rojo: '#D64545', ambar: '#C9860B', teal: '#0B7285', gray: '#8A929E', line: '#E6E8EE', soft: '#F5F6F8' }
 const SEV = { ok: C.verde, warn: C.ambar, crit: C.rojo }
 const clp = n => '$' + Math.round(+n || 0).toLocaleString('es-CL')
 const pad2 = x => (x < 10 ? '0' + x : '' + x)
@@ -12,7 +12,7 @@ function fechaCL(f) { if (!f) return '-'; const s = ('' + f).slice(0, 10); const
 const num = n => (+n || 0)
 
 function Card({ titulo, icon: Ico, children, borde }) {
-  return (<div style={{ background: '#fff', border: '1px solid ' + C.line, borderTop: '3px solid ' + (borde || C.navy), borderRadius: 5, padding: '14px 16px', marginBottom: 16 }}>
+  return (<div style={{ background: '#fff', border: '1px solid ' + C.line, borderTop: '3px solid ' + (borde || C.orange), borderRadius: 14, boxShadow: '0 1px 3px rgba(16,24,40,.06), 0 1px 2px rgba(16,24,40,.04)', padding: '16px 18px', marginBottom: 18 }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
       {Ico && <Ico size={16} color={borde || C.navy} />}
       <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 13.5, textTransform: 'uppercase', letterSpacing: 0.4, color: C.carbon }}>{titulo}</span>
@@ -23,9 +23,9 @@ function Card({ titulo, icon: Ico, children, borde }) {
 
 function SemCard({ label, valor, sub, sev }) {
   const col = SEV[sev] || C.navy
-  return (<div style={{ flex: '1 1 160px', minWidth: 150, background: '#fff', border: '1px solid ' + C.line, borderLeft: '4px solid ' + col, borderRadius: 5, padding: '11px 13px' }}>
+  return (<div style={{ flex: '1 1 160px', minWidth: 150, background: '#fff', border: '1px solid ' + C.line, borderLeft: '4px solid ' + col, borderRadius: 12, boxShadow: '0 1px 3px rgba(16,24,40,.06)', padding: '14px 16px' }}>
     <div style={{ fontSize: 10.5, color: C.gray, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, marginBottom: 3 }}>{label}</div>
-    <div style={{ fontSize: 19, fontWeight: 700, color: col, fontFamily: "'Oswald',sans-serif", lineHeight: 1.1 }}>{valor}</div>
+    <div style={{ fontSize: 21, fontWeight: 700, color: col, fontFamily: "'Oswald',sans-serif", lineHeight: 1.1 }}>{valor}</div>
     {sub && <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>{sub}</div>}
   </div>)
 }
