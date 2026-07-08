@@ -1,8 +1,9 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { ChevronDown, ChevronUp, Plus, Trash2, X, Ruler, Paintbrush, FileText, Receipt, ShoppingCart, CircleDollarSign, Download, Camera } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { descargarOTDesdeOT } from './CotizacionesModule.jsx'
 import { costoOCdeOT } from './OrdenesCompraModule.jsx'
+import { supabase } from './supabase.js'
 import { costoMOdeOT } from './ManoObraModule.jsx'
 import Paginador, { paginar } from './Paginador.jsx'
 
@@ -231,7 +232,7 @@ function descargarOT(ot) {
   XLSX.writeFile(wb, `${ot.numero}.xlsx`)
 }
 
-function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = [], mo = null, otsAll = [], instrumentos = null }) {
+function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = [], mo = null, otsAll = [], instrumentos = null, libroCompras = [] }) {
   const [abierta, setAbierta] = useState(false)
   const [addVenta, setAddVenta] = useState(false)
   const [addCosto, setAddCosto] = useState(false)
@@ -467,7 +468,9 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
               )}
               {addVenta && <FormVenta onAdd={v => { onUpdate(ot.id, { ventas: [...ot.ventas, v] }); setAddVenta(false) }} onCancel={() => setAddVenta(false)} />}
 
-              {/* COSTOS */}
+              {verValores && (libroCompras || []).some(l => l.ot_id === ot.numero) ? (() => { const cs = (libroCompras || []).filter(l => l.ot_id === ot.numero); const sub = cs.reduce((a, l) => a + (Number(l.neto) || 0), 0); return (<div style={{ marginTop: 14, border: '1px solid #D8DCE5', borderRadius: 6, padding: 10, background: '#F5F7FA' }}><div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#061A40', marginBottom: 6 }}>Compras del libro de compras (SII) asignadas</div><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}><tbody>{cs.map((l, i) => (<tr key={i} style={{ borderBottom: '1px solid #E7E4DC' }}><td style={{ padding: '4px 6px', color: '#7A8288', whiteSpace: 'nowrap' }}>{l.emission_date}</td><td style={{ padding: '4px 6px' }}>{l.provider_name}</td><td style={{ padding: '4px 6px', color: '#7A8288' }}>Folio {l.document_number}</td><td style={{ padding: '4px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>{clp(l.neto)}</td></tr>))}</tbody></table><div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}><span style={{ fontSize: 11, color: '#7A8288' }}>Subtotal neto (informativo, aun no sumado a la utilidad)</span><span style={{ fontWeight: 700, color: '#061A40' }}>{clp(sub)}</span></div></div>); })() : null}
+
+          {/* COSTOS */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0 8px' }}>
                 <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: '#7A8288', display: 'flex', alignItems: 'center', gap: 5 }}>
                   <ShoppingCart size={13} /> Compras y costos de la OT
@@ -701,6 +704,8 @@ function ProtocolosOT({ ot, onUpdate, otsAll = [], instrumentos = null }) {
 
 export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], ots: otsExt, setOts: setOtsExt, verValores = true, clientes = [], ordenesCompra = [], mo = null, instrumentos = null }) {
   const [otsInt, setOtsInt] = useState(OTS_INICIALES)
+  const [libroCompras, setLibroCompras] = useState([])
+  useEffect(() => { supabase.from('libro_compras').select('ot_id,provider_name,document_number,neto,document_total,emission_date').not('ot_id', 'is', null).then(({ data }) => setLibroCompras(data || [])) }, [])
   const otsAll = otsExt ?? otsInt
   const setOts = setOtsExt ?? setOtsInt
   const ots = otsAll.filter(o => areasPermitidas.includes(o.area))
@@ -802,7 +807,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
       {creando && <FormOT area={areaSel} siguienteNumero={siguiente} onAdd={o => { setOts(xs => [o, ...xs]); setCreando(false) }} onCancel={() => setCreando(false)} />}
 
       {visibles.length === 0 && <div style={{ color: '#9AA0A6', fontSize: 14, padding: 20, textAlign: 'center', background: '#fff', border: '1px dashed #CBD2D6' }}>Sin OTs en {areaSel}. Crea la primera.</div>}
-      {paginar(visibles, page).items.map(o => <TarjetaOT key={o.id} ot={o} onUpdate={actualizar} onDelete={eliminar} verValores={verValores} ordenesCompra={ordenesCompra} mo={mo} otsAll={otsAll} instrumentos={instrumentos} />)}
+      {paginar(visibles, page).items.map(o => <TarjetaOT key={o.id} ot={o} onUpdate={actualizar} onDelete={eliminar} verValores={verValores} ordenesCompra={ordenesCompra} mo={mo} otsAll={otsAll} instrumentos={instrumentos} libroCompras={libroCompras} />)}
       <Paginador page={paginar(visibles, page).page} paginas={paginar(visibles, page).paginas} total={visibles.length} setPage={setPage} />
 
       <div style={{ fontSize: 12, color: '#9AA0A6', textAlign: 'center', marginTop: 8 }}>
