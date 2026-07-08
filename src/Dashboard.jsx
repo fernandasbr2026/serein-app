@@ -448,7 +448,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
           <Kpi label="Cobrado" valor={clp(kCobrado)} sub={`${((kCobrado / ((kCobrado + kPend) || 1)) * 100).toFixed(0)}% de la cartera`} color={C.verde} icon={Wallet} />
           <Kpi label="Por Cobrar" valor={clp(kPend)} sub="pendiente" color={C.rojo} icon={AlertTriangle} />
           <Kpi label="Pérdida Factoring" valor={clp(kPerd)} sub={kVenta > 0 ? `${((kPerd / kVenta) * 100).toFixed(2)}% s/ venta` : '—'} color={C.ambar} icon={Landmark} />
-          {esTODAS && <Kpi label="% Factorizado" valor={`${pctFactorizado.toFixed(1)}%`} sub={`${clp(netoFactTotal)} de ${clp(netoTotalFact)}`} color={C.teal} icon={Landmark} />}
+          {esGerencia && <Kpi label="Carga financiera" valor={clp(calcularResumenFin(fin, new Date().toISOString().slice(0, 7)).deudaVigente)} sub="deuda total propia" color="#061A40" icon={Landmark} />}
+            {esTODAS && <Kpi label="% Factorizado" valor={`${pctFactorizado.toFixed(1)}%`} sub={`${clp(netoFactTotal)} de ${clp(netoTotalFact)}`} color={C.teal} icon={Landmark} />}
         </div>
 
         {esGerencia && areaSel === 'TODAS' && (
