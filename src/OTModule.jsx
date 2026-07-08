@@ -329,29 +329,94 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
             </label>
           </div>
 
-          {/* PARTIDAS / ENTREGAS DE MATERIAL (visible para todos) */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '4px 0 8px' }}>
-            <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: '#7A8288' }}>Partidas / entregas de material</span>
-            <button onClick={() => onUpdate(ot.id, { partidas: [...(ot.partidas || []), { id: 'pa' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente' }] })} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Agregar partida</button>
+          {/* RECEPCION - PARTIDAS / ENTREGAS DE MATERIAL */}
+
+        <div style={{ marginTop: 14 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+            <span style={{ fontSize:13, fontWeight:700, textTransform:'uppercase', color:'#B23A0E' }}>Recepción / Partidas / entregas de material</span>
+            <button onClick={() => onUpdate(ot.id, { partidas: [...(ot.partidas || []), { id: 'pa' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [] }] })} style={{ background: C.teal, color:'#fff', border:'none', padding:'6px 12px', cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', gap:4 }}><Plus size={14} /> Agregar recepción</button>
           </div>
-          {(ot.partidas || []).length === 0 ? (
-            <div style={{ fontSize: 13, color: '#9AA0A6', marginBottom: 10 }}>Sin partidas. Indica en cuántas entregas llegará el material.</div>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 10 }}>
-              <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['N°', 'Detalle del material', 'Fecha estimada', 'Estado', ''].map((h, i) => <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
-              <tbody>
-                {(ot.partidas || []).map((p, i) => (
-                  <tr key={p.id || i} style={{ borderBottom: '1px solid #EEE9DF' }}>
-                    <td style={{ padding: '4px 8px', fontWeight: 600 }}>{i + 1}</td>
-                    <td style={{ padding: '4px 8px' }}><input value={p.detalle} onChange={e => onUpdate(ot.id, { partidas: ot.partidas.map((x, j) => j === i ? { ...x, detalle: e.target.value } : x) })} placeholder="Ej: 16 barandas / 33 soportes" style={{ ...inp, width: '100%', padding: '5px 7px' }} /></td>
-                    <td style={{ padding: '4px 8px' }}><input type="date" value={p.fecha} onChange={e => onUpdate(ot.id, { partidas: ot.partidas.map((x, j) => j === i ? { ...x, fecha: e.target.value } : x) })} style={{ ...inp, width: 140, padding: '5px 7px' }} /></td>
-                    <td style={{ padding: '4px 8px' }}><select value={p.estado} onChange={e => onUpdate(ot.id, { partidas: ot.partidas.map((x, j) => j === i ? { ...x, estado: e.target.value } : x) })} style={{ border: 'none', background: p.estado === 'Recibida' ? '#E7F2EA' : '#F9E9DE', color: p.estado === 'Recibida' ? C.verde : '#8C4519', padding: '3px 8px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}><option>Pendiente</option><option>Recibida</option></select></td>
-                    <td style={{ padding: '4px 4px', textAlign: 'right' }}><button onClick={() => onUpdate(ot.id, { partidas: ot.partidas.filter((_, j) => j !== i) })} style={btnMini}><Trash2 size={13} /></button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          {(ot.partidas || []).length === 0 ? (<div style={{ fontSize:12, color:'#8A8A7A', marginBottom:6 }}>Sin registros.</div>) : null}
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {(ot.partidas || []).map((p, i) => (
+              <div key={p.id || i} style={{ border:'1px solid #E2DED4', borderRadius:6, padding:10, background:'#FCFBF9' }}>
+                <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', marginBottom:8 }}>
+                  <span style={{ fontWeight:700, fontSize:12, color:C.carbon }}>#{i + 1}</span>
+                  <input value={p.detalle || ''} onChange={e => onUpdate(ot.id, { partidas: (ot.partidas || []).map((x, j) => j === i ? { ...x, detalle: e.target.value } : x) })} placeholder="Detalle del material" style={{ ...inp, flex:'2 1 150px', padding:'6px 8px' }} />
+                  <input type="date" value={p.fecha || ''} onChange={e => onUpdate(ot.id, { partidas: (ot.partidas || []).map((x, j) => j === i ? { ...x, fecha: e.target.value } : x) })} style={{ ...inp, flex:'0 1 140px', padding:'6px 8px' }} />
+                  <div style={{ display:'flex', alignItems:'center', gap:4 }}><input type="number" value={p.m2 || ''} onChange={e => onUpdate(ot.id, { partidas: (ot.partidas || []).map((x, j) => j === i ? { ...x, m2: e.target.value } : x) })} placeholder="m²" style={{ ...inp, width:72, padding:'6px 8px' }} /><span style={{ fontSize:11, color:'#7A8288' }}>m²</span></div>
+                  <select value={p.estado || 'Pendiente'} onChange={e => onUpdate(ot.id, { partidas: (ot.partidas || []).map((x, j) => j === i ? { ...x, estado: e.target.value } : x) })} style={{ border:'none', background: p.estado === 'Recibida' ? '#E6F5EA' : '#F5E5DE', color: p.estado === 'Recibida' ? C.verde : '#B23A0E', padding:'5px 8px', fontSize:11, fontWeight:700, cursor:'pointer' }}><option>Pendiente</option><option>Recibida</option></select>
+                  <button onClick={() => onUpdate(ot.id, { partidas: (ot.partidas || []).filter((_, j) => j !== i) })} style={btnMini}><Trash2 size={13} /></button>
+                </div>
+                <textarea value={p.obs || ''} onChange={e => onUpdate(ot.id, { partidas: (ot.partidas || []).map((x, j) => j === i ? { ...x, obs: e.target.value } : x) })} placeholder="Observaciones" style={{ ...inp, width:'100%', minHeight:38, padding:'6px 8px', resize:'vertical', boxSizing:'border-box' }} />
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginTop:8 }}>
+                  {(p.fotos || []).map((f, k) => (
+                    <div key={k} style={{ position:'relative' }}>
+                      <img src={f} style={{ width:64, height:64, objectFit:'cover', borderRadius:4, border:'1px solid #CBD2D6' }} />
+                      <button onClick={() => onUpdate(ot.id, { partidas: (ot.partidas || []).map((x, j) => j === i ? { ...x, fotos: (x.fotos || []).filter((_, z) => z !== k) } : x) })} style={{ position:'absolute', top:-6, right:-6, background:'#DC2626', color:'#fff', border:'none', borderRadius:'50%', width:18, height:18, fontSize:11, cursor:'pointer', lineHeight:1 }}>×</button>
+                    </div>
+                  ))}
+                  <label style={{ cursor:'pointer', width:64, height:64, border:'1px dashed #C9C4B8', borderRadius:4, display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, color:'#B0A89A' }}>+
+                    <input type="file" accept="image/*" multiple style={{ display:'none' }} onChange={e => { const fls = [...e.target.files]; if (!fls.length) return; const acc = []; let c = 0; fls.forEach(fl => imgToData(fl, d => { acc.push(d); c++; if (c === fls.length) onUpdate(ot.id, { partidas: (ot.partidas || []).map((x, j) => j === i ? { ...x, fotos: [...(x.fotos || []), ...acc] } : x) }); })); }} />
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ENTREGAS / DESPACHO SEREIN */}
+
+        <div style={{ marginTop: 14 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+            <span style={{ fontSize:13, fontWeight:700, textTransform:'uppercase', color:'#B23A0E' }}>Entregas / Despacho SEREIN</span>
+            <button onClick={() => onUpdate(ot.id, { despachos: [...(ot.despachos || []), { id: 'de' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [] }] })} style={{ background: C.teal, color:'#fff', border:'none', padding:'6px 12px', cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', gap:4 }}><Plus size={14} /> Agregar despacho</button>
+          </div>
+          {(ot.despachos || []).length === 0 ? (<div style={{ fontSize:12, color:'#8A8A7A', marginBottom:6 }}>Sin registros.</div>) : null}
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {(ot.despachos || []).map((p, i) => (
+              <div key={p.id || i} style={{ border:'1px solid #E2DED4', borderRadius:6, padding:10, background:'#FCFBF9' }}>
+                <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', marginBottom:8 }}>
+                  <span style={{ fontWeight:700, fontSize:12, color:C.carbon }}>#{i + 1}</span>
+                  <input value={p.detalle || ''} onChange={e => onUpdate(ot.id, { despachos: (ot.despachos || []).map((x, j) => j === i ? { ...x, detalle: e.target.value } : x) })} placeholder="Detalle del material" style={{ ...inp, flex:'2 1 150px', padding:'6px 8px' }} />
+                  <input type="date" value={p.fecha || ''} onChange={e => onUpdate(ot.id, { despachos: (ot.despachos || []).map((x, j) => j === i ? { ...x, fecha: e.target.value } : x) })} style={{ ...inp, flex:'0 1 140px', padding:'6px 8px' }} />
+                  <div style={{ display:'flex', alignItems:'center', gap:4 }}><input type="number" value={p.m2 || ''} onChange={e => onUpdate(ot.id, { despachos: (ot.despachos || []).map((x, j) => j === i ? { ...x, m2: e.target.value } : x) })} placeholder="m²" style={{ ...inp, width:72, padding:'6px 8px' }} /><span style={{ fontSize:11, color:'#7A8288' }}>m²</span></div>
+                  <select value={p.estado || 'Pendiente'} onChange={e => onUpdate(ot.id, { despachos: (ot.despachos || []).map((x, j) => j === i ? { ...x, estado: e.target.value } : x) })} style={{ border:'none', background: p.estado === 'Despachada' ? '#E6F5EA' : '#F5E5DE', color: p.estado === 'Despachada' ? C.verde : '#B23A0E', padding:'5px 8px', fontSize:11, fontWeight:700, cursor:'pointer' }}><option>Pendiente</option><option>Despachada</option></select>
+                  <button onClick={() => onUpdate(ot.id, { despachos: (ot.despachos || []).filter((_, j) => j !== i) })} style={btnMini}><Trash2 size={13} /></button>
+                </div>
+                <textarea value={p.obs || ''} onChange={e => onUpdate(ot.id, { despachos: (ot.despachos || []).map((x, j) => j === i ? { ...x, obs: e.target.value } : x) })} placeholder="Observaciones" style={{ ...inp, width:'100%', minHeight:38, padding:'6px 8px', resize:'vertical', boxSizing:'border-box' }} />
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginTop:8 }}>
+                  {(p.fotos || []).map((f, k) => (
+                    <div key={k} style={{ position:'relative' }}>
+                      <img src={f} style={{ width:64, height:64, objectFit:'cover', borderRadius:4, border:'1px solid #CBD2D6' }} />
+                      <button onClick={() => onUpdate(ot.id, { despachos: (ot.despachos || []).map((x, j) => j === i ? { ...x, fotos: (x.fotos || []).filter((_, z) => z !== k) } : x) })} style={{ position:'absolute', top:-6, right:-6, background:'#DC2626', color:'#fff', border:'none', borderRadius:'50%', width:18, height:18, fontSize:11, cursor:'pointer', lineHeight:1 }}>×</button>
+                    </div>
+                  ))}
+                  <label style={{ cursor:'pointer', width:64, height:64, border:'1px dashed #C9C4B8', borderRadius:4, display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, color:'#B0A89A' }}>+
+                    <input type="file" accept="image/*" multiple style={{ display:'none' }} onChange={e => { const fls = [...e.target.files]; if (!fls.length) return; const acc = []; let c = 0; fls.forEach(fl => imgToData(fl, d => { acc.push(d); c++; if (c === fls.length) onUpdate(ot.id, { despachos: (ot.despachos || []).map((x, j) => j === i ? { ...x, fotos: [...(x.fotos || []), ...acc] } : x) }); })); }} />
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* RESUMEN M2 REALES / EN PLANTA */}
+        {(() => {
+          const m2c = parseFloat(ot.m2) || 0;
+          const r2 = n => Math.round(n * 100) / 100;
+          const m2r = r2((ot.partidas || []).reduce((s, p) => s + (parseFloat(p.m2) || 0), 0));
+          const m2d = r2((ot.despachos || []).reduce((s, p) => s + (parseFloat(p.m2) || 0), 0));
+          const planta = r2(m2r - m2d);
+          const over = m2c > 0 && m2r > m2c;
+          return (
+            <div style={{ marginTop: 16, display:'flex', gap:12, flexWrap:'wrap' }}>
+              <div style={{ flex:'1 1 120px', border:'1px solid #D8DCE5', borderRadius:6, padding:'10px 12px', background:'#F5F7FA' }}><div style={{ fontSize:11, color:'#7A8288', textTransform:'uppercase', fontWeight:700 }}>M² cotización</div><div style={{ fontSize:20, fontWeight:700, color:C.carbon }}>{m2c}</div></div>
+              <div style={{ flex:'1 1 120px', border:'1px solid ' + (over ? '#DC2626' : '#D8DCE5'), borderRadius:6, padding:'10px 12px', background: over ? '#FDECEC' : '#F5F7FA' }}><div style={{ fontSize:11, color: over ? '#DC2626' : '#7A8288', textTransform:'uppercase', fontWeight:700 }}>M² reales</div><div style={{ fontSize:20, fontWeight:700, color: over ? '#DC2626' : C.carbon }}>{m2r}</div>{over ? <div style={{ fontSize:10.5, color:'#DC2626', fontWeight:700, marginTop:2 }}>⚠ Supera lo cotizado (+{r2(m2r - m2c)} m²)</div> : null}</div>
+              <div style={{ flex:'1 1 120px', border:'1px solid #D8DCE5', borderRadius:6, padding:'10px 12px', background:'#F5F7FA' }}><div style={{ fontSize:11, color:'#7A8288', textTransform:'uppercase', fontWeight:700 }}>M² en planta</div><div style={{ fontSize:20, fontWeight:700, color: planta < 0 ? '#DC2626' : C.carbon }}>{planta}</div></div>
+            </div>
+          );
+        })()}
 
           {verValores && (
             <>
