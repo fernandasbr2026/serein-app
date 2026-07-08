@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Plus, Trash2, Search, ChevronDown, ChevronUp, Download } from 'lucide-react'
 import Paginador, { paginar } from './Paginador.jsx'
+import { PROVEEDORES_FICHA } from './proveedores-data.js'
 
 // ============================================================
 // MÓDULO: Órdenes de Compra a PROVEEDORES (emitidas por Serein)
@@ -14,6 +15,12 @@ const num = s => { const v = parseInt(String(s).replace(/[^\d-]/g, ''), 10); ret
 const inp = { padding: '6px 8px', border: '1px solid #CBD2D6', fontSize: 12.5, boxSizing: 'border-box' }
 const hoy = () => new Date().toISOString().slice(0, 10)
 const sumarDias = (fecha, dias) => { if (!fecha) return ''; const d = new Date(fecha + 'T12:00:00'); d.setDate(d.getDate() + (parseInt(dias, 10) || 0)); return d.toISOString().slice(0, 10) }
+
+const buscarProv = (proveedores, nombre) => {
+  const n = (nombre || '').trim().toLowerCase()
+  if (!n) return null
+  return (proveedores || []).find(p => (p.nombre || '').trim().toLowerCase() === n) || null
+}
 
 const CATEGORIAS = ['Pintura', 'Granalla', 'EPP', 'Ferretería', 'Transporte', 'Arriendo de equipos', 'Mantención', 'Servicios externos', 'Combustible', 'Financiero', 'Otro']
 const ESTADOS_PAGO = ['Pendiente', 'Parcialmente pagada', 'Pagada', 'Vencida', 'Anulada']
@@ -80,8 +87,9 @@ export const costoOCdeOT = (ocs, numeroOT) => (ocs || []).filter(o => o.estadoPa
 const fondoEstado = e => ({ Pagada: '#E7F2EA', 'Parcialmente pagada': '#F9E9DE', Vencida: '#F6E0DA', Pendiente: '#F9E9DE', Anulada: '#EEE' }[e] || '#EEE')
 const colorEstado = e => ({ Pagada: C.verde, 'Parcialmente pagada': C.naranja, Vencida: C.rojo, Pendiente: '#8C4519', Anulada: C.gris }[e] || C.gris)
 
-function FilaOC({ oc, otsDisponibles, upd, onDelete }) {
+function FilaOC({ oc, otsDisponibles, upd, onDelete, proveedores = PROVEEDORES_FICHA }) {
   const [abierta, setAbierta] = useState(false)
+  const setProv = v => { const p = buscarProv(proveedores, v); upd(oc.id, { proveedor: v, ...(p ? { rut: p.rut || oc.rut, direccion: p.direccion || oc.direccion } : {}) }) }
   const v = vencOC(oc), vencido = ocPorPagar(oc) && v && v < hoy()
   const asigs = oc.asignaciones || []
   const sumaPct = asigs.reduce((a, x) => a + (num(x.pct) || 0), 0)
@@ -96,7 +104,7 @@ function FilaOC({ oc, otsDisponibles, upd, onDelete }) {
     <>
       <tr style={{ borderBottom: '1px solid #EEE9DF', background: vencido ? '#FDF3F0' : 'transparent' }}>
         <td style={{ padding: '4px 6px' }}><input value={oc.numero} onChange={e => upd(oc.id, { numero: e.target.value })} style={{ ...inp, width: 66, fontWeight: 600, padding: '5px 6px' }} /></td>
-        <td style={{ padding: '4px 6px' }}><input value={oc.proveedor} onChange={e => upd(oc.id, { proveedor: e.target.value })} style={{ ...inp, width: 180, padding: '5px 6px' }} /></td>
+        <td style={{ padding: '4px 6px' }}><input list="prov-list-oc" value={oc.proveedor} onChange={e => setProv(e.target.value)} style={{ ...inp, width: 180, padding: '5px 6px' }} /></td>
         <td style={{ padding: '4px 6px' }}><input value={oc.rut || ''} onChange={e => upd(oc.id, { rut: e.target.value })} style={{ ...inp, width: 100, padding: '5px 6px' }} /></td>
         <td style={{ padding: '4px 6px' }}><select value={oc.categoria || ''} onChange={e => upd(oc.id, { categoria: e.target.value })} style={{ ...inp, width: 120, padding: '5px 6px' }}><option value="">—</option>{CATEGORIAS.map(x => <option key={x}>{x}</option>)}</select></td>
         <td style={{ padding: '4px 6px' }}><input type="date" value={oc.fecha || ''} onChange={e => upd(oc.id, { fecha: e.target.value })} style={{ ...inp, width: 132, padding: '5px 6px' }} /></td>
@@ -169,9 +177,10 @@ function FilaOC({ oc, otsDisponibles, upd, onDelete }) {
 }
 
 // ---- Formulario para crear / editar una OC en una mini ventana ----
-function FormOC({ inicial, otsDisponibles, onGuardar, onCancelar }) {
+function FormOC({ inicial, otsDisponibles, onGuardar, onCancelar, proveedores = PROVEEDORES_FICHA }) {
   const [f, setF] = useState(inicial)
   const set = (k, v) => setF({ ...f, [k]: v })
+  const setProveedor = v => { const p = buscarProv(proveedores, v); setF(prev => ({ ...prev, proveedor: v, ...(p ? { rut: p.rut || prev.rut, direccion: p.direccion || prev.direccion } : {}) })) }
   const setFecha = v => setF({ ...f, fecha: v, vencimiento: sumarDias(v, num(f.plazo)) })
   const setPlazo = v => setF({ ...f, plazo: num(v), vencimiento: sumarDias(f.fecha, num(v)) })
   const items = f.items || []
@@ -192,7 +201,7 @@ function FormOC({ inicial, otsDisponibles, onGuardar, onCancelar }) {
         <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, textTransform: 'uppercase', marginBottom: 12 }}>Orden de compra · N° {f.numero}</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
           <label style={lab}>N° OC (correlativo)<input style={{ ...inp, background: '#F1EDE6', fontWeight: 600 }} value={f.numero} onChange={e => set('numero', e.target.value)} /></label>
-          <label style={lab}>Proveedor *<input style={inp} value={f.proveedor} onChange={e => set('proveedor', e.target.value)} /></label>
+          <label style={lab}>Proveedor *<input list="prov-list-oc" style={inp} value={f.proveedor} onChange={e => setProveedor(e.target.value)} placeholder="Escribe o elige de la lista…" /></label>
           <label style={lab}>RUT proveedor<input style={inp} value={f.rut} onChange={e => set('rut', e.target.value)} /></label>
           <label style={lab}>Categoría<select style={inp} value={f.categoria} onChange={e => set('categoria', e.target.value)}>{CATEGORIAS.map(x => <option key={x}>{x}</option>)}</select></label>
           <label style={lab}>Centro de negocio / Área<select style={inp} value={f.area} onChange={e => set('area', e.target.value)}>{AREAS.map(a => <option key={a}>{a}</option>)}</select></label>
@@ -255,8 +264,9 @@ function FormOC({ inicial, otsDisponibles, onGuardar, onCancelar }) {
   )
 }
 
-export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}, ots = [] }) {
+export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}, ots = [], proveedores = PROVEEDORES_FICHA }) {
   const ocs = pp.ocs || []
+  const provLista = Object.values((proveedores || []).reduce((m, p) => { const n = (p.nombre || '').trim(); if (n && !m[n.toLowerCase()]) m[n.toLowerCase()] = p; return m }, {}))
   const otsDisponibles = [...new Set((ots || []).map(o => o.numero).filter(Boolean))]
   const setOcs = arr => setPp({ ...pp, ocs: arr })
   const upd = (id, cambios) => setOcs(ocs.map(o => o.id === id ? { ...o, ...cambios } : o))
@@ -277,7 +287,10 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
 
   return (
     <div>
-      {creando && <FormOC inicial={nueva()} otsDisponibles={otsDisponibles} onGuardar={oc => { setOcs([oc, ...ocs]); setCreando(false) }} onCancelar={() => setCreando(false)} />}
+      <datalist id="prov-list-oc">
+        {provLista.map(p => <option key={p.id || p.nombre} value={p.nombre}>{p.rut || ''}</option>)}
+      </datalist>
+      {creando && <FormOC inicial={nueva()} otsDisponibles={otsDisponibles} proveedores={proveedores} onGuardar={oc => { setOcs([oc, ...ocs]); setCreando(false) }} onCancelar={() => setCreando(false)} />}
       <div style={{ fontSize: 12, color: '#8C4519', background: '#F9E9DE', padding: '8px 12px', marginBottom: 12 }}>
         <b>Órdenes de compra a proveedores</b> (emitidas por Serein). Cada OC puede asociarse a una o varias OT con reparto porcentual; su costo neto se carga a esas OT. Las OC pendientes alimentan cuentas por pagar y el flujo de caja del Consolidado.
       </div>
@@ -296,7 +309,7 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
             {['Nº OC', 'Proveedor', 'RUT', 'Categoría', 'Fecha', 'Neto', 'IVA', 'Total', 'Plazo', 'Vencimiento', 'Estado de pago', ''].map((h, hi) => <th key={hi} style={{ textAlign: ['Neto', 'IVA', 'Total'].includes(h) ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap', ...(h === '' ? { position: 'sticky', right: 0, background: '#fff', zIndex: 3 } : {}) }}>{h || 'Acciones'}</th>)}
           </tr></thead>
           <tbody>
-            {pg.items.map(o => <FilaOC key={o.id} oc={o} otsDisponibles={otsDisponibles} upd={upd} onDelete={eliminar} />)}
+            {pg.items.map(o => <FilaOC key={o.id} oc={o} otsDisponibles={otsDisponibles} upd={upd} onDelete={eliminar} proveedores={proveedores} />)}
             {mostradas.length === 0 && <tr><td colSpan={12} style={{ padding: 16, textAlign: 'center', color: '#9AA0A6' }}>Sin órdenes de compra.</td></tr>}
           </tbody>
         </table>
