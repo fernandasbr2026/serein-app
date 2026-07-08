@@ -69,26 +69,7 @@ function enPalabras(n) {
 }
 
 // ---- Generar el HTML del documento e imprimir (Guardar como PDF) ----
-function estilosDoc() {
-  return `body{font-family:Arial,Helvetica,sans-serif;color:#161616;font-size:12px;margin:24px}
-  .head{display:flex;justify-content:space-between;border-bottom:2px solid #161616;padding-bottom:8px}
-  .emp b{font-size:13px}.emp div{color:#333;line-height:1.4}
-  .doc{text-align:right}.doc .t{font-size:20px;font-weight:bold;color:#A8501F}.doc .f{font-size:14px;font-weight:bold}
-  table{width:100%;border-collapse:collapse;margin-top:10px}
-  .cli td{padding:3px 6px;font-size:11px;vertical-align:top}
-  .cli .lbl{color:#7A8288;text-transform:uppercase;font-size:9px}
-  .items th{background:#161616;color:#fff;padding:6px;font-size:10px;text-align:left}
-  .items td{border-bottom:1px solid #ddd;padding:6px;font-size:11px;vertical-align:top}
-  .items .r{text-align:right}
-  .tot{width:auto;margin-left:auto;margin-top:10px}
-  .tot td{padding:4px 10px;font-size:12px}.tot .lbl{color:#7A8288;text-align:right}.tot .big{font-weight:bold;font-size:14px}
-  .words{margin-top:6px;font-size:10px;color:#555}
-  .badge{display:inline-block;border:1px solid #A8501F;color:#A8501F;padding:2px 8px;font-size:10px;margin-top:6px}
-  .pb{page-break-before:always;padding-top:10px}
-  .cond h2{font-size:15px;border-bottom:2px solid #161616;padding-bottom:6px;margin:0 0 10px}
-  .cond ol{padding-left:18px;font-size:11px;line-height:1.5}.cond li{margin-bottom:6px}.cond li b{color:#161616}
-  .cond .datos{margin-top:14px;border:1px solid #ddd;padding:10px;font-size:11px;line-height:1.6}`
-}
+function estilosDoc() { return '@page{size:A4;margin:18mm 14mm 14mm}body{font-family:Inter,Arial,Helvetica,sans-serif;color:#101828;font-size:12px;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.head{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #061A40;padding-bottom:10px}.emp b{color:#061A40;font-size:15px}.emp div{color:#5a6b85;line-height:1.45;font-size:10.5px}.doc{text-align:right}.doc .t{font-size:20px;font-weight:800;color:#061A40}.doc .f{font-size:13px;font-weight:700;color:#FF6B00}table{width:100%;border-collapse:collapse;margin-top:10px}.cli td{padding:4px 8px;font-size:11px;vertical-align:top}.cli .lbl{color:#5a6b85;text-transform:uppercase;font-size:9px}.items th{background:#061A40;color:#fff;padding:6px 8px;font-size:10px;text-align:left}.items td{border:1px solid #D8DCE5;padding:6px 8px;font-size:11px;vertical-align:top}.items .r{text-align:right}.tot{width:auto;margin-left:auto;margin-top:10px}.tot td{padding:4px 12px;font-size:12px}.tot .lbl{color:#5a6b85;text-align:right}.tot .big{font-weight:800;font-size:14px;color:#061A40}.words{margin-top:8px;font-size:11px;color:#344054}.badge{display:inline-block;border:1px solid #D8DCE5;background:#F5F7FA;color:#5a6b85;padding:2px 8px;font-size:10px;margin-top:6px;border-radius:4px}.pb{page-break-before:always;padding-top:6px}.cond{font-size:11px;border-bottom:1px solid #D8DCE5;padding-bottom:8px;margin:8px 0}.cond ol{padding-left:18px;font-size:11px;line-height:1.5}.cond li{margin-bottom:5px;color:#101828}.cond .datos{margin-top:10px;border:1px solid #D8DCE5;padding:10px;font-size:11px;line-height:1.5;background:#F5F7FA}' }
 
 // Condiciones comerciales y operativas (se adjuntan a la cotización)
 function htmlCondiciones() {
