@@ -40,6 +40,7 @@ export const FIN_SEED = {
 
 // ================= EDITOR DE DISTRIBUCIÓN (reutilizable) =================
 function EditorDistribucion({ dist, setDist, plantillas, areas }) {
+  const repartir = arr => { const n = arr.length; if (!n) return arr; const base = Math.floor(10000 / n) / 100; return arr.map((x, i) => ({ ...x, pct: i === n - 1 ? Math.round((100 - base * (n - 1)) * 100) / 100 : base })) }
   const suma = dist.reduce((a, d) => a + (parseFloat(d.pct) || 0), 0)
   const ok = Math.abs(suma - 100) < 0.01
   return (
@@ -58,11 +59,11 @@ function EditorDistribucion({ dist, setDist, plantillas, areas }) {
           </select>
           <input type="number" value={d.pct} onChange={e => setDist(dist.map((x, j) => j === i ? { ...x, pct: e.target.value } : x))} style={{ ...inp, width: 70, textAlign: 'right' }} />
           <span style={{ fontSize: 13, color: C.gris }}>%</span>
-          {dist.length > 1 && <button onClick={() => setDist(dist.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><X size={15} /></button>}
+          {dist.length > 1 && <button onClick={() => setDist(repartir(dist.filter((_, j) => j !== i)))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><X size={15} /></button>}
         </div>
       ))}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <button onClick={() => setDist([...dist, { area: areas[0], pct: 0 }])} style={{ background: 'none', border: '1px dashed #CBD2D6', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Agregar área</button>
+        <button onClick={() => setDist(repartir([...dist, { area: areas[0], pct: 0 }]))} style={{ background: 'none', border: '1px dashed #CBD2D6', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Agregar área</button>
         <span style={{ fontSize: 13, fontWeight: 700, color: ok ? C.verde : C.rojo }}>Suma: {suma}% {ok ? '✓' : '— debe ser 100%'}</span>
       </div>
     </div>
@@ -97,7 +98,7 @@ function FormGasto({ tipo, fin, setFin, otsDisponibles, onCerrar }) {
         <input style={inp} placeholder="Nº documento (factura/boleta)" value={f.documento} onChange={e => setF({ ...f, documento: e.target.value })} />
         <input style={inp} placeholder={f.esUF ? "Monto en UF *" : "Monto neto CLP *"} value={f.esUF ? f.uf : f.neto} onChange={e => setF({ ...f, [f.esUF ? 'uf' : 'neto']: e.target.value })} />
         <label style={{ ...inp, display: 'flex', alignItems: 'center', gap: 6, border: 'none' }}><input type="checkbox" checked={f.esUF} onChange={e => setF({ ...f, esUF: e.target.checked })} /> Monto en UF</label>
-        {f.esUF ? <input style={inp} placeholder="Valor UF hoy (CLP)" value={fin.ufValor || ''} onChange={e => setFin({ ...fin, ufValor: num(e.target.value) })} /> : null}
+        {f.esUF ? <div style={{ ...inp, display: 'flex', alignItems: 'center', color: C.gris, fontSize: 12 }}>UF hoy: {clp(fin.ufValor || 0)} · edítala en Parámetros</div> : null}
         {f.esUF && num(f.uf) > 0 ? <div style={{ fontSize: 12, color: C.gris, alignSelf: 'center' }}>= {clp(Math.round(num(f.uf) * (fin.ufValor || 0)))} (UF {f.uf} × {clp(fin.ufValor || 0)})</div> : null}
         <label style={{ ...inp, display: 'flex', alignItems: 'center', gap: 6, border: 'none' }}>
           <input type="checkbox" checked={f.conIva} onChange={e => setF({ ...f, conIva: e.target.checked })} /> Aplica IVA 19%

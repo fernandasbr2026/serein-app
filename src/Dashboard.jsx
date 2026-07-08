@@ -212,6 +212,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const [fin, setFin] = useState(() => { const _f = LS('fin', FIN_SEED); if (_f && _f.credVer !== FIN_SEED.credVer) { _f.obligaciones = FIN_SEED.obligaciones; _f.credVer = FIN_SEED.credVer } return _f })
   const [pp, setPp] = useState(() => { const s = LS('pp', null); if (!s) return PP_SEED; return (s.ocsVer === PP_SEED.ocsVer) ? s : { ...s, ocs: PP_SEED.ocs, ocsVer: PP_SEED.ocsVer } })
   const [params, setParams] = useState(() => LS('params', PARAMS_SEED))
+  useEffect(() => { const uv = (params.uf && params.uf.valor) || 0; if ((fin.ufValor || 0) !== uv) setFin(f => ({ ...f, ufValor: uv })) }, [params.uf && params.uf.valor])
   const [clientes, setClientes] = useState(() => LS('clientes', CLIENTES_SEED))
   const [contactos, setContactos] = useState(() => { const s = LS('contactos', null); return (s && s.ver === CONTACTOS_SEED.ver) ? s : CONTACTOS_SEED })
   const [facturas, setFacturas] = useState(() => LS('facturas', FACTURAS_SEED))
