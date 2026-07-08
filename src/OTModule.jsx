@@ -471,7 +471,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
               <div><div style={{ fontSize: 11, color: '#7A8288', marginBottom: 2 }}>NV (Nota de Venta)</div><input style={{ padding: '6px 8px', border: '1px solid #CBD2D6', fontSize: 12.5, width: '100%', boxSizing: 'border-box' }} value={ot.nv || ''} onChange={e => onUpdate(ot.id, { nv: e.target.value })} /></div>
             </div>
           </div>
-          <ProtocoloPIG ot={ot} onUpdate={onUpdate} otsAll={otsAll} />
+          <ProtocolosOT ot={ot} onUpdate={onUpdate} otsAll={otsAll} />
           <FotosOT ot={ot} onUpdate={onUpdate} />
 
           <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
@@ -533,128 +533,87 @@ function FormOT({ area, siguienteNumero, onAdd, onCancel }) {
 }
 
 // ---------- Módulo principal ----------
-// ================= PROTOCOLO INICIO DE GRANALLA (PIG) =================
-const PIG_BASE = 144
-const nextCorrelativoProt = otsAll => { const nums = (otsAll || []).map(o => (o.protocoloPIG && o.protocoloPIG.correlativo) || 0); return Math.max(PIG_BASE, ...nums) + 1 }
-const promedioPerfil = med => { const v = (med || []).map(x => parseFloat(String(x).replace(',', '.'))).filter(x => !isNaN(x)); return v.length ? (v.reduce((a, b) => a + b, 0) / v.length) : 0 }
-function nuevoPIG(ot, correlativo) {
-  const cod = correlativo + '-' + new Date().getFullYear()
-  const h = new Date().toISOString().slice(0, 10)
-  return {
-    correlativo, codigo: 'PIG ' + cod, pgpCodigo: 'PGP ' + cod, docNro: 'RC-GP-1',
-    ot: ot.numero || '', nv: ot.nv || '', cliente: ot.cliente || '', proyecto: '',
-    preparadoPor: 'Boris Gomez', revisadoPor: 'Luis Soto', aprobadoPor: 'Luis Soto',
-    fecha: h, descripcion: 'Proceso de inicio de granallado para pintura exterior/interior.',
-    checks: [
-      { nombre: 'Control aire presurizado norma ASTM D4285', cumple: 'SI', obs: '' },
-      { nombre: 'Verificacion limpieza de granalla ASTM D7393', cumple: 'SI', obs: '' },
-      { nombre: 'Inspeccion visual pieza granallada', cumple: 'SI', obs: '' },
-      { nombre: 'Medicion de perfil de rugosidad', cumple: 'SI', obs: '' } ],
-    limpiezaSSPC: 'SP10', perfilSolicitado: '1 a 3 mils', medidas: ['', '', ''],
-    perfilObtenido: '', perfilCumple: 'SI',
-    amb: { fecha: h, humedad: '', tAmbiente: '', tPieza: '', ptoRocio: '', horaInicio: '' },
-    firmas: [ { rol: 'Aprobado', quien: 'Tecnico Pintura - Luis Soto', fecha: '' }, { rol: 'Recepcionado', quien: 'Cliente', fecha: '' }, { rol: 'Aprobado', quien: 'Inspector Cliente', fecha: '' } ] }
+// ================= PROTOCOLOS DE CALIDAD (PIG / PGP) =================
+const PROT_BASE = 144
+const nextCorrelativoProt = otsAll => { let mx = PROT_BASE; (otsAll || []).forEach(o => (o.protocolos || []).forEach(p => { if (p.correlativo > mx) mx = p.correlativo })); return mx + 1 }
+const parseRango = s => { const m = (String(s || '').replace(',', '.').match(/\d+(\.\d+)?/g) || []).map(Number); if (m.length >= 2) return [Math.min(m[0], m[1]), Math.max(m[0], m[1])]; if (m.length === 1) return [m[0], m[0]]; return [2, 2.5] }
+const promArr = arr => { const v = (arr || []).map(x => parseFloat(String(x).replace(',', '.'))).filter(x => !isNaN(x)); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0 }
+const autoFila = (vals, lo, hi) => { const n = vals.length; const idxE = []; const entered = []; vals.forEach((v, i) => { if (v === '' || v == null) idxE.push(i); else { const nn = parseFloat(String(v).replace(',', '.')); if (!isNaN(nn)) entered.push(nn) } }); if (idxE.length === 0) return vals.slice(); const desired = lo + Math.random() * ((hi - lo) + 0.6); const sumE = entered.reduce((a, b) => a + b, 0); const meanEmpty = (desired * n - sumE) / idxE.length; const res = vals.slice(); idxE.forEach(i => { let val = meanEmpty + (Math.random() * 1.6 - 0.7); val = Math.max(lo - 1, Math.min(hi + 1.8, val)); res[i] = (Math.round(val * 100) / 100).toFixed(2) }); return res }
+const imgToData = (file, cb) => { const r = new FileReader(); r.onload = e => { const img = new Image(); img.onload = () => { const max = 900; let w = img.width, h = img.height; if (w > h && w > max) { h = Math.round(h * max / w); w = max } else if (h > max) { w = Math.round(w * max / h); h = max } const cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.getContext('2d').drawImage(img, 0, 0, w, h); cb(cv.toDataURL('image/jpeg', 0.7)) }; img.src = e.target.result }; r.readAsDataURL(file) }
+function nuevoProtocolo(tipo, ot, correlativo) {
+  const cod = correlativo + '-' + new Date().getFullYear(); const h = new Date().toISOString().slice(0, 10)
+  const base = { id: 'pr' + Date.now() + Math.floor(Math.random() * 999), tipo, correlativo, codigo: tipo + ' ' + cod, pgpCodigo: 'PGP ' + cod, docNro: tipo === 'PIG' ? 'RC-GP-1' : 'RC-PG-6', ot: ot.numero || '', oc: ot.oc || '', nv: ot.nv || '', cliente: ot.cliente || '', proyecto: '', preparadoPor: 'Boris Gomez', revisadoPor: 'Luis Soto', aprobadoPor: 'Luis Soto', fecha: h, firmas: [{ rol: 'Aprobado', quien: 'Tecnico Pintura', fecha: '' }, { rol: 'Recepcionado', quien: 'Cliente', fecha: '' }, { rol: 'Aprobado', quien: 'Inspector Cliente', fecha: '' }] }
+  if (tipo === 'PIG') { return Object.assign(base, { descripcion: 'Proceso de inicio de granallado para pintura.', checks: [{ nombre: 'Control aire presurizado norma ASTM D4285', cumple: 'SI', obs: '' }, { nombre: 'Verificacion limpieza de granalla ASTM D7393', cumple: 'SI', obs: '' }, { nombre: 'Inspeccion visual pieza granallada', cumple: 'SI', obs: '' }, { nombre: 'Medicion de perfil de rugosidad', cumple: 'SI', obs: '' }], limpiezaSSPC: 'SP10', perfilSolicitado: '1 a 3 mils', medidas: ['', '', ''], perfilObtenido: '', perfilCumple: 'SI', amb: { fecha: h, humedad: '', tAmbiente: '', tPieza: '', ptoRocio: '', horaInicio: '' }, fotosGranalla: [] }) }
+  return Object.assign(base, { instr: { espMarca: 'ELCOMETER', espSerie: '', rugMarca: 'ELCOMETER', rugSerie: '', termoMarca: 'ELCOMETER', termoSerie: '' }, amb: { fecha: h, humedad: '', tAmbiente: '', tPieza: '', ptoRocio: '', horaInicio: '' }, limpiezaSSPC: 'sspc-sP 10', perfilSolicitado: '2 a 2,5 Mils', perfilFilas: [['', '', '', '', ''], ['', '', '', '', ''], ['', '', '', '', ''], ['', '', '', '', '']], esqProducto: 'REZINC', esqSolicitado: '2 a 3 Mils', esqFilas: [['', '', '', '', '', '', ''], ['', '', '', '', '', '', ''], ['', '', '', '', '', '', ''], ['', '', '', '', '', '', ''], ['', '', '', '', '', '', '']], capas: '2 - 3 Mils', fotosGranalla: [], fotosPrimeraCapa: [] })
 }
+function fotosHTML(fotos) { var s = ''; (fotos || []).forEach(function (d) { s += '<img src="' + d + '" style="width:31%;margin:1%;border:1px solid #999" />' }); return s }
 function htmlPIG(p) {
-  var prom = promedioPerfil(p.medidas); var promTxt = prom ? prom.toFixed(2) : '';
-  var chk = ''; for (var i = 0; i < p.checks.length; i++) { var c = p.checks[i]; chk += '<tr><td class="c">' + (i + 1) + '</td><td>' + (c.nombre || '') + '</td><td class="c">' + (c.cumple === 'SI' ? 'SI' : (c.cumple === 'NO' ? 'NO' : '')) + '</td><td>' + (c.obs || '') + '</td></tr>'; }
-  var fr = ''; for (var j = 0; j < p.firmas.length; j++) { var f = p.firmas[j]; fr += '<tr><td>' + (f.rol || '') + '</td><td>' + (f.quien || '') + '</td><td>____________</td><td>' + (f.fecha || '') + '</td></tr>'; }
-  var med = (p.medidas || []).filter(function (x) { return x !== '' && x != null; }).join(' - ');
-  var s = '<!doctype html><html><head><meta charset="utf-8"><title>' + (p.codigo || 'PIG') + '</title><style>';
-  s += 'body{font-family:Arial,Helvetica,sans-serif;color:#161616;font-size:12px;margin:22px}';
-  s += '.hd{display:flex;justify-content:space-between;border:2px solid #161616;padding:6px 10px;align-items:center}.hd .t{font-weight:bold;font-size:15px;color:#A8501F}';
-  s += 'table.meta{width:100%;border-collapse:collapse;margin-top:6px}table.meta td{border:1px solid #999;padding:3px 6px;font-size:11px}table.meta .k{background:#f0ede7;font-weight:bold;width:135px}';
-  s += 'h2{font-size:12px;text-transform:uppercase;background:#161616;color:#fff;padding:4px 8px;margin:14px 0 4px}';
-  s += 'table.d{width:100%;border-collapse:collapse}table.d th{background:#161616;color:#fff;padding:4px 6px;font-size:10px;text-align:left}table.d td{border:1px solid #ccc;padding:4px 6px;font-size:11px}table.d td.c{text-align:center}';
-  s += '</style></head><body>';
-  s += '<div class="hd"><div class="t">PROTOCOLO INICIO DE GRANALLA - SEREIN GROUP</div><div style="text-align:right"><div><b>' + (p.codigo || '') + '</b></div><div>Documento N: ' + (p.docNro || '') + '</div></div></div>';
-  s += '<table class="meta"><tbody>';
-  s += '<tr><td class="k">Orden de Trabajo</td><td>' + (p.ot || '') + '</td><td class="k">NV</td><td>' + (p.nv || '') + '</td></tr>';
-  s += '<tr><td class="k">Cliente</td><td>' + (p.cliente || '') + '</td><td class="k">Proyecto</td><td>' + (p.proyecto || '') + '</td></tr>';
-  s += '<tr><td class="k">Protoc. Granallado</td><td>' + (p.pgpCodigo || '') + '</td><td class="k">Protoc. Pintura</td><td>' + (p.pgpCodigo || '') + '</td></tr>';
-  s += '<tr><td class="k">Preparado por</td><td>' + (p.preparadoPor || '') + '</td><td class="k">Fecha</td><td>' + (p.fecha || '') + '</td></tr>';
-  s += '<tr><td class="k">Revisado por</td><td>' + (p.revisadoPor || '') + '</td><td class="k">Aprobado por</td><td>' + (p.aprobadoPor || '') + '</td></tr>';
-  s += '</tbody></table>';
-  s += '<div style="margin-top:6px;font-style:italic">' + (p.descripcion || '') + '</div>';
-  s += '<h2>Analisis proceso de granallado</h2><table class="d"><thead><tr><th>N</th><th>Control</th><th>Cumple</th><th>Observacion</th></tr></thead><tbody>' + chk + '</tbody></table>';
-  s += '<h2>Inspeccion de perfil</h2><table class="d"><tbody>';
-  s += '<tr><td>Limpieza superficial SSPC-SP</td><td>' + (p.limpiezaSSPC || '') + '</td><td>Perfil solicitado</td><td>' + (p.perfilSolicitado || '') + '</td></tr>';
-  s += '<tr><td>Medidas rugosidad</td><td>' + med + '</td><td>Promedio</td><td>' + promTxt + '</td></tr>';
-  s += '<tr><td>Perfil obtenido</td><td>' + (p.perfilObtenido || promTxt) + '</td><td>Cumple</td><td>' + (p.perfilCumple || '') + '</td></tr>';
-  s += '</tbody></table>';
-  s += '<h2>Condiciones ambientales</h2><table class="d"><tbody>';
-  s += '<tr><td>Fecha</td><td>' + (p.amb.fecha || '') + '</td><td>% Humedad</td><td>' + (p.amb.humedad || '') + '</td></tr>';
-  s += '<tr><td>T. Ambiente C</td><td>' + (p.amb.tAmbiente || '') + '</td><td>C Pieza</td><td>' + (p.amb.tPieza || '') + '</td></tr>';
-  s += '<tr><td>Pto. Rocio</td><td>' + (p.amb.ptoRocio || '') + '</td><td>Hora inicio</td><td>' + (p.amb.horaInicio || '') + '</td></tr>';
-  s += '</tbody></table>';
-  s += '<h2>Firmas</h2><table class="d"><thead><tr><th>Rol</th><th>Nombre</th><th>Firma</th><th>Fecha</th></tr></thead><tbody>' + fr + '</tbody></table>';
-  s += '</body></html>'; return s;
+  var prom = promArr(p.medidas); var promTxt = prom ? prom.toFixed(2) : ''
+  var chk = ''; for (var i = 0; i < p.checks.length; i++) { var c = p.checks[i]; chk += '<tr><td class="c">' + (i + 1) + '</td><td>' + (c.nombre || '') + '</td><td class="c">' + (c.cumple || '') + '</td><td>' + (c.obs || '') + '</td></tr>' }
+  var fr = ''; for (var j = 0; j < p.firmas.length; j++) { var f = p.firmas[j]; fr += '<tr><td>' + (f.rol || '') + '</td><td>' + (f.quien || '') + '</td><td>__________</td><td>' + (f.fecha || '') + '</td></tr>' }
+  var s = '<!doctype html><html><head><meta charset="utf-8"><title>' + (p.codigo || 'PIG') + '</title><style>' + PROTO_CSS + '</style></head><body>'
+  s += '<div class="hd"><div class="t">PROTOCOLO INICIO DE GRANALLA - SEREIN GROUP</div><div style="text-align:right"><b>' + (p.codigo || '') + '</b><br>Documento N: ' + (p.docNro || '') + '</div></div>'
+  s += '<table class="meta"><tbody><tr><td class="k">Orden de Trabajo</td><td>' + (p.ot || '') + '</td><td class="k">NV</td><td>' + (p.nv || '') + '</td></tr><tr><td class="k">Cliente</td><td>' + (p.cliente || '') + '</td><td class="k">Proyecto</td><td>' + (p.proyecto || '') + '</td></tr><tr><td class="k">Protoc. Granallado</td><td>' + (p.pgpCodigo || '') + '</td><td class="k">Protoc. Pintura</td><td>' + (p.pgpCodigo || '') + '</td></tr><tr><td class="k">Preparado por</td><td>' + (p.preparadoPor || '') + '</td><td class="k">Fecha</td><td>' + (p.fecha || '') + '</td></tr></tbody></table>'
+  s += '<h2>Analisis proceso de granallado</h2><table class="d"><thead><tr><th>N</th><th>Control</th><th>Cumple</th><th>Obs.</th></tr></thead><tbody>' + chk + '</tbody></table>'
+  s += '<h2>Perfil / Condiciones</h2><table class="d"><tbody><tr><td>Limpieza SSPC-SP</td><td>' + (p.limpiezaSSPC || '') + '</td><td>Perfil solicitado</td><td>' + (p.perfilSolicitado || '') + '</td></tr><tr><td>Medidas</td><td>' + (p.medidas || []).join(' - ') + '</td><td>Perfil obtenido</td><td>' + (p.perfilObtenido || promTxt) + '</td></tr><tr><td>Humedad</td><td>' + (p.amb.humedad || '') + '</td><td>T. Ambiente</td><td>' + (p.amb.tAmbiente || '') + '</td></tr></tbody></table>'
+  if ((p.fotosGranalla || []).length) s += '<h2>Anexo imagenes granallado</h2><div>' + fotosHTML(p.fotosGranalla) + '</div>'
+  s += '<h2>Firmas</h2><table class="d"><thead><tr><th>Rol</th><th>Nombre</th><th>Firma</th><th>Fecha</th></tr></thead><tbody>' + fr + '</tbody></table>'
+  return s + '</body></html>'
 }
-function descargarPIG(p) { const w = window.open('', '_blank'); if (!w) { window.alert('Habilita las ventanas emergentes para descargar el PIG.'); return } w.document.write(htmlPIG(p)); w.document.close(); setTimeout(function () { w.focus(); w.print() }, 400) }
-function PIGField({ label, children }) { return (<div><div style={{ fontSize: 11, color: '#7A8288', marginBottom: 2, marginTop: 4 }}>{label}</div>{children}</div>) }
-function ProtocoloPIG({ ot, onUpdate, otsAll = [] }) {
-  const p = ot.protocoloPIG
-  const NAR = '#D2642F', GRIS = '#7A8288'
+function filasHTML(filas) { var s = ''; for (var i = 0; i < filas.length; i++) { var pr = promArr(filas[i]); s += '<tr><td class="c">' + (i + 1) + '</td>'; for (var j = 0; j < filas[i].length; j++) s += '<td class="c">' + (filas[i][j] || '') + '</td>'; s += '<td class="c"><b>' + (pr ? pr.toFixed(2) : '') + '</b></td></tr>' } return s }
+function htmlPGP(p) {
+  var pp = (p.perfilFilas || []).map(function (f) { return promArr(f) }); var perfObt = pp.length ? (pp.reduce(function (a, b) { return a + b }, 0) / pp.length) : 0
+  var ep = (p.esqFilas || []).map(function (f) { return promArr(f) }); var esqProm = ep.length ? (ep.reduce(function (a, b) { return a + b }, 0) / ep.length) : 0
+  var fr = ''; for (var j = 0; j < p.firmas.length; j++) { var f = p.firmas[j]; fr += '<tr><td>' + (f.rol || '') + '</td><td>' + (f.quien || '') + '</td><td>__________</td><td>' + (f.fecha || '') + '</td></tr>' }
+  var ncP = 5, ncE = 7
+  var thP = '<th>Item</th>'; for (var a = 1; a <= ncP; a++) thP += '<th>' + a + '</th>'; thP += '<th>Prom.</th>'
+  var thE = '<th>Item</th>'; for (var b = 1; b <= ncE; b++) thE += '<th>' + b + '</th>'; thE += '<th>Prom.</th>'
+  var s = '<!doctype html><html><head><meta charset="utf-8"><title>' + (p.codigo || 'PGP') + '</title><style>' + PROTO_CSS + '</style></head><body>'
+  s += '<div class="hd"><div class="t">PROTOCOLO GRANALLADO Y PINTURA - SEREIN GROUP</div><div style="text-align:right"><b>' + (p.codigo || '') + '</b><br>Documento N: ' + (p.docNro || '') + '</div></div>'
+  s += '<table class="meta"><tbody><tr><td class="k">Orden de Trabajo</td><td>' + (p.ot || '') + '</td><td class="k">NV</td><td>' + (p.nv || '') + '</td></tr><tr><td class="k">Cliente</td><td>' + (p.cliente || '') + '</td><td class="k">Proyecto</td><td>' + (p.proyecto || '') + '</td></tr><tr><td class="k">Prot. Granallado</td><td>' + (p.pgpCodigo || '') + '</td><td class="k">Protoc. Pintura</td><td>' + (p.pgpCodigo || '') + '</td></tr><tr><td class="k">Preparado por</td><td>' + (p.preparadoPor || '') + '</td><td class="k">Fecha</td><td>' + (p.fecha || '') + '</td></tr></tbody></table>'
+  s += '<h2>Instrumentos utilizados</h2><table class="d"><tbody><tr><td>Medidor espesor</td><td>' + (p.instr.espMarca || '') + ' / ' + (p.instr.espSerie || '') + '</td><td>Rugosimetro</td><td>' + (p.instr.rugMarca || '') + ' / ' + (p.instr.rugSerie || '') + '</td><td>Termohigrometro</td><td>' + (p.instr.termoMarca || '') + ' / ' + (p.instr.termoSerie || '') + '</td></tr></tbody></table>'
+  s += '<h2>Condiciones ambientales</h2><table class="d"><tbody><tr><td>Fecha</td><td>' + (p.amb.fecha || '') + '</td><td>% Humedad</td><td>' + (p.amb.humedad || '') + '</td><td>T. Ambiente</td><td>' + (p.amb.tAmbiente || '') + '</td></tr><tr><td>C Pieza</td><td>' + (p.amb.tPieza || '') + '</td><td>Pto. Rocio</td><td>' + (p.amb.ptoRocio || '') + '</td><td>Hora inicio</td><td>' + (p.amb.horaInicio || '') + '</td></tr></tbody></table>'
+  s += '<h2>Perfil de rugosidad (Limpieza ' + (p.limpiezaSSPC || '') + ' / Solicitado ' + (p.perfilSolicitado || '') + ' / Obtenido ' + (perfObt ? perfObt.toFixed(2) : '') + ')</h2>'
+  s += '<table class="d"><thead><tr>' + thP + '</tr></thead><tbody>' + filasHTML(p.perfilFilas) + '</tbody></table>'
+  s += '<h2>Esquema pintura primera capa (' + (p.esqProducto || '') + ' / Solicitado ' + (p.esqSolicitado || '') + ' / Promedio ' + (esqProm ? esqProm.toFixed(2) : '') + ')</h2>'
+  s += '<table class="d"><thead><tr>' + thE + '</tr></thead><tbody>' + filasHTML(p.esqFilas) + '</tbody></table>'
+  if ((p.fotosGranalla || []).length) s += '<h2>Anexo imagenes evidencia granallado</h2><div>' + fotosHTML(p.fotosGranalla) + '</div>'
+  if ((p.fotosPrimeraCapa || []).length) s += '<h2>Anexo imagenes evidencia primera capa</h2><div>' + fotosHTML(p.fotosPrimeraCapa) + '</div>'
+  s += '<h2>Firmas</h2><table class="d"><thead><tr><th>Rol</th><th>Nombre</th><th>Firma</th><th>Fecha</th></tr></thead><tbody>' + fr + '</tbody></table>'
+  return s + '</body></html>'
+}
+var PROTO_CSS = 'body{font-family:Arial,Helvetica,sans-serif;color:#161616;font-size:12px;margin:20px}.hd{display:flex;justify-content:space-between;border:2px solid #161616;padding:6px 10px;align-items:center}.hd .t{font-weight:bold;font-size:15px;color:#A8501F}table.meta{width:100%;border-collapse:collapse;margin-top:6px}table.meta td{border:1px solid #999;padding:3px 6px;font-size:11px}table.meta .k{background:#f0ede7;font-weight:bold;width:130px}h2{font-size:12px;text-transform:uppercase;background:#161616;color:#fff;padding:4px 8px;margin:12px 0 4px}table.d{width:100%;border-collapse:collapse}table.d th{background:#161616;color:#fff;padding:4px 6px;font-size:10px}table.d td{border:1px solid #ccc;padding:4px 6px;font-size:11px}table.d td.c{text-align:center}'
+function descargarProto(p) { const w = window.open('', '_blank'); if (!w) { window.alert('Habilita las ventanas emergentes.'); return } w.document.write(p.tipo === 'PIG' ? htmlPIG(p) : htmlPGP(p)); w.document.close(); setTimeout(function () { w.focus(); w.print() }, 400) }
+function PF({ label, children }) { return (<div><div style={{ fontSize: 11, color: '#7A8288', marginBottom: 2, marginTop: 4 }}>{label}</div>{children}</div>) }
+function FotoSlots({ label, fotos, max, onChange }) {
+  const add = e => { const files = [...(e.target.files || [])].slice(0, max - fotos.length); let pend = files.length; if (!pend) return; const acc = []; files.forEach(f => imgToData(f, d => { acc.push(d); pend--; if (pend === 0) onChange([...fotos, ...acc]) })); e.target.value = '' }
+  return (<div style={{ marginTop: 8 }}><div style={{ fontSize: 11.5, fontWeight: 600, color: '#7A8288', marginBottom: 4 }}>{label} ({fotos.length}/{max})</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{fotos.map((d, i) => (<div key={i} style={{ position: 'relative' }}><img src={d} style={{ width: 78, height: 78, objectFit: 'cover', border: '1px solid #CBD2D6' }} /><button onClick={() => onChange(fotos.filter((_, j) => j !== i))} style={{ position: 'absolute', top: -6, right: -6, background: '#B5432E', color: '#fff', border: 'none', borderRadius: '50%', width: 18, height: 18, cursor: 'pointer', fontSize: 11 }}>x</button></div>))}{fotos.length < max && (<label style={{ width: 78, height: 78, border: '1px dashed #CBD2D6', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#7A8288', fontSize: 22 }}>+<input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={add} /></label>)}</div></div>) }
+function TablaMedidas({ titulo, filas, ncols, solicitado, onSetCell, onAuto, resumen }) {
+  const ip = { padding: '4px 5px', border: '1px solid #CBD2D6', fontSize: 12, width: 50, textAlign: 'center', boxSizing: 'border-box' }
+  const proms = filas.map(f => promArr(f)); const global = proms.length ? (proms.reduce((a, b) => a + b, 0) / proms.length) : 0
+  return (<div style={{ marginTop: 8 }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}><span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase' }}>{titulo}</span><button onClick={onAuto} title="Completa las celdas vacias con valores aceptables" style={{ background: '#3D7A4E', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 12 }}>Autocompletar</button></div><div style={{ overflowX: 'auto' }}><table style={{ borderCollapse: 'collapse', fontSize: 12, marginTop: 4 }}><thead><tr><th style={{ padding: 3, fontSize: 10, color: '#7A8288' }}>Item</th>{Array.from({ length: ncols }).map((_, c) => <th key={c} style={{ padding: 3, fontSize: 10, color: '#7A8288' }}>{c + 1}</th>)}<th style={{ padding: 3, fontSize: 10, color: '#7A8288' }}>Prom.</th></tr></thead><tbody>{filas.map((f, ri) => (<tr key={ri}><td style={{ padding: 2, textAlign: 'center', fontWeight: 600 }}>{ri + 1}</td>{f.map((v, ci) => <td key={ci} style={{ padding: 2 }}><input style={ip} value={v} onChange={e => onSetCell(ri, ci, e.target.value)} /></td>)}<td style={{ padding: 2, textAlign: 'center', fontWeight: 700, color: '#D2642F' }}>{proms[ri] ? proms[ri].toFixed(2) : ''}</td></tr>))}</tbody></table></div><div style={{ fontSize: 12, marginTop: 4 }}>{resumen}: <b>{global ? global.toFixed(2) : ''}</b></div></div>) }
+function ProtoHead({ p, upd, onDel, titulo }) {
   const ip = { padding: '6px 8px', border: '1px solid #CBD2D6', fontSize: 12.5, boxSizing: 'border-box', width: '100%' }
-  const set = (k, v) => onUpdate(ot.id, { protocoloPIG: { ...p, [k]: v } })
-  const setAmb = (k, v) => onUpdate(ot.id, { protocoloPIG: { ...p, amb: { ...p.amb, [k]: v } } })
-  const setChk = (i, k, v) => onUpdate(ot.id, { protocoloPIG: { ...p, checks: p.checks.map((c, j) => j === i ? { ...c, [k]: v } : c) } })
-  const setMed = (i, v) => onUpdate(ot.id, { protocoloPIG: { ...p, medidas: p.medidas.map((m, j) => j === i ? v : m) } })
-  const setFir = (i, k, v) => onUpdate(ot.id, { protocoloPIG: { ...p, firmas: p.firmas.map((fx, j) => j === i ? { ...fx, [k]: v } : fx) } })
-  if (!p) { return (<div style={{ marginTop: 14, borderTop: '1px dashed #CBD2D6', paddingTop: 12 }}><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 13, textTransform: 'uppercase', marginBottom: 8 }}>Protocolos de calidad</div><button onClick={() => onUpdate(ot.id, { protocoloPIG: nuevoPIG(ot, nextCorrelativoProt(otsAll)) })} style={{ background: NAR, color: '#fff', border: 'none', padding: '8px 14px', cursor: 'pointer', fontSize: 13 }}>+ Generar PIG (Protocolo Inicio de Granalla)</button></div>) }
-  const prom = promedioPerfil(p.medidas)
-  return (
-    <div style={{ marginTop: 14, border: '1px solid #E2DED4', borderTop: '3px solid ' + NAR, padding: 14 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-        <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 700, fontSize: 14, textTransform: 'uppercase' }}>{p.codigo} - Protocolo Inicio de Granalla</span>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => descargarPIG(p)} style={{ background: '#161616', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>Descargar PIG (PDF)</button>
-          <button onClick={() => window.confirm('Eliminar este protocolo PIG?') && onUpdate(ot.id, { protocoloPIG: null })} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 10px', cursor: 'pointer', fontSize: 12.5, color: GRIS }}>Eliminar</button>
-        </div>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8 }}>
-        <PIGField label="Codigo PIG"><input style={ip} value={p.codigo} onChange={e => set('codigo', e.target.value)} /></PIGField>
-        <PIGField label="Documento N"><input style={ip} value={p.docNro} onChange={e => set('docNro', e.target.value)} /></PIGField>
-        <PIGField label="Orden de Trabajo"><input style={ip} value={p.ot} onChange={e => set('ot', e.target.value)} /></PIGField>
-        <PIGField label="NV"><input style={ip} value={p.nv} onChange={e => set('nv', e.target.value)} /></PIGField>
-        <PIGField label="Protoc. Granallado (PGP)"><input style={ip} value={p.pgpCodigo} onChange={e => set('pgpCodigo', e.target.value)} /></PIGField>
-        <PIGField label="Protoc. Pintura (PGP)"><input style={ip} value={p.pgpCodigo} onChange={e => set('pgpCodigo', e.target.value)} /></PIGField>
-        <PIGField label="Cliente"><input style={ip} value={p.cliente} onChange={e => set('cliente', e.target.value)} /></PIGField>
-        <PIGField label="Proyecto"><input style={ip} value={p.proyecto} onChange={e => set('proyecto', e.target.value)} /></PIGField>
-        <PIGField label="Fecha"><input type="date" style={ip} value={p.fecha} onChange={e => set('fecha', e.target.value)} /></PIGField>
-        <PIGField label="Preparado por"><input style={ip} value={p.preparadoPor} onChange={e => set('preparadoPor', e.target.value)} /></PIGField>
-        <PIGField label="Revisado por"><input style={ip} value={p.revisadoPor} onChange={e => set('revisadoPor', e.target.value)} /></PIGField>
-        <PIGField label="Aprobado por"><input style={ip} value={p.aprobadoPor} onChange={e => set('aprobadoPor', e.target.value)} /></PIGField>
-      </div>
-      <PIGField label="Descripcion del proceso"><input style={ip} value={p.descripcion} onChange={e => set('descripcion', e.target.value)} /></PIGField>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '12px 0 6px' }}>Analisis proceso de granallado</div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}><thead><tr style={{ borderBottom: '1px solid #CBD2D6' }}><th style={{ textAlign: 'left', padding: 4 }}>N</th><th style={{ textAlign: 'left', padding: 4 }}>Control</th><th style={{ padding: 4 }}>Cumple</th><th style={{ textAlign: 'left', padding: 4 }}>Obs.</th></tr></thead><tbody>
-        {p.checks.map((c, i) => (<tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}><td style={{ padding: 4 }}>{i + 1}</td><td style={{ padding: 4 }}><input style={ip} value={c.nombre} onChange={e => setChk(i, 'nombre', e.target.value)} /></td><td style={{ padding: 4, textAlign: 'center' }}><select value={c.cumple} onChange={e => setChk(i, 'cumple', e.target.value)} style={{ ...ip, width: 70 }}><option>SI</option><option>NO</option></select></td><td style={{ padding: 4 }}><input style={ip} value={c.obs} onChange={e => setChk(i, 'obs', e.target.value)} /></td></tr>))}
-      </tbody></table>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8, marginTop: 8 }}>
-        <PIGField label="Limpieza superficial SSPC-SP"><input style={ip} value={p.limpiezaSSPC} onChange={e => set('limpiezaSSPC', e.target.value)} /></PIGField>
-        <PIGField label="Perfil solicitado"><input style={ip} value={p.perfilSolicitado} onChange={e => set('perfilSolicitado', e.target.value)} /></PIGField>
-        <PIGField label="Medida 1"><input style={ip} value={p.medidas[0]} onChange={e => setMed(0, e.target.value)} /></PIGField>
-        <PIGField label="Medida 2"><input style={ip} value={p.medidas[1]} onChange={e => setMed(1, e.target.value)} /></PIGField>
-        <PIGField label="Medida 3"><input style={ip} value={p.medidas[2]} onChange={e => setMed(2, e.target.value)} /></PIGField>
-        <PIGField label="Promedio (auto)"><input readOnly style={{ ...ip, background: '#F1EDE6' }} value={prom ? prom.toFixed(2) : ''} /></PIGField>
-        <PIGField label="Perfil obtenido"><input style={ip} value={p.perfilObtenido} onChange={e => set('perfilObtenido', e.target.value)} /></PIGField>
-        <PIGField label="Cumple"><select value={p.perfilCumple} onChange={e => set('perfilCumple', e.target.value)} style={ip}><option>SI</option><option>NO</option></select></PIGField>
-      </div>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '12px 0 6px' }}>Condiciones ambientales</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px,1fr))', gap: 8 }}>
-        <PIGField label="Fecha"><input type="date" style={ip} value={p.amb.fecha} onChange={e => setAmb('fecha', e.target.value)} /></PIGField>
-        <PIGField label="% Humedad"><input style={ip} value={p.amb.humedad} onChange={e => setAmb('humedad', e.target.value)} /></PIGField>
-        <PIGField label="T. Ambiente C"><input style={ip} value={p.amb.tAmbiente} onChange={e => setAmb('tAmbiente', e.target.value)} /></PIGField>
-        <PIGField label="C Pieza"><input style={ip} value={p.amb.tPieza} onChange={e => setAmb('tPieza', e.target.value)} /></PIGField>
-        <PIGField label="Pto. Rocio"><input style={ip} value={p.amb.ptoRocio} onChange={e => setAmb('ptoRocio', e.target.value)} /></PIGField>
-        <PIGField label="Hora inicio"><input style={ip} value={p.amb.horaInicio} onChange={e => setAmb('horaInicio', e.target.value)} /></PIGField>
-      </div>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '12px 0 6px' }}>Firmas</div>
-      {p.firmas.map((fx, i) => (<div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}><input style={{ ...ip, width: 130 }} value={fx.rol} onChange={e => setFir(i, 'rol', e.target.value)} /><input style={{ ...ip, flex: 1, minWidth: 160 }} value={fx.quien} onChange={e => setFir(i, 'quien', e.target.value)} /><input type="date" style={{ ...ip, width: 150 }} value={fx.fecha} onChange={e => setFir(i, 'fecha', e.target.value)} /></div>))}
-    </div>
-  )
-}
+  const set = (k, v) => upd({ ...p, [k]: v })
+  return (<div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}><span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 700, fontSize: 14, textTransform: 'uppercase' }}>{p.codigo} - {titulo}</span><div style={{ display: 'flex', gap: 8 }}><button onClick={() => descargarProto(p)} style={{ background: '#161616', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>Descargar PDF</button><button onClick={onDel} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 10px', cursor: 'pointer', fontSize: 12.5, color: '#7A8288' }}>Eliminar</button></div></div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8 }}><PF label="Codigo"><input style={ip} value={p.codigo} onChange={e => set('codigo', e.target.value)} /></PF><PF label="Orden de Trabajo"><input style={ip} value={p.ot} onChange={e => set('ot', e.target.value)} /></PF><PF label="NV"><input style={ip} value={p.nv} onChange={e => set('nv', e.target.value)} /></PF><PF label="Codigo PGP (gran/pintura)"><input style={ip} value={p.pgpCodigo} onChange={e => set('pgpCodigo', e.target.value)} /></PF><PF label="Cliente"><input style={ip} value={p.cliente} onChange={e => set('cliente', e.target.value)} /></PF><PF label="Proyecto"><input style={ip} value={p.proyecto} onChange={e => set('proyecto', e.target.value)} /></PF><PF label="Fecha"><input type="date" style={ip} value={p.fecha} onChange={e => set('fecha', e.target.value)} /></PF><PF label="Preparado por"><input style={ip} value={p.preparadoPor} onChange={e => set('preparadoPor', e.target.value)} /></PF></div></div>) }
+function ProtoPIGForm({ p, upd, onDel }) {
+  const ip = { padding: '6px 8px', border: '1px solid #CBD2D6', fontSize: 12.5, boxSizing: 'border-box', width: '100%' }
+  const set = (k, v) => upd({ ...p, [k]: v }); const setAmb = (k, v) => upd({ ...p, amb: { ...p.amb, [k]: v } }); const setChk = (i, k, v) => upd({ ...p, checks: p.checks.map((c, j) => j === i ? { ...c, [k]: v } : c) }); const setMed = (i, v) => upd({ ...p, medidas: p.medidas.map((m, j) => j === i ? v : m) })
+  return (<div style={{ marginTop: 12, border: '1px solid #E2DED4', borderTop: '3px solid #D2642F', padding: 14 }}><ProtoHead p={p} upd={upd} onDel={onDel} titulo="Protocolo Inicio de Granalla" /><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '10px 0 4px' }}>Controles</div><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}><tbody>{p.checks.map((c, i) => (<tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}><td style={{ padding: 3, width: 20 }}>{i + 1}</td><td style={{ padding: 3 }}><input style={ip} value={c.nombre} onChange={e => setChk(i, 'nombre', e.target.value)} /></td><td style={{ padding: 3, width: 70 }}><select value={c.cumple} onChange={e => setChk(i, 'cumple', e.target.value)} style={ip}><option>SI</option><option>NO</option></select></td></tr>))}</tbody></table><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px,1fr))', gap: 8, marginTop: 8 }}><PF label="Limpieza SSPC-SP"><input style={ip} value={p.limpiezaSSPC} onChange={e => set('limpiezaSSPC', e.target.value)} /></PF><PF label="Perfil solicitado"><input style={ip} value={p.perfilSolicitado} onChange={e => set('perfilSolicitado', e.target.value)} /></PF><PF label="Medida 1"><input style={ip} value={p.medidas[0]} onChange={e => setMed(0, e.target.value)} /></PF><PF label="Medida 2"><input style={ip} value={p.medidas[1]} onChange={e => setMed(1, e.target.value)} /></PF><PF label="Medida 3"><input style={ip} value={p.medidas[2]} onChange={e => setMed(2, e.target.value)} /></PF><PF label="Perfil obtenido"><input style={ip} value={p.perfilObtenido} onChange={e => set('perfilObtenido', e.target.value)} /></PF><PF label="% Humedad"><input style={ip} value={p.amb.humedad} onChange={e => setAmb('humedad', e.target.value)} /></PF><PF label="T. Ambiente"><input style={ip} value={p.amb.tAmbiente} onChange={e => setAmb('tAmbiente', e.target.value)} /></PF></div><FotoSlots label="Fotos inicio de granalla" fotos={p.fotosGranalla || []} max={4} onChange={v => set('fotosGranalla', v)} /></div>) }
+function ProtoPGPForm({ p, upd, onDel }) {
+  const ip = { padding: '6px 8px', border: '1px solid #CBD2D6', fontSize: 12.5, boxSizing: 'border-box', width: '100%' }
+  const set = (k, v) => upd({ ...p, [k]: v }); const setAmb = (k, v) => upd({ ...p, amb: { ...p.amb, [k]: v } }); const setInstr = (k, v) => upd({ ...p, instr: { ...p.instr, [k]: v } })
+  const setPerfil = (r, c, v) => upd({ ...p, perfilFilas: p.perfilFilas.map((row, ri) => ri === r ? row.map((x, ci) => ci === c ? v : x) : row) })
+  const autoPerfil = () => { const [lo, hi] = parseRango(p.perfilSolicitado); upd({ ...p, perfilFilas: p.perfilFilas.map(row => autoFila(row, lo, hi)) }) }
+  const setEsq = (r, c, v) => upd({ ...p, esqFilas: p.esqFilas.map((row, ri) => ri === r ? row.map((x, ci) => ci === c ? v : x) : row) })
+  const autoEsq = () => { const [lo, hi] = parseRango(p.esqSolicitado); upd({ ...p, esqFilas: p.esqFilas.map(row => autoFila(row, lo, hi)) }) }
+  return (<div style={{ marginTop: 12, border: '1px solid #E2DED4', borderTop: '3px solid #161616', padding: 14 }}><ProtoHead p={p} upd={upd} onDel={onDel} titulo="Protocolo Granallado y Pintura" /><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '10px 0 4px' }}>Instrumentos</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8 }}><PF label="Medidor espesor / serie"><input style={ip} value={p.instr.espSerie} onChange={e => setInstr('espSerie', e.target.value)} /></PF><PF label="Rugosimetro / serie"><input style={ip} value={p.instr.rugSerie} onChange={e => setInstr('rugSerie', e.target.value)} /></PF><PF label="Termohigrometro / serie"><input style={ip} value={p.instr.termoSerie} onChange={e => setInstr('termoSerie', e.target.value)} /></PF></div><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '10px 0 4px' }}>Condiciones ambientales</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px,1fr))', gap: 8 }}><PF label="Fecha"><input type="date" style={ip} value={p.amb.fecha} onChange={e => setAmb('fecha', e.target.value)} /></PF><PF label="% Humedad"><input style={ip} value={p.amb.humedad} onChange={e => setAmb('humedad', e.target.value)} /></PF><PF label="T. Ambiente"><input style={ip} value={p.amb.tAmbiente} onChange={e => setAmb('tAmbiente', e.target.value)} /></PF><PF label="C Pieza"><input style={ip} value={p.amb.tPieza} onChange={e => setAmb('tPieza', e.target.value)} /></PF><PF label="Pto. Rocio"><input style={ip} value={p.amb.ptoRocio} onChange={e => setAmb('ptoRocio', e.target.value)} /></PF><PF label="Hora inicio"><input style={ip} value={p.amb.horaInicio} onChange={e => setAmb('horaInicio', e.target.value)} /></PF></div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8, marginTop: 8 }}><PF label="Limpieza superficial"><input style={ip} value={p.limpiezaSSPC} onChange={e => set('limpiezaSSPC', e.target.value)} /></PF><PF label="Perfil solicitado"><input style={ip} value={p.perfilSolicitado} onChange={e => set('perfilSolicitado', e.target.value)} /></PF></div><TablaMedidas titulo="Perfil de rugosidad" filas={p.perfilFilas} ncols={5} onSetCell={setPerfil} onAuto={autoPerfil} resumen="Perfil obtenido (prom.)" /><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8, marginTop: 10 }}><PF label="Producto"><input style={ip} value={p.esqProducto} onChange={e => set('esqProducto', e.target.value)} /></PF><PF label="Espesor solicitado (capa)"><input style={ip} value={p.esqSolicitado} onChange={e => set('esqSolicitado', e.target.value)} /></PF><PF label="Capas"><input style={ip} value={p.capas} onChange={e => set('capas', e.target.value)} /></PF></div><TablaMedidas titulo="Esquema pintura primera capa (DFT)" filas={p.esqFilas} ncols={7} onSetCell={setEsq} onAuto={autoEsq} resumen="Promedio final" /><FotoSlots label="Fotos inicio de granalla" fotos={p.fotosGranalla || []} max={4} onChange={v => set('fotosGranalla', v)} /><FotoSlots label="Fotos primera capa" fotos={p.fotosPrimeraCapa || []} max={4} onChange={v => set('fotosPrimeraCapa', v)} /></div>) }
+function ProtocolosOT({ ot, onUpdate, otsAll = [] }) {
+  const lista = ot.protocolos || []
+  const gen = tipo => onUpdate(ot.id, { protocolos: [...lista, nuevoProtocolo(tipo, ot, nextCorrelativoProt(otsAll))] })
+  const updP = np => onUpdate(ot.id, { protocolos: lista.map(x => x.id === np.id ? np : x) })
+  const delP = id => window.confirm('Eliminar este protocolo?') && onUpdate(ot.id, { protocolos: lista.filter(x => x.id !== id) })
+  return (<div style={{ marginTop: 14, borderTop: '1px dashed #CBD2D6', paddingTop: 12 }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 13, textTransform: 'uppercase' }}>Protocolos de calidad ({lista.length})</div><div style={{ display: 'flex', gap: 8 }}><button onClick={() => gen('PIG')} style={{ background: '#D2642F', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>+ Generar PIG</button><button onClick={() => gen('PGP')} style={{ background: '#161616', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>+ Generar PGP</button></div></div>{lista.map(p => p.tipo === 'PIG' ? <ProtoPIGForm key={p.id} p={p} upd={updP} onDel={() => delP(p.id)} /> : <ProtoPGPForm key={p.id} p={p} upd={updP} onDel={() => delP(p.id)} />)}</div>) }
 
 export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], ots: otsExt, setOts: setOtsExt, verValores = true, clientes = [], ordenesCompra = [], mo = null }) {
   const [otsInt, setOtsInt] = useState(OTS_INICIALES)
