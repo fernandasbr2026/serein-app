@@ -3,6 +3,7 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { LogOut, TrendingUp, Wallet, AlertTriangle, Landmark, User } from 'lucide-react'
 import { DATA } from './data.js'
 import LogoSerein from './LogoSerein.jsx'
+import { Sidebar, PageHeader, THEME } from './ui.jsx'
 import ProyectosModule from './ProyectosModule.jsx'
 import OTModule, { OTS_INICIALES } from './OTModule.jsx'
 import PipelineOT from './PipelineOT.jsx'
@@ -192,6 +193,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     ...(esGerencia ? ['PARAMETROS'] : []),
   ]
   const [areaSel, setAreaSel] = useState(tabs[0])
+  const [sidebarColapsado, setSidebarColapsado] = useState(false)
 
   const esModuloProyectos = areaSel === 'GESTION_PROYECTOS'
   const esModuloOT = areaSel === 'GESTION_OT'
@@ -359,38 +361,12 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const nombreTab = t => t === 'ASESOR' ? 'Asesor IA' : t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'ORDENES_COMPRA' ? '🧾 Órdenes de Compra' : t === 'TRAZABILIDAD' ? '🔗 Trazabilidad y Alertas' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Resumen ventas por cliente' : t === 'CONTACTOS' ? '📇 Clientes y Proveedores' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t === 'LIBRO_COMPRAS' ? 'Libro de Compras' : t === 'LIBRO_VENTAS' ? 'Libro de Ventas' : t
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: C.niebla, fontFamily: "'Inter',sans-serif" }}>
-      <aside style={{ width: 234, flexShrink: 0, background: C.carbon, display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh' }}>
-        <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid #2A2F33' }}>
-          <LogoSerein alto={30} oscuro />
-          <div style={{ color: '#6B747A', fontSize: 11, letterSpacing: 1, marginTop: 6 }}>PANEL 2026</div>
-        </div>
-        <div style={{ padding: '10px 16px', borderBottom: '1px solid #2A2F33', color: '#B8C0C6', fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <User size={15} />
-          <div style={{ minWidth: 0 }}>
-            <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{perfil.nombre || email}</div>
-            <div style={{ color: '#6B747A', fontSize: 11 }}>{perfil.rol}</div>
-          </div>
-        </div>
-        <nav style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
-          {tabs.map(t => (
-            <button key={t} onClick={() => setAreaSel(t)}
-              style={{ display: 'flex', alignItems: 'center', width: '100%', textAlign: 'left', background: areaSel === t ? '#22282C' : 'transparent', border: 'none', borderLeft: areaSel === t ? `3px solid ${C.ambar}` : '3px solid transparent', color: areaSel === t ? '#fff' : '#9AA0A6', padding: '11px 16px', cursor: 'pointer', fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-              {nombreTab(t)}
-            </button>
-          ))}
-        </nav>
-        <button onClick={onLogout} style={{ margin: '16px 16px 4px', background: 'transparent', border: '1px solid #3A4045', color: '#B8C0C6', padding: '8px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 12 }}>
-          <LogOut size={13} /> Salir
-        </button>
-        <div style={{ margin: '0 16px 12px', fontSize: 10, color: '#6B7176', textAlign: 'center', lineHeight: 1.4 }}>
-          Datos guardados en este navegador
-          <button onClick={() => { if (window.confirm('¿Borrar los datos guardados y volver a los valores base? Esta acción no se puede deshacer.')) borrarDatosLocales() }} style={{ display: 'block', margin: '4px auto 0', background: 'transparent', border: 'none', color: '#7A8288', cursor: 'pointer', fontSize: 10, textDecoration: 'underline' }}>Restablecer datos</button>
-        </div>
-      </aside>
+    <div style={{ display: 'flex', minHeight: '100vh', background: THEME.bg, fontFamily: THEME.font }}>
+      <Sidebar tabs={tabs} areaSel={areaSel} setAreaSel={setAreaSel} nombreTab={nombreTab} perfil={perfil} email={email} onLogout={onLogout} colapsado={sidebarColapsado} setColapsado={setSidebarColapsado} onReset={borrarDatosLocales} />
 
       <main style={{ flex: 1, minWidth: 0, height: '100vh', overflowY: 'auto' }}>
       <div style={{ padding: 20, maxWidth: 1200, margin: '0 auto' }}>
+              <PageHeader titulo={nombreTab(areaSel)} perfil={perfil} email={email} />
         {esModuloAsesor && esGerencia ? (<AsesorModule fin={fin} pp={pp} proyectos={proyectos} ots={ots} params={params} onIr={setAreaSel} />) : esModuloLibroCompras ? (<LibroComprasModule esGerencia={esGerencia} ots={ots} factoringList={params.factoring || []} />) : esModuloLibroVentas ? (<LibroVentasModule ots={ots} />) : esModuloProyectos ? (
           <>
           {resumenFinancieroArea('Proyectos')}
