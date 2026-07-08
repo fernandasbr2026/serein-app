@@ -160,6 +160,7 @@ function SeccionUF({ params, setParams }) {
 
 function SeccionInstrumentos({ params, setParams }) {
   const inst = params.instrumentos || { espMarca: 'ELCOMETER', espSerie: 'MH11472', rugMarca: 'ELCOMETER', rugSerie: 'NE30319', termoMarca: 'ELCOMETER', termoSerie: 'KCA721' }
+  useEffect(() => { if (!params.instrumentos) setParams({ ...params, instrumentos: inst }) }, [])
   const set = (k, v) => setParams({ ...params, instrumentos: { ...inst, [k]: v } })
   const ip = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box', width: '100%', marginTop: 4 }
   const lb = { fontSize: 12, color: '#7A8288' }
