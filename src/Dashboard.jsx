@@ -19,6 +19,7 @@ import TrazabilidadModule from './TrazabilidadModule.jsx'
 import ParametrosModule, { PARAMS_SEED, perdidaFactoringFactura } from './ParametrosModule.jsx'
 import ClientesModule, { CLIENTES_SEED } from './ClientesModule.jsx'
 import LibroComprasModule from './LibroComprasModule.jsx'
+import LibroVentasModule from './LibroVentasModule.jsx'
 import ContactosModule, { CONTACTOS_SEED, nombresClientes } from './ContactosModule.jsx'
 import FacturasModule, { FACTURAS_SEED } from './FacturasModule.jsx'
 import { MO_SEED } from './ManoObraModule.jsx'
@@ -175,6 +176,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     ...(esGerencia ? ['PAGOS'] : []),
     ...(esGerencia ? ['ORDENES_COMPRA'] : []),
       ...(esGerencia ? ['LIBRO_COMPRAS'] : []),
+      ...(esGerencia ? ['LIBRO_VENTAS'] : []),
     ...(esGerencia ? ['TRAZABILIDAD'] : []),
     ...(esGerencia ? ['FINANZAS'] : []),
     'CLIENTES',
@@ -204,6 +206,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const [mo, setMo] = useState(() => LS('mo', MO_SEED))
   const esModuloComprasOp = areaSel === 'COMPRAS_OP'
   const esModuloLibroCompras = areaSel === 'LIBRO_COMPRAS'
+  const esModuloLibroVentas = areaSel === 'LIBRO_VENTAS'
   const [comprasOp, setComprasOp] = useState(() => LS('comprasOp', COMPRAS_OP_SEED))
   const [configCompras, setConfigCompras] = useState(() => LS('configCompras', CONFIG_COMPRAS_DEFAULT))
   const [fin, setFin] = useState(() => LS('fin', FIN_SEED))
@@ -348,7 +351,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     </div>
   )
 
-  const nombreTab = t => t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'ORDENES_COMPRA' ? '🧾 Órdenes de Compra' : t === 'TRAZABILIDAD' ? '🔗 Trazabilidad y Alertas' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Resumen ventas por cliente' : t === 'CONTACTOS' ? '📇 Clientes y Proveedores' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t === 'LIBRO_COMPRAS' ? 'Libro de Compras' : t
+  const nombreTab = t => t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'ORDENES_COMPRA' ? '🧾 Órdenes de Compra' : t === 'TRAZABILIDAD' ? '🔗 Trazabilidad y Alertas' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Resumen ventas por cliente' : t === 'CONTACTOS' ? '📇 Clientes y Proveedores' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t === 'LIBRO_COMPRAS' ? 'Libro de Compras' : t === 'LIBRO_VENTAS' ? 'Libro de Ventas' : t
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: C.niebla, fontFamily: "'Inter',sans-serif" }}>
@@ -383,7 +386,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
 
       <main style={{ flex: 1, minWidth: 0, height: '100vh', overflowY: 'auto' }}>
       <div style={{ padding: 20, maxWidth: 1200, margin: '0 auto' }}>
-        {esModuloLibroCompras ? (<LibroComprasModule esGerencia={esGerencia} ots={ots} factoringList={params.factoring || []} />) : esModuloProyectos ? (
+        {esModuloLibroCompras ? (<LibroComprasModule esGerencia={esGerencia} ots={ots} factoringList={params.factoring || []} />) : esModuloLibroVentas ? (<LibroVentasModule ots={ots} />) : esModuloProyectos ? (
           <>
           {resumenFinancieroArea('Proyectos')}
           <ProyectosModule proyectos={proyectos} setProyectos={setProyectos} params={params} facturas={facturas} setFacturas={setFacturas} comisionPct={comisiones['Proyectos'] ?? 2} setComisionPct={v => setComisiones(c => ({ ...c, Proyectos: v }))} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={nombresClientes(contactos)} />
