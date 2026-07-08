@@ -55,7 +55,7 @@ export function borrarDatosLocales() {
 
 function Kpi({ label, valor, sub, color, icon: Icon }) {
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 16, flex: '1 1 180px', minWidth: 0 }}>
+    <div style={{ background: '#fff', border: '1px solid #EEF0F4', borderRadius: 14, boxShadow: '0 1px 3px rgba(16,24,40,.06), 0 1px 2px rgba(16,24,40,.04)', padding: '16px 18px', flex: '1 1 180px', minWidth: 0 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: 11, color: '#7A8288', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>{label}</span>
         <Icon size={16} color={color} />
@@ -68,7 +68,7 @@ function Kpi({ label, valor, sub, color, icon: Icon }) {
 
 function Panel({ title, children, right }) {
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18, minWidth: 0 }}>
+    <div style={{ background: '#fff', border: '1px solid #EEF0F4', borderRadius: 14, boxShadow: '0 1px 3px rgba(16,24,40,.06)', padding: 18, minWidth: 0 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
         <h3 style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, letterSpacing: 0.5, textTransform: 'uppercase', margin: 0 }}>{title}</h3>
         {right}
