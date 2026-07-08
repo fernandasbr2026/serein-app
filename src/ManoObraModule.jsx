@@ -61,6 +61,12 @@ export function calc(t) {
 const valorDiarioDe = t => calc(t).diaBruto
 const valorHexDe = t => calc(t).horaExtra
 const cargoDe = t => t.cargo || ''
+export const costoMOdeOT = (mo, numOT) => {
+  if (!mo) return 0
+  const asis = (mo.asistencias || []).reduce((a, x) => a + ((x.costo && x.costo.porOT && x.costo.porOT[numOT]) || 0), 0)
+  const hex = (mo.horasExtras || []).filter(h => h.ot === numOT).reduce((a, h) => a + ((h.costo && h.costo.total) || 0), 0)
+  return asis + hex
+}
 
 function Aviso({ hijo }) { return <div style={{ background: '#F9E9DE', color: '#8C4519', padding: '8px 12px', fontSize: 12, marginTop: 8 }}>{hijo}</div> }
 

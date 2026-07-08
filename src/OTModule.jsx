@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, Plus, Trash2, X, Ruler, Paintbrush, FileText, R
 import * as XLSX from 'xlsx'
 import { descargarOTDesdeOT } from './CotizacionesModule.jsx'
 import { costoOCdeOT } from './OrdenesCompraModule.jsx'
+import { costoMOdeOT } from './ManoObraModule.jsx'
 import Paginador, { paginar } from './Paginador.jsx'
 
 const C = { azul: '#1D1D1B', teal: '#A8501F', ambar: '#D2642F', rojo: '#B5432E', verde: '#3D7A4E', carbon: '#161616', gris: '#7A8288' }
@@ -230,14 +231,15 @@ function descargarOT(ot) {
   XLSX.writeFile(wb, `${ot.numero}.xlsx`)
 }
 
-function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = [] }) {
+function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = [], mo = null }) {
   const [abierta, setAbierta] = useState(false)
   const [addVenta, setAddVenta] = useState(false)
   const [addCosto, setAddCosto] = useState(false)
 
   const ventaTotal = ot.ventas.reduce((a, v) => a + v.neta, 0)
   const costoOC = costoOCdeOT(ordenesCompra, ot.numero)
-  const costoTotal = ot.costos.reduce((a, c) => a + c.monto, 0) + costoOC
+  const costoMO = costoMOdeOT(mo, ot.numero)
+  const costoTotal = ot.costos.reduce((a, c) => a + c.monto, 0) + costoOC + costoMO
   const utilidad = ventaTotal - costoTotal
   const margen = ventaTotal > 0 ? (utilidad / ventaTotal) * 100 : 0
   const precioM2 = ot.m2 > 0 && ventaTotal > 0 ? ventaTotal / ot.m2 : null
@@ -453,7 +455,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
               <div style={{ marginTop: 16, padding: '12px 14px', background: '#F7F4EE', fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
                 <CircleDollarSign size={16} color={margen >= 30 ? C.verde : C.ambar} />
                 <span>Venta neta: <b>{clp(ventaTotal)}</b></span>
-                <span>Costos: <b>{clp(costoTotal)}</b></span>
+                <span>Costos: <b>{clp(costoTotal)}</b></span>{costoMO > 0 && <span style={{ color: '#7A8288' }}>(incluye {clp(costoMO)} de mano de obra)</span>}
                 {costoOC > 0 && <span style={{ color: C.teal }}>(incluye {clp(costoOC)} de OC proveedores)</span>}
                 <span>Utilidad real: <b style={{ color: margen >= 30 ? C.verde : margen >= 15 ? C.ambar : C.rojo }}>{clp(utilidad)} ({margen.toFixed(1)}%)</b></span>
               </div>
@@ -517,7 +519,7 @@ function FormOT({ area, siguienteNumero, onAdd, onCancel }) {
 }
 
 // ---------- Módulo principal ----------
-export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], ots: otsExt, setOts: setOtsExt, verValores = true, clientes = [], ordenesCompra = [] }) {
+export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], ots: otsExt, setOts: setOtsExt, verValores = true, clientes = [], ordenesCompra = [], mo = null }) {
   const [otsInt, setOtsInt] = useState(OTS_INICIALES)
   const otsAll = otsExt ?? otsInt
   const setOts = setOtsExt ?? setOtsInt
@@ -557,7 +559,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
 
   const visibles = ots.filter(o => o.area === areaSel && (!fCliente || _norm(o.cliente) === _norm(fCliente)))
   const ventaTot = visibles.reduce((a, o) => a + o.ventas.reduce((x, v) => x + v.neta, 0), 0)
-  const costoTot = visibles.reduce((a, o) => a + o.costos.reduce((x, c) => x + c.monto, 0) + costoOCdeOT(ordenesCompra, o.numero), 0)
+  const costoTot = visibles.reduce((a, o) => a + o.costos.reduce((x, c) => x + c.monto, 0) + costoOCdeOT(ordenesCompra, o.numero) + costoMOdeOT(mo, o.numero), 0)
   const utilTot = ventaTot - costoTot
 
   const nums = ots.map(o => parseInt((o.numero.match(/(\d+)$/) || [0, 0])[1], 10))
@@ -620,7 +622,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
       {creando && <FormOT area={areaSel} siguienteNumero={siguiente} onAdd={o => { setOts(xs => [o, ...xs]); setCreando(false) }} onCancel={() => setCreando(false)} />}
 
       {visibles.length === 0 && <div style={{ color: '#9AA0A6', fontSize: 14, padding: 20, textAlign: 'center', background: '#fff', border: '1px dashed #CBD2D6' }}>Sin OTs en {areaSel}. Crea la primera.</div>}
-      {paginar(visibles, page).items.map(o => <TarjetaOT key={o.id} ot={o} onUpdate={actualizar} onDelete={eliminar} verValores={verValores} ordenesCompra={ordenesCompra} />)}
+      {paginar(visibles, page).items.map(o => <TarjetaOT key={o.id} ot={o} onUpdate={actualizar} onDelete={eliminar} verValores={verValores} ordenesCompra={ordenesCompra} mo={mo} />)}
       <Paginador page={paginar(visibles, page).page} paginas={paginar(visibles, page).paginas} total={visibles.length} setPage={setPage} />
 
       <div style={{ fontSize: 12, color: '#9AA0A6', textAlign: 'center', marginTop: 8 }}>
