@@ -209,7 +209,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const esModuloLibroVentas = areaSel === 'LIBRO_VENTAS'
   const [comprasOp, setComprasOp] = useState(() => LS('comprasOp', COMPRAS_OP_SEED))
   const [configCompras, setConfigCompras] = useState(() => LS('configCompras', CONFIG_COMPRAS_DEFAULT))
-  const [fin, setFin] = useState(() => LS('fin', FIN_SEED))
+  const [fin, setFin] = useState(() => { const _f = LS('fin', FIN_SEED); if (_f && _f.credVer !== FIN_SEED.credVer) { _f.obligaciones = FIN_SEED.obligaciones; _f.credVer = FIN_SEED.credVer } return _f })
   const [pp, setPp] = useState(() => { const s = LS('pp', null); if (!s) return PP_SEED; return (s.ocsVer === PP_SEED.ocsVer) ? s : { ...s, ocs: PP_SEED.ocs, ocsVer: PP_SEED.ocsVer } })
   const [params, setParams] = useState(() => LS('params', PARAMS_SEED))
   const [clientes, setClientes] = useState(() => LS('clientes', CLIENTES_SEED))
