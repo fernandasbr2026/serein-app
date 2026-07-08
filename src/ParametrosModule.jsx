@@ -21,6 +21,7 @@ export const PARAMS_SEED = {
     { id: 'f2', nombre: 'ACF Capital', tasa: 0.83, tasaMora: 3.5, costoOp: 50000 },
   ],
   uf: { valor: 0, fecha: '' },
+  instrumentos: { espMarca: 'ELCOMETER', espSerie: 'MH11472', rugMarca: 'ELCOMETER', rugSerie: 'NE30319', termoMarca: 'ELCOMETER', termoSerie: 'KCA721' },
 }
 
 // Cálculo de pérdida por factoring (reutilizable desde otros módulos)
@@ -157,13 +158,20 @@ function SeccionUF({ params, setParams }) {
   )
 }
 
+function SeccionInstrumentos({ params, setParams }) {
+  const inst = params.instrumentos || { espMarca: 'ELCOMETER', espSerie: 'MH11472', rugMarca: 'ELCOMETER', rugSerie: 'NE30319', termoMarca: 'ELCOMETER', termoSerie: 'KCA721' }
+  const set = (k, v) => setParams({ ...params, instrumentos: { ...inst, [k]: v } })
+  const ip = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box', width: '100%', marginTop: 4 }
+  const lb = { fontSize: 12, color: '#7A8288' }
+  return (<div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Instrumentos / equipos de inspeccion</div><div style={{ fontSize: 12, color: '#7A8288', marginBottom: 14 }}>Estos codigos se cargan automaticamente al generar un protocolo PGP y siguen siendo editables en cada protocolo. Cambialos aqui cuando cambien los equipos.</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px,1fr))', gap: 12 }}><label style={lb}>Medidor de espesor - Marca<input style={ip} value={inst.espMarca || ''} onChange={e => set('espMarca', e.target.value)} /></label><label style={lb}>Medidor de espesor - Serie<input style={ip} value={inst.espSerie || ''} onChange={e => set('espSerie', e.target.value)} /></label><label style={lb}>Rugosimetro - Marca<input style={ip} value={inst.rugMarca || ''} onChange={e => set('rugMarca', e.target.value)} /></label><label style={lb}>Rugosimetro - Serie<input style={ip} value={inst.rugSerie || ''} onChange={e => set('rugSerie', e.target.value)} /></label><label style={lb}>Termohigrometro - Marca<input style={ip} value={inst.termoMarca || ''} onChange={e => set('termoMarca', e.target.value)} /></label><label style={lb}>Termohigrometro - Serie<input style={ip} value={inst.termoSerie || ''} onChange={e => set('termoSerie', e.target.value)} /></label></div></div>) }
+
 export default function ParametrosModule({ params: pExt, setParams: setPExt }) {
   const [pInt, setPInt] = useState(PARAMS_SEED)
   const params = pExt ?? pInt
   const setParams = setPExt ?? setPInt
   const [tab, setTab] = useState('factoring')
 
-  const tabs = [{ id: 'factoring', label: 'Factoring', icono: <Landmark size={13} /> }, { id: 'uf', label: 'Valor UF', icono: <TrendingUp size={13} /> }]
+  const tabs = [{ id: 'factoring', label: 'Factoring', icono: <Landmark size={13} /> }, { id: 'uf', label: 'Valor UF', icono: <TrendingUp size={13} /> }, { id: 'instrumentos', label: 'Instrumentos', icono: <Info size={13} /> }]
 
   return (
     <div>
@@ -177,6 +185,7 @@ export default function ParametrosModule({ params: pExt, setParams: setPExt }) {
       </div>
       {tab === 'factoring' && <SeccionFactoring params={params} setParams={setParams} />}
       {tab === 'uf' && <SeccionUF params={params} setParams={setParams} />}
+      {tab === 'instrumentos' && <SeccionInstrumentos params={params} setParams={setParams} />}
     </div>
   )
 }
