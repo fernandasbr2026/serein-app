@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, Target, Receipt, Hammer, ShoppingCart, Pencil, 
 import { PROYECTOS, CC_DEFS } from './proyectos-data.js'
 import { calcularPerdidaFactoring, perdidaFactoringFactura } from './ParametrosModule.jsx'
 import FacturasModule from './FacturasModule.jsx'
+import ProyParametros from './ProyParametros.jsx'
 // Engancha una factura de Proyectos a su OT comparando los números (≥3 dígitos) de OT/OC
 const _toks = x => (String(x || '').match(/\d{3,}/g) || [])
 const otMatch = (p, f) => { const pt = new Set([..._toks(p.ot), ..._toks(p.oc)]); return [..._toks(f.ot), ..._toks(f.oc)].some(t => pt.has(t)) }
@@ -552,7 +553,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-        {[['tarjetas', 'Tarjetas', LayoutGrid], ['consolidado', 'Consolidado', Table2], ['facturas', 'Facturas', Receipt]].map(([id, lbl, Icon]) => (
+        {[['tarjetas', 'Tarjetas', LayoutGrid], ['consolidado', 'Consolidado', Table2], ['facturas', 'Facturas', Receipt], ['parametros', 'Parámetros Proyectos', Target]].map(([id, lbl, Icon]) => (
           <button key={id} onClick={() => setVista(id)} style={{ background: vista === id ? C.carbon : '#fff', color: vista === id ? '#fff' : C.carbon, border: '1px solid #CBD2D6', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Icon size={14} />{lbl}</button>
         ))}
         {!creando && vista === 'tarjetas' && (
@@ -566,6 +567,8 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
         <Consolidado proyectos={proyectos} />
       ) : vista === 'facturas' ? (
         <FacturasModule area="Proyectos" facturas={facturas} setFacturas={setFacturas} params={params} comisionPct={comisionPct} setComisionPct={setComisionPct} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={clientesSugeridos} />
+      ) : vista === 'parametros' ? (
+        <ProyParametros />
       ) : (
         proyectos.map(p => <TarjetaProyecto key={p.id} p={p} onUpdate={actualizar} onDelete={eliminar} onAddCompra={agregarCompra} params={params} facturasProy={facturasProy} />)
       )}
