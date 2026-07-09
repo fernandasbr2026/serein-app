@@ -286,6 +286,7 @@ function FormCotizacion({ inicial, onGuardar, onCancelar, clientes = [], onAddCl
 }
 
 import CotizadorParametros from './CotizadorParametros.jsx'
+import CotizadorCalculo from './CotizadorCalculo.jsx'
 
 export default function CotizacionesModule({ cotizaciones = [], setCotizaciones = () => {}, ots = [], setOts = () => {}, clientes = [], onAddCliente = () => {} }) {
   const [creando, setCreando] = useState(false)
@@ -358,11 +359,13 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
   }
 
   if (modo === 'params') return <CotizadorParametros onVolver={() => setModo('rapida')} />
+  if (modo === 'calculo') return <CotizadorCalculo clientes={clientes} onAddCliente={onAddCliente} cotizaciones={cotizaciones} setCotizaciones={setCotizaciones} onVolver={() => setModo('rapida')} />
 
   return (
     <div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, borderBottom: '1px solid #E6E8EE', paddingBottom: 8 }}>
         <button onClick={() => setModo('rapida')} style={{ background: 'transparent', border: 'none', borderBottom: '2px solid #FF6B00', padding: '6px 2px', marginRight: 12, cursor: 'pointer', fontWeight: 600, fontSize: 13, color: '#061A40' }}>Cotizacion rapida</button>
+        <button onClick={() => setModo('calculo')} style={{ background: 'transparent', border: 'none', padding: '6px 2px', marginRight: 12, cursor: 'pointer', fontWeight: 500, fontSize: 13, color: '#5A6472' }}>Nueva por calculo</button>
         <button onClick={() => setModo('params')} style={{ background: 'transparent', border: 'none', padding: '6px 2px', cursor: 'pointer', fontWeight: 500, fontSize: 13, color: '#5A6472' }}>Parametros Cotizador</button>
       </div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
