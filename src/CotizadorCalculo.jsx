@@ -73,6 +73,7 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
   const tdc = { padding: '3px 5px', borderBottom: '1px solid ' + T.borderSoft, fontSize: 12.5 }
 
   return (<div>
+    <datalist id="cot-productos">{P.productos.map((pp, kk) => <option key={kk} value={pp.n} />)}</datalist>
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
       <button onClick={onVolver} style={{ background: 'transparent', border: '1px solid ' + T.border, borderRadius: 8, padding: '7px 11px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: T.textSoft }}><ChevronLeft size={15} /> Volver</button>
       <h3 style={{ margin: 0, fontFamily: "'Oswald',sans-serif", fontSize: 18, fontWeight: 600, color: T.navy, textTransform: 'uppercase' }}>Nueva cotizacion por calculo</h3>
@@ -140,7 +141,7 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
             <tbody>
               {it.capas.map((c, j) => { const prod = idx[c.p]; const mp = milsProm(c); const rend = prod ? rendimientoM2Gal(prod.s, mp, c.perdida, cte.constante) : 0; const vg = prod ? valorGalon(prod, cte.litrosPorGalon) : 0; const vm = prod ? valorM2Capa(prod, mp, c.perdida, cte) : 0; return (<tr key={j}>
                 <td style={tdc}>{j + 1}a</td>
-                <td style={tdc}><BuscadorProducto value={c.p} productos={P.productos} onSelect={val => updItem(i, x => x.capas[j].p = val)} style={{ ...inp, width: '100%', minWidth: 150, padding: '5px 7px' }} /></td>
+                <td style={tdc}><input list="cot-productos" value={c.p} onChange={e => updItem(i, x => x.capas[j].p = e.target.value)} placeholder="escribe producto..." style={{ ...inp, width: '100%', minWidth: 150, padding: '5px 7px' }} /></td>
                 <td style={tdc}><input type="number" value={c.mMin} onChange={e => updItem(i, x => x.capas[j].mMin = e.target.value)} style={{ ...inp, width: 68, padding: '5px 6px' }} /></td>
                 <td style={tdc}><input type="number" value={c.mMax} onChange={e => updItem(i, x => x.capas[j].mMax = e.target.value)} style={{ ...inp, width: 68, padding: '5px 6px' }} /></td>
                 <td style={tdc}><input type="number" value={c.perdida} onChange={e => updItem(i, x => x.capas[j].perdida = e.target.value)} style={{ ...inp, width: 62, padding: '5px 6px' }} /></td>
