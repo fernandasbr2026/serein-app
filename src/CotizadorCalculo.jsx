@@ -6,6 +6,7 @@ import { Plus, Trash2, ChevronLeft } from 'lucide-react'
 const LS_KEY = 'cotizador_params_v1'
 function cargarParams() { try { const s = localStorage.getItem(LS_KEY); if (s) { const o = JSON.parse(s); if (o && o.productos) return o } } catch (e) {} return JSON.parse(JSON.stringify(COTIZADOR_SEED)) }
 const T = THEME
+const CASOS_DIF = { A: 'Planchas, estanques exteriores, vigas simples, superficies amplias y accesibles', B: 'Perfiles estructurales, columnas, algo de interior, acceso regular', C: 'Reticulados / celosías, muchas aristas o sectores, mayormente interior', D: 'Ductos, interior confinado, cañerías, geometría difícil', E: 'Confinado + geometría difícil + interior simultáneamente' }
 const clp = n => '$' + Math.round(+n || 0).toLocaleString('es-CL')
 const milsProm = c => { const a = +c.mMin || 0; const b = (c.mMax === '' || c.mMax == null) ? a : (+c.mMax || 0); return b > 0 ? (a + b) / 2 : a }
 function nuevaCapa() { return { p: '', mMin: 2, mMax: 4, perdida: 2 } }
@@ -115,7 +116,7 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
           <div><span style={lab}>Descripcion</span><input value={it.desc} onChange={e => updItem(i, x => x.desc = e.target.value)} style={{ ...inp, width: '100%' }} /></div>
           <div><span style={lab}>RAL / Color</span><input value={it.ral} onChange={e => updItem(i, x => x.ral = e.target.value)} style={{ ...inp, width: '100%' }} /></div>
           <div><span style={lab}>m2 superficie</span><input type="number" value={it.m2} onChange={e => updItem(i, x => x.m2 = e.target.value)} style={{ ...inp, width: '100%' }} /></div>
-          <div><span style={lab}>Dificultad</span><select value={it.dif} onChange={e => updItem(i, x => x.dif = e.target.value)} style={{ ...inp, width: '100%' }}>{P.factores.map((f, k) => <option key={k} value={f.nivel}>{f.nivel} (x{f.factor})</option>)}</select></div>
+          <div><span style={lab}>Dificultad</span><select value={it.dif} onChange={e => updItem(i, x => x.dif = e.target.value)} style={{ ...inp, width: '100%' }}>{P.factores.map((f, k) => <option key={k} value={f.nivel}>{f.nivel} (x{f.factor})</option>)}</select><div style={{ fontSize: 11, color: T.textMute, marginTop: 3, lineHeight: 1.3 }}>{CASOS_DIF[(it.dif || '').trim()[0]] || ''}</div></div>
           <div><span style={lab}>Limpieza SP-1 /m2</span><input type="number" value={it.limpieza} onChange={e => updItem(i, x => x.limpieza = e.target.value)} style={{ ...inp, width: '100%' }} /></div>
         </div>
 
