@@ -47,7 +47,7 @@ export default function App() {
     if (!session) { setPerfil(null); setErrorPerfil(null); return }
     supabase
       .from('perfiles')
-      .select('nombre, rol, areas, tipo')
+      .select('nombre, rol, areas, tipo, modulos, sin_valores')
       .eq('id', session.user.id)
       .single()
       .then(({ data, error }) => {

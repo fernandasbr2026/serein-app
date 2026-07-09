@@ -160,10 +160,13 @@ function ResumenModulos({ ots, proyectos }) {
 
 export default function Dashboard({ perfil, email, onLogout }) {
   const areasUsuario = perfil.areas || []
+  const modulosPerfil = Array.isArray(perfil.modulos) ? perfil.modulos : null
+  const sinValores = Array.isArray(perfil.sin_valores) ? perfil.sin_valores : []
   const esGerencia = areasUsuario.length > 1 && perfil.tipo !== 'supervisor'
   const esSupervisor = perfil.tipo === 'supervisor'
   const tieneProyectos = areasUsuario.includes('Proyectos')
   const areasOT = areasUsuario.filter(a => a === 'Santa Rosa' || a === 'Istria')
+  const puedeVer = code => modulosPerfil ? modulosPerfil.includes(code) : esGerencia
   // Cada usuario ve en paralelo las OT de su área asignada
   const EMAIL_AREA = { 'joce@sereinspa.com': 'Santa Rosa', 'jose@sereinspa.com': 'Santa Rosa', 'produccion@sereinspa.com': 'Istria', 'mario@sereinspa.com': 'Proyectos' }
   const _email = (email || '').toLowerCase()
@@ -172,7 +175,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const areasOTUsuario = veTodasLasOT
     ? ['Santa Rosa', 'Istria', 'Proyectos']
     : [...new Set([...areasUsuario.filter(a => ['Santa Rosa', 'Istria', 'Proyectos'].includes(a)), ...(areaPorEmail ? [areaPorEmail] : [])])]
-  const tabs = esSupervisor ? [...(areasOTUsuario.length > 0 ? ['GESTION_OT'] : []), 'PRODUCCION', 'COMPRAS_OP', 'LIBRO_COMPRAS', 'ASISTENCIA'] : [
+  let tabs = esSupervisor ? [...(areasOTUsuario.length > 0 ? ['GESTION_OT'] : []), 'PRODUCCION', 'COMPRAS_OP', 'LIBRO_COMPRAS', 'ASISTENCIA'] : [
     ...(esGerencia ? ['TODAS'] : []),
     ...(esGerencia ? ['ASESOR'] : []),
     ...areasUsuario.filter(a => a !== 'Proyectos'),
@@ -192,6 +195,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
     'CONTACTOS',
     ...(esGerencia ? ['PARAMETROS'] : []),
   ]
+  const ORDEN_MODULOS = ['TODAS', 'ASESOR', 'Santa Rosa', 'Istria', 'GESTION_PROYECTOS', 'FINANZAS', 'ORDENES_COMPRA', 'PAGOS', 'LIBRO_COMPRAS', 'LIBRO_VENTAS', 'TRAZABILIDAD', 'COTIZADOR', 'CLIENTES', 'CONTACTOS', 'COMPRAS_OP', 'PRODUCCION', 'GESTION_OT', 'ASISTENCIA', 'PARAMETROS']
+  if (modulosPerfil) tabs = ORDEN_MODULOS.filter(c => modulosPerfil.includes(c))
   const [areaSel, setAreaSel] = useState(tabs[0])
   const [sidebarColapsado, setSidebarColapsado] = useState(false)
 
@@ -224,7 +229,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const [facturas, setFacturas] = useState(() => LS('facturas', FACTURAS_SEED))
   const [cotizaciones, setCotizaciones] = useState(() => LS('cotizaciones', []))
   // Valores de las OT visibles solo para Gerencia, Caro y Mario
-  const verValoresOT = esGerencia || ['caro@sereinspa.com', 'mario@sereinspa.com'].includes((email || '').toLowerCase())
+  const verValoresOT = (esGerencia || ['caro@sereinspa.com', 'mario@sereinspa.com'].includes((email || '').toLowerCase())) && !sinValores.includes('GESTION_OT')
   const [comisiones, setComisiones] = useState(() => LS('comisiones', { 'Santa Rosa': 3, 'Istria': 2, 'Proyectos': 2 }))
   const [ppmPct, setPpmPct] = useState(() => LS('ppmPct', 2))
   const [ots, setOts] = useState(() => LS('ots', OTS_INICIALES))
@@ -368,7 +373,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
       <main style={{ flex: 1, minWidth: 0, height: '100vh', overflowY: 'auto' }}>
       <div style={{ padding: 20, maxWidth: 1200, margin: '0 auto' }}>
               <PageHeader titulo={nombreTab(areaSel)} perfil={perfil} email={email} />
-        {esModuloAsesor && esGerencia ? (<AsesorModule fin={fin} pp={pp} proyectos={proyectos} ots={ots} params={params} onIr={setAreaSel} />) : esModuloLibroCompras ? (<LibroComprasModule esGerencia={esGerencia} ots={ots} factoringList={params.factoring || []} />) : esModuloLibroVentas ? (<LibroVentasModule ots={ots} />) : esModuloProyectos ? (
+        {esModuloAsesor && puedeVer('ASESOR') ? (<AsesorModule fin={fin} pp={pp} proyectos={proyectos} ots={ots} params={params} onIr={setAreaSel} />) : esModuloLibroCompras ? (<LibroComprasModule esGerencia={esGerencia} ots={ots} factoringList={params.factoring || []} />) : esModuloLibroVentas ? (<LibroVentasModule ots={ots} />) : esModuloProyectos ? (
           <>
           {resumenFinancieroArea('Proyectos')}
           <ProyectosModule proyectos={proyectos} setProyectos={setProyectos} params={params} facturas={facturas} setFacturas={setFacturas} comisionPct={comisiones['Proyectos'] ?? 2} setComisionPct={v => setComisiones(c => ({ ...c, Proyectos: v }))} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={nombresClientes(contactos)} />
@@ -401,15 +406,15 @@ export default function Dashboard({ perfil, email, onLogout }) {
           />
         ) : esModuloCot ? (
           <CotizacionesModule cotizaciones={cotizaciones} setCotizaciones={setCotizaciones} ots={ots} setOts={setOts} clientes={contactos.clientes || []} onAddCliente={cli => { const nuevoCli = { id: 'cf' + Date.now(), estado: 'Activo', giro: '', direccion: '', comuna: '', vendedor: '', ...cli }; setContactos(prev => ({ ...prev, clientes: [nuevoCli, ...(prev.clientes || [])] })); setClientes(prev => [nuevoCli, ...(prev || [])]) }} />
-        ) : esModuloFin && esGerencia ? (
+        ) : esModuloFin && puedeVer('FINANZAS') ? (
           <FinanzasModule otsDisponibles={ots.map(o => o.numero)} fin={fin} setFin={setFin} />
-        ) : esModuloPagos && esGerencia ? (
+        ) : esModuloPagos && puedeVer('PAGOS') ? (
           <ProveedoresPagosModule pp={pp} setPp={setPp} gastos={fin.gastos || []} />
-        ) : esModuloOC && esGerencia ? (
+        ) : esModuloOC && puedeVer('ORDENES_COMPRA') ? (
           <OrdenesCompraModule pp={pp} setPp={setPp} ots={ots} />
-        ) : esModuloTraza && esGerencia ? (
+        ) : esModuloTraza && puedeVer('TRAZABILIDAD') ? (
           <TrazabilidadModule cotizaciones={cotizaciones} ots={ots} ordenesCompra={pp.ocs || []} />
-        ) : esModuloParams && esGerencia ? (
+        ) : esModuloParams && puedeVer('PARAMETROS') ? (
           <ParametrosModule params={params} setParams={setParams} />
         ) : esModuloClientes ? (
           <ClientesModule clientes={clientes} setClientes={setClientes} proyectos={proyectos} ots={ots} />
@@ -417,7 +422,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
           <ContactosModule contactos={contactos} setContactos={setContactos} />
         ) : esModuloMO ? (
           <ManoObraModule
-            esGerencia={esGerencia}
+            esGerencia={esGerencia && !sinValores.includes('ASISTENCIA')}
             otsDisponibles={ots.map(o => o.numero)}
             usuario={email}
             mo={mo} setMo={setMo}
