@@ -400,7 +400,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
             mo={mo}
           />
         ) : esModuloCot ? (
-          <CotizacionesModule cotizaciones={cotizaciones} setCotizaciones={setCotizaciones} ots={ots} setOts={setOts} clientes={contactos.clientes || []} onAddCliente={cli => setContactos(prev => ({ ...prev, clientes: [{ id: 'cf' + Date.now(), estado: 'Activo', giro: '', direccion: '', comuna: '', vendedor: '', ...cli }, ...(prev.clientes || [])] }))} />
+          <CotizacionesModule cotizaciones={cotizaciones} setCotizaciones={setCotizaciones} ots={ots} setOts={setOts} clientes={contactos.clientes || []} onAddCliente={cli => { const nuevoCli = { id: 'cf' + Date.now(), estado: 'Activo', giro: '', direccion: '', comuna: '', vendedor: '', ...cli }; setContactos(prev => ({ ...prev, clientes: [nuevoCli, ...(prev.clientes || [])] })); setClientes(prev => [nuevoCli, ...(prev || [])]) }} />
         ) : esModuloFin && esGerencia ? (
           <FinanzasModule otsDisponibles={ots.map(o => o.numero)} fin={fin} setFin={setFin} />
         ) : esModuloPagos && esGerencia ? (
