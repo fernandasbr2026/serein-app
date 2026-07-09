@@ -8,7 +8,7 @@ import { Plus, Trash2, ChevronDown, ChevronUp, Building2, Phone, Mail, User } fr
 // Versión en memoria.
 // ============================================================
 
-const C = { azul: '#1D1D1B', teal: '#A8501F', ambar: '#D2642F', rojo: '#B5432E', verde: '#3D7A4E', carbon: '#161616', gris: '#7A8288' }
+const C = { azul: '#061A40', teal: '#0B7285', ambar: '#FF6B00', rojo: '#D64545', verde: '#12805C', carbon: '#0F1A2E', gris: '#8A929E' }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
 const norm = s => (s || '').toString().trim().toLowerCase()

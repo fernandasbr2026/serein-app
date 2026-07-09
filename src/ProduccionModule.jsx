@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { Plus, Trash2, CalendarDays, Factory, ClipboardList, BarChart3, CheckCircle2, AlertTriangle, Users } from 'lucide-react'
 
-const C = { naranja: '#D2642F', carbon: '#161616', verde: '#3D7A4E', rojo: '#B5432E', gris: '#7A8288', azul: '#1D5A73' }
+const C = { naranja: '#FF6B00', carbon: '#0F1A2E', verde: '#12805C', rojo: '#D64545', gris: '#8A929E', azul: '#25608E' }
 const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
 const hoy = () => new Date().toISOString().slice(0, 10)
 const fm2 = n => n.toLocaleString('es-CL', { maximumFractionDigits: 1 })

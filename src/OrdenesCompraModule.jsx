@@ -9,7 +9,7 @@ import { PROVEEDORES_FICHA } from './proveedores-data.js'
 // Alimenta: costos de la OT, cuentas por pagar y flujo de caja.
 // ============================================================
 
-const C = { naranja: '#D2642F', teal: '#A8501F', carbon: '#161616', verde: '#3D7A4E', rojo: '#B5432E', gris: '#7A8288', azul: '#1D1D1B' }
+const C = { naranja: '#FF6B00', teal: '#0B7285', carbon: '#0F1A2E', verde: '#12805C', rojo: '#D64545', gris: '#8A929E', azul: '#061A40' }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const num = s => { const v = parseInt(String(s).replace(/[^\d-]/g, ''), 10); return isNaN(v) ? 0 : v }
 const inp = { padding: '6px 8px', border: '1px solid #CBD2D6', fontSize: 12.5, boxSizing: 'border-box' }

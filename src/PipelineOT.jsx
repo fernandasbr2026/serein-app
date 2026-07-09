@@ -1,7 +1,7 @@
 import React from 'react'
 import { Hourglass, CheckCircle2, ArrowRight } from 'lucide-react'
 
-const C = { azul: '#1D1D1B', teal: '#A8501F', ambar: '#D2642F', rojo: '#B5432E', verde: '#3D7A4E', carbon: '#161616' }
+const C = { azul: '#061A40', teal: '#0B7285', ambar: '#FF6B00', rojo: '#D64545', verde: '#12805C', carbon: '#0F1A2E' }
 const clp = n => '$' + Math.round(n).toLocaleString('es-CL')
 const AREA_COLOR = { 'Santa Rosa': '#A8501F', 'Istria': '#1D1D1B', 'Proyectos': '#D2642F' }
 

@@ -12,7 +12,7 @@ import Paginador, { paginar } from './Paginador.jsx'
 // Defontana (razón social + RUT) en la fase de integración.
 // ============================================================
 
-const C = { azul: '#1D1D1B', teal: '#A8501F', ambar: '#D2642F', rojo: '#B5432E', verde: '#3D7A4E', carbon: '#161616', gris: '#7A8288' }
+const C = { azul: '#061A40', teal: '#0B7285', ambar: '#FF6B00', rojo: '#D64545', verde: '#12805C', carbon: '#0F1A2E', gris: '#8A929E' }
 const inp = { padding: '6px 8px', border: '1px solid #CBD2D6', fontSize: 12.5, boxSizing: 'border-box' }
 const norm = s => (s || '').toString().trim()
 
