@@ -3,7 +3,7 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { LogOut, TrendingUp, Wallet, AlertTriangle, Landmark, User } from 'lucide-react'
 import { DATA } from './data.js'
 import LogoSerein from './LogoSerein.jsx'
-import { Sidebar, PageHeader, THEME } from './ui.jsx'
+import { Sidebar, PageHeader, THEME, GlobalStyles } from './ui.jsx'
 import ProyectosModule from './ProyectosModule.jsx'
 import OTModule, { OTS_INICIALES } from './OTModule.jsx'
 import PipelineOT from './PipelineOT.jsx'
@@ -362,6 +362,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: THEME.bg, fontFamily: THEME.font }}>
+      <GlobalStyles />
       <Sidebar tabs={tabs} areaSel={areaSel} setAreaSel={setAreaSel} nombreTab={nombreTab} perfil={perfil} email={email} onLogout={onLogout} colapsado={sidebarColapsado} setColapsado={setSidebarColapsado} onReset={borrarDatosLocales} />
 
       <main style={{ flex: 1, minWidth: 0, height: '100vh', overflowY: 'auto' }}>

@@ -86,6 +86,10 @@ export function Sidebar({ tabs, areaSel, setAreaSel, nombreTab, perfil, email, o
   </aside>)
 }
 
+export function GlobalStyles() {
+  return (<style>{'*{box-sizing:border-box}' + 'body{margin:0}' + '::selection{background:rgba(255,107,0,.18)}' + '::-webkit-scrollbar{width:10px;height:10px}' + '::-webkit-scrollbar-thumb{background:#CBD2DC;border-radius:8px;border:2px solid transparent;background-clip:content-box}' + '::-webkit-scrollbar-thumb:hover{background:#AAB3C0;background-clip:content-box}' + '::-webkit-scrollbar-track{background:transparent}' + 'table tbody tr{transition:background .12s ease}' + 'table tbody tr:hover{background:#F4F7FB}' + 'input:focus,select:focus,textarea:focus{outline:none;box-shadow:0 0 0 3px rgba(255,107,0,.15);border-color:#FF6B00 !important}' + 'button{transition:filter .12s ease,transform .06s ease,background .12s ease}' + 'button:not(:disabled):active{transform:translateY(1px)}'}</style>)
+}
+
 export function PageHeader({ titulo, perfil, email }) {
   const hoy = new Date()
   const dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
