@@ -39,6 +39,8 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
   const [sg, setSg] = useState(3380000)
   const [sp, setSp] = useState(2700000)
   const [guardado, setGuardado] = useState('')
+  const [addOpen, setAddOpen] = useState(false)
+  const [nc, setNc] = useState({ nombre: '', rut: '', giro: '', direccion: '', comuna: '' })
 
   const sedeP = P.sedes[sede] || {}
   const totalFijos = sedeP.totalFijosFallback || 18000000
@@ -54,8 +56,8 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
   function guardar() {
     const numero = proximoNumero(cotizaciones)
     const cli = cliSel || { nombre: cliQuery }
-    const cot = { id: 'cot' + Date.now(), numero, folio: numero, area: sede, vencimiento: new Date().toISOString().slice(0, 10), tipo: 'calculo', origen: 'cotizador', estado: 'Alta probabilidad de cierre', cliente: cli.nombre, clienteRut: cli.rut || '', clienteDireccion: cli.direccion || '', sede, fecha: new Date().toISOString().slice(0, 10), porcentajeGanancia: +pct,
-      items: items.map((it, i) => { const d = dg(it); const pm = precioM2(d.costoM2, pct); return { codigo: it.grado || '', detalle: (it.desc || 'Item ' + (i + 1)) + (it.ral ? ' - ' + it.ral : '') + ' - ' + (it.capas.filter(c => c.p).map(c => c.p).join(' + ') || 'solo granallado ' + it.grado), cant: +it.m2 || 0, unidad: 'm2', pUnitario: Math.round(pm), descuento: 0, descripcion: it.desc, ral: it.ral, m2: +it.m2 || 0, gradoSSPC: it.grado, factorDificultad: it.dif, limpiezaSP1: +it.limpieza || 0, capas: it.capas.filter(c => c.p), costoM2: Math.round(d.costoM2), precioM2: Math.round(pm), total: Math.round(pm * (+it.m2 || 0)), desglose: { granallado: Math.round(d.granallado), aplicacion: Math.round(d.aplicacion), diluyente: Math.round(d.diluyente), pintura: Math.round(d.pintura), fijos: Math.round(d.fijos) } } }),
+    const cot = { id: 'cot' + Date.now(), numero, folio: numero, area: sede, vencimiento: new Date().toISOString().slice(0, 10), tipo: 'calculo', origen: 'cotizador', estado: 'Alta probabilidad de cierre', cliente: cli.nombre || '', rut: cli.rut || '', giro: cli.giro || '', direccion: cli.direccion || '', comuna: cli.comuna || '', ciudad: cli.ciudad || cli.comuna || '', condicionPago: 'CONTADO', vendedor: cli.vendedor || 'Mario Vidal', sede, fecha: new Date().toISOString().slice(0, 10), porcentajeGanancia: +pct,
+      items: items.map((it, i) => { const d = dg(it); const pm = precioM2(d.costoM2, pct); return { codigo: it.grado || '', detalle: (it.desc || 'Item ' + (i + 1)) + (it.ral ? ' - ' + it.ral : '') + ' - ' + (it.capas.filter(c => c.p).map(c => c.p).join(' + ') || 'solo granallado ' + it.grado), cant: +it.m2 || 0, unidad: 'm\u00B2', pUnitario: Math.round(pm), descuento: 0, comentario: (it.capas.filter(c => c.p).map(c => c.p + ' ' + milsProm(c) + ' mils').join(' + ') || 'Solo granallado') + ' - ' + it.grado, descripcion: it.desc, ral: it.ral, m2: +it.m2 || 0, gradoSSPC: it.grado, factorDificultad: it.dif, limpiezaSP1: +it.limpieza || 0, capas: it.capas.filter(c => c.p), costoM2: Math.round(d.costoM2), precioM2: Math.round(pm), total: Math.round(pm * (+it.m2 || 0)), desglose: { granallado: Math.round(d.granallado), aplicacion: Math.round(d.aplicacion), diluyente: Math.round(d.diluyente), pintura: Math.round(d.pintura), fijos: Math.round(d.fijos) } } }),
       total: Math.round(totalCot), montoCotizado: Math.round(totalCot), supuestos: { sueldosGranallado: +sg, sueldosPintores: +sp, totalFijos } }
     setCotizaciones([...(cotizaciones || []), cot])
     if (!cliSel && cliQuery.trim()) { try { onAddCliente(cliQuery.trim()) } catch (e) {} }
@@ -90,7 +92,7 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
           {cliSel && (<div style={{ marginTop: 8, display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: T.textSoft, background: '#F5F7FA', borderRadius: 8, padding: '8px 10px' }}>
             <span><b>RUT:</b> {cliSel.rut || '-'}</span><span><b>Direccion:</b> {cliSel.direccion || '-'}</span><span><b>Giro:</b> {cliSel.giro || '-'}</span><span><b>Comuna:</b> {cliSel.comuna || '-'}</span>
           </div>)}
-          {!cliSel && cliQuery.trim() && matches.length === 0 && <div style={{ marginTop: 6, fontSize: 12, color: T.warn }}>Cliente nuevo (no esta en el listado) - se guardara como nuevo.</div>}
+          {!cliSel && cliQuery.trim() && matches.length === 0 && (<div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}><span style={{ fontSize: 12, color: T.warn }}>No esta en el listado.</span><button onClick={() => { setNc({ nombre: cliQuery.trim(), rut: '', giro: '', direccion: '', comuna: '' }); setAddOpen(true) }} style={{ background: T.orange, color: '#fff', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>+ Agregar cliente</button></div>)}
         </div>
         <div>
           <span style={lab}>Sede</span>
@@ -198,5 +200,23 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
         <button onClick={guardar} disabled={!cliQuery.trim()} style={{ ...btnP, opacity: cliQuery.trim() ? 1 : 0.5 }}>Guardar borrador</button>
       </div>
     </div>
+    {addOpen && (<div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(6,26,64,.45)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ background: '#fff', borderRadius: 14, boxShadow: '0 20px 50px rgba(16,24,40,.25)', padding: 22, width: 440, maxWidth: '100%' }}>
+        <h3 style={{ margin: '0 0 14px', fontFamily: "'Oswald',sans-serif", fontSize: 16, color: T.navy, textTransform: 'uppercase' }}>Agregar cliente</h3>
+        <div style={{ display: 'grid', gap: 10 }}>
+          <div><span style={lab}>Nombre / Razon social</span><input value={nc.nombre} onChange={e => setNc({ ...nc, nombre: e.target.value })} style={{ ...inp, width: '100%' }} /></div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ flex: 1 }}><span style={lab}>RUT</span><input value={nc.rut} onChange={e => setNc({ ...nc, rut: e.target.value })} style={{ ...inp, width: '100%' }} /></div>
+            <div style={{ flex: 1 }}><span style={lab}>Comuna</span><input value={nc.comuna} onChange={e => setNc({ ...nc, comuna: e.target.value })} style={{ ...inp, width: '100%' }} /></div>
+          </div>
+          <div><span style={lab}>Giro</span><input value={nc.giro} onChange={e => setNc({ ...nc, giro: e.target.value })} style={{ ...inp, width: '100%' }} /></div>
+          <div><span style={lab}>Direccion</span><input value={nc.direccion} onChange={e => setNc({ ...nc, direccion: e.target.value })} style={{ ...inp, width: '100%' }} /></div>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+          <button onClick={() => setAddOpen(false)} style={{ background: '#fff', border: '1px solid ' + T.border, borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontSize: 13, color: T.textSoft }}>Cancelar</button>
+          <button onClick={() => { if (!nc.nombre.trim()) return; const obj = { nombre: nc.nombre.trim(), rut: nc.rut.trim(), giro: nc.giro.trim(), direccion: nc.direccion.trim(), comuna: nc.comuna.trim() }; try { onAddCliente(obj) } catch (e) {} setCliSel(obj); setCliQuery(obj.nombre); setAddOpen(false) }} style={{ ...btnP }}>Guardar cliente</button>
+        </div>
+      </div>
+    </div>)}
   </div>)
 }
