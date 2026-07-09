@@ -23,10 +23,10 @@ const ICON = {
 const iconoTab = c => ICON[c] || Circle
 
 const CATS = [
-  { nombre: 'Principal', codes: ['TODAS', 'ASESOR'] },
-  { nombre: 'Producción', codes: ['Santa Rosa', 'Istria', 'Proyectos', 'GESTION_OT', 'PRODUCCION', 'COMPRAS_OP', 'ASISTENCIA'] },
-  { nombre: 'Comercial', codes: ['GESTION_PROYECTOS', 'COTIZADOR', 'CLIENTES', 'CONTACTOS'] },
-  { nombre: 'Finanzas', codes: ['FINANZAS', 'PAGOS', 'ORDENES_COMPRA', 'LIBRO_COMPRAS', 'LIBRO_VENTAS', 'TRAZABILIDAD'] },
+  { nombre: 'Principal', codes: ['TODAS', 'ASESOR', 'Santa Rosa', 'Istria', 'Proyectos', 'GESTION_PROYECTOS'] },
+  { nombre: 'Finanzas', codes: ['FINANZAS', 'ORDENES_COMPRA', 'PAGOS', 'LIBRO_COMPRAS', 'LIBRO_VENTAS', 'TRAZABILIDAD'] },
+  { nombre: 'Comercial', codes: ['COTIZADOR', 'CLIENTES', 'CONTACTOS', 'COMPRAS_OP'] },
+  { nombre: 'Producción', codes: ['PRODUCCION', 'GESTION_OT', 'ASISTENCIA'] },
   { nombre: 'Configuración', codes: ['PARAMETROS'] }
 ]
 
