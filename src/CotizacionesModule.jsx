@@ -291,6 +291,9 @@ import CotizadorCalculo from './CotizadorCalculo.jsx'
 export default function CotizacionesModule({ cotizaciones = [], setCotizaciones = () => {}, ots = [], setOts = () => {}, clientes = [], onAddCliente = () => {} }) {
   const [creando, setCreando] = useState(false)
   const [modo, setModo] = useState('rapida')
+  const [aproCot, setAproCot] = useState(null)
+  const [aproFecha, setAproFecha] = useState('')
+  const [aproResp, setAproResp] = useState('')
   const [editId, setEditId] = useState(null)
   const [busca, setBusca] = useState('')
   const [rep, setRep] = useState(false)
@@ -327,14 +330,12 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
   }
   const eliminar = id => { if (window.confirm('¿Eliminar esta cotización?')) setCotizaciones(cotizaciones.filter(c => c.id !== id)) }
 
-  function aprobar(cot) {
+  function aprobar(cot, fechaEntrega = '', responsable = '') {
     if (cot.estado === 'Aprobada') { window.alert('Esta cotización ya fue aprobada y su OT ya existe.'); return }
     const numeroOT = 'OT-' + cot.folio
     if ((ots || []).some(o => o.numero === numeroOT)) { window.alert('Ya existe una OT creada para esta cotización (' + numeroOT + '). No se creó otra.') }
     else {
       const t = totales(cot)
-      const fechaEntrega = window.prompt('Fecha de entrega de la OT (AAAA-MM-DD), opcional:', '') || ''
-      const responsable = window.prompt('Responsable de la OT, opcional:', '') || ''
       const nuevaOT = {
         id: 'ot' + Date.now(), numero: numeroOT, area: cot.area || 'Santa Rosa', cliente: cot.cliente, fecha: cot.fecha,
         cotizacion: 'COT ' + cot.folio, oc: '—', m2: (cot.items || []).filter(i => i.unidad === 'm²').reduce((a, i) => a + (Number(i.cant) || 0), 0), montoCotizado: t.afecto,
@@ -348,7 +349,7 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
   }
 
   const updateCot = (id, cambios) => setCotizaciones(cotizaciones.map(x => x.id === id ? { ...x, ...cambios } : x))
-  const setEstadoCot = (c, nuevo) => { if (nuevo === 'Aprobada' && c.estado !== 'Aprobada') aprobar(c); else updateCot(c.id, { estado: nuevo }) }
+  const setEstadoCot = (c, nuevo) => { if (nuevo === 'Aprobada' && c.estado !== 'Aprobada') setAproCot(c); else updateCot(c.id, { estado: nuevo }) }
 
   const mostradas = cotizaciones.filter(c => !busca || (String(c.folio) + ' ' + (c.cliente || '')).toLowerCase().includes(busca.toLowerCase()))
     .sort((a, b) => (parseInt(String(b.folio).replace(/\D/g, ''), 10) || 0) - (parseInt(String(a.folio).replace(/\D/g, ''), 10) || 0))
@@ -370,6 +371,20 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
         <button onClick={() => setModo('calculo')} style={{ background: 'transparent', border: 'none', padding: '6px 2px', marginRight: 12, cursor: 'pointer', fontWeight: 500, fontSize: 13, color: '#5A6472' }}>Nueva por calculo</button>
         <button onClick={() => setModo('params')} style={{ background: 'transparent', border: 'none', padding: '6px 2px', cursor: 'pointer', fontWeight: 500, fontSize: 13, color: '#5A6472' }}>Parametros Cotizador</button>
       </div>
+      {aproCot && (<div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(6,26,64,.45)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+        <div style={{ background: '#fff', borderRadius: 14, boxShadow: '0 20px 50px rgba(16,24,40,.25)', padding: 22, width: 440, maxWidth: '100%' }}>
+          <h3 style={{ margin: '0 0 6px', fontFamily: "'Oswald',sans-serif", fontSize: 16, color: '#061A40', textTransform: 'uppercase' }}>Aprobar y generar OT</h3>
+          <div style={{ fontSize: 12.5, color: '#5A6472', marginBottom: 14 }}>Se creara la OT-{aproCot.folio} con el mismo numero. Completa los datos de la orden:</div>
+          <div style={{ display: 'grid', gap: 10 }}>
+            <div><span style={{ fontSize: 11.5, color: '#8A929E', fontWeight: 600, textTransform: 'uppercase' }}>Fecha de entrega</span><input type="date" value={aproFecha} onChange={e => setAproFecha(e.target.value)} style={{ border: '1px solid #E6E8EE', borderRadius: 8, padding: '8px 10px', fontSize: 13, width: '100%', boxSizing: 'border-box' }} /></div>
+            <div><span style={{ fontSize: 11.5, color: '#8A929E', fontWeight: 600, textTransform: 'uppercase' }}>Responsable</span><input value={aproResp} onChange={e => setAproResp(e.target.value)} placeholder="Nombre del responsable" style={{ border: '1px solid #E6E8EE', borderRadius: 8, padding: '8px 10px', fontSize: 13, width: '100%', boxSizing: 'border-box' }} /></div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+            <button onClick={() => setAproCot(null)} style={{ background: '#fff', border: '1px solid #E6E8EE', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontSize: 13, color: '#5A6472' }}>Cancelar</button>
+            <button onClick={() => { const cc = aproCot; setAproCot(null); aprobar(cc, aproFecha, aproResp); setAproFecha(''); setAproResp('') }} style={{ background: '#FF6B00', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 15px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Aprobar y crear OT</button>
+          </div>
+        </div>
+      </div>)}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
         <button onClick={() => setCreando(true)} style={{ background: C.teal, color: '#fff', border: 'none', padding: '9px 16px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Nueva cotización</button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, border: '1px solid #CBD2D6', padding: '2px 6px' }}>
