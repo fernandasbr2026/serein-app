@@ -73,7 +73,7 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
   const tdc = { padding: '3px 5px', borderBottom: '1px solid ' + T.borderSoft, fontSize: 12.5 }
 
   return (<div>
-    <datalist id="cot-productos">{P.productos.map((pp, kk) => <option key={kk} value={pp.n} />)}</datalist>
+    <datalist id="cot-productos">{P.productos.map((pp, kk) => <option key={kk} value={pp.n} label={pp.mc} />)}</datalist>
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
       <button onClick={onVolver} style={{ background: 'transparent', border: '1px solid ' + T.border, borderRadius: 8, padding: '7px 11px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: T.textSoft }}><ChevronLeft size={15} /> Volver</button>
       <h3 style={{ margin: 0, fontFamily: "'Oswald',sans-serif", fontSize: 18, fontWeight: 600, color: T.navy, textTransform: 'uppercase' }}>Nueva cotizacion por calculo</h3>
