@@ -6,6 +6,7 @@ import { Plus, Trash2, ChevronLeft } from 'lucide-react'
 const LS_KEY = 'cotizador_params_v1'
 function cargar() { try { const s = localStorage.getItem(LS_KEY); if (s) { const o = JSON.parse(s); if (o && o.productos) return o } } catch (e) {} return JSON.parse(JSON.stringify(COTIZADOR_SEED)) }
 const T = THEME
+const CASOS_DIF = { A: 'Planchas, estanques exteriores, vigas simples, superficies amplias y accesibles', B: 'Perfiles estructurales, columnas, algo de interior, acceso regular', C: 'Reticulados / celosías, muchas aristas o sectores, mayormente interior', D: 'Ductos, interior confinado, cañerías, geometría difícil', E: 'Confinado + geometría difícil + interior simultáneamente' }
 
 const SEDE_CAMPOS = [
   ['granallaAmortizada', 'Granalla amortizada ($/mes)'],
@@ -111,7 +112,7 @@ export default function CotizadorParametros({ onVolver }) {
       <div style={card}>
         <div style={{ fontWeight: 600, marginBottom: 10, color: T.text }}>Factores de dificultad (geometria/acceso)</div>
         {p.factores.map((f, i) => (<div key={i} style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 6 }}>
-          <span style={{ flex: 1, fontSize: 13 }}>{f.nivel}</span>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600 }}>{f.nivel} <span style={{ fontSize: 11, color: T.textMute, fontWeight: 400 }}>(recargo +{Math.round(((+f.factor || 1) - 1) * 100)}%)</span></div><div style={{ fontSize: 11.5, color: T.textMute, marginTop: 2 }}>{CASOS_DIF[(f.nivel || '').trim()[0]] || ''}</div></div>
           {ni(f.factor, v => upd(n => { n.factores[i].factor = v }), { width: 90 })}
         </div>))}
       </div>
