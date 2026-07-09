@@ -2,95 +2,120 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from './supabase.js'
 import Login from './Login.jsx'
 import Dashboard from './Dashboard.jsx'
-import { pullState, pushState } from './sync.js'
-
-// Captura errores de render para que la app no se quede en blanco y muestre el detalle
-class ErrorBoundary extends React.Component {
-  constructor(props) { super(props); this.state = { error: null } }
-  static getDerivedStateFromError(error) { return { error } }
-  componentDidCatch(error, info) { console.error('Error en la app:', error, info) }
-  render() {
-    if (this.state.error) {
-      const msg = (this.state.error && this.state.error.message) || String(this.state.error)
-      return (
-        <div style={{ minHeight: '100vh', background: '#161616', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 14, fontFamily: "'Inter',sans-serif", padding: 24, textAlign: 'center' }}>
-          <div style={{ color: '#E8836F', fontSize: 16, fontWeight: 600 }}>Se produjo un error al mostrar el panel</div>
-          <div style={{ color: '#B8C0C6', fontSize: 13, maxWidth: 620, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg}</div>
-          <button onClick={() => { try { Object.keys(localStorage).filter(k => k.startsWith('serein_')).forEach(k => localStorage.removeItem(k)) } catch (e) {} location.reload() }}
-            style={{ background: '#D2642F', color: '#fff', border: 'none', padding: '10px 20px', cursor: 'pointer', fontWeight: 600 }}>
-            Reiniciar datos locales y recargar
-          </button>
-        </div>
-      )
-    }
-    return this.props.children
-  }
-}
+import LogoSerein from './LogoSerein.jsx'
 
 export default function App() {
   const [session, setSession] = useState(null)
   const [perfil, setPerfil] = useState(null)
   const [cargando, setCargando] = useState(true)
   const [errorPerfil, setErrorPerfil] = useState(null)
-  const [sincronizado, setSincronizado] = useState(false)
+  const [recovery, setRecovery] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)
       setCargando(false)
     })
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
+    const { data: sub } = supabase.auth.onAuthStateChange((evento, s) => {
+      if (evento === 'PASSWORD_RECOVERY') setRecovery(true)
+      setSession(s)
+    })
     return () => sub.subscription.unsubscribe()
   }, [])
 
   useEffect(() => {
-    if (!session) { setPerfil(null); setErrorPerfil(null); return }
+    if (!session) { setPerfil(null); return }
     supabase
       .from('perfiles')
-      .select('nombre, rol, areas, tipo, modulos, sin_valores')
+      .select('nombre, rol, areas, tipo')
       .eq('id', session.user.id)
       .single()
       .then(({ data, error }) => {
-        if (error) setErrorPerfil('No pude leer tu perfil. Detalle técnico: ' + error.message + (error.code ? ' [código ' + error.code + ']' : '') + '\n\nUsuario: ' + (session.user.email || '') + ' · id: ' + session.user.id)
-        else if (!data) setErrorPerfil('Tu cuenta existe pero no tiene perfil asignado. Pide al administrador que te asigne un área.')
-        else { setErrorPerfil(null); setPerfil(data) }
+        if (error || !data) setErrorPerfil('Tu cuenta existe pero no tiene perfil asignado. Pide al administrador que te asigne un área.')
+        else setPerfil(data)
       })
-      .catch(e => setErrorPerfil('Error de conexión al leer el perfil: ' + (e && e.message ? e.message : String(e))))
   }, [session])
-
-  useEffect(() => {
-    if (!perfil) return
-    let vivo = true
-    pullState().then(res => { if (res.ok && res.n === 0) pushState() }).finally(() => { if (vivo) setSincronizado(true) })
-    const id = setInterval(() => { pushState() }, 8000)
-    const onHide = () => { pushState() }
-    window.addEventListener('beforeunload', onHide)
-    return () => { vivo = false; clearInterval(id); window.removeEventListener('beforeunload', onHide) }
-  }, [perfil])
 
   async function salir() {
     await supabase.auth.signOut()
     setPerfil(null)
     setErrorPerfil(null)
+    setRecovery(false)
   }
 
   if (cargando) return <Pantalla msg="Cargando…" />
+  if (recovery && session) return <NuevaClave onListo={() => setRecovery(false)} />
   if (!session) return <Login />
   if (errorPerfil) return <Pantalla msg={errorPerfil} accion={salir} accionTxt="Cerrar sesión" />
   if (!perfil) return <Pantalla msg="Verificando tu perfil…" />
-  if (!sincronizado) return <Pantalla msg="Sincronizando datos con la nube..." />
-  return <ErrorBoundary><Dashboard perfil={perfil} email={session.user.email} onLogout={salir} /></ErrorBoundary>
+  return <Dashboard perfil={perfil} email={session.user.email} onLogout={salir} />
 }
 
 function Pantalla({ msg, accion, accionTxt }) {
   return (
     <div style={{ minHeight: '100vh', background: '#161616', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16, fontFamily: "'Inter',sans-serif", padding: 20, textAlign: 'center' }}>
-      <div style={{ color: '#B8C0C6', fontSize: 15, maxWidth: 620, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg}</div>
+      <div style={{ color: '#B8C0C6', fontSize: 15, maxWidth: 420 }}>{msg}</div>
       {accion && (
         <button onClick={accion} style={{ background: '#D2642F', border: 'none', padding: '10px 20px', cursor: 'pointer', fontWeight: 600 }}>
           {accionTxt}
         </button>
       )}
+    </div>
+  )
+}
+
+// Pantalla de recuperación: se muestra cuando el usuario llega desde el enlace
+// "¿Olvidaste tu contraseña?" del correo. Permite fijar una nueva contraseña.
+function NuevaClave({ onListo }) {
+  const [p1, setP1] = useState('')
+  const [p2, setP2] = useState('')
+  const [err, setErr] = useState('')
+  const [ok, setOk] = useState(false)
+  const [cargando, setCargando] = useState(false)
+
+  const inputBase = {
+    width: '100%', boxSizing: 'border-box', padding: '11px 12px', margin: '6px 0 16px',
+    border: '1px solid #CBD2D6', borderRadius: 6, fontSize: 14, background: '#fff',
+    outline: 'none', fontFamily: "'Inter',sans-serif",
+  }
+
+  async function guardar() {
+    setErr('')
+    if (p1.length < 6) { setErr('La contraseña debe tener al menos 6 caracteres.'); return }
+    if (p1 !== p2) { setErr('Las contraseñas no coinciden.'); return }
+    setCargando(true)
+    const { error } = await supabase.auth.updateUser({ password: p1 })
+    setCargando(false)
+    if (error) setErr('No se pudo actualizar: ' + error.message)
+    else setOk(true)
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #F6F0EA 0%, #EFE6DC 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Inter',sans-serif", padding: 20 }}>
+      <div style={{ width: '100%', maxWidth: 400 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 24 }}>
+          <LogoSerein alto={54} />
+        </div>
+        <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: '4px solid #D2642F', borderRadius: 4, padding: 30, boxShadow: '0 12px 40px -12px rgba(29,29,27,0.18)' }}>
+          {ok ? (
+            <>
+              <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 18, textTransform: 'uppercase', marginBottom: 8 }}>Contraseña actualizada</div>
+              <p style={{ fontSize: 13.5, color: '#5C5750', lineHeight: 1.5, marginBottom: 18 }}>Tu nueva contraseña quedó guardada. Ya puedes ingresar al panel.</p>
+              <button onClick={onListo} style={{ width: '100%', padding: 12, background: '#1D1D1B', color: '#fff', border: 'none', borderRadius: 6, fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, letterSpacing: 1, cursor: 'pointer', textTransform: 'uppercase' }}>Entrar al panel</button>
+            </>
+          ) : (
+            <>
+              <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 18, textTransform: 'uppercase', marginBottom: 14 }}>Crear nueva contraseña</div>
+              <label style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.5 }}>NUEVA CONTRASEÑA</label>
+              <input type="password" value={p1} onChange={e => setP1(e.target.value)} placeholder="••••••••" style={inputBase} />
+              <label style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.5 }}>REPETIR CONTRASEÑA</label>
+              <input type="password" value={p2} onChange={e => setP2(e.target.value)} onKeyDown={e => e.key === 'Enter' && guardar()} placeholder="••••••••" style={inputBase} />
+              {err && <div style={{ color: '#B5432E', fontSize: 13, marginBottom: 12 }}>{err}</div>}
+              <button onClick={guardar} disabled={cargando} style={{ width: '100%', padding: 12, background: '#1D1D1B', color: '#fff', border: 'none', borderRadius: 6, fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, letterSpacing: 1, cursor: 'pointer', textTransform: 'uppercase', opacity: cargando ? 0.7 : 1 }}>{cargando ? 'Guardando…' : 'Guardar contraseña'}</button>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
