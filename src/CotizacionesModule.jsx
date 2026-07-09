@@ -285,8 +285,11 @@ function FormCotizacion({ inicial, onGuardar, onCancelar, clientes = [], onAddCl
   )
 }
 
+import CotizadorParametros from './CotizadorParametros.jsx'
+
 export default function CotizacionesModule({ cotizaciones = [], setCotizaciones = () => {}, ots = [], setOts = () => {}, clientes = [], onAddCliente = () => {} }) {
   const [creando, setCreando] = useState(false)
+  const [modo, setModo] = useState('rapida')
   const [editId, setEditId] = useState(null)
   const [busca, setBusca] = useState('')
   const [rep, setRep] = useState(false)
@@ -354,8 +357,14 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
     return <FormCotizacion inicial={inicial} onGuardar={guardar} onCancelar={() => { setCreando(false); setEditId(null) }} clientes={clientes} onAddCliente={onAddCliente} />
   }
 
+  if (modo === 'params') return <CotizadorParametros onVolver={() => setModo('rapida')} />
+
   return (
     <div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, borderBottom: '1px solid #E6E8EE', paddingBottom: 8 }}>
+        <button onClick={() => setModo('rapida')} style={{ background: 'transparent', border: 'none', borderBottom: '2px solid #FF6B00', padding: '6px 2px', marginRight: 12, cursor: 'pointer', fontWeight: 600, fontSize: 13, color: '#061A40' }}>Cotizacion rapida</button>
+        <button onClick={() => setModo('params')} style={{ background: 'transparent', border: 'none', padding: '6px 2px', cursor: 'pointer', fontWeight: 500, fontSize: 13, color: '#5A6472' }}>Parametros Cotizador</button>
+      </div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
         <button onClick={() => setCreando(true)} style={{ background: C.teal, color: '#fff', border: 'none', padding: '9px 16px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Nueva cotización</button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, border: '1px solid #CBD2D6', padding: '2px 6px' }}>
