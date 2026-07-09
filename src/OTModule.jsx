@@ -305,7 +305,8 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
                 {ESTADOS_OT.map(s => <option key={s}>{s}</option>)}
               </select>
             </label>
-            <label style={{ fontSize: 12, color: '#7A8288' }}>Metros cuadrados
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}><button onClick={() => { if (window.confirm('Cerrar esta OT y marcarla lista para facturar?')) onUpdate(ot.id, { estado: 'Terminada' }) }} style={{ background: '#FF6B00', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 12.5, width: '100%' }}>Cerrar OT - lista para facturar</button></div>
+              <label style={{ fontSize: 12, color: '#7A8288' }}>Metros cuadrados
               <input type="number" value={ot.m2} onChange={e => onUpdate(ot.id, { m2: Math.max(0, +e.target.value) })} style={{ ...inp, width: '100%', marginTop: 4 }} />
             </label>
             {verValores && (

@@ -61,7 +61,9 @@ function useDatos({ cc, facturas, ots, proyectos, cotizaciones, clientes, params
     const otProceso = L.filter(o => o.estado === 'En ejecución')
     const otTerminadas = L.filter(o => o.estado === 'Terminada')
     const otFacturadas = L.filter(o => ['Facturada', 'Cerrada'].includes(o.estado))
-    const montoPorFacturar = otTerminadas.reduce((a, o) => a + meOT(o), 0)
+    const facturadoDe = o => (o.ventas || []).reduce((acc, v) => acc + num(v.neta), 0)
+      const otPorFacturar = L.filter(o => ['Terminada', 'Facturada'].includes(o.estado)).map(o => Math.max(0, meOT(o) - facturadoDe(o))).filter(s => s > 0)
+      const montoPorFacturar = otPorFacturar.reduce((a, s) => a + s, 0)
     const prodMod = m => L.filter(o => o.area === m).length
 
     // Cobros 7 dias
