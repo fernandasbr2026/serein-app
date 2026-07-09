@@ -333,11 +333,13 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
     if ((ots || []).some(o => o.numero === numeroOT)) { window.alert('Ya existe una OT creada para esta cotización (' + numeroOT + '). No se creó otra.') }
     else {
       const t = totales(cot)
+      const fechaEntrega = window.prompt('Fecha de entrega de la OT (AAAA-MM-DD), opcional:', '') || ''
+      const responsable = window.prompt('Responsable de la OT, opcional:', '') || ''
       const nuevaOT = {
         id: 'ot' + Date.now(), numero: numeroOT, area: cot.area || 'Santa Rosa', cliente: cot.cliente, fecha: cot.fecha,
         cotizacion: 'COT ' + cot.folio, oc: '—', m2: (cot.items || []).filter(i => i.unidad === 'm²').reduce((a, i) => a + (Number(i.cant) || 0), 0), montoCotizado: t.afecto,
         procesos: [], preparacion: '—', esquema: (cot.items || []).map(i => i.comentario).filter(Boolean).join(' · ') || '—',
-        estado: 'Cotizada', ventas: [], costos: [], itemsCot: cot.items, folioCot: cot.folio,
+        estado: 'Cotizada', fechaEntrega, responsable, ventas: [], costos: [], itemsCot: cot.items, folioCot: cot.folio,
       }
       setOts([nuevaOT, ...(ots || [])])
     }
