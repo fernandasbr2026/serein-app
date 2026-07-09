@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { COTIZADOR_SEED, indexProductos, desgloseItem, precioM2, valorM2Capa, rendimientoM2Gal, valorGalon } from './cotizador-data.js'
+import { COTIZADOR_SEED, indexProductos, desgloseItem, valorM2Capa, rendimientoM2Gal, valorGalon } from './cotizador-data.js'
 import { THEME } from './ui.jsx'
 import { Plus, Trash2, ChevronLeft } from 'lucide-react'
 
@@ -8,6 +8,9 @@ function cargarParams() { try { const s = localStorage.getItem(LS_KEY); if (s) {
 const T = THEME
 const CASOS_DIF = { A: 'Planchas, estanques exteriores, vigas simples, superficies amplias y accesibles', B: 'Perfiles estructurales, columnas, algo de interior, acceso regular', C: 'Reticulados / celosías, muchas aristas o sectores, mayormente interior', D: 'Ductos, interior confinado, cañerías, geometría difícil', E: 'Confinado + geometría difícil + interior simultáneamente' }
 const clp = n => '$' + Math.round(+n || 0).toLocaleString('es-CL')
+// Precio por m2 a partir del costo y el MARGEN sobre la venta (%).
+// margen real = (precio - costo) / precio = pct/100  ->  precio = costo / (1 - pct/100)
+const precioMargen = (costoM2, pctMargen) => { const m = Math.min(Math.max(+pctMargen || 0, 0), 95) / 100; return (1 - m) > 0 ? (+costoM2 || 0) / (1 - m) : (+costoM2 || 0) }
 const milsProm = c => { const a = +c.mMin || 0; const b = (c.mMax === '' || c.mMax == null) ? a : (+c.mMax || 0); return b > 0 ? (a + b) / 2 : a }
 function nuevaCapa() { return { p: '', mMin: 2, mMax: 4, perdida: 2 } }
 function nuevoItem() { return { desc: '', ral: '', m2: 0, grado: 'SP-10 (near-white)', dif: 'A - Estandar', limpieza: 0, capas: [nuevaCapa()] } }
@@ -36,7 +39,7 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
   const [cliSel, setCliSel] = useState(null)
   const [cliOpen, setCliOpen] = useState(false)
   const [items, setItems] = useState([nuevoItem()])
-  const [pct, setPct] = useState(100)
+  const [pct, setPct] = useState(35)
   const [sg, setSg] = useState(3380000)
   const [sp, setSp] = useState(2700000)
   const [guardado, setGuardado] = useState('')
@@ -51,14 +54,14 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
   function updItem(i, fn) { setItems(prev => prev.map((x, k) => { if (k !== i) return x; const n = { ...x, capas: x.capas.map(c => ({ ...c })) }; fn(n); return n })) }
   function capasEng(it) { return it.capas.filter(c => c.p).map(c => ({ p: c.p, m: milsProm(c), perdida: c.perdida })) }
   function dg(it) { const g = P.grados.find(x => x.grado === it.grado); const f = P.factores.find(x => x.nivel === it.dif); return desgloseItem({ esquema: { capas: capasEng(it) }, factorGrado: g ? g.factor : 1, factorDif: f ? f.factor : 1, limpiezaSP1: +it.limpieza || 0 }, ctx) }
-  const totalCot = items.reduce((s, it) => s + precioM2(dg(it).costoM2, pct) * (+it.m2 || 0), 0)
+  const totalCot = items.reduce((s, it) => s + precioMargen(dg(it).costoM2, pct) * (+it.m2 || 0), 0)
   function cargarEsquema(i, nombre) { const e = P.esquemas.find(x => x.n === nombre); if (!e) return; updItem(i, n => { n.capas = e.capas.map(c => ({ p: c.p, mMin: c.m, mMax: c.m, perdida: cte.perdidaTipica || 2 })) }) }
 
   function guardar() {
     const numero = proximoNumero(cotizaciones)
     const cli = cliSel || { nombre: cliQuery }
-    const cot = { id: 'cot' + Date.now(), numero, folio: numero, area: sede, vencimiento: new Date().toISOString().slice(0, 10), tipo: 'calculo', origen: 'cotizador', estado: 'Alta probabilidad de cierre', cliente: cli.nombre || '', rut: cli.rut || '', giro: cli.giro || '', direccion: cli.direccion || '', comuna: cli.comuna || '', ciudad: cli.ciudad || cli.comuna || '', condicionPago: 'CONTADO', vendedor: cli.vendedor || 'Mario Vidal', sede, fecha: new Date().toISOString().slice(0, 10), porcentajeGanancia: +pct,
-      items: items.map((it, i) => { const d = dg(it); const pm = precioM2(d.costoM2, pct); return { codigo: it.grado || '', detalle: (it.desc || 'Item ' + (i + 1)) + (it.ral ? ' - ' + it.ral : '') + ' - ' + (it.capas.filter(c => c.p).map(c => c.p).join(' + ') || 'solo granallado ' + it.grado), cant: +it.m2 || 0, unidad: 'm\u00B2', pUnitario: Math.round(pm), descuento: 0, comentario: (it.capas.filter(c => c.p).map(c => c.p + ' ' + milsProm(c) + ' mils').join(' + ') || 'Solo granallado') + ' - ' + it.grado, descripcion: it.desc, ral: it.ral, m2: +it.m2 || 0, gradoSSPC: it.grado, factorDificultad: it.dif, limpiezaSP1: +it.limpieza || 0, capas: it.capas.filter(c => c.p), costoM2: Math.round(d.costoM2), precioM2: Math.round(pm), total: Math.round(pm * (+it.m2 || 0)), desglose: { granallado: Math.round(d.granallado), aplicacion: Math.round(d.aplicacion), diluyente: Math.round(d.diluyente), pintura: Math.round(d.pintura), fijos: Math.round(d.fijos) } } }),
+    const cot = { id: 'cot' + Date.now(), numero, folio: numero, area: sede, vencimiento: new Date().toISOString().slice(0, 10), tipo: 'calculo', origen: 'cotizador', estado: 'Alta probabilidad de cierre', cliente: cli.nombre || '', rut: cli.rut || '', giro: cli.giro || '', direccion: cli.direccion || '', comuna: cli.comuna || '', ciudad: cli.ciudad || cli.comuna || '', condicionPago: 'CONTADO', vendedor: cli.vendedor || 'Mario Vidal', sede, fecha: new Date().toISOString().slice(0, 10), margenVenta: +pct, porcentajeGanancia: +pct,
+      items: items.map((it, i) => { const d = dg(it); const pm = precioMargen(d.costoM2, pct); return { codigo: it.grado || '', detalle: (it.desc || 'Item ' + (i + 1)) + (it.ral ? ' - ' + it.ral : '') + ' - ' + (it.capas.filter(c => c.p).map(c => c.p).join(' + ') || 'solo granallado ' + it.grado), cant: +it.m2 || 0, unidad: 'm²', pUnitario: Math.round(pm), descuento: 0, comentario: (it.capas.filter(c => c.p).map(c => c.p + ' ' + milsProm(c) + ' mils').join(' + ') || 'Solo granallado') + ' - ' + it.grado, descripcion: it.desc, ral: it.ral, m2: +it.m2 || 0, gradoSSPC: it.grado, factorDificultad: it.dif, limpiezaSP1: +it.limpieza || 0, capas: it.capas.filter(c => c.p), costoM2: Math.round(d.costoM2), precioM2: Math.round(pm), total: Math.round(pm * (+it.m2 || 0)), desglose: { granallado: Math.round(d.granallado), aplicacion: Math.round(d.aplicacion), diluyente: Math.round(d.diluyente), pintura: Math.round(d.pintura), fijos: Math.round(d.fijos) } } }),
       total: Math.round(totalCot), montoCotizado: Math.round(totalCot), supuestos: { sueldosGranallado: +sg, sueldosPintores: +sp, totalFijos } }
     setCotizaciones([...(cotizaciones || []), cot])
     if (!cliSel && cliQuery.trim()) { try { onAddCliente(cliQuery.trim()) } catch (e) {} }
@@ -106,7 +109,7 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
       </div>
     </div>
 
-    {items.map((it, i) => { const d = dg(it); const pm = precioM2(d.costoM2, pct); const soloGran = d.nCapas === 0; return (
+    {items.map((it, i) => { const d = dg(it); const pm = precioMargen(d.costoM2, pct); const soloGran = d.nCapas === 0; return (
       <div key={i} style={card}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <div style={{ fontWeight: 600, color: T.navy }}>Item {i + 1}{soloGran ? ' - SOLO GRANALLADO' : ''}</div>
@@ -172,7 +175,7 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
           </div>
           <div style={{ minWidth: 180 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700, color: T.navy, borderBottom: '1px solid ' + T.border, paddingBottom: 4, marginBottom: 4 }}><span>Costo /m2</span><span>{clp(d.costoM2)}</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700, color: T.orange }}><span>Precio /m2</span><span>{clp(pm)}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700, color: T.orange }}><span>Precio /m2 ({pct}% margen)</span><span>{clp(pm)}</span></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 700, color: T.text, marginTop: 6 }}><span>Total item</span><span>{clp(pm * (+it.m2 || 0))}</span></div>
           </div>
         </div>
@@ -181,12 +184,14 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
     <button onClick={() => setItems([...items, nuevoItem()])} style={{ background: 'transparent', border: '1px dashed ' + T.border, borderRadius: 8, padding: '9px 14px', cursor: 'pointer', color: T.textSoft, fontSize: 13, marginBottom: 16, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Plus size={14} /> Agregar item</button>
 
     <div style={card}>
-      <span style={lab}>% de ganancia global</span>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
-        <button onClick={() => setPct(100)} style={pill(pct == 100)}>x2 (100%)</button>
-        <button onClick={() => setPct(200)} style={pill(pct == 200)}>x3 (200%)</button>
-        <input type="number" value={pct} onChange={e => setPct(+e.target.value || 0)} style={{ ...inp, width: 100 }} /><span style={{ fontSize: 13, color: T.textMute }}>% libre</span>
+      <span style={lab}>% de margen sobre la venta</span>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+        <button onClick={() => setPct(25)} style={pill(pct == 25)}>25%</button>
+        <button onClick={() => setPct(35)} style={pill(pct == 35)}>35%</button>
+        <button onClick={() => setPct(45)} style={pill(pct == 45)}>45%</button>
+        <input type="number" value={pct} onChange={e => setPct(Math.min(95, Math.max(0, +e.target.value || 0)))} style={{ ...inp, width: 100 }} /><span style={{ fontSize: 13, color: T.textMute }}>% margen libre</span>
       </div>
+      <div style={{ fontSize: 11.5, color: T.textMute, marginBottom: 12, lineHeight: 1.4 }}>El precio se calcula como <b>costo &divide; (1 &minus; margen)</b>, de modo que el margen sobre la venta sea exactamente el indicado. Ej: 25% de margen sobre $10.000 de costo &rarr; $13.333/m&sup2; (costo/venta = 75%). Tope 95%.</div>
       <span style={lab}>Supuestos de costeo (se enlazaran a Gastos Fijos)</span>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <label style={{ fontSize: 12, color: T.textSoft }}>Sueldos granallado/mes<br /><input type="number" value={sg} onChange={e => setSg(+e.target.value || 0)} style={{ ...inp, width: 150 }} /></label>
