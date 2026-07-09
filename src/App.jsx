@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from './supabase.js'
 import Login from './Login.jsx'
 import Dashboard from './Dashboard.jsx'
+import { pullState, pushState } from './sync.js'
 
 // Captura errores de render para que la app no se quede en blanco y muestre el detalle
 class ErrorBoundary extends React.Component {
@@ -31,6 +32,7 @@ export default function App() {
   const [perfil, setPerfil] = useState(null)
   const [cargando, setCargando] = useState(true)
   const [errorPerfil, setErrorPerfil] = useState(null)
+  const [sincronizado, setSincronizado] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -56,6 +58,16 @@ export default function App() {
       .catch(e => setErrorPerfil('Error de conexión al leer el perfil: ' + (e && e.message ? e.message : String(e))))
   }, [session])
 
+  useEffect(() => {
+    if (!perfil) return
+    let vivo = true
+    pullState().then(res => { if (res.ok && res.n === 0) pushState() }).finally(() => { if (vivo) setSincronizado(true) })
+    const id = setInterval(() => { pushState() }, 8000)
+    const onHide = () => { pushState() }
+    window.addEventListener('beforeunload', onHide)
+    return () => { vivo = false; clearInterval(id); window.removeEventListener('beforeunload', onHide) }
+  }, [perfil])
+
   async function salir() {
     await supabase.auth.signOut()
     setPerfil(null)
@@ -66,6 +78,7 @@ export default function App() {
   if (!session) return <Login />
   if (errorPerfil) return <Pantalla msg={errorPerfil} accion={salir} accionTxt="Cerrar sesión" />
   if (!perfil) return <Pantalla msg="Verificando tu perfil…" />
+  if (!sincronizado) return <Pantalla msg="Sincronizando datos con la nube..." />
   return <ErrorBoundary><Dashboard perfil={perfil} email={session.user.email} onLogout={salir} /></ErrorBoundary>
 }
 
