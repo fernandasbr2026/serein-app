@@ -27,6 +27,7 @@ import ContactosModule, { CONTACTOS_SEED, nombresClientes } from './ContactosMod
 import FacturasModule, { FACTURAS_SEED } from './FacturasModule.jsx'
 import { MO_SEED } from './ManoObraModule.jsx'
 import { PROYECTOS } from './proyectos-data.js'
+import { pushState } from './sync.js'
 
 const C = { azul: '#1D1D1B', teal: '#A8501F', ambar: '#D2642F', rojo: '#B5432E', verde: '#3D7A4E', carbon: '#161616', niebla: '#F6F0EA' }
 const AREA_COLOR = { 'Santa Rosa': '#A8501F', 'Proyectos': '#D2642F', 'Istria': '#1D1D1B' }
@@ -237,7 +238,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
 
   // Guarda automáticamente en el navegador cada vez que cambian los datos
   useEffect(() => {
-    guardarSerein({ avances, mo, comprasOp, configCompras, fin, pp, params, clientes, contactos, facturas, cotizaciones, comisiones, ppmPct, ots, proyectos })
+    guardarSerein({ avances, mo, comprasOp, configCompras, fin, pp, params, clientes, contactos, facturas, cotizaciones, comisiones, ppmPct, ots, proyectos }); try { clearTimeout(window.__sereinPushT); window.__sereinPushT = setTimeout(function () { pushState() }, 800) } catch (e) {}
   }, [avances, mo, comprasOp, configCompras, fin, pp, params, clientes, contactos, facturas, cotizaciones, comisiones, ppmPct, ots, proyectos])
 
   // Trae la UF (valor del día) al cargar la app, desde mindicador.cl (Banco Central)
