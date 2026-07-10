@@ -29,7 +29,7 @@ export default function ProyComprasLibro({ proyectos = [], setProyectos = null }
       setLoading(true); setErr('')
       const { data, error } = await supabase
         .from('libro_compras')
-        .select('id, emission_date, provider_name, provider_rut, document_number, document_type, neto, document_total, estado_pago')
+        .select('*')
         .order('emission_date', { ascending: false })
       if (!vivo) return
       if (error) setErr('No pude leer el Libro de Compras: ' + error.message)
