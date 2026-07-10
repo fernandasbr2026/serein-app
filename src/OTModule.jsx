@@ -244,7 +244,7 @@ function TileOT({ ot, onOpen, onDragStart, onDropOn, verValores }) {
           <span draggable onDragStart={e => { e.stopPropagation(); onDragStart() }} onClick={e => e.stopPropagation()} title="Arrastrar para reordenar" style={{ cursor: 'grab', color: '#B9C0C6', fontSize: 15, userSelect: 'none', lineHeight: 1, letterSpacing: '-1px' }}>::</span>
         </div>
       </div>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, color: '#161616', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ot.cliente}</div>
+      {ot.nv && ot.nv !== '—' ? <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, fontWeight: 700, color: '#A8501F' }}>NV {ot.nv}</div> : null}<div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, color: '#161616', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ot.cliente}</div>
       <div style={{ fontSize: 11.5, color: '#7A8288', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ot.area}{ot.m2 ? ' · ' + ot.m2 + ' m²' : ''}{ot.preparacion ? ' · ' + ot.preparacion : ''}</div>
       {verValores && monto > 0 && (
         <div style={{ marginTop: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
