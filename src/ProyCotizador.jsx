@@ -20,7 +20,7 @@ function cargarCots() { try { const s = localStorage.getItem(LS_KEY); if (s) { c
 function guardarCots(a) { try { localStorage.setItem(LS_KEY, JSON.stringify(a)) } catch (e) {} }
 const brutoDe = c => c.condicionIVA === 'exento' ? num(c.neto) : Math.round(num(c.neto) * 1.19)
 
-export default function ProyCotizador({ clientes = [] }) {
+export default function ProyCotizador({ clientes = [], proyectos = [], setProyectos = null }) {
   const params = useMemo(cargarProyParams, [])
   const catalogo = params.centros || []
   const [cots, setCots] = useState(cargarCots)
@@ -32,6 +32,9 @@ export default function ProyCotizador({ clientes = [] }) {
   const [margenPct, setMargenPct] = useState(params.margenDefault || 33)
   const [ventaFija, setVentaFija] = useState('')
   const [msg, setMsg] = useState('')
+  const [aprobando, setAprobando] = useState(null)
+  const [fEntrega, setFEntrega] = useState('')
+  const [fResp, setFResp] = useState('')
 
   const setCentro = (i, k, v) => setCentros(prev => prev.map((c, j) => j === i ? { ...c, [k]: v } : c))
   const addCentroVacio = () => setCentros(prev => [...prev, { codigo: '', nombre: '', neto: '', condicionIVA: 'afecto' }])
@@ -71,6 +74,25 @@ export default function ProyCotizador({ clientes = [] }) {
   }
 
   function borrar(id) { if (!window.confirm('¿Eliminar este borrador de cotizacion?')) return; const next = cots.filter(c => c.id !== id); setCots(next); guardarCots(next) }
+
+  function aprobar(c) {
+    if (!setProyectos) { setMsg('No se pudo generar la OT (falta conexion con Proyectos).'); return }
+    const q = 'T' + (Math.floor(new Date().getMonth() / 3) + 1)
+    const nueva = {
+      id: 'otp' + Date.now(), ot: c.numero, oc: c.numero, periodo: q,
+      nombre: (c.nombreProyecto ? c.nombreProyecto + ' · ' : '') + c.cliente, cliente: c.cliente, m2: null,
+      venta_cotizada: c.ventaNeta, avance: 0, cc: {}, ccNombres: {}, edps: [], compras: [],
+      origen: 'cotizador-proyecto', fechaEntrega: fEntrega || '', responsable: fResp || '',
+      snapshotProy: { centros: c.centros, costoNeto: c.costoNeto, costoBruto: c.costoBruto, ventaNeta: c.ventaNeta, ventaBruta: c.ventaBruta, utilidad: c.utilidad, margenPct: c.margenPct, modoMargen: c.modoMargen, fecha: new Date().toISOString().slice(0, 10) },
+    }
+    ;(c.centros || []).forEach(cc => { if (cc.codigo) { nueva.cc[cc.codigo] = cc.neto; nueva.ccNombres[cc.codigo] = cc.nombre } })
+    setProyectos(prev => [nueva, ...(prev || [])])
+    const next = cots.map(x => x.id === c.id ? { ...x, estado: 'aprobada', otId: nueva.id, snapshot: nueva.snapshotProy } : x)
+    setCots(next); guardarCots(next)
+    setAprobando(null); setFEntrega(''); setFResp('')
+    setMsg('Aprobada: se genero la OT de proyecto ' + c.numero + ' (revisala en la pestana Tarjetas).')
+    setTimeout(() => setMsg(''), 4500)
+  }
 
   const card = { background: '#fff', border: '1px solid #E2DED4', padding: 16, marginBottom: 16 }
   const h = { fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }
@@ -166,6 +188,17 @@ export default function ProyCotizador({ clientes = [] }) {
 
       <div style={card}>
         <div style={h}>Cotizaciones de proyecto (borradores)</div>
+        {aprobando && (() => { const c = cots.find(x => x.id === aprobando); if (!c) return null; return (
+          <div style={{ background: '#F1F5F9', border: '1px solid ' + C.azul, borderRadius: 6, padding: 12, marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Aprobar {c.numero} — se congela el presupuesto por centro de costo y se genera la OT de proyecto.</div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <label style={{ fontSize: 11, color: C.gris, display: 'flex', flexDirection: 'column', gap: 3 }}>Fecha de entrega<input type="date" value={fEntrega} onChange={e => setFEntrega(e.target.value)} style={inp} /></label>
+              <label style={{ fontSize: 11, color: C.gris, display: 'flex', flexDirection: 'column', gap: 3 }}>Responsable<input value={fResp} onChange={e => setFResp(e.target.value)} placeholder="Nombre" style={inp} /></label>
+              <button onClick={() => aprobar(c)} style={{ background: C.verde, color: '#fff', border: 'none', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Confirmar aprobacion y crear OT</button>
+              <button onClick={() => setAprobando(null)} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '8px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+            </div>
+          </div>
+        ) })()}
         {cots.length === 0 ? (
           <div style={{ fontSize: 13, color: C.gris }}>Aun no hay cotizaciones de proyecto guardadas.</div>
         ) : (
@@ -182,14 +215,17 @@ export default function ProyCotizador({ clientes = [] }) {
                     <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{clp(c.ventaNeta)}</td>
                     <td style={{ padding: '6px 8px', textAlign: 'right', color: C.verde }}>{(c.margenSobreCosto != null ? c.margenSobreCosto : 0)}%</td>
                     <td style={{ padding: '6px 8px', color: C.gris }}>{c.estado}</td>
-                    <td style={{ padding: '6px 4px', textAlign: 'right' }}><button onClick={() => borrar(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button></td>
+                    <td style={{ padding: '6px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      {c.estado === 'borrador' ? <button onClick={() => { setAprobando(c.id); setFEntrega(''); setFResp('') }} style={{ background: C.verde, color: '#fff', border: 'none', padding: '4px 10px', cursor: 'pointer', fontSize: 12, marginRight: 6 }}>Aprobar</button> : <span style={{ fontSize: 11.5, color: C.teal, marginRight: 6 }}>OT creada</span>}
+                      <button onClick={() => borrar(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-        <div style={{ fontSize: 11.5, color: '#9AA0A6', marginTop: 8 }}>Proximo paso (siguiente etapa): "Aprobar" congela el presupuesto por centro de costo y genera la OT de proyecto.</div>
+        <div style={{ fontSize: 11.5, color: '#9AA0A6', marginTop: 8 }}>Al aprobar, la OT de proyecto aparece en la pestana Tarjetas con su presupuesto por centro de costo (congelado). Las compras se imputan alli.</div>
       </div>
     </div>
   )

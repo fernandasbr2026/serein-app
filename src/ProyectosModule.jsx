@@ -28,8 +28,9 @@ const perdidaFactDe = p => (p.edps || []).reduce((a, e) => a + (e.perdidaFact ||
 const CONDICIONES = [{ label: 'Contado', dias: 0 }, { label: '30 días', dias: 30 }, { label: '45 días', dias: 45 }, { label: '60 días', dias: 60 }, { label: '90 días', dias: 90 }]
 const consumoCC = (p, ccId) => (p.compras || []).filter(c => c.cc === ccId).reduce((a, c) => a + c.monto, 0)
 const topeCC = (p, ccId) => (p.cc && p.cc[ccId]) || 0
-const costoEstDe = p => CC_DEFS.reduce((a, cc) => a + topeCC(p, cc.id), 0)   // costo estimado = suma de topes
-const ccActivos = p => CC_DEFS.filter(cc => topeCC(p, cc.id) > 0 || consumoCC(p, cc.id) > 0)
+const costoEstDe = p => Object.values(p.cc || {}).reduce((a, v) => a + (+v || 0), 0)   // costo estimado = suma de topes (todos los CC)
+const ccCodigos = p => [...new Set([...CC_DEFS.map(c => c.id), ...Object.keys(p.cc || {}), ...(p.compras || []).map(c => c.cc)])].filter(Boolean)
+const ccActivos = p => ccCodigos(p).filter(id => topeCC(p, id) > 0 || consumoCC(p, id) > 0).map(id => ({ id, nombre: nombreCC(p, id) }))
 const pct = (parte, total) => total > 0 ? (parte / total) * 100 : 0
 const colorUT = p => p >= 30 ? C.verde : p >= 15 ? C.ambar : C.rojo
 
@@ -565,7 +566,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
       {creando && <FormProyecto onAdd={p => { setProyectos(ps => [p, ...ps]); setCreando(false) }} onCancel={() => setCreando(false)} />}
 
       {vista === 'cotizarProy' ? (
-        <ProyCotizador clientes={clientesSugeridos} />
+        <ProyCotizador clientes={clientesSugeridos} proyectos={proyectos} setProyectos={setProyectos} />
       ) : vista === 'consolidado' ? (
         <Consolidado proyectos={proyectos} />
       ) : vista === 'facturas' ? (
