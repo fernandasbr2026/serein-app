@@ -27,6 +27,8 @@ import ContactosModule, { CONTACTOS_SEED, nombresClientes } from './ContactosMod
 import FacturasModule, { FACTURAS_SEED } from './FacturasModule.jsx'
 import { MO_SEED } from './ManoObraModule.jsx'
 import { PROYECTOS } from './proyectos-data.js'
+import InventarioModule from './InventarioModule.jsx'
+import { INVENTARIO_SEED } from './inventario-data.js'
 import { pushState } from './sync.js'
 
 const C = { azul: '#1D1D1B', teal: '#A8501F', ambar: '#D2642F', rojo: '#B5432E', verde: '#3D7A4E', carbon: '#161616', niebla: '#F6F0EA' }
@@ -194,9 +196,10 @@ export default function Dashboard({ perfil, email, onLogout }) {
     ...(areasOT.length > 0 || esGerencia ? ['PRODUCCION'] : []),
     'ASISTENCIA',
     'CONTACTOS',
+    ...(esGerencia ? ['INVENTARIO'] : []),
     ...(esGerencia ? ['PARAMETROS'] : []),
   ]
-  const ORDEN_MODULOS = ['TODAS', 'ASESOR', 'Santa Rosa', 'Istria', 'GESTION_PROYECTOS', 'FINANZAS', 'ORDENES_COMPRA', 'PAGOS', 'LIBRO_COMPRAS', 'LIBRO_VENTAS', 'TRAZABILIDAD', 'COTIZADOR', 'CLIENTES', 'CONTACTOS', 'COMPRAS_OP', 'PRODUCCION', 'GESTION_OT', 'ASISTENCIA', 'PARAMETROS']
+  const ORDEN_MODULOS = ['TODAS', 'ASESOR', 'Santa Rosa', 'Istria', 'GESTION_PROYECTOS', 'FINANZAS', 'ORDENES_COMPRA', 'PAGOS', 'LIBRO_COMPRAS', 'LIBRO_VENTAS', 'TRAZABILIDAD', 'COTIZADOR', 'CLIENTES', 'CONTACTOS', 'COMPRAS_OP', 'PRODUCCION', 'GESTION_OT', 'ASISTENCIA', 'INVENTARIO', 'PARAMETROS']
   if (modulosPerfil) tabs = ORDEN_MODULOS.filter(c => modulosPerfil.includes(c))
   const [areaSel, setAreaSel] = useState(tabs[0])
   const [sidebarColapsado, setSidebarColapsado] = useState(false)
@@ -235,11 +238,13 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const [ppmPct, setPpmPct] = useState(() => LS('ppmPct', 2))
   const [ots, setOts] = useState(() => LS('ots', OTS_INICIALES))
   const [proyectos, setProyectos] = useState(() => LS('proyectos', PROYECTOS))
+  const [inventario, setInventario] = useState(() => LS('inventario', INVENTARIO_SEED))
+  const [invMov, setInvMov] = useState(() => LS('invMov', []))
 
   // Guarda automáticamente en el navegador cada vez que cambian los datos
   useEffect(() => {
-    guardarSerein({ avances, mo, comprasOp, configCompras, fin, pp, params, clientes, contactos, facturas, cotizaciones, comisiones, ppmPct, ots, proyectos }); try { clearTimeout(window.__sereinPushT); window.__sereinPushT = setTimeout(function () { pushState() }, 800) } catch (e) {}
-  }, [avances, mo, comprasOp, configCompras, fin, pp, params, clientes, contactos, facturas, cotizaciones, comisiones, ppmPct, ots, proyectos])
+    guardarSerein({ avances, mo, comprasOp, configCompras, fin, pp, params, clientes, contactos, facturas, cotizaciones, comisiones, ppmPct, ots, proyectos, inventario, invMov }); try { clearTimeout(window.__sereinPushT); window.__sereinPushT = setTimeout(function () { pushState() }, 800) } catch (e) {}
+  }, [avances, mo, comprasOp, configCompras, fin, pp, params, clientes, contactos, facturas, cotizaciones, comisiones, ppmPct, ots, proyectos, inventario, invMov])
 
   // Trae la UF (valor del día) al cargar la app, desde mindicador.cl (Banco Central)
   useEffect(() => {
@@ -364,7 +369,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     </div>
   )
 
-  const nombreTab = t => t === 'ASESOR' ? 'Asesor IA' : t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'ORDENES_COMPRA' ? '🧾 Órdenes de Compra' : t === 'TRAZABILIDAD' ? '🔗 Trazabilidad y Alertas' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Resumen ventas por cliente' : t === 'CONTACTOS' ? '📇 Clientes y Proveedores' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t === 'LIBRO_COMPRAS' ? 'Libro de Compras' : t === 'LIBRO_VENTAS' ? 'Libro de Ventas' : t
+  const nombreTab = t => t === 'ASESOR' ? 'Asesor IA' : t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'ORDENES_COMPRA' ? '🧾 Órdenes de Compra' : t === 'TRAZABILIDAD' ? '🔗 Trazabilidad y Alertas' : t === 'INVENTARIO' ? '📦 Inventario' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Resumen ventas por cliente' : t === 'CONTACTOS' ? '📇 Clientes y Proveedores' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t === 'LIBRO_COMPRAS' ? 'Libro de Compras' : t === 'LIBRO_VENTAS' ? 'Libro de Ventas' : t
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: THEME.bg, fontFamily: THEME.font }}>
@@ -415,6 +420,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
           <OrdenesCompraModule pp={pp} setPp={setPp} ots={ots} />
         ) : esModuloTraza && puedeVer('TRAZABILIDAD') ? (
           <TrazabilidadModule cotizaciones={cotizaciones} ots={ots} ordenesCompra={pp.ocs || []} />
+        ) : (areaSel === 'INVENTARIO') ? (
+          <InventarioModule inventario={inventario} setInventario={setInventario} movimientos={invMov} setMovimientos={setInvMov} usuario={email} />
         ) : esModuloParams && puedeVer('PARAMETROS') ? (
           <ParametrosModule params={params} setParams={setParams} />
         ) : esModuloClientes ? (
