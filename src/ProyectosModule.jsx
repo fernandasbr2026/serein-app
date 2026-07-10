@@ -6,6 +6,9 @@ import FacturasModule from './FacturasModule.jsx'
 import ProyParametros from './ProyParametros.jsx'
 import ProyCotizador from './ProyCotizador.jsx'
 import ProyComprasLibro from './ProyComprasLibro.jsx'
+import { supabase } from './supabase.js'
+// Cotizador de Proyectos visible solo para estos correos (el resto ve la gestion normal de OT)
+const COTIZADOR_PROY_EMAILS = ['administracion@sereinspa.com', 'mario@sereinspa.com']
 // Engancha una factura de Proyectos a su OT comparando los números (≥3 dígitos) de OT/OC
 const _toks = x => (String(x || '').match(/\d{3,}/g) || [])
 const otMatch = (p, f) => { const pt = new Set([..._toks(p.ot), ..._toks(p.oc)]); return [..._toks(f.ot), ..._toks(f.oc)].some(t => pt.has(t)) }
@@ -516,6 +519,9 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
   const facturasProy = (facturas && facturas['Proyectos']) || []
   const [creando, setCreando] = useState(false)
   const [vista, setVista] = useState('tarjetas')
+  const [emailUser, setEmailUser] = useState('')
+  React.useEffect(() => { let v = true; supabase.auth.getUser().then(({ data }) => { if (v) setEmailUser((data && data.user && data.user.email) || '') }); return () => { v = false } }, [])
+  const verCotizadorProy = COTIZADOR_PROY_EMAILS.includes((emailUser || '').trim().toLowerCase())
 
   const actualizar = (id, cambios) => setProyectos(ps => ps.map(p => p.id === id ? { ...p, ...cambios } : p))
   const eliminar = id => setProyectos(ps => ps.filter(p => p.id !== id))
@@ -556,7 +562,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-        {[['tarjetas', 'Tarjetas', LayoutGrid], ['cotizarProy', 'Cotización Proyecto', Receipt], ['comprasSII', 'Compras SII', ShoppingCart], ['consolidado', 'Consolidado', Table2], ['facturas', 'Facturas', Receipt], ['parametros', 'Parámetros Proyectos', Target]].map(([id, lbl, Icon]) => (
+        {[['tarjetas', 'Tarjetas', LayoutGrid], ...(verCotizadorProy ? [['cotizarProy', 'Cotización Proyecto', Receipt], ['comprasSII', 'Compras SII', ShoppingCart]] : []), ['consolidado', 'Consolidado', Table2], ['facturas', 'Facturas', Receipt], ...(verCotizadorProy ? [['parametros', 'Parámetros Proyectos', Target]] : [])].map(([id, lbl, Icon]) => (
           <button key={id} onClick={() => setVista(id)} style={{ background: vista === id ? C.carbon : '#fff', color: vista === id ? '#fff' : C.carbon, border: '1px solid #CBD2D6', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Icon size={14} />{lbl}</button>
         ))}
         {!creando && vista === 'tarjetas' && (
@@ -566,15 +572,15 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
 
       {creando && <FormProyecto onAdd={p => { setProyectos(ps => [p, ...ps]); setCreando(false) }} onCancel={() => setCreando(false)} />}
 
-      {vista === 'cotizarProy' ? (
+      {(vista === 'cotizarProy' && verCotizadorProy) ? (
         <ProyCotizador clientes={clientesSugeridos} proyectos={proyectos} setProyectos={setProyectos} />
-      ) : vista === 'comprasSII' ? (
+      ) : (vista === 'comprasSII' && verCotizadorProy) ? (
         <ProyComprasLibro proyectos={proyectos} setProyectos={setProyectos} />
       ) : vista === 'consolidado' ? (
         <Consolidado proyectos={proyectos} />
       ) : vista === 'facturas' ? (
         <FacturasModule area="Proyectos" facturas={facturas} setFacturas={setFacturas} params={params} comisionPct={comisionPct} setComisionPct={setComisionPct} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={clientesSugeridos} />
-      ) : vista === 'parametros' ? (
+      ) : (vista === 'parametros' && verCotizadorProy) ? (
         <ProyParametros />
       ) : (
         proyectos.map(p => <TarjetaProyecto key={p.id} p={p} onUpdate={actualizar} onDelete={eliminar} onAddCompra={agregarCompra} params={params} facturasProy={facturasProy} />)
