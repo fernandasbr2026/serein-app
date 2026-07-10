@@ -19,14 +19,10 @@ const ESTADOS_COT = ['Alta probabilidad de cierre', 'Baja probabilidad de cierre
 const colorEstadoCot = e => ({ 'Aprobada': ['#E7F2EA', C.verde], 'Rechazada': ['#F6E0DA', C.rojo], 'Alta probabilidad de cierre': ['#E7EEF2', C.azul], 'Baja probabilidad de cierre': ['#F9E9DE', '#8C4519'], 'Otro': ['#EEE', C.gris] }[e] || ['#EEE', C.gris])
 
 // Datos de la empresa (encabezado del documento)
-export const EMPRESA = {
-  nombre: 'SERVICIOS REVESTIMIENTOS INDUSTRIALES SPA',
-  rut: '76.860.656-0',
-  giro: 'Revestimientos Industriales y habitacionales',
-  direccion: 'Santa Rosa 70, RENCA',
-  telefono: '56999369503',
-  email: 'administracion@sereinspa.com',
-}
+const _EMP_DEF = { nombre: 'SERVICIOS REVESTIMIENTOS INDUSTRIALES SPA', rut: '76.860.656-0', giro: 'Revestimientos Industriales y habitacionales', direccion: 'Santa Rosa 70, RENCA', telefono: '56999369503', email: 'administracion@sereinspa.com' }
+function _empVal(k, map) { try { const p = JSON.parse(localStorage.getItem('serein_params') || '{}'); const e = (p && p.empresa) || {}; const v = e[map]; return (v && String(v).trim()) || _EMP_DEF[k] || '' } catch (x) { return _EMP_DEF[k] || '' } }
+export const EMPRESA = {}
+;[['nombre', 'razonSocial'], ['rut', 'rut'], ['giro', 'giro'], ['direccion', 'direccion'], ['telefono', 'telefono'], ['email', 'correo']].forEach(m => Object.defineProperty(EMPRESA, m[0], { get() { return _empVal(m[0], m[1]) }, enumerable: true }))
 
 const itemTotal = it => Math.max(0, Math.round((num(it.cant) * num(it.pUnitario)) - num(it.descuento)))
 function totales(cot) {
