@@ -1,0 +1,139 @@
+import React, { useState, useEffect, useMemo } from 'react'
+import { supabase } from './supabase.js'
+
+// ============================================================
+// Compras SII -> Centro de costo (Proyectos)
+// Trae las facturas del Libro de Compras (SII) y permite imputarlas
+// a un proyecto-OT + centro de costo. Se agregan a p.compras (con
+// origen 'libro' y libroId para evitar duplicados), asi el consumo por
+// CC del proyecto las toma igual que las compras manuales.
+// ============================================================
+
+const C = { azul: '#061A40', teal: '#0B7285', ambar: '#FF6B00', rojo: '#D64545', verde: '#12805C', carbon: '#0F1A2E', gris: '#8A929E' }
+const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
+const sel = { padding: '5px 7px', border: '1px solid #CBD2D6', fontSize: 12.5, background: '#fff' }
+const clp = n => '$' + Math.round(+n || 0).toLocaleString('es-CL')
+
+export default function ProyComprasLibro({ proyectos = [], setProyectos = null }) {
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState('')
+  const [q, setQ] = useState('')
+  const [otSel, setOtSel] = useState('')
+  const [ccSel, setCcSel] = useState({})
+  const [msg, setMsg] = useState('')
+
+  useEffect(() => {
+    let vivo = true
+    ;(async () => {
+      setLoading(true); setErr('')
+      const { data, error } = await supabase
+        .from('libro_compras')
+        .select('id, emission_date, provider_name, provider_rut, document_number, document_type, neto, document_total, estado_pago')
+        .order('emission_date', { ascending: false })
+      if (!vivo) return
+      if (error) setErr('No pude leer el Libro de Compras: ' + error.message)
+      else setRows(data || [])
+      setLoading(false)
+    })()
+    return () => { vivo = false }
+  }, [])
+
+  const proy = proyectos.find(p => p.id === otSel) || null
+  const ccList = proy ? [...new Set([...Object.keys(proy.cc || {}), ...(proy.compras || []).map(c => c.cc)])].filter(Boolean) : []
+  const nombreCC = (p, code) => (p && p.ccNombres && p.ccNombres[code]) || code
+  const impSet = useMemo(() => { const s = new Set(); proyectos.forEach(p => (p.compras || []).forEach(c => { if (c.libroId != null) s.add(String(c.libroId)) })); return s }, [proyectos])
+
+  const filtradas = useMemo(() => (rows || []).filter(r => {
+    if (!q) return true
+    const t = ((r.provider_name || '') + ' ' + (r.provider_rut || '') + ' ' + (r.document_number || '')).toLowerCase()
+    return t.includes(q.toLowerCase())
+  }), [rows, q])
+
+  function imputar(r) {
+    if (!setProyectos) { setMsg('Falta conexion con Proyectos.'); return }
+    if (!otSel) { setMsg('Primero elige el proyecto/OT destino (arriba).'); return }
+    const cc = ccSel[r.id]
+    if (!cc) { setMsg('Elige el centro de costo para la factura ' + r.document_number + '.'); return }
+    const compra = { proveedor: r.provider_name || '', folio: String(r.document_number || ''), rut: r.provider_rut || '', monto: Math.round(+r.neto || 0), cc, fecha: r.emission_date || '—', detalle: 'SII ' + (r.document_type || ''), origen: 'libro', libroId: String(r.id) }
+    setProyectos(prev => prev.map(p => p.id === otSel ? { ...p, compras: [...(p.compras || []), compra] } : p))
+    setMsg('Factura ' + r.document_number + ' imputada a ' + cc + ' (' + nombreCC(proy, cc) + ').')
+    setTimeout(() => setMsg(''), 3200)
+  }
+  function quitar(libroId) {
+    if (!setProyectos) return
+    setProyectos(prev => prev.map(p => ({ ...p, compras: (p.compras || []).filter(c => String(c.libroId) !== String(libroId)) })))
+  }
+
+  const card = { background: '#fff', border: '1px solid #E2DED4', padding: 16, marginBottom: 16 }
+  const h = { fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }
+
+  return (
+    <div>
+      <div style={card}>
+        <div style={h}>Compras del Libro (SII) a centro de costo</div>
+        <div style={{ fontSize: 12.5, color: C.gris, marginBottom: 12, lineHeight: 1.4 }}>
+          Elige el proyecto/OT destino y luego imputa las facturas de compra (SII) a un centro de costo. Se descuentan del presupuesto de ese CC igual que las compras manuales. Tambien puedes seguir cargando compras a mano desde la ficha de la OT (pestana Tarjetas).
+        </div>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <label style={{ fontSize: 11, color: C.gris, display: 'flex', flexDirection: 'column', gap: 3 }}>Proyecto / OT destino
+            <select value={otSel} onChange={e => setOtSel(e.target.value)} style={{ ...inp, minWidth: 260 }}>
+              <option value="">- elige el proyecto -</option>
+              {proyectos.map(p => <option key={p.id} value={p.id}>{(p.ot ? p.ot + ' · ' : '') + (p.nombre || p.cliente || 'Proyecto')}</option>)}
+            </select>
+          </label>
+          {proy && (
+            <div style={{ fontSize: 12, color: C.gris }}>Centros de costo del proyecto: <b>{ccList.length ? ccList.map(cc => cc + ' ' + nombreCC(proy, cc)).join(' · ') : 'ninguno (agrega presupuesto por CC en la ficha)'}</b></div>
+          )}
+        </div>
+      </div>
+
+      <div style={card}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+          <input style={{ ...inp, flex: '1 1 240px' }} placeholder="Buscar proveedor, RUT o folio..." value={q} onChange={e => setQ(e.target.value)} />
+          {msg && <span style={{ color: msg.includes('imputada') ? C.verde : C.rojo, fontSize: 13, fontWeight: 600 }}>{msg}</span>}
+        </div>
+        {loading ? <div style={{ color: C.gris, padding: 16 }}>Cargando Libro de Compras...</div>
+          : err ? <div style={{ background: '#F6E0DA', border: '1px solid ' + C.rojo, color: C.rojo, padding: '10px 12px', fontSize: 13 }}>{err}</div>
+            : filtradas.length === 0 ? <div style={{ color: C.gris, padding: 16, textAlign: 'center' }}>Sin facturas en el Libro de Compras. Sincroniza el Libro de Compras primero.</div>
+              : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 900 }}>
+                    <thead>
+                      <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                        {['Emision', 'Proveedor', 'Folio', 'Neto', 'Pago', 'Imputar a CC', ''].map((t, i) => <th key={i} style={{ textAlign: t === 'Neto' ? 'right' : 'left', padding: '6px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{t}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtradas.slice(0, 300).map(r => {
+                        const imp = impSet.has(String(r.id))
+                        return (
+                          <tr key={r.id} style={{ borderBottom: '1px solid #EEE9DF', background: imp ? '#F3F7F4' : 'transparent' }}>
+                            <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{r.emission_date || '-'}</td>
+                            <td style={{ padding: '6px 8px' }}><div style={{ fontWeight: 600 }}>{r.provider_name || '-'}</div><div style={{ color: C.gris, fontSize: 11 }}>{r.provider_rut}</div></td>
+                            <td style={{ padding: '6px 8px' }}>{r.document_number}</td>
+                            <td style={{ padding: '6px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>{clp(r.neto)}</td>
+                            <td style={{ padding: '6px 8px', color: C.gris }}>{r.estado_pago || '-'}</td>
+                            <td style={{ padding: '6px 8px' }}>
+                              {imp ? <span style={{ color: C.teal, fontSize: 12, fontWeight: 600 }}>Ya imputada</span> : (
+                                <select value={ccSel[r.id] || ''} onChange={e => setCcSel({ ...ccSel, [r.id]: e.target.value })} style={{ ...sel, minWidth: 150 }} disabled={!proy || ccList.length === 0}>
+                                  <option value="">- CC -</option>
+                                  {ccList.map(cc => <option key={cc} value={cc}>{cc} · {nombreCC(proy, cc)}</option>)}
+                                </select>
+                              )}
+                            </td>
+                            <td style={{ padding: '6px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                              {imp ? <button onClick={() => quitar(r.id)} style={{ background: 'none', border: '1px solid #CBD2D6', color: C.rojo, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>Quitar</button>
+                                : <button onClick={() => imputar(r)} disabled={!proy || !ccSel[r.id]} style={{ background: (proy && ccSel[r.id]) ? C.verde : '#B9C2C7', color: '#fff', border: 'none', padding: '5px 12px', cursor: (proy && ccSel[r.id]) ? 'pointer' : 'default', fontSize: 12, fontWeight: 600 }}>Imputar</button>}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+      </div>
+    </div>
+  )
+}
