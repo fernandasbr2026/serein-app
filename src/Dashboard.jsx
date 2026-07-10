@@ -196,11 +196,11 @@ export default function Dashboard({ perfil, email, onLogout }) {
     ...(areasOT.length > 0 || esGerencia ? ['PRODUCCION'] : []),
     'ASISTENCIA',
     'CONTACTOS',
-    ...(esGerencia ? ['INVENTARIO'] : []),
+    'INVENTARIO',
     ...(esGerencia ? ['PARAMETROS'] : []),
   ]
   const ORDEN_MODULOS = ['TODAS', 'ASESOR', 'Santa Rosa', 'Istria', 'GESTION_PROYECTOS', 'FINANZAS', 'ORDENES_COMPRA', 'PAGOS', 'LIBRO_COMPRAS', 'LIBRO_VENTAS', 'TRAZABILIDAD', 'COTIZADOR', 'CLIENTES', 'CONTACTOS', 'COMPRAS_OP', 'PRODUCCION', 'GESTION_OT', 'ASISTENCIA', 'INVENTARIO', 'PARAMETROS']
-  if (modulosPerfil) tabs = ORDEN_MODULOS.filter(c => modulosPerfil.includes(c))
+  if (modulosPerfil) tabs = ORDEN_MODULOS.filter(c => c === 'INVENTARIO' || modulosPerfil.includes(c))
   const [areaSel, setAreaSel] = useState(tabs[0])
   const [sidebarColapsado, setSidebarColapsado] = useState(false)
 
