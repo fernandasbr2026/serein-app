@@ -375,6 +375,46 @@ export function calcularResumenFin(fin, mes) {
   return { fijos, variables, porArea, cuotasMes, totalCuotasMes, interesMes, cuotasVencidas, deudaVigente, reembolsable, salidaCaja: fijos + variables + totalCuotasMes }
 }
 
+function ProyeccionFin({ fin }) {
+  const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
+  const now = new Date()
+  const nowMes = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0')
+  const r0 = calcularResumenFin(fin, nowMes)
+  const fijoM = r0.fijos || 0, varM = r0.variables || 0, totalM = fijoM + varM
+  const meses = []
+  for (let k = 0; k < 12; k++) { const d = new Date(now.getFullYear(), now.getMonth() + k, 1); meses.push({ key: k, etiqueta: d.toLocaleDateString('es-CL', { month: 'short', year: '2-digit' }), fijos: fijoM, total: totalM }) }
+  const max = Math.max(1, totalM)
+  return (
+    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18, marginTop: 16 }}>
+      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Proyeccion a 12 meses</div>
+      <div style={{ fontSize: 12, color: '#7A8288', marginBottom: 14 }}>Forecast informativo: gastos fijos proyectados, y fijos + variables (promedio del mes vigente). Se actualiza a medida que cargas mas gastos.</div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 140, marginBottom: 8 }}>
+        {meses.map(m => (
+          <div key={m.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 0 }}>
+            <div style={{ width: '100%', height: 115, position: 'relative' }}>
+              <div title={'Fijos + variables ' + clp(m.total)} style={{ width: '68%', height: (m.total / max * 115) + 'px', background: '#D2642F', position: 'absolute', bottom: 0, left: '16%' }} />
+              <div title={'Fijos ' + clp(m.fijos)} style={{ width: '68%', height: (m.fijos / max * 115) + 'px', background: '#061A40', position: 'absolute', bottom: 0, left: '16%' }} />
+            </div>
+            <div style={{ fontSize: 9, color: '#7A8288', whiteSpace: 'nowrap' }}>{m.etiqueta}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 16, fontSize: 11.5, color: '#7A8288', marginBottom: 10 }}>
+        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#061A40', marginRight: 5 }} />Gastos fijos</span>
+        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#D2642F', marginRight: 5 }} />Fijos + variables</span>
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+          <thead><tr style={{ borderBottom: '2px solid #161616' }}>{['Mes', 'Fijos', 'Fijos + variables'].map((h, i) => <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '6px 8px', fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {meses.map(m => (<tr key={m.key} style={{ borderBottom: '1px solid #EEE9DF' }}><td style={{ padding: '6px 8px' }}>{m.etiqueta}</td><td style={{ padding: '6px 8px', textAlign: 'right' }}>{clp(m.fijos)}</td><td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{clp(m.total)}</td></tr>))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 function ResumenMensual({ fin }) {
   const [mes, setMes] = useState(hoy().slice(0, 7))
   const r = useMemo(() => calcularResumenFin(fin, mes), [fin, mes])
@@ -447,7 +487,7 @@ export default function FinanzasModule({ otsDisponibles = [], fin: finExt, setFi
           </button>
         ))}
       </div>
-      {tab === 'resumen' && <ResumenMensual fin={fin} />}
+      {tab === 'resumen' && <><ResumenMensual fin={fin} /><ProyeccionFin fin={fin} /></>}
       {tab === 'fijos' && <ListaGastos tipo="fijo" fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} />}
       {tab === 'variables' && <ListaGastos tipo="variable" fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} />}
       {tab === 'plantillas' && <Plantillas fin={fin} setFin={setFin} />}
