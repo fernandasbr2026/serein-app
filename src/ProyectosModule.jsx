@@ -231,6 +231,71 @@ function FichaEditor({ p, onUpdate, onClose }) {
   )
 }
 
+function AbonosOT({ p, facturasOT, onUpdate }) {
+  const [add, setAdd] = useState(false)
+  const [f, setF] = useState({ numero: '', monto: '', fecha: '', banco: '' })
+  const abonos = p.abonos || []
+  const totalDe = fac => Math.round((fac.neto || 0) * 1.19)
+  const abonadoDe = numero => abonos.filter(a => String(a.numero) === String(numero)).reduce((s, a) => s + (+a.monto || 0), 0)
+  const inp = { border: '1px solid #E2DED4', borderRadius: 4, padding: '6px 8px', fontSize: 12 }
+  const guardar = () => {
+    if (!f.numero || !(num(f.monto) > 0)) return
+    onUpdate(p.id, { abonos: [...abonos, { id: 'ab' + Date.now(), numero: f.numero, monto: num(f.monto), fecha: f.fecha || '—', banco: f.banco || '' }] })
+    setF({ numero: '', monto: '', fecha: '', banco: '' }); setAdd(false)
+  }
+  const eliminar = id => onUpdate(p.id, { abonos: abonos.filter(a => a.id !== id) })
+  return (
+    <div style={{ marginBottom: 16, border: '1px solid #E2DED4', borderRadius: 8, padding: 12, background: '#FCFBF9' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.teal }}>Pagos recibidos (abonos)</span>
+        <button onClick={() => setAdd(v => !v)} style={{ background: C.azul, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}>+ Registrar abono</button>
+      </div>
+      {facturasOT.length === 0 ? (<div style={{ fontSize: 12, color: C.gris }}>Esta OT aún no tiene facturas para abonar.</div>) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Factura', 'Total c/IVA', 'Abonado', 'Saldo', 'Estado'].map((h, i) => <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+            <tbody>
+              {facturasOT.map((fac, i) => {
+                const tot = totalDe(fac); const ab = abonadoDe(fac.numero); const saldo = tot - ab; const pagada = saldo <= 0
+                return (
+                  <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                    <td style={{ padding: '5px 8px', fontWeight: 600 }}>{fac.numero}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right' }}>{clp(tot)}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', color: C.verde }}>{clp(ab)}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600, color: pagada ? C.verde : '#B23A0E' }}>{clp(Math.max(0, saldo))}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right' }}><span style={{ background: pagada ? '#E7F2EA' : '#F6E0DA', color: pagada ? C.verde : '#B23A0E', padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>{pagada ? 'PAGADA' : 'Falta ' + clp(saldo)}</span></td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {add && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end', marginTop: 10, paddingTop: 10, borderTop: '1px dashed #E2DED4' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Factura</label><select value={f.numero} onChange={e => setF({ ...f, numero: e.target.value })} style={{ ...inp, minWidth: 120 }}><option value="">— folio —</option>{facturasOT.map((fac, i) => <option key={i} value={fac.numero}>{fac.numero}</option>)}</select></div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Monto abono</label><input value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} style={{ ...inp, width: 110, textAlign: 'right' }} /></div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Fecha</label><input type="date" value={f.fecha && f.fecha !== '—' ? f.fecha : ''} onChange={e => setF({ ...f, fecha: e.target.value })} style={{ ...inp, width: 140 }} /></div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Banco</label><input list="serein-bancos" value={f.banco} onChange={e => setF({ ...f, banco: e.target.value })} placeholder="Banco..." style={{ ...inp, width: 130 }} /></div>
+          <button onClick={guardar} style={{ background: C.verde, color: '#fff', border: 'none', borderRadius: 4, padding: '7px 14px', fontSize: 13, cursor: 'pointer' }}>Agregar</button>
+          <button onClick={() => setAdd(false)} style={{ background: 'none', border: '1px solid #CBD2D6', borderRadius: 4, padding: '7px 12px', fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+        </div>
+      )}
+      {abonos.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 10, color: C.gris, textTransform: 'uppercase', marginBottom: 4 }}>Abonos registrados</div>
+          {abonos.map(a => (
+            <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '3px 0', borderBottom: '1px solid #F0ECE3' }}>
+              <span style={{ color: C.gris }}>Factura {a.numero} · {a.fecha}{a.banco ? ' · ' + a.banco : ''}</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}><b>{clp(a.monto)}</b><button onClick={() => eliminar(a.id)} style={{ background: 'none', border: 'none', color: '#B23A0E', cursor: 'pointer', fontSize: 13 }}>x</button></span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasProy = [], enModal = false }) {
   const facturasOT = facturasDeOT(facturasProy, p)
   const factNetoOT = facturasOT.reduce((a, f) => a + (f.neto || 0), 0)
@@ -336,6 +401,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
               <div style={{ fontSize: 12, color: C.gris, marginTop: 4 }}>Facturado (facturas): <b>{clp(factNetoOT)}</b> — se cargan solas al ingresarlas en la pestaña Facturas con esta OT.</div>
             </div>
           )}
+          <AbonosOT p={p} facturasOT={facturasOT} onUpdate={onUpdate} />
           {/* VENTAS / EDP */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.gris }}>Ventas · Estados de pago (EDP)</span>
