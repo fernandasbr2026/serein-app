@@ -14,8 +14,8 @@ const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, box
 const btnMini = { background: 'none', border: 'none', cursor: 'pointer', color: C.rojo, padding: 4 }
 
 const CATEGORIAS_COSTO = ['Materiales', 'Mano de obra', 'Gastos asociados', 'Arriendo equipos', 'Factoring', 'Transporte', 'Otros']
-const ESTADOS_OT = ['Cotizada', 'En ejecuciÃ³n', 'Terminada', 'Facturada', 'Cerrada']
-const PREPARACIONES = ['SSPC-SP1 Limpieza solvente', 'SSPC-SP2/SP3 Manual/MecÃ¡nica', 'SSPC-SP6 Comercial', 'SSPC-SP10 Casi blanco', 'SSPC-SP5 Metal blanco', 'Hidrolavado', 'Otra']
+const ESTADOS_OT = ['Cotizada', 'En ejecución', 'Terminada', 'Facturada', 'Cerrada']
+const PREPARACIONES = ['SSPC-SP1 Limpieza solvente', 'SSPC-SP2/SP3 Manual/Mecánica', 'SSPC-SP6 Comercial', 'SSPC-SP10 Casi blanco', 'SSPC-SP5 Metal blanco', 'Hidrolavado', 'Otra']
 
 // ===== OTs DE EJEMPLO CON DATOS REALES DEL EXCEL (Viman, Santa Rosa) =====
 export const OTS_INICIALES = [
@@ -30,7 +30,7 @@ export const OTS_INICIALES = [
     montoCotizado: 5518500,
     procesos: ['Granallado', 'Pintura'],
     preparacion: 'SSPC-SP6 Comercial',
-    esquema: 'Zinc rico + epÃ³xico HB + poliuretano (240 Âµm)',
+    esquema: 'Zinc rico + epóxico HB + poliuretano (240 µm)',
     estado: 'Facturada',
     ventas: [
       { folio: '1667', fecha: '2026-07-01', neta: 4465500, estadoPago: 'Pendiente' },
@@ -38,8 +38,8 @@ export const OTS_INICIALES = [
     ],
     costos: [
       { categoria: 'Materiales', detalle: 'Pintura y diluyente (estimado)', monto: 1150000 },
-      { categoria: 'Mano de obra', detalle: 'Cuadrilla 4 dÃ­as', monto: 880000 },
-      { categoria: 'Factoring', detalle: 'PÃ©rdida neta fact. 1669', monto: 200000 },
+      { categoria: 'Mano de obra', detalle: 'Cuadrilla 4 días', monto: 880000 },
+      { categoria: 'Factoring', detalle: 'Pérdida neta fact. 1669', monto: 200000 },
     ],
   },
   {
@@ -48,43 +48,43 @@ export const OTS_INICIALES = [
     area: 'Santa Rosa',
     cliente: 'Viman',
     cotizacion: 'COT 773',
-    oc: 'â',
+    oc: '—',
     m2: 0,
     montoCotizado: 684000,
     procesos: ['Pintura'],
-    preparacion: 'SSPC-SP2/SP3 Manual/MecÃ¡nica',
-    esquema: 'ReparaciÃ³n puntual esquema existente',
+    preparacion: 'SSPC-SP2/SP3 Manual/Mecánica',
+    esquema: 'Reparación puntual esquema existente',
     estado: 'Facturada',
     ventas: [{ folio: '1668', fecha: '2026-07-01', neta: 684000, estadoPago: 'Pendiente' }],
     costos: [],
   },
   {
     id: 'ot-234', numero: 'OT-234', area: 'Santa Rosa', cliente: 'Howden',
-    cotizacion: 'â', oc: 'â', m2: 200, montoCotizado: 0,
+    cotizacion: '—', oc: '—', m2: 200, montoCotizado: 0,
     procesos: ['Granallado', 'Pintura'],
     preparacion: 'SSPC-SP6 Comercial', esquema: 'Granallado y pintura',
-    estado: 'En ejecuciÃ³n', ventas: [], costos: [],
+    estado: 'En ejecución', ventas: [], costos: [],
   },
   {
     id: 'ot-385', numero: 'OT-385', area: 'Santa Rosa', cliente: 'TTM',
-    cotizacion: 'â', oc: 'â', m2: 500, montoCotizado: 0,
+    cotizacion: '—', oc: '—', m2: 500, montoCotizado: 0,
     procesos: ['Granallado', 'Pintura'],
     preparacion: 'SSPC-SP10 Casi blanco', esquema: 'Granallado y pintura',
-    estado: 'En ejecuciÃ³n', ventas: [], costos: [],
+    estado: 'En ejecución', ventas: [], costos: [],
   },
   {
     id: 'ot-304', numero: 'OT-304', area: 'Istria', cliente: 'IMMA',
-    cotizacion: 'â', oc: 'â', m2: 180, montoCotizado: 0,
+    cotizacion: '—', oc: '—', m2: 180, montoCotizado: 0,
     procesos: ['Pintura'],
-    preparacion: 'SSPC-SP2/SP3 Manual/MecÃ¡nica', esquema: 'Pintura estructuras',
-    estado: 'En ejecuciÃ³n', ventas: [], costos: [],
+    preparacion: 'SSPC-SP2/SP3 Manual/Mecánica', esquema: 'Pintura estructuras',
+    estado: 'En ejecución', ventas: [], costos: [],
   },
   {
     id: 'ot-302', numero: 'OT-302', area: 'Istria', cliente: 'IMMA',
-    cotizacion: 'â', oc: 'â', m2: 300, montoCotizado: 0,
+    cotizacion: '—', oc: '—', m2: 300, montoCotizado: 0,
     procesos: ['Pintura'],
-    preparacion: 'SSPC-SP2/SP3 Manual/MecÃ¡nica', esquema: 'Pintura',
-    estado: 'En ejecuciÃ³n', ventas: [], costos: [],
+    preparacion: 'SSPC-SP2/SP3 Manual/Mecánica', esquema: 'Pintura',
+    estado: 'En ejecución', ventas: [], costos: [],
   },
 ]
 
@@ -98,7 +98,7 @@ function Barra({ pct, color, alto = 8 }) {
 
 function ChipEstado({ estado }) {
   const map = {
-    'Cotizada': ['#EEF1F4', '#5A6B77'], 'En ejecuciÃ³n': ['#F9E9DE', C.ambar],
+    'Cotizada': ['#EEF1F4', '#5A6B77'], 'En ejecución': ['#F9E9DE', C.ambar],
     'Terminada': ['#E7EEF2', C.azul], 'Facturada': ['#E7F2EA', C.verde], 'Cerrada': ['#E9E7F2', '#5B4E8C'],
   }
   const [bg, fg] = map[estado] || ['#EEE', '#666']
@@ -118,11 +118,11 @@ function FormVenta({ onAdd, onCancel }) {
         <select style={inp} value={f.estadoPago} onChange={e => setF({ ...f, estadoPago: e.target.value })}>
           <option>Pendiente</option><option>Pagado</option><option>Factoring</option>
         </select>
-        <button onClick={() => num(f.neta) > 0 && onAdd({ folio: f.folio || 's/f', fecha: f.fecha || 'â', neta: num(f.neta), estadoPago: f.estadoPago })}
+        <button onClick={() => num(f.neta) > 0 && onAdd({ folio: f.folio || 's/f', fecha: f.fecha || '—', neta: num(f.neta), estadoPago: f.estadoPago })}
           style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Agregar</button>
         <button onClick={onCancel} style={{ ...btnMini, color: '#7A8288' }}><X size={16} /></button>
       </div>
-      {num(f.neta) > 0 && <div style={{ fontSize: 12, color: '#7A8288', marginTop: 6 }}>IVA 19%: {clp(iva)} Â· Total factura: {clp(num(f.neta) + iva)}</div>}
+      {num(f.neta) > 0 && <div style={{ fontSize: 12, color: '#7A8288', marginTop: 6 }}>IVA 19%: {clp(iva)} · Total factura: {clp(num(f.neta) + iva)}</div>}
     </div>
   )
 }
@@ -134,7 +134,7 @@ function FormCosto({ onAdd, onCancel }) {
       <select style={inp} value={f.categoria} onChange={e => setF({ ...f, categoria: e.target.value })}>
         {CATEGORIAS_COSTO.map(c => <option key={c}>{c}</option>)}
       </select>
-      <input style={{ ...inp, flex: '1 1 160px' }} placeholder="Detalle (proveedor, conceptoâ¦)" value={f.detalle} onChange={e => setF({ ...f, detalle: e.target.value })} />
+      <input style={{ ...inp, flex: '1 1 160px' }} placeholder="Detalle (proveedor, concepto…)" value={f.detalle} onChange={e => setF({ ...f, detalle: e.target.value })} />
       <input style={{ ...inp, width: 140 }} placeholder="Monto neto CLP" value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} />
       <button onClick={() => num(f.monto) > 0 && onAdd({ categoria: f.categoria, detalle: f.detalle, monto: num(f.monto) })}
         style={{ background: C.teal, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Agregar</button>
@@ -144,7 +144,7 @@ function FormCosto({ onAdd, onCancel }) {
 }
 
 // ---------- Tarjeta OT ----------
-const ETIQUETAS_FOTO = ['RecepciÃ³n', 'Proceso', 'Despacho', 'Otro']
+const ETIQUETAS_FOTO = ['Recepción', 'Proceso', 'Despacho', 'Otro']
 
 function SobrantePanel({ ot }) {
   const [open, setOpen] = useState(false)
@@ -179,7 +179,7 @@ function SobrantePanel({ ot }) {
 }
 
 function FotosOT({ ot, onUpdate }) {
-  const [etiqueta, setEtiqueta] = useState('RecepciÃ³n')
+  const [etiqueta, setEtiqueta] = useState('Recepción')
   const [ampliada, setAmpliada] = useState(null)
   const fotos = ot.fotos || []
 
@@ -209,7 +209,7 @@ function FotosOT({ ot, onUpdate }) {
           <Camera size={13} /> Subir foto(s)
           <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={subir} />
         </label>
-        <span style={{ fontSize: 11, color: '#9AA0A6' }}>Ej: camiÃ³n al recibir, avance del proceso, despacho.</span>
+        <span style={{ fontSize: 11, color: '#9AA0A6' }}>Ej: camión al recibir, avance del proceso, despacho.</span>
       </div>
       {fotos.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
@@ -218,8 +218,8 @@ function FotosOT({ ot, onUpdate }) {
               <img src={f.url} alt={f.etiqueta} onClick={() => setAmpliada(f)}
                 style={{ width: 110, height: 82, objectFit: 'cover', cursor: 'pointer', border: '1px solid #E2DED4', display: 'block' }} />
               <div style={{ fontSize: 10.5, color: C.gris, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
-                <span>{f.etiqueta} Â· {f.fecha.slice(5)}</span>
-                <button onClick={() => window.confirm('Â¿Eliminar esta foto?') && onUpdate(ot.id, { fotos: fotos.filter(x => x.id !== f.id) })}
+                <span>{f.etiqueta} · {f.fecha.slice(5)}</span>
+                <button onClick={() => window.confirm('¿Eliminar esta foto?') && onUpdate(ot.id, { fotos: fotos.filter(x => x.id !== f.id) })}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo, padding: 0 }}><Trash2 size={12} /></button>
               </div>
             </div>
@@ -229,7 +229,7 @@ function FotosOT({ ot, onUpdate }) {
       {ampliada && (
         <div onClick={() => setAmpliada(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.85)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexDirection: 'column', gap: 10, padding: 20 }}>
           <img src={ampliada.url} alt="" style={{ maxWidth: '92vw', maxHeight: '80vh', objectFit: 'contain' }} />
-          <span style={{ color: '#fff', fontSize: 13 }}>{ampliada.etiqueta} Â· {ampliada.fecha} Â· toca para cerrar</span>
+          <span style={{ color: '#fff', fontSize: 13 }}>{ampliada.etiqueta} · {ampliada.fecha} · toca para cerrar</span>
         </div>
       )}
     </div>
@@ -242,10 +242,10 @@ function descargarOT(ot) {
   const wb = XLSX.utils.book_new()
   const ficha = [
     ['ORDEN DE TRABAJO', ot.numero], [],
-    ['Cliente', ot.cliente], ['Ãrea / Planta', ot.area],
-    ['CotizaciÃ³n', ot.cotizacion || 'â'], ['Orden de compra', ot.oc || 'â'],
-    ['mÂ² fÃ­sicos', ot.m2 || 0], ['PreparaciÃ³n superficial', ot.preparacion || 'â'],
-    ['Esquema', ot.esquema || 'â'], ['Procesos', (ot.procesos || []).join(' + ') || 'â'],
+    ['Cliente', ot.cliente], ['Área / Planta', ot.area],
+    ['Cotización', ot.cotizacion || '—'], ['Orden de compra', ot.oc || '—'],
+    ['m² físicos', ot.m2 || 0], ['Preparación superficial', ot.preparacion || '—'],
+    ['Esquema', ot.esquema || '—'], ['Procesos', (ot.procesos || []).join(' + ') || '—'],
     ['Estado', ot.estado], ['Monto cotizado (neto)', ot.montoCotizado || 0], [],
     ['Venta neta facturada', ventaTotal], ['Costos totales', costoTotal],
     ['Utilidad real', ventaTotal - costoTotal],
@@ -255,11 +255,11 @@ function descargarOT(ot) {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ficha), 'Ficha')
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
     ['Folio', 'Fecha', 'Neta', 'IVA', 'Total', 'Estado de pago'],
-    ...ot.ventas.map(v => [v.folio, v.fecha, v.neta, Math.round(v.neta * 0.19), Math.round(v.neta * 1.19), v.estadoPago || v.estado_pago || 'â']),
+    ...ot.ventas.map(v => [v.folio, v.fecha, v.neta, Math.round(v.neta * 0.19), Math.round(v.neta * 1.19), v.estadoPago || v.estado_pago || '—']),
   ]), 'Ventas')
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-    ['CategorÃ­a', 'Detalle', 'Fecha', 'Monto'],
-    ...ot.costos.map(x => [x.categoria, x.detalle || 'â', x.fecha || 'â', x.monto]),
+    ['Categoría', 'Detalle', 'Fecha', 'Monto'],
+    ...ot.costos.map(x => [x.categoria, x.detalle || '—', x.fecha || '—', x.monto]),
   ]), 'Costos')
   XLSX.writeFile(wb, `${ot.numero}.xlsx`)
 }
@@ -276,8 +276,8 @@ function TileOT({ ot, onOpen, onDragStart, onDropOn, verValores }) {
           <span draggable onDragStart={e => { e.stopPropagation(); onDragStart() }} onClick={e => e.stopPropagation()} title="Arrastrar para reordenar" style={{ cursor: 'grab', color: '#B9C0C6', fontSize: 15, userSelect: 'none', lineHeight: 1, letterSpacing: '-1px' }}>::</span>
         </div>
       </div>
-      {ot.nv && ot.nv !== 'â' ? <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, fontWeight: 700, color: '#A8501F' }}>NV {ot.nv}</div> : null}<div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, color: '#161616', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ot.cliente}</div>
-      <div style={{ fontSize: 11.5, color: '#7A8288', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ot.area}{ot.m2 ? ' Â· ' + ot.m2 + ' mÂ²' : ''}{ot.preparacion ? ' Â· ' + ot.preparacion : ''}</div>
+      {ot.nv && ot.nv !== '—' ? <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, fontWeight: 700, color: '#A8501F' }}>NV {ot.nv}</div> : null}<div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, color: '#161616', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ot.cliente}</div>
+      <div style={{ fontSize: 11.5, color: '#7A8288', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ot.area}{ot.m2 ? ' · ' + ot.m2 + ' m²' : ''}{ot.preparacion ? ' · ' + ot.preparacion : ''}</div>
       {verValores && monto > 0 && (
         <div style={{ marginTop: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
           <span style={{ fontSize: 10.5, color: '#7A8288', textTransform: 'uppercase' }}>Monto</span>
@@ -316,8 +316,8 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
             <ChipEstado estado={ot.estado} />
           </div>
           <div style={{ fontSize: 12, color: '#7A8288', marginTop: 5, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-            <span><FileText size={11} style={{ verticalAlign: -1 }} /> {ot.cotizacion}{ot.oc && ot.oc !== 'â' ? ' Â· Aprob. cliente ' + ot.oc : ''}</span>
-            {ot.m2 > 0 && <span><Ruler size={11} style={{ verticalAlign: -1 }} /> {ot.m2} mÂ²</span>}
+            <span><FileText size={11} style={{ verticalAlign: -1 }} /> {ot.cotizacion}{ot.oc && ot.oc !== '—' ? ' · Aprob. cliente ' + ot.oc : ''}</span>
+            {ot.m2 > 0 && <span><Ruler size={11} style={{ verticalAlign: -1 }} /> {ot.m2} m²</span>}
             <span><Paintbrush size={11} style={{ verticalAlign: -1 }} /> {ot.esquema}</span>
           </div>
         </div>
@@ -344,17 +344,17 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
           <Barra pct={ventaTotal > 0 ? (costoTotal / ventaTotal) * 100 : 0} color={margen >= 30 ? C.teal : margen >= 15 ? C.ambar : C.rojo} />
           {(precioM2 || costoM2) && (
             <div style={{ fontSize: 12, color: '#7A8288', marginTop: 4 }}>
-              {precioM2 && <>Venta: <b>{clp(precioM2)}/mÂ²</b></>}{precioM2 && costoM2 && ' Â· '}
-              {costoM2 && <>Costo: <b>{clp(costoM2)}/mÂ²</b></>}
+              {precioM2 && <>Venta: <b>{clp(precioM2)}/m²</b></>}{precioM2 && costoM2 && ' · '}
+              {costoM2 && <>Costo: <b>{clp(costoM2)}/m²</b></>}
             </div>
           )}
         </div>
       )}
-      {!verValores && <div style={{ padding: '0 18px 14px' }}><span style={{ fontSize: 11.5, color: '#9AA0A6', fontStyle: 'italic' }}>Vista de taller Â· valores visibles solo para Gerencia.</span></div>}
+      {!verValores && <div style={{ padding: '0 18px 14px' }}><span style={{ fontSize: 11.5, color: '#9AA0A6', fontStyle: 'italic' }}>Vista de taller · valores visibles solo para Gerencia.</span></div>}
 
       {(abierta || enModal) && (
         <div style={{ borderTop: '1px solid #EEE9DF', padding: 18 }}>
-          {/* Datos tÃ©cnicos editables */}
+          {/* Datos técnicos editables */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 18 }}>
             <label style={{ fontSize: 12, color: '#7A8288' }}>Estado OT
               <select value={ot.estado} onChange={e => onUpdate(ot.id, { estado: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }}>
@@ -370,7 +370,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
                 <input value={ot.montoCotizado || ''} onChange={e => onUpdate(ot.id, { montoCotizado: num(e.target.value) })} style={{ ...inp, width: '100%', marginTop: 4 }} />
               </label>
             )}
-            <label style={{ fontSize: 12, color: '#7A8288' }}>PreparaciÃ³n superficial
+            <label style={{ fontSize: 12, color: '#7A8288' }}>Preparación superficial
               <select value={ot.preparacion} onChange={e => onUpdate(ot.id, { preparacion: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }}>
                 {PREPARACIONES.map(s => <option key={s}>{s}</option>)}
               </select>
@@ -380,10 +380,10 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
           {/* Esquema de pintura y servicios (visible para todos) */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10, marginBottom: 16 }}>
             <label style={{ fontSize: 12, color: '#7A8288' }}>Esquema de pintura
-              <textarea value={ot.esquema === 'â' ? '' : (ot.esquema || '')} onChange={e => onUpdate(ot.id, { esquema: e.target.value })} placeholder="Detalle del esquema: preparaciÃ³n, capas, productos, espesores (Âµm)â¦" style={{ ...inp, width: '100%', marginTop: 4, minHeight: 72, resize: 'vertical', fontFamily: 'inherit' }} />
+              <textarea value={ot.esquema === '—' ? '' : (ot.esquema || '')} onChange={e => onUpdate(ot.id, { esquema: e.target.value })} placeholder="Detalle del esquema: preparación, capas, productos, espesores (µm)…" style={{ ...inp, width: '100%', marginTop: 4, minHeight: 72, resize: 'vertical', fontFamily: 'inherit' }} />
             </label>
             <label style={{ fontSize: 12, color: '#7A8288' }}>Servicios necesarios / observaciones
-              <textarea value={ot.servicios || ''} onChange={e => onUpdate(ot.id, { servicios: e.target.value })} placeholder="Servicios adicionales, requerimientos y notas para el tallerâ¦" style={{ ...inp, width: '100%', marginTop: 4, minHeight: 72, resize: 'vertical', fontFamily: 'inherit' }} />
+              <textarea value={ot.servicios || ''} onChange={e => onUpdate(ot.id, { servicios: e.target.value })} placeholder="Servicios adicionales, requerimientos y notas para el taller…" style={{ ...inp, width: '100%', marginTop: 4, minHeight: 72, resize: 'vertical', fontFamily: 'inherit' }} />
             </label>
           </div>
 
@@ -391,8 +391,8 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
 
         <div style={{ marginTop: 14 }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-            <span style={{ fontSize:13, fontWeight:700, textTransform:'uppercase', color:'#B23A0E' }}>RecepciÃ³n / Partidas / entregas de material</span>
-            <button onClick={() => onUpdate(ot.id, { partidas: [...(ot.partidas || []), { id: 'pa' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [] }] })} style={{ background: C.teal, color:'#fff', border:'none', padding:'6px 12px', cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', gap:4 }}><Plus size={14} /> Agregar recepciÃ³n</button>
+            <span style={{ fontSize:13, fontWeight:700, textTransform:'uppercase', color:'#B23A0E' }}>Recepción / Partidas / entregas de material</span>
+            <button onClick={() => onUpdate(ot.id, { partidas: [...(ot.partidas || []), { id: 'pa' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [] }] })} style={{ background: C.teal, color:'#fff', border:'none', padding:'6px 12px', cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', gap:4 }}><Plus size={14} /> Agregar recepción</button>
           </div>
           {(ot.partidas || []).length === 0 ? (<div style={{ fontSize:12, color:'#8A8A7A', marginBottom:6 }}>Sin registros.</div>) : null}
           <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
@@ -402,7 +402,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
                   <span style={{ fontWeight:700, fontSize:12, color:C.carbon }}>#{i + 1}</span>
                   <input value={p.detalle || ''} onChange={e => onUpdate(ot.id, { partidas: (ot.partidas || []).map((x, j) => j === i ? { ...x, detalle: e.target.value } : x) })} placeholder="Detalle del material" style={{ ...inp, flex:'2 1 150px', padding:'6px 8px' }} />
                   <input type="date" value={p.fecha || ''} onChange={e => onUpdate(ot.id, { partidas: (ot.partidas || []).map((x, j) => j === i ? { ...x, fecha: e.target.value } : x) })} style={{ ...inp, flex:'0 1 140px', padding:'6px 8px' }} />
-                  <div style={{ display:'flex', alignItems:'center', gap:4 }}><input type="number" value={p.m2 || ''} onChange={e => onUpdate(ot.id, { partidas: (ot.partidas || []).map((x, j) => j === i ? { ...x, m2: e.target.value } : x) })} placeholder="mÂ²" style={{ ...inp, width:72, padding:'6px 8px' }} /><span style={{ fontSize:11, color:'#7A8288' }}>mÂ²</span></div>
+                  <div style={{ display:'flex', alignItems:'center', gap:4 }}><input type="number" value={p.m2 || ''} onChange={e => onUpdate(ot.id, { partidas: (ot.partidas || []).map((x, j) => j === i ? { ...x, m2: e.target.value } : x) })} placeholder="m²" style={{ ...inp, width:72, padding:'6px 8px' }} /><span style={{ fontSize:11, color:'#7A8288' }}>m²</span></div>
                   <select value={p.estado || 'Pendiente'} onChange={e => onUpdate(ot.id, { partidas: (ot.partidas || []).map((x, j) => j === i ? { ...x, estado: e.target.value } : x) })} style={{ border:'none', background: p.estado === 'Recibida' ? '#E6F5EA' : '#F5E5DE', color: p.estado === 'Recibida' ? C.verde : '#B23A0E', padding:'5px 8px', fontSize:11, fontWeight:700, cursor:'pointer' }}><option>Pendiente</option><option>Recibida</option></select>
                   <button onClick={() => onUpdate(ot.id, { partidas: (ot.partidas || []).filter((_, j) => j !== i) })} style={btnMini}><Trash2 size={13} /></button>
                 </div>
@@ -411,7 +411,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
                   {(p.fotos || []).map((f, k) => (
                     <div key={k} style={{ position:'relative' }}>
                       <img src={f} style={{ width:64, height:64, objectFit:'cover', borderRadius:4, border:'1px solid #CBD2D6' }} />
-                      <button onClick={() => onUpdate(ot.id, { partidas: (ot.partidas || []).map((x, j) => j === i ? { ...x, fotos: (x.fotos || []).filter((_, z) => z !== k) } : x) })} style={{ position:'absolute', top:-6, right:-6, background:'#DC2626', color:'#fff', border:'none', borderRadius:'50%', width:18, height:18, fontSize:11, cursor:'pointer', lineHeight:1 }}>Ã</button>
+                      <button onClick={() => onUpdate(ot.id, { partidas: (ot.partidas || []).map((x, j) => j === i ? { ...x, fotos: (x.fotos || []).filter((_, z) => z !== k) } : x) })} style={{ position:'absolute', top:-6, right:-6, background:'#DC2626', color:'#fff', border:'none', borderRadius:'50%', width:18, height:18, fontSize:11, cursor:'pointer', lineHeight:1 }}>×</button>
                     </div>
                   ))}
                   <label style={{ cursor:'pointer', width:64, height:64, border:'1px dashed #C9C4B8', borderRadius:4, display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, color:'#B0A89A' }}>+
@@ -439,7 +439,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
                   <span style={{ fontWeight:700, fontSize:12, color:C.carbon }}>#{i + 1}</span>
                   <input value={p.detalle || ''} onChange={e => onUpdate(ot.id, { despachos: (ot.despachos || []).map((x, j) => j === i ? { ...x, detalle: e.target.value } : x) })} placeholder="Detalle del material" style={{ ...inp, flex:'2 1 150px', padding:'6px 8px' }} />
                   <input type="date" value={p.fecha || ''} onChange={e => onUpdate(ot.id, { despachos: (ot.despachos || []).map((x, j) => j === i ? { ...x, fecha: e.target.value } : x) })} style={{ ...inp, flex:'0 1 140px', padding:'6px 8px' }} />
-                  <div style={{ display:'flex', alignItems:'center', gap:4 }}><input type="number" value={p.m2 || ''} onChange={e => onUpdate(ot.id, { despachos: (ot.despachos || []).map((x, j) => j === i ? { ...x, m2: e.target.value } : x) })} placeholder="mÂ²" style={{ ...inp, width:72, padding:'6px 8px' }} /><span style={{ fontSize:11, color:'#7A8288' }}>mÂ²</span></div>
+                  <div style={{ display:'flex', alignItems:'center', gap:4 }}><input type="number" value={p.m2 || ''} onChange={e => onUpdate(ot.id, { despachos: (ot.despachos || []).map((x, j) => j === i ? { ...x, m2: e.target.value } : x) })} placeholder="m²" style={{ ...inp, width:72, padding:'6px 8px' }} /><span style={{ fontSize:11, color:'#7A8288' }}>m²</span></div>
                   <select value={p.estado || 'Pendiente'} onChange={e => onUpdate(ot.id, { despachos: (ot.despachos || []).map((x, j) => j === i ? { ...x, estado: e.target.value } : x) })} style={{ border:'none', background: p.estado === 'Despachada' ? '#E6F5EA' : '#F5E5DE', color: p.estado === 'Despachada' ? C.verde : '#B23A0E', padding:'5px 8px', fontSize:11, fontWeight:700, cursor:'pointer' }}><option>Pendiente</option><option>Despachada</option></select>
                   <button onClick={() => onUpdate(ot.id, { despachos: (ot.despachos || []).filter((_, j) => j !== i) })} style={btnMini}><Trash2 size={13} /></button>
                 </div>
@@ -448,7 +448,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
                   {(p.fotos || []).map((f, k) => (
                     <div key={k} style={{ position:'relative' }}>
                       <img src={f} style={{ width:64, height:64, objectFit:'cover', borderRadius:4, border:'1px solid #CBD2D6' }} />
-                      <button onClick={() => onUpdate(ot.id, { despachos: (ot.despachos || []).map((x, j) => j === i ? { ...x, fotos: (x.fotos || []).filter((_, z) => z !== k) } : x) })} style={{ position:'absolute', top:-6, right:-6, background:'#DC2626', color:'#fff', border:'none', borderRadius:'50%', width:18, height:18, fontSize:11, cursor:'pointer', lineHeight:1 }}>Ã</button>
+                      <button onClick={() => onUpdate(ot.id, { despachos: (ot.despachos || []).map((x, j) => j === i ? { ...x, fotos: (x.fotos || []).filter((_, z) => z !== k) } : x) })} style={{ position:'absolute', top:-6, right:-6, background:'#DC2626', color:'#fff', border:'none', borderRadius:'50%', width:18, height:18, fontSize:11, cursor:'pointer', lineHeight:1 }}>×</button>
                     </div>
                   ))}
                   <label style={{ cursor:'pointer', width:64, height:64, border:'1px dashed #C9C4B8', borderRadius:4, display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, color:'#B0A89A' }}>+
@@ -470,9 +470,9 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
           const over = m2c > 0 && m2r > m2c;
           return (
             <div style={{ marginTop: 16, display:'flex', gap:12, flexWrap:'wrap' }}>
-              <div style={{ flex:'1 1 120px', border:'1px solid #D8DCE5', borderRadius:6, padding:'10px 12px', background:'#F5F7FA' }}><div style={{ fontSize:11, color:'#7A8288', textTransform:'uppercase', fontWeight:700 }}>MÂ² cotizaciÃ³n</div><div style={{ fontSize:20, fontWeight:700, color:C.carbon }}>{m2c}</div></div>
-              <div style={{ flex:'1 1 120px', border:'1px solid ' + (over ? '#DC2626' : '#D8DCE5'), borderRadius:6, padding:'10px 12px', background: over ? '#FDECEC' : '#F5F7FA' }}><div style={{ fontSize:11, color: over ? '#DC2626' : '#7A8288', textTransform:'uppercase', fontWeight:700 }}>MÂ² reales</div><div style={{ fontSize:20, fontWeight:700, color: over ? '#DC2626' : C.carbon }}>{m2r}</div>{over ? <div style={{ fontSize:10.5, color:'#DC2626', fontWeight:700, marginTop:2 }}>â  Supera lo cotizado (+{r2(m2r - m2c)} mÂ²)</div> : null}</div>
-              <div style={{ flex:'1 1 120px', border:'1px solid #D8DCE5', borderRadius:6, padding:'10px 12px', background:'#F5F7FA' }}><div style={{ fontSize:11, color:'#7A8288', textTransform:'uppercase', fontWeight:700 }}>MÂ² en planta</div><div style={{ fontSize:20, fontWeight:700, color: planta < 0 ? '#DC2626' : C.carbon }}>{planta}</div></div>
+              <div style={{ flex:'1 1 120px', border:'1px solid #D8DCE5', borderRadius:6, padding:'10px 12px', background:'#F5F7FA' }}><div style={{ fontSize:11, color:'#7A8288', textTransform:'uppercase', fontWeight:700 }}>M² cotización</div><div style={{ fontSize:20, fontWeight:700, color:C.carbon }}>{m2c}</div></div>
+              <div style={{ flex:'1 1 120px', border:'1px solid ' + (over ? '#DC2626' : '#D8DCE5'), borderRadius:6, padding:'10px 12px', background: over ? '#FDECEC' : '#F5F7FA' }}><div style={{ fontSize:11, color: over ? '#DC2626' : '#7A8288', textTransform:'uppercase', fontWeight:700 }}>M² reales</div><div style={{ fontSize:20, fontWeight:700, color: over ? '#DC2626' : C.carbon }}>{m2r}</div>{over ? <div style={{ fontSize:10.5, color:'#DC2626', fontWeight:700, marginTop:2 }}>⚠ Supera lo cotizado (+{r2(m2r - m2c)} m²)</div> : null}</div>
+              <div style={{ flex:'1 1 120px', border:'1px solid #D8DCE5', borderRadius:6, padding:'10px 12px', background:'#F5F7FA' }}><div style={{ fontSize:11, color:'#7A8288', textTransform:'uppercase', fontWeight:700 }}>M² en planta</div><div style={{ fontSize:20, fontWeight:700, color: planta < 0 ? '#DC2626' : C.carbon }}>{planta}</div></div>
             </div>
           );
         })()}
@@ -489,7 +489,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
                 </button>
               </div>
               {ot.ventas.length === 0 ? (
-                <div style={{ fontSize: 13, color: '#9AA0A6' }}>AÃºn sin facturar.</div>
+                <div style={{ fontSize: 13, color: '#9AA0A6' }}>Aún sin facturar.</div>
               ) : (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
@@ -515,7 +515,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
                           </select>
                         </td>
                         <td style={{ padding: '7px 4px', textAlign: 'right' }}>
-                          <button onClick={() => window.confirm(`Â¿Eliminar factura ${v.folio} (${clp(v.neta)})?`) && onUpdate(ot.id, { ventas: ot.ventas.filter((_, j) => j !== i) })} style={btnMini}>
+                          <button onClick={() => window.confirm(`¿Eliminar factura ${v.folio} (${clp(v.neta)})?`) && onUpdate(ot.id, { ventas: ot.ventas.filter((_, j) => j !== i) })} style={btnMini}>
                             <Trash2 size={14} />
                           </button>
                         </td>
@@ -538,12 +538,12 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
                 </button>
               </div>
               {ot.costos.length === 0 ? (
-                <div style={{ fontSize: 13, color: '#9AA0A6' }}>Sin costos registrados â la utilidad mostrada es bruta.</div>
+                <div style={{ fontSize: 13, color: '#9AA0A6' }}>Sin costos registrados — la utilidad mostrada es bruta.</div>
               ) : (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-                      {['CategorÃ­a', 'Detalle', 'Monto', ''].map((h, i) => (
+                      {['Categoría', 'Detalle', 'Monto', ''].map((h, i) => (
                         <th key={i} style={{ textAlign: h === 'Monto' ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>{h}</th>
                       ))}
                     </tr>
@@ -552,10 +552,10 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
                     {ot.costos.map((c, i) => (
                       <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
                         <td style={{ padding: '7px 8px', fontWeight: 500 }}>{c.categoria}</td>
-                        <td style={{ padding: '7px 8px', color: '#7A8288' }}>{c.detalle || 'â'}</td>
+                        <td style={{ padding: '7px 8px', color: '#7A8288' }}>{c.detalle || '—'}</td>
                         <td style={{ padding: '7px 8px', textAlign: 'right' }}>{clp(c.monto)}</td>
                         <td style={{ padding: '7px 4px', textAlign: 'right' }}>
-                          <button onClick={() => window.confirm(`Â¿Eliminar costo ${c.categoria} (${clp(c.monto)})?`) && onUpdate(ot.id, { costos: ot.costos.filter((_, j) => j !== i) })} style={btnMini}>
+                          <button onClick={() => window.confirm(`¿Eliminar costo ${c.categoria} (${clp(c.monto)})?`) && onUpdate(ot.id, { costos: ot.costos.filter((_, j) => j !== i) })} style={btnMini}>
                             <Trash2 size={14} />
                           </button>
                         </td>
@@ -612,7 +612,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
                 <Download size={13} /> Descargar OT (Excel)
               </button>
             )}
-            <button onClick={() => window.confirm(`Â¿Eliminar la ${ot.numero} completa?`) && onDelete(ot.id)}
+            <button onClick={() => window.confirm(`¿Eliminar la ${ot.numero} completa?`) && onDelete(ot.id)}
               style={{ background: 'none', border: `1px solid ${C.rojo}`, color: C.rojo, padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
               <Trash2 size={13} /> Eliminar OT
             </button>
@@ -629,7 +629,7 @@ function FormOT({ area, siguienteNumero, onAdd, onCancel }) {
   return (
     <div style={{ background: '#fff', border: `2px solid ${C.azul}`, padding: 16, marginBottom: 14 }}>
       <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>
-        Nueva OT Â· {area} <span style={{ fontFamily: "'JetBrains Mono',monospace", background: C.carbon, color: '#fff', padding: '2px 8px', marginLeft: 8 }}>{siguienteNumero}</span>
+        Nueva OT · {area} <span style={{ fontFamily: "'JetBrains Mono',monospace", background: C.carbon, color: '#fff', padding: '2px 8px', marginLeft: 8 }}>{siguienteNumero}</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
         <input style={inp} placeholder="Cliente *" value={f.cliente} onChange={e => setF({ ...f, cliente: e.target.value })} />
@@ -637,8 +637,8 @@ function FormOT({ area, siguienteNumero, onAdd, onCancel }) {
         <input style={inp} placeholder="Correo" value={f.correo} onChange={e => setF({ ...f, correo: e.target.value })} />
         <input style={inp} placeholder="Telefono" value={f.telefono} onChange={e => setF({ ...f, telefono: e.target.value })} />
         <input style={inp} placeholder="NV (Nota de Venta)" value={f.nv} onChange={e => setF({ ...f, nv: e.target.value })} />
-        <input style={inp} placeholder="CotizaciÃ³n" value={f.cotizacion} onChange={e => setF({ ...f, cotizacion: e.target.value })} />
-        <input style={inp} placeholder="Respaldo aprobaciÃ³n cliente (opcional)" value={f.oc} onChange={e => setF({ ...f, oc: e.target.value })} />
+        <input style={inp} placeholder="Cotización" value={f.cotizacion} onChange={e => setF({ ...f, cotizacion: e.target.value })} />
+        <input style={inp} placeholder="Respaldo aprobación cliente (opcional)" value={f.oc} onChange={e => setF({ ...f, oc: e.target.value })} />
         <input style={inp} placeholder="Metros cuadrados" value={f.m2} onChange={e => setF({ ...f, m2: e.target.value })} />
         <input style={inp} placeholder="Monto cotizado CLP" value={f.montoCotizado} onChange={e => setF({ ...f, montoCotizado: e.target.value })} />
         <select style={inp} value={f.preparacion} onChange={e => setF({ ...f, preparacion: e.target.value })}>
@@ -649,8 +649,8 @@ function FormOT({ area, siguienteNumero, onAdd, onCancel }) {
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
         <button onClick={() => f.cliente && onAdd({
           id: 'ot' + Date.now(), numero: siguienteNumero, area, fecha: new Date().toISOString().slice(0, 10), nombreEncargo: f.nombreEncargo, correo: f.correo, telefono: f.telefono, nv: f.nv,
-          cliente: f.cliente, cotizacion: f.cotizacion || 'â', oc: f.oc || 'â',
-          m2: num(f.m2), montoCotizado: num(f.montoCotizado), preparacion: f.preparacion, esquema: f.esquema || 'â',
+          cliente: f.cliente, cotizacion: f.cotizacion || '—', oc: f.oc || '—',
+          m2: num(f.m2), montoCotizado: num(f.montoCotizado), preparacion: f.preparacion, esquema: f.esquema || '—',
           estado: 'Cotizada', ventas: [], costos: [],
         })} style={{ background: C.verde, color: '#fff', border: 'none', padding: '8px 18px', cursor: 'pointer', fontSize: 13 }}>Crear OT</button>
         <button onClick={onCancel} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '8px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
@@ -659,7 +659,7 @@ function FormOT({ area, siguienteNumero, onAdd, onCancel }) {
   )
 }
 
-// ---------- MÃ³dulo principal ----------
+// ---------- Módulo principal ----------
 // ================= PROTOCOLOS DE CALIDAD (PIG / PGP) =================
 const PROT_BASE = 144
 const nextCorrelativoProt = otsAll => { let mx = PROT_BASE; (otsAll || []).forEach(o => (o.protocolos || []).forEach(p => { if (p.correlativo > mx) mx = p.correlativo })); return mx + 1 }
@@ -730,11 +730,11 @@ function TablaMedidas({ titulo, filas, ncols, onSetCell, onAuto, onAddFila, onDe
 function ProtoHead({ p, upd, onDel, titulo, equipos, col, onTgl }) {
   const ip = { padding: '6px 8px', border: '1px solid #CBD2D6', fontSize: 12.5, boxSizing: 'border-box', width: '100%' }
   const set = (k, v) => upd({ ...p, [k]: v })
-  return (<div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}><span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 700, fontSize: 14, textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }} onClick={onTgl}>{col ? 'â¸ ' : 'â¾ '}{p.codigo} - {titulo}</span><div style={{ display: 'flex', gap: 8 }}><button onClick={() => descargarProto(p, equipos)} style={{ background: '#161616', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>Descargar PDF</button><button onClick={onDel} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 10px', cursor: 'pointer', fontSize: 12.5, color: '#7A8288' }}>Eliminar</button></div></div>{!col && (<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8 }}><PF label="Codigo"><input style={ip} value={p.codigo} onChange={e => set('codigo', e.target.value)} /></PF><PF label="Orden de Trabajo"><input style={ip} value={p.ot} onChange={e => set('ot', e.target.value)} /></PF><PF label="NV"><input style={ip} value={p.nv} onChange={e => set('nv', e.target.value)} /></PF><PF label="Codigo PGP (gran/pintura)"><input style={ip} value={p.pgpCodigo} onChange={e => set('pgpCodigo', e.target.value)} /></PF><PF label="Cliente"><input style={ip} value={p.cliente} onChange={e => set('cliente', e.target.value)} /></PF><PF label="Proyecto"><input style={ip} value={p.proyecto} onChange={e => set('proyecto', e.target.value)} /></PF><PF label="Fecha"><input type="date" style={ip} value={p.fecha} onChange={e => set('fecha', e.target.value)} /></PF><PF label="Preparado por"><input style={ip} value={p.preparadoPor} onChange={e => set('preparadoPor', e.target.value)} /></PF></div>)}</div>) }
+  return (<div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}><span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 700, fontSize: 14, textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }} onClick={onTgl}>{col ? '▸ ' : '▾ '}{p.codigo} - {titulo}</span><div style={{ display: 'flex', gap: 8 }}><button onClick={() => descargarProto(p, equipos)} style={{ background: '#161616', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>Descargar PDF</button><button onClick={onDel} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 10px', cursor: 'pointer', fontSize: 12.5, color: '#7A8288' }}>Eliminar</button></div></div>{!col && (<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8 }}><PF label="Codigo"><input style={ip} value={p.codigo} onChange={e => set('codigo', e.target.value)} /></PF><PF label="Orden de Trabajo"><input style={ip} value={p.ot} onChange={e => set('ot', e.target.value)} /></PF><PF label="NV"><input style={ip} value={p.nv} onChange={e => set('nv', e.target.value)} /></PF><PF label="Codigo PGP (gran/pintura)"><input style={ip} value={p.pgpCodigo} onChange={e => set('pgpCodigo', e.target.value)} /></PF><PF label="Cliente"><input style={ip} value={p.cliente} onChange={e => set('cliente', e.target.value)} /></PF><PF label="Proyecto"><input style={ip} value={p.proyecto} onChange={e => set('proyecto', e.target.value)} /></PF><PF label="Fecha"><input type="date" style={ip} value={p.fecha} onChange={e => set('fecha', e.target.value)} /></PF><PF label="Preparado por"><input style={ip} value={p.preparadoPor} onChange={e => set('preparadoPor', e.target.value)} /></PF></div>)}</div>) }
 function ProtoPIGForm({ p, upd, onDel, instrumentos }) {
   const ip = { padding: '6px 8px', border: '1px solid #CBD2D6', fontSize: 12.5, boxSizing: 'border-box', width: '100%' }
   const set = (k, v) => upd({ ...p, [k]: v }); const setAmb = (k, v) => upd({ ...p, amb: { ...p.amb, [k]: v } }); const setChk = (i, k, v) => upd({ ...p, checks: p.checks.map((c, j) => j === i ? { ...c, [k]: v } : c) }); const setMed = (i, v) => upd({ ...p, medidas: p.medidas.map((m, j) => j === i ? v : m) }); const [col, setCol] = useState(false)
-  return (<div style={{ marginTop: 12, border: '1px solid #E2DED4', borderTop: '3px solid #D2642F', padding: 14 }}><ProtoHead p={p} upd={upd} onDel={onDel} titulo="Protocolo Inicio de Granalla" equipos={instrumentos} col={col} onTgl={() => setCol(!col)} />{!col && (<><div style={{ margin: '10px 0 4px' }}><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '6px 0 4px' }}>DescripciÃ³n</div><input style={ip} value={p.descripcion || ''} onChange={e => set('descripcion', e.target.value)} /><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '10px 0 4px' }}>Esquema del proyecto</div><textarea style={{ ...ip, minHeight: 54, resize: 'vertical' }} value={p.esquemaProyecto || ''} onChange={e => set('esquemaProyecto', e.target.value)} placeholder="Sistema de pintura, espesores, normas, alcance..." /></div><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '10px 0 4px' }}>Controles</div><div>{p.checks.map((c, i) => (<div key={i} style={{ border: '1px solid #EEE9DF', borderRadius: 6, padding: 8, marginBottom: 6 }}><div style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: 6 }}><input style={ip} value={c.nombre} onChange={e => setChk(i, 'nombre', e.target.value)} /><select value={c.cumple} onChange={e => setChk(i, 'cumple', e.target.value)} style={ip}><option>SI</option><option>NO</option></select></div><input style={{ ...ip, marginTop: 6 }} placeholder="Observacion" value={c.obs} onChange={e => setChk(i, 'obs', e.target.value)} /><FotoSlots label={'Fotos evidencia ' + (i + 1)} fotos={c.fotos || []} max={4} onChange={v => setChk(i, 'fotos', v)} /></div>))}</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px,1fr))', gap: 8, marginTop: 8 }}><PF label="Limpieza SSPC-SP"><input style={ip} value={p.limpiezaSSPC} onChange={e => set('limpiezaSSPC', e.target.value)} /></PF><PF label="Perfil de anclaje"><input style={ip} value={p.perfilSolicitado} onChange={e => set('perfilSolicitado', e.target.value)} /></PF><PF label="Medida 1"><input style={ip} value={p.medidas[0]} onChange={e => setMed(0, e.target.value)} /></PF><PF label="Medida 2"><input style={ip} value={p.medidas[1]} onChange={e => setMed(1, e.target.value)} /></PF><PF label="Medida 3"><input style={ip} value={p.medidas[2]} onChange={e => setMed(2, e.target.value)} /></PF><PF label="Perfil obtenido (auto)"><input readOnly style={{ ...ip, background: '#F1EDE6' }} value={promArr(p.medidas) ? promArr(p.medidas).toFixed(2) : ''} /></PF></div><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '12px 0 4px' }}>Condiciones ambientales</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px,1fr))', gap: 8 }}><PF label="Fecha"><input type="date" style={ip} value={p.amb.fecha} onChange={e => setAmb('fecha', e.target.value)} /></PF><PF label="% Humedad"><input style={ip} value={p.amb.humedad} onChange={e => setAmb('humedad', e.target.value)} /></PF><PF label="T. Ambiente C"><input style={ip} value={p.amb.tAmbiente} onChange={e => setAmb('tAmbiente', e.target.value)} /></PF><PF label="C Pieza"><input style={ip} value={p.amb.tPieza} onChange={e => setAmb('tPieza', e.target.value)} /></PF><PF label="Pto. Rocio"><input style={ip} value={p.amb.ptoRocio} onChange={e => setAmb('ptoRocio', e.target.value)} /></PF><PF label="Hora inicio"><input style={ip} value={p.amb.horaInicio} onChange={e => setAmb('horaInicio', e.target.value)} /></PF></div><FotoSlots label="Fotos inicio de granalla" fotos={p.fotosGranalla || []} max={4} onChange={v => set('fotosGranalla', v)} /></>)}</div>) }
+  return (<div style={{ marginTop: 12, border: '1px solid #E2DED4', borderTop: '3px solid #D2642F', padding: 14 }}><ProtoHead p={p} upd={upd} onDel={onDel} titulo="Protocolo Inicio de Granalla" equipos={instrumentos} col={col} onTgl={() => setCol(!col)} />{!col && (<><div style={{ margin: '10px 0 4px' }}><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '6px 0 4px' }}>Descripción</div><input style={ip} value={p.descripcion || ''} onChange={e => set('descripcion', e.target.value)} /><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '10px 0 4px' }}>Esquema del proyecto</div><textarea style={{ ...ip, minHeight: 54, resize: 'vertical' }} value={p.esquemaProyecto || ''} onChange={e => set('esquemaProyecto', e.target.value)} placeholder="Sistema de pintura, espesores, normas, alcance..." /></div><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '10px 0 4px' }}>Controles</div><div>{p.checks.map((c, i) => (<div key={i} style={{ border: '1px solid #EEE9DF', borderRadius: 6, padding: 8, marginBottom: 6 }}><div style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: 6 }}><input style={ip} value={c.nombre} onChange={e => setChk(i, 'nombre', e.target.value)} /><select value={c.cumple} onChange={e => setChk(i, 'cumple', e.target.value)} style={ip}><option>SI</option><option>NO</option></select></div><input style={{ ...ip, marginTop: 6 }} placeholder="Observacion" value={c.obs} onChange={e => setChk(i, 'obs', e.target.value)} /><FotoSlots label={'Fotos evidencia ' + (i + 1)} fotos={c.fotos || []} max={4} onChange={v => setChk(i, 'fotos', v)} /></div>))}</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px,1fr))', gap: 8, marginTop: 8 }}><PF label="Limpieza SSPC-SP"><input style={ip} value={p.limpiezaSSPC} onChange={e => set('limpiezaSSPC', e.target.value)} /></PF><PF label="Perfil de anclaje"><input style={ip} value={p.perfilSolicitado} onChange={e => set('perfilSolicitado', e.target.value)} /></PF><PF label="Medida 1"><input style={ip} value={p.medidas[0]} onChange={e => setMed(0, e.target.value)} /></PF><PF label="Medida 2"><input style={ip} value={p.medidas[1]} onChange={e => setMed(1, e.target.value)} /></PF><PF label="Medida 3"><input style={ip} value={p.medidas[2]} onChange={e => setMed(2, e.target.value)} /></PF><PF label="Perfil obtenido (auto)"><input readOnly style={{ ...ip, background: '#F1EDE6' }} value={promArr(p.medidas) ? promArr(p.medidas).toFixed(2) : ''} /></PF></div><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '12px 0 4px' }}>Condiciones ambientales</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px,1fr))', gap: 8 }}><PF label="Fecha"><input type="date" style={ip} value={p.amb.fecha} onChange={e => setAmb('fecha', e.target.value)} /></PF><PF label="% Humedad"><input style={ip} value={p.amb.humedad} onChange={e => setAmb('humedad', e.target.value)} /></PF><PF label="T. Ambiente C"><input style={ip} value={p.amb.tAmbiente} onChange={e => setAmb('tAmbiente', e.target.value)} /></PF><PF label="C Pieza"><input style={ip} value={p.amb.tPieza} onChange={e => setAmb('tPieza', e.target.value)} /></PF><PF label="Pto. Rocio"><input style={ip} value={p.amb.ptoRocio} onChange={e => setAmb('ptoRocio', e.target.value)} /></PF><PF label="Hora inicio"><input style={ip} value={p.amb.horaInicio} onChange={e => setAmb('horaInicio', e.target.value)} /></PF></div><FotoSlots label="Fotos inicio de granalla" fotos={p.fotosGranalla || []} max={4} onChange={v => set('fotosGranalla', v)} /></>)}</div>) }
 function CapaBlock({ cap, acum, onSet, onCell, onAuto, onAddFila, onDelFila, onFotos, onDel }) {
   const ip = { padding: '6px 8px', border: '1px solid #CBD2D6', fontSize: 12.5, boxSizing: 'border-box', width: '100%' }
   return (<div style={{ border: '1px solid #E2DED4', padding: 10, marginTop: 8, background: '#FBF9F6' }}><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px,1fr))', gap: 8 }}><PF label="Nombre capa"><input style={ip} value={cap.nombre} onChange={e => onSet('nombre', e.target.value)} /></PF><PF label="Producto"><input style={ip} value={cap.producto} onChange={e => onSet('producto', e.target.value)} /></PF><PF label="Espesor solicitado (capa)"><input style={ip} value={cap.solicitado} onChange={e => onSet('solicitado', e.target.value)} /></PF><PF label="Solicitado acumulado"><input readOnly style={{ ...ip, background: '#FFF0E6', color: '#B85000', fontWeight: 600 }} value={acum ? (acum[0] + ' a ' + acum[1] + ' mils') : ''} /></PF></div><TablaMedidas titulo="Espesores (DFT)" filas={cap.filas} ncols={(cap.filas[0] || []).length} onSetCell={onCell} onAuto={onAuto} onAddFila={onAddFila} onDelFila={onDelFila} resumen="Promedio capa" /><FotoSlots label={'Fotos ' + (cap.nombre || 'capa')} fotos={cap.fotos || []} max={4} onChange={onFotos} /><div style={{ textAlign: 'right', marginTop: 4 }}><button onClick={onDel} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '4px 10px', cursor: 'pointer', fontSize: 12, color: '#B5432E' }}>Eliminar capa</button></div></div>) }
@@ -752,7 +752,7 @@ function ProtoPGPForm({ p, upd, onDel, instrumentos }) {
   const fotosCapa = (id, v) => upd({ ...p, capas: capas.map(c => c.id === id ? { ...c, fotos: v } : c) })
   const addCapa = () => upd({ ...p, capas: [...capas, nuevaCapa('Capa ' + (capas.length + 1))] })
   const delCapa = id => upd({ ...p, capas: capas.filter(c => c.id !== id) }); const [col, setCol] = useState(false)
-  return (<div style={{ marginTop: 12, border: '1px solid #E2DED4', borderTop: '3px solid #161616', padding: 14 }}><ProtoHead p={p} upd={upd} onDel={onDel} titulo="Protocolo Granallado y Pintura" equipos={instrumentos} col={col} onTgl={() => setCol(!col)} />{!col && (<><div style={{ margin: '10px 0 4px' }}><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '6px 0 4px' }}>DescripciÃ³n</div><input style={ip} value={p.descripcion || ''} onChange={e => set('descripcion', e.target.value)} /><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '10px 0 4px' }}>Esquema del proyecto</div><textarea style={{ ...ip, minHeight: 54, resize: 'vertical' }} value={p.esquemaProyecto || ''} onChange={e => set('esquemaProyecto', e.target.value)} placeholder="Sistema de pintura, espesores, normas, alcance..." /></div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '10px 0 4px' }}><span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase' }}>Instrumentos (desde Parametros)</span><button onClick={() => { var df = { espMarca: 'ELCOMETER', espSerie: 'MH11472', rugMarca: 'ELCOMETER', rugSerie: 'NE30319', termoMarca: 'ELCOMETER', termoSerie: 'KCA721' }; var s = instrumentos || {}; upd({ ...p, instr: { espMarca: s.espMarca || df.espMarca, espSerie: s.espSerie || df.espSerie, rugMarca: s.rugMarca || df.rugMarca, rugSerie: s.rugSerie || df.rugSerie, termoMarca: s.termoMarca || df.termoMarca, termoSerie: s.termoSerie || df.termoSerie } }) }} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>Cargar de Parametros</button></div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8 }}><PF label="Medidor espesor - marca"><input style={ip} value={p.instr.espMarca} onChange={e => setInstr('espMarca', e.target.value)} /></PF><PF label="Medidor espesor - serie"><input style={ip} value={p.instr.espSerie} onChange={e => setInstr('espSerie', e.target.value)} /></PF><PF label="Rugosimetro - marca"><input style={ip} value={p.instr.rugMarca} onChange={e => setInstr('rugMarca', e.target.value)} /></PF><PF label="Rugosimetro - serie"><input style={ip} value={p.instr.rugSerie} onChange={e => setInstr('rugSerie', e.target.value)} /></PF><PF label="Termohigrometro - marca"><input style={ip} value={p.instr.termoMarca} onChange={e => setInstr('termoMarca', e.target.value)} /></PF><PF label="Termohigrometro - serie"><input style={ip} value={p.instr.termoSerie} onChange={e => setInstr('termoSerie', e.target.value)} /></PF></div><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '10px 0 4px' }}>Condiciones ambientales</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px,1fr))', gap: 8 }}><PF label="Fecha"><input type="date" style={ip} value={p.amb.fecha} onChange={e => setAmb('fecha', e.target.value)} /></PF><PF label="% Humedad"><input style={ip} value={p.amb.humedad} onChange={e => setAmb('humedad', e.target.value)} /></PF><PF label="T. Ambiente"><input style={ip} value={p.amb.tAmbiente} onChange={e => setAmb('tAmbiente', e.target.value)} /></PF><PF label="C Pieza"><input style={ip} value={p.amb.tPieza} onChange={e => setAmb('tPieza', e.target.value)} /></PF><PF label="Pto. Rocio"><input style={ip} value={p.amb.ptoRocio} onChange={e => setAmb('ptoRocio', e.target.value)} /></PF><PF label="Hora inicio"><input style={ip} value={p.amb.horaInicio} onChange={e => setAmb('horaInicio', e.target.value)} /></PF></div><div style={{ marginTop: 8 }}>{(p.ambExtra || []).map((c, i) => (<div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}><input style={{ ...ip, flex: '1 1 140px' }} placeholder="CondiciÃ³n" value={c.label || ''} onChange={e => set('ambExtra', (p.ambExtra || []).map((x, j) => j === i ? { ...x, label: e.target.value } : x))} /><input style={{ ...ip, flex: '1 1 100px' }} placeholder="Valor" value={c.valor || ''} onChange={e => set('ambExtra', (p.ambExtra || []).map((x, j) => j === i ? { ...x, valor: e.target.value } : x))} /><button onClick={() => set('ambExtra', (p.ambExtra || []).filter((_, j) => j !== i))} style={{ background: 'none', border: '1px solid #CBD2D6', cursor: 'pointer', padding: '4px 8px', color: '#B23A0E' }}>Ã</button></div>))}<button onClick={() => set('ambExtra', [...(p.ambExtra || []), { label: '', valor: '' }])} style={{ background: C.teal, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, marginTop: 2 }}>+ Agregar condiciÃ³n ambiental</button></div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8, marginTop: 8 }}><PF label="Limpieza superficial"><input style={ip} value={p.limpiezaSSPC} onChange={e => set('limpiezaSSPC', e.target.value)} /></PF><PF label="Perfil de anclaje"><input style={ip} value={p.perfilSolicitado} onChange={e => set('perfilSolicitado', e.target.value)} /></PF></div><TablaMedidas titulo="Perfil de rugosidad" filas={Array.isArray(p.perfilFilas) ? p.perfilFilas : []} ncols={5} onSetCell={setPerfil} onAuto={autoPerfil} resumen="Perfil obtenido (prom.)" /><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '12px 0 4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span>Esquema de pintura - capas ({capas.length})</span><button onClick={addCapa} style={{ background: '#D2642F', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 12 }}>+ Agregar capa</button></div>{capas.map((cap, ci) => (<CapaBlock key={cap.id} cap={cap} acum={acumRango(capas, ci)} onSet={(k, v) => setCapa(cap.id, k, v)} onCell={(r, c, v) => cellCapa(cap.id, r, c, v)} onAuto={() => autoCapa(cap.id)} onAddFila={() => addFila(cap.id)} onDelFila={() => delFila(cap.id)} onFotos={v => fotosCapa(cap.id, v)} onDel={() => delCapa(cap.id)} />))}<FotoSlots label="Fotos inicio de granalla" fotos={p.fotosGranalla || []} max={4} onChange={v => set('fotosGranalla', v)} /></>)}</div>) }
+  return (<div style={{ marginTop: 12, border: '1px solid #E2DED4', borderTop: '3px solid #161616', padding: 14 }}><ProtoHead p={p} upd={upd} onDel={onDel} titulo="Protocolo Granallado y Pintura" equipos={instrumentos} col={col} onTgl={() => setCol(!col)} />{!col && (<><div style={{ margin: '10px 0 4px' }}><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '6px 0 4px' }}>Descripción</div><input style={ip} value={p.descripcion || ''} onChange={e => set('descripcion', e.target.value)} /><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '10px 0 4px' }}>Esquema del proyecto</div><textarea style={{ ...ip, minHeight: 54, resize: 'vertical' }} value={p.esquemaProyecto || ''} onChange={e => set('esquemaProyecto', e.target.value)} placeholder="Sistema de pintura, espesores, normas, alcance..." /></div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '10px 0 4px' }}><span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase' }}>Instrumentos (desde Parametros)</span><button onClick={() => { var df = { espMarca: 'ELCOMETER', espSerie: 'MH11472', rugMarca: 'ELCOMETER', rugSerie: 'NE30319', termoMarca: 'ELCOMETER', termoSerie: 'KCA721' }; var s = instrumentos || {}; upd({ ...p, instr: { espMarca: s.espMarca || df.espMarca, espSerie: s.espSerie || df.espSerie, rugMarca: s.rugMarca || df.rugMarca, rugSerie: s.rugSerie || df.rugSerie, termoMarca: s.termoMarca || df.termoMarca, termoSerie: s.termoSerie || df.termoSerie } }) }} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>Cargar de Parametros</button></div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8 }}><PF label="Medidor espesor - marca"><input style={ip} value={p.instr.espMarca} onChange={e => setInstr('espMarca', e.target.value)} /></PF><PF label="Medidor espesor - serie"><input style={ip} value={p.instr.espSerie} onChange={e => setInstr('espSerie', e.target.value)} /></PF><PF label="Rugosimetro - marca"><input style={ip} value={p.instr.rugMarca} onChange={e => setInstr('rugMarca', e.target.value)} /></PF><PF label="Rugosimetro - serie"><input style={ip} value={p.instr.rugSerie} onChange={e => setInstr('rugSerie', e.target.value)} /></PF><PF label="Termohigrometro - marca"><input style={ip} value={p.instr.termoMarca} onChange={e => setInstr('termoMarca', e.target.value)} /></PF><PF label="Termohigrometro - serie"><input style={ip} value={p.instr.termoSerie} onChange={e => setInstr('termoSerie', e.target.value)} /></PF></div><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '10px 0 4px' }}>Condiciones ambientales</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px,1fr))', gap: 8 }}><PF label="Fecha"><input type="date" style={ip} value={p.amb.fecha} onChange={e => setAmb('fecha', e.target.value)} /></PF><PF label="% Humedad"><input style={ip} value={p.amb.humedad} onChange={e => setAmb('humedad', e.target.value)} /></PF><PF label="T. Ambiente"><input style={ip} value={p.amb.tAmbiente} onChange={e => setAmb('tAmbiente', e.target.value)} /></PF><PF label="C Pieza"><input style={ip} value={p.amb.tPieza} onChange={e => setAmb('tPieza', e.target.value)} /></PF><PF label="Pto. Rocio"><input style={ip} value={p.amb.ptoRocio} onChange={e => setAmb('ptoRocio', e.target.value)} /></PF><PF label="Hora inicio"><input style={ip} value={p.amb.horaInicio} onChange={e => setAmb('horaInicio', e.target.value)} /></PF></div><div style={{ marginTop: 8 }}>{(p.ambExtra || []).map((c, i) => (<div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}><input style={{ ...ip, flex: '1 1 140px' }} placeholder="Condición" value={c.label || ''} onChange={e => set('ambExtra', (p.ambExtra || []).map((x, j) => j === i ? { ...x, label: e.target.value } : x))} /><input style={{ ...ip, flex: '1 1 100px' }} placeholder="Valor" value={c.valor || ''} onChange={e => set('ambExtra', (p.ambExtra || []).map((x, j) => j === i ? { ...x, valor: e.target.value } : x))} /><button onClick={() => set('ambExtra', (p.ambExtra || []).filter((_, j) => j !== i))} style={{ background: 'none', border: '1px solid #CBD2D6', cursor: 'pointer', padding: '4px 8px', color: '#B23A0E' }}>×</button></div>))}<button onClick={() => set('ambExtra', [...(p.ambExtra || []), { label: '', valor: '' }])} style={{ background: C.teal, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, marginTop: 2 }}>+ Agregar condición ambiental</button></div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8, marginTop: 8 }}><PF label="Limpieza superficial"><input style={ip} value={p.limpiezaSSPC} onChange={e => set('limpiezaSSPC', e.target.value)} /></PF><PF label="Perfil de anclaje"><input style={ip} value={p.perfilSolicitado} onChange={e => set('perfilSolicitado', e.target.value)} /></PF></div><TablaMedidas titulo="Perfil de rugosidad" filas={Array.isArray(p.perfilFilas) ? p.perfilFilas : []} ncols={5} onSetCell={setPerfil} onAuto={autoPerfil} resumen="Perfil obtenido (prom.)" /><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '12px 0 4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span>Esquema de pintura - capas ({capas.length})</span><button onClick={addCapa} style={{ background: '#D2642F', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 12 }}>+ Agregar capa</button></div>{capas.map((cap, ci) => (<CapaBlock key={cap.id} cap={cap} acum={acumRango(capas, ci)} onSet={(k, v) => setCapa(cap.id, k, v)} onCell={(r, c, v) => cellCapa(cap.id, r, c, v)} onAuto={() => autoCapa(cap.id)} onAddFila={() => addFila(cap.id)} onDelFila={() => delFila(cap.id)} onFotos={v => fotosCapa(cap.id, v)} onDel={() => delCapa(cap.id)} />))}<FotoSlots label="Fotos inicio de granalla" fotos={p.fotosGranalla || []} max={4} onChange={v => set('fotosGranalla', v)} /></>)}</div>) }
 function ProtocolosOT({ ot, onUpdate, otsAll = [], instrumentos = null }) {
   const lista = ot.protocolos || []
   const gen = tipo => onUpdate(ot.id, { protocolos: [...lista, nuevoProtocolo(tipo, ot, nextCorrelativoProt(otsAll), instrumentos)] })
@@ -779,7 +779,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   const [repHasta, setRepHasta] = useState('')
   const [repCliente, setRepCliente] = useState('')
   const _norm = s => (s || '').trim().toLowerCase()
-  const otFecha = o => o.fecha || ((o.ventas || []).map(v => v.fecha).filter(f => f && f !== 'â').sort()[0]) || ''
+  const otFecha = o => o.fecha || ((o.ventas || []).map(v => v.fecha).filter(f => f && f !== '—').sort()[0]) || ''
   const clientesActivos = [...new Set((clientes || []).filter(c => (c.estado || 'Activo') === 'Activo').map(c => (c.nombre || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b))
 
   function generarInforme() {
@@ -787,8 +787,8 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
     const lista = ots.filter(o => (!repCliente || _norm(o.cliente) === _norm(repCliente)) && enRango(o))
     if (lista.length === 0) { window.alert('No hay OT que cumplan el filtro seleccionado.'); return }
     const header = verValores
-      ? ['NÂ° OT', 'Cliente', 'Ãrea', 'Estado', 'Fecha', 'CotizaciÃ³n', 'Monto cotizado', 'Venta neta', 'Costos', 'Utilidad', 'Esquema', 'NÂ° partidas']
-      : ['NÂ° OT', 'Cliente', 'Ãrea', 'Estado', 'Fecha', 'CotizaciÃ³n', 'Esquema', 'NÂ° partidas']
+      ? ['N° OT', 'Cliente', 'Área', 'Estado', 'Fecha', 'Cotización', 'Monto cotizado', 'Venta neta', 'Costos', 'Utilidad', 'Esquema', 'N° partidas']
+      : ['N° OT', 'Cliente', 'Área', 'Estado', 'Fecha', 'Cotización', 'Esquema', 'N° partidas']
     const rows = lista.map(o => {
       const venta = (o.ventas || []).reduce((a, v) => a + (v.neta || 0), 0)
       const costo = (o.costos || []).reduce((a, c) => a + (c.monto || 0), 0)
@@ -817,7 +817,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
 
   return (
     <div>
-      {/* Selector de Ã¡rea */}
+      {/* Selector de área */}
       {areasPermitidas.length > 1 && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
           {areasPermitidas.map(a => (
@@ -845,11 +845,11 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
           <label style={{ fontSize: 11, color: '#7A8288' }}>Hasta<input type="date" value={repHasta} onChange={e => setRepHasta(e.target.value)} style={{ ...inp, display: 'block', marginTop: 3 }} /></label>
           <label style={{ fontSize: 11, color: '#7A8288' }}>Cliente<select value={repCliente} onChange={e => setRepCliente(e.target.value)} style={{ ...inp, display: 'block', marginTop: 3 }}><option value="">Todos</option>{clientesActivos.map(c => <option key={c} value={c}>{c}</option>)}</select></label>
           <button onClick={generarInforme} style={{ background: C.verde, color: '#fff', border: 'none', padding: '8px 16px', cursor: 'pointer', fontSize: 13 }}>Generar Excel</button>
-          <span style={{ fontSize: 11.5, color: '#9AA0A6' }}>Deja las fechas vacÃ­as para incluir todo. Cubre tus Ã¡reas visibles.</span>
+          <span style={{ fontSize: 11.5, color: '#9AA0A6' }}>Deja las fechas vacías para incluir todo. Cubre tus áreas visibles.</span>
         </div>
       )}
 
-      {/* KPIs del Ã¡rea */}
+      {/* KPIs del área */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
         {kpis.map(([l, v], i) => (
           <div key={i} style={{ background: '#fff', border: '1px solid #E2DED4', padding: 14, flex: '1 1 150px' }}>
@@ -876,7 +876,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
           <div onClick={() => setSel(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,26,46,.55)', zIndex: 70, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '28px 16px', overflowY: 'auto' }}>
             <div onClick={e => e.stopPropagation()} style={{ background: '#F7F6F3', width: '100%', maxWidth: 1000, boxShadow: '0 20px 60px -12px rgba(0,0,0,.4)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #E2DED4', background: '#fff', position: 'sticky', top: 0, zIndex: 2 }}>
-                <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, textTransform: 'uppercase' }}>{so.numero} Â· {so.cliente}</span>
+                <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, textTransform: 'uppercase' }}>{so.numero} · {so.cliente}</span>
                 <button onClick={() => setSel(null)} style={{ background: 'none', border: '1px solid #CBD2D6', cursor: 'pointer', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><X size={15} /> Cerrar</button>
               </div>
               <div style={{ padding: 12 }}>
@@ -889,7 +889,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
       <Paginador page={paginar(visibles, page).page} paginas={paginar(visibles, page).paginas} total={visibles.length} setPage={setPage} />
 
       <div style={{ fontSize: 12, color: '#9AA0A6', textAlign: 'center', marginTop: 8 }}>
-        Los cambios se guardan automÃ¡ticamente en la nube (Supabase) y quedan sincronizados en todos los dispositivos.
+        Los cambios se guardan automáticamente en la nube (Supabase) y quedan sincronizados en todos los dispositivos.
       </div>
     </div>
   )
