@@ -94,12 +94,12 @@ function ResumenFinancieroCard({ fin, onIr }) {
   return (
     <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: '4px solid #161616', marginBottom: 16 }}>
       <div style={{ padding: '14px 18px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-        <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>💰 Resumen financiero del mes</span>
-        <button onClick={onIr} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '5px 12px', cursor: 'pointer', fontSize: 12 }}>Ver módulo Finanzas →</button>
+        <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>ð° Resumen financiero del mes</span>
+        <button onClick={onIr} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '5px 12px', cursor: 'pointer', fontSize: 12 }}>Ver mÃ³dulo Finanzas â</button>
       </div>
       <div style={{ padding: '0 18px 16px', display: 'flex', gap: 28, flexWrap: 'wrap' }}>
         {item('Gastos fijos + variables', clp(r.fijos + r.variables))}
-        {item('Cuotas créditos/leasing', clp(r.totalCuotasMes), '#D2642F')}
+        {item('Cuotas crÃ©ditos/leasing', clp(r.totalCuotasMes), '#D2642F')}
         {item('Salida de caja proyectada', clp(r.salidaCaja), '#B5432E')}
         {item('Deuda vigente', clp(r.deudaVigente))}
         {item('Cuotas vencidas', r.cuotasVencidas.length, r.cuotasVencidas.length > 0 ? '#B5432E' : '#3D7A4E')}
@@ -118,9 +118,9 @@ function CardModulo({ titulo, color, abiertasN, abiertasMonto, porFacturar, fact
   return (
     <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `4px solid ${color}`, padding: '14px 16px' }}>
       <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 12 }}>{titulo}</div>
-      {it(`Abiertas · ${abiertasN} en curso`, clp(abiertasMonto) + ' por facturar', color)}
+      {it(`Abiertas Â· ${abiertasN} en curso`, clp(abiertasMonto) + ' por facturar', color)}
       {it('Cerradas por facturar', clp(porFacturar), '#D2642F')}
-      {it('Facturado, aún por cobrar', clp(facturadoPorCobrar), '#B5432E')}
+      {it('Facturado, aÃºn por cobrar', clp(facturadoPorCobrar), '#B5432E')}
     </div>
   )
 }
@@ -129,7 +129,7 @@ function ResumenModulos({ ots, proyectos }) {
   const meOT = o => (o.montoCotizado > 0 ? o.montoCotizado : (o.ventas || []).reduce((a, v) => a + (v.neta || 0), 0))
   const areaData = a => {
     const list = (ots || []).filter(o => o.area === a)
-    const abiertas = list.filter(o => ['Cotizada', 'En ejecución'].includes(o.estado))
+    const abiertas = list.filter(o => ['Cotizada', 'En ejecuciÃ³n'].includes(o.estado))
     const terminadas = list.filter(o => o.estado === 'Terminada')
     const facturadas = list.filter(o => ['Facturada', 'Cerrada'].includes(o.estado))
     return {
@@ -151,7 +151,7 @@ function ResumenModulos({ ots, proyectos }) {
   }
   return (
     <div style={{ marginBottom: 16 }}>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>OT y proyectos por módulo</div>
+      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>OT y proyectos por mÃ³dulo</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
         <CardModulo titulo="Santa Rosa" color="#A8501F" {...areaData('Santa Rosa')} />
         <CardModulo titulo="Istria" color="#1D1D1B" {...areaData('Istria')} />
@@ -170,7 +170,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const tieneProyectos = areasUsuario.includes('Proyectos')
   const areasOT = areasUsuario.filter(a => a === 'Santa Rosa' || a === 'Istria')
   const puedeVer = code => modulosPerfil ? modulosPerfil.includes(code) : esGerencia
-  // Cada usuario ve en paralelo las OT de su área asignada
+  // Cada usuario ve en paralelo las OT de su Ã¡rea asignada
   const EMAIL_AREA = { 'joce@sereinspa.com': 'Santa Rosa', 'jose@sereinspa.com': 'Santa Rosa', 'produccion@sereinspa.com': 'Istria', 'mario@sereinspa.com': 'Proyectos' }
   const _email = (email || '').toLowerCase()
   const areaPorEmail = EMAIL_AREA[_email] || null
@@ -241,12 +241,35 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const [inventario, setInventario] = useState(() => LS('inventario', INVENTARIO_SEED))
   const [invMov, setInvMov] = useState(() => LS('invMov', []))
 
-  // Guarda automáticamente en el navegador cada vez que cambian los datos
+  useEffect(() => {
+    window.__sereinAddSobrante = (d) => {
+      try {
+        const nombre = String((d && d.nombre) || '').trim(); const cant = +((d && d.cantidad)) || 0
+        if (!nombre || cant <= 0) return { ok: false, msg: 'Indica producto y cantidad.' }
+        const sede = (d && d.sede) || 'Santa Rosa'; const nm = nombre.toLowerCase()
+        let arr = []; try { arr = JSON.parse(localStorage.getItem('serein_inventario') || '[]') } catch (e) { arr = [] }
+        const idx = (arr || []).findIndex(p => String(p.nombre || '').trim().toLowerCase() === nm && p.sede === sede)
+        let prodId, saldoRes
+        if (idx >= 0) { prodId = arr[idx].id; saldoRes = (arr[idx].saldo || 0) + cant } else { prodId = 'inv-' + Date.now(); saldoRes = cant }
+        setInventario(prev => {
+          const a = (prev || []).slice()
+          const j = a.findIndex(p => String(p.nombre || '').trim().toLowerCase() === nm && p.sede === sede)
+          if (j >= 0) { a[j] = { ...a[j], saldo: (a[j].saldo || 0) + cant }; return a }
+          return [{ id: prodId, codigo: '', nombre, color: (d && d.color) || '', proveedor: '', tipo: '', unidad: 'GALON', catalizador: '', saldo: cant, sede, estado: 'usable', costo: 0, descripcion: (d && d.color) || '' }, ...a]
+        })
+        setInvMov(prev => [{ id: 'mv-' + Date.now(), productoId: prodId, producto: nombre, sede, fecha: new Date().toISOString().slice(0, 10), tipo: 'entrada', cantidad: cant, motivo: 'sobrante de proyecto', ot: (d && d.ot) || '', usuario: (d && d.usuario) || '', saldoResultante: saldoRes }, ...(prev || [])])
+        return { ok: true, saldoRes }
+      } catch (e) { return { ok: false, msg: 'Error al ingresar.' } }
+    }
+    return () => { try { delete window.__sereinAddSobrante } catch (e) {} }
+  }, [])
+
+  // Guarda automÃ¡ticamente en el navegador cada vez que cambian los datos
   useEffect(() => {
     guardarSerein({ avances, mo, comprasOp, configCompras, fin, pp, params, clientes, contactos, facturas, cotizaciones, comisiones, ppmPct, ots, proyectos, inventario, invMov }); try { clearTimeout(window.__sereinPushT); window.__sereinPushT = setTimeout(function () { pushState() }, 800) } catch (e) {}
   }, [avances, mo, comprasOp, configCompras, fin, pp, params, clientes, contactos, facturas, cotizaciones, comisiones, ppmPct, ots, proyectos, inventario, invMov])
 
-  // Trae la UF (valor del día) al cargar la app, desde mindicador.cl (Banco Central)
+  // Trae la UF (valor del dÃ­a) al cargar la app, desde mindicador.cl (Banco Central)
   useEffect(() => {
     fetch('https://mindicador.cl/api/uf')
       .then(r => r.json())
@@ -261,7 +284,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     setFin(f => ({
       ...f,
       gastos: (f.gastos || []).map(g => {
-        if (g.id === 'g1') return { ...g, uf: 180, tipo: 'fijo', categoria: 'Arriendo', nombre: 'Arriendo Santa Rosa · 180 UF', dist: [{ area: 'Santa Rosa', pct: 100 }], neto: Math.round(180 * ufv), iva: 0, obs: '180 UF × $' + Math.round(ufv).toLocaleString('es-CL') + ' (vence el 5 de cada mes)' }
+        if (g.id === 'g1') return { ...g, uf: 180, tipo: 'fijo', categoria: 'Arriendo', nombre: 'Arriendo Santa Rosa Â· 180 UF', dist: [{ area: 'Santa Rosa', pct: 100 }], neto: Math.round(180 * ufv), iva: 0, obs: '180 UF Ã $' + Math.round(ufv).toLocaleString('es-CL') + ' (vence el 5 de cada mes)' }
         if (g.uf > 0) return { ...g, neto: Math.round(g.uf * ufv) }
         return g
       }),
@@ -278,7 +301,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const estados = Object.entries(vista.estados || {})
   const totalEst = estados.reduce((a, [, n]) => a + n, 0) || 1
 
-  // ----- Consolidado y áreas: suman desde las FACTURAS consolidadas (Venta Neta) -----
+  // ----- Consolidado y Ã¡reas: suman desde las FACTURAS consolidadas (Venta Neta) -----
   const areasFact = ['Santa Rosa', 'Istria', 'Proyectos']
   const facNeto = a => (facturas[a] || []).reduce((s, x) => s + (x.neto || 0), 0)
   const facCobN = a => (facturas[a] || []).filter(x => x.estado === 'Pagado').reduce((s, x) => s + (x.neto || 0), 0)
@@ -299,7 +322,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const gastosPend = (fin.gastos || []).filter(g => g.estado !== 'Pagado' && g.estado !== 'Anulado')
   const cuotasPend = (fin.obligaciones || []).flatMap(o => o.cuotas || []).filter(c => c.estado !== 'Pagada')
   const docsPend = (pp.docs || []).filter(d => !d.anulado).map(d => ({ venc: d.fecha_vencimiento, monto: Math.max(0, (d.total || 0) - (d.pagos || []).reduce((a, p) => a + (p.monto || 0), 0)) })).filter(d => d.monto > 0)
-  // Órdenes de compra pendientes (no Pagadas/Canceladas/Anuladas) → cuentas por pagar y flujo
+  // Ãrdenes de compra pendientes (no Pagadas/Canceladas/Anuladas) â cuentas por pagar y flujo
   const ocsPend = (pp.ocs || []).filter(o => !['Pagada', 'Anulada'].includes(o.estadoPago) && ocTotal(o) > 0).map(o => ({ venc: o.vencimiento || o.fecha, monto: ocTotal(o) }))
   const porPagarDocs = docsPend.concat(ocsPend)
   const totalPagar = gastosPend.reduce((a, g) => a + (g.neto || 0), 0) + cuotasPend.reduce((a, c) => a + (c.total || 0), 0) + porPagarDocs.reduce((a, d) => a + d.monto, 0)
@@ -315,17 +338,17 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const noPagada = f => f.estado !== 'Pagado' && f.estado !== 'Anulada'
   const esPagada = f => f.estado === 'Pagado'
   const facBrutoArea = (a, filtro) => (facturas[a] || []).filter(filtro).reduce((s, f) => s + brutoF(f), 0)
-  // Cuentas por cobrar (bruto): facturas no pagadas de las tres áreas
+  // Cuentas por cobrar (bruto): facturas no pagadas de las tres Ã¡reas
   const cxcTotal = areasFact.reduce((s, a) => s + facBrutoArea(a, noPagada), 0)
   // Cuentas por pagar (bruto): gastos + cuotas + facturas de proveedores pendientes
   const cxpTotal = gastosPend.reduce((a, g) => a + ((g.neto || 0) + (g.iva || 0)), 0) + cuotasPend.reduce((a, c) => a + (c.total || 0), 0) + porPagarDocs.reduce((a, d) => a + d.monto, 0)
   // OT en curso por facturar: OT (SR/Istria) + saldo de proyectos vs presupuesto
   const meOT = o => (o.montoCotizado > 0 ? o.montoCotizado : (o.ventas || []).reduce((x, v) => x + (v.neta || 0), 0))
-  const otEnCurso = (ots || []).filter(o => ['Cotizada', 'En ejecución', 'Terminada'].includes(o.estado)).reduce((a, o) => a + meOT(o), 0)
+  const otEnCurso = (ots || []).filter(o => ['Cotizada', 'En ejecuciÃ³n', 'Terminada'].includes(o.estado)).reduce((a, o) => a + meOT(o), 0)
   const facturadoDeP = p => (p.edps || []).reduce((a, e) => a + (e.venta || 0), 0)
   const proyPorFacturar = (proyectos || []).reduce((a, p) => a + ((p.presupuesto > 0) ? Math.max(0, p.presupuesto - facturadoDeP(p)) : 0), 0)
   const otEnCursoTotal = otEnCurso + proyPorFacturar
-  // Caja = saldo inicial + cobros registrados − pagos registrados (desde Finanzas/Pagos)
+  // Caja = saldo inicial + cobros registrados â pagos registrados (desde Finanzas/Pagos)
   const cobrosReg = (pp.cobros || []).filter(c => c.estado === 'Cobrado' || c.estado === 'Pagado').reduce((a, c) => a + (c.total || 0), 0)
   const pagosReg = (fin.gastos || []).filter(g => g.estado === 'Pagado').reduce((a, g) => a + ((g.neto || 0) + (g.iva || 0)), 0)
     + (fin.obligaciones || []).flatMap(o => o.cuotas || []).filter(c => c.estado === 'Pagada').reduce((a, c) => a + (c.total || 0), 0)
@@ -336,27 +359,27 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const netoFactTotal = areasFact.reduce((s, a) => s + (facturas[a] || []).filter(f => f.estado === 'Factoring' || /factor/i.test(f.medio || '')).reduce((x, f) => x + (f.neto || 0), 0), 0)
   const netoTotalFact = areasFact.reduce((s, a) => s + facNeto(a), 0)
   const pctFactorizado = netoTotalFact > 0 ? (netoFactTotal / netoTotalFact * 100) : 0
-  // Cuentas por pagar atribuidas a un área (para el resumen por módulo)
+  // Cuentas por pagar atribuidas a un Ã¡rea (para el resumen por mÃ³dulo)
   const pagarArea = a => {
     const g = (fin.gastos || []).filter(x => x.estado !== 'Pagado' && x.estado !== 'Anulado').reduce((s, x) => s + ((x.neto || 0) + (x.iva || 0)) * (((x.dist || []).find(d => d.area === a) || {}).pct || 0) / 100, 0)
     const doc = (pp.docs || []).filter(d => !d.anulado && d.area === a).reduce((s, d) => s + Math.max(0, (d.total || 0) - (d.pagos || []).reduce((x, p) => x + (p.monto || 0), 0)), 0)
     const cuo = (fin.obligaciones || []).flatMap(o => (o.cuotas || []).filter(c => c.estado !== 'Pagada').map(c => ({ c, o }))).reduce((s, { c, o }) => s + (c.total || 0) * (((o.dist || []).find(d => d.area === a) || {}).pct || 0) / 100, 0)
     return g + doc + cuo
   }
-  // Recuadro reutilizable: resumen financiero de un área
+  // Recuadro reutilizable: resumen financiero de un Ã¡rea
   const resumenFinancieroArea = a => {
     const venta = facNeto(a), cobradoA = facBrutoArea(a, esPagada), porCobrarA = facBrutoArea(a, noPagada), porPagarA = pagarArea(a)
     const resultadoA = porCobrarA - porPagarA
     const it = (l, v, c) => (<div><div style={{ fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>{l}</div><div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: c || C.carbon, whiteSpace: 'nowrap' }}>{clp(v)}</div></div>)
     return (
       <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `4px solid ${AREA_COLOR[a] || C.teal}`, marginBottom: 16 }}>
-        <div style={{ padding: '14px 18px 6px', fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Resumen financiero · {a}</div>
+        <div style={{ padding: '14px 18px 6px', fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Resumen financiero Â· {a}</div>
         <div style={{ padding: '0 18px 16px', display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           {it('Venta neta', venta, C.azul)}
           {it('Cobrado', cobradoA, C.verde)}
           {it('Por cobrar', porCobrarA, C.rojo)}
           {it('Por pagar', porPagarA, C.ambar)}
-          {it('Resultado (por cobrar − por pagar)', resultadoA, resultadoA >= 0 ? C.verde : C.rojo)}
+          {it('Resultado (por cobrar â por pagar)', resultadoA, resultadoA >= 0 ? C.verde : C.rojo)}
         </div>
       </div>
     )
@@ -369,7 +392,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     </div>
   )
 
-  const nombreTab = t => t === 'ASESOR' ? 'Asesor IA' : t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'ORDENES_COMPRA' ? '🧾 Órdenes de Compra' : t === 'TRAZABILIDAD' ? '🔗 Trazabilidad y Alertas' : t === 'INVENTARIO' ? '📦 Inventario' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Resumen ventas por cliente' : t === 'CONTACTOS' ? '📇 Clientes y Proveedores' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t === 'LIBRO_COMPRAS' ? 'Libro de Compras' : t === 'LIBRO_VENTAS' ? 'Libro de Ventas' : t
+  const nombreTab = t => t === 'ASESOR' ? 'Asesor IA' : t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? 'ð§ Ãrdenes de Trabajo' : t === 'ASISTENCIA' ? 'ð· Asistencia' : t === 'FINANZAS' ? 'ð° Finanzas' : t === 'PAGOS' ? 'ðµ Proveedores y Pagos' : t === 'ORDENES_COMPRA' ? 'ð§¾ Ãrdenes de Compra' : t === 'TRAZABILIDAD' ? 'ð Trazabilidad y Alertas' : t === 'INVENTARIO' ? 'ð¦ Inventario' : t === 'PARAMETROS' ? 'ð§® ParÃ¡metros' : t === 'CLIENTES' ? 'ð¢ Resumen ventas por cliente' : t === 'CONTACTOS' ? 'ð Clientes y Proveedores' : t === 'COTIZADOR' ? 'ð Cotizaciones' : t === 'PRODUCCION' ? 'ð­ ProducciÃ³n' : t === 'COMPRAS_OP' ? 'ð Compras Operativas' : t === 'LIBRO_COMPRAS' ? 'Libro de Compras' : t === 'LIBRO_VENTAS' ? 'Libro de Ventas' : t
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: THEME.bg, fontFamily: THEME.font }}>
@@ -442,7 +465,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
           <Kpi label="Venta Neta" valor={clp(kVenta)} sub={`${kNFact} facturas`} color={C.azul} icon={TrendingUp} />
           <Kpi label="Cobrado" valor={clp(kCobrado)} sub={`${((kCobrado / ((kCobrado + kPend) || 1)) * 100).toFixed(0)}% de la cartera`} color={C.verde} icon={Wallet} />
           <Kpi label="Por Cobrar" valor={clp(kPend)} sub="pendiente" color={C.rojo} icon={AlertTriangle} />
-          <Kpi label="Pérdida Factoring" valor={clp(kPerd)} sub={kVenta > 0 ? `${((kPerd / kVenta) * 100).toFixed(2)}% s/ venta` : '—'} color={C.ambar} icon={Landmark} />
+          <Kpi label="PÃ©rdida Factoring" valor={clp(kPerd)} sub={kVenta > 0 ? `${((kPerd / kVenta) * 100).toFixed(2)}% s/ venta` : 'â'} color={C.ambar} icon={Landmark} />
           {esGerencia && <Kpi label="Carga financiera" valor={clp(calcularResumenFin(fin, new Date().toISOString().slice(0, 7)).deudaVigente)} sub="deuda total propia" color="#061A40" icon={Landmark} />}
             {esTODAS && <Kpi label="% Factorizado" valor={`${pctFactorizado.toFixed(1)}%`} sub={`${clp(netoFactTotal)} de ${clp(netoTotalFact)}`} color={C.teal} icon={Landmark} />}
         </div>
@@ -452,8 +475,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
           <>
             <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `4px solid ${C.verde}`, marginBottom: 16 }}>
               <div style={{ padding: '14px 18px 6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-                <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>📊 Resumen financiero total</span>
-                <span style={{ fontSize: 11, color: '#7A8288' }}>caja + por cobrar − por pagar + OT en curso · montos con IVA</span>
+                <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>ð Resumen financiero total</span>
+                <span style={{ fontSize: 11, color: '#7A8288' }}>caja + por cobrar â por pagar + OT en curso Â· montos con IVA</span>
               </div>
               <div style={{ padding: '0 18px 16px', display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 {flujoItem('Caja', clp(caja), caja >= 0 ? C.verde : C.rojo)}
@@ -461,7 +484,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
                 {flujoItem('Cuentas por pagar', clp(cxpTotal), C.rojo)}
                 {flujoItem('OT en curso (por facturar)', clp(otEnCursoTotal), C.ambar)}
                 <div style={{ borderLeft: '2px solid #E2DED4', paddingLeft: 20 }}>
-                  {flujoItem('Posición financiera', clp(posicionFin), posicionFin >= 0 ? C.verde : C.rojo)}
+                  {flujoItem('PosiciÃ³n financiera', clp(posicionFin), posicionFin >= 0 ? C.verde : C.rojo)}
                 </div>
               </div>
             </div>
@@ -471,12 +494,12 @@ export default function Dashboard({ perfil, email, onLogout }) {
             <ResumenFinancieroCard fin={fin} onIr={() => setAreaSel('FINANZAS')} />
             <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `4px solid ${C.verde}`, marginBottom: 16 }}>
               <div style={{ padding: '14px 18px 6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-                <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>💵 Flujo de caja proyectado · todas las áreas</span>
-                <span style={{ fontSize: 11, color: '#7A8288' }}>pagos: gastos + cuotas + proveedores · ingresos: cobros + facturas por cobrar</span>
+                <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>ðµ Flujo de caja proyectado Â· todas las Ã¡reas</span>
+                <span style={{ fontSize: 11, color: '#7A8288' }}>pagos: gastos + cuotas + proveedores Â· ingresos: cobros + facturas por cobrar</span>
               </div>
               <div style={{ padding: '0 18px 16px', display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 {flujoItem('Total a pagar', clp(totalPagar), C.rojo)}
-                {flujoItem('Vence en 7 días', clp(pagar7), C.ambar)}
+                {flujoItem('Vence en 7 dÃ­as', clp(pagar7), C.ambar)}
                 {flujoItem('Total a entrar', clp(totalEntrar), C.verde)}
                 {flujoItem('Saldo proyectado', clp(saldoProy), saldoProy >= 0 ? C.verde : C.rojo)}
               </div>
@@ -488,7 +511,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16, marginBottom: 16 }}>
           <div style={{ gridColumn: 'span 1' }}>
-            <Panel title={`Venta neta por mes · ${areaSel === 'TODAS' ? 'consolidado' : areaSel}`}>
+            <Panel title={`Venta neta por mes Â· ${areaSel === 'TODAS' ? 'consolidado' : areaSel}`}>
               <ResponsiveContainer width="100%" height={240}>
                 <LineChart data={mesesVista} margin={{ left: 4, right: 8 }}>
                   <CartesianGrid stroke="#EEE9DF" vertical={false} />
@@ -525,7 +548,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
 
         {esGerencia && areaSel === 'TODAS' && (
           <div style={{ marginBottom: 16 }}>
-            <Panel title="Venta por área (facturas)">
+            <Panel title="Venta por Ã¡rea (facturas)">
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={ventaAreaLive} margin={{ left: 4 }}>
                   <CartesianGrid stroke="#EEE9DF" vertical={false} />
@@ -566,7 +589,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
 
             <Panel title="Cobranza atrasada" right={<span style={{ fontSize: 12, color: C.rojo }}>{vista.atrasadas.length} facturas</span>}>
               {vista.atrasadas.length === 0 ? (
-                <div style={{ color: C.verde, fontSize: 14, padding: '10px 0' }}>✓ Sin facturas atrasadas en esta área.</div>
+                <div style={{ color: C.verde, fontSize: 14, padding: '10px 0' }}>â Sin facturas atrasadas en esta Ã¡rea.</div>
               ) : (
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -574,7 +597,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
                       <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
                         <th style={{ textAlign: 'left', padding: '6px 8px', fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>Cliente</th>
                         <th style={{ textAlign: 'right', padding: '6px 8px', fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>Pendiente</th>
-                        <th style={{ textAlign: 'right', padding: '6px 8px', fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>Días</th>
+                        <th style={{ textAlign: 'right', padding: '6px 8px', fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>DÃ­as</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -601,7 +624,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
         )}
 
         <div style={{ textAlign: 'center', color: '#9AA0A6', fontSize: 11, marginTop: 20 }}>
-          SEREIN SpA · Datos: VENTAS_SEREIN_SPA_2026
+          SEREIN SpA Â· Datos: VENTAS_SEREIN_SPA_2026
         </div>
       </div>
       </main>
