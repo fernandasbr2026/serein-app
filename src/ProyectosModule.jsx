@@ -234,6 +234,9 @@ function FichaEditor({ p, onUpdate, onClose }) {
 function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasProy = [], enModal = false }) {
   const facturasOT = facturasDeOT(facturasProy, p)
   const factNetoOT = facturasOT.reduce((a, f) => a + (f.neto || 0), 0)
+  const remIvaVenta = Math.round((p.edps || []).reduce((a, e) => a + (+e.venta || 0), 0) * 0.19)
+  const remIvaCompra = Math.round((p.compras || []).reduce((a, c) => a + (+c.monto || 0), 0) * 0.19)
+  const remIva = remIvaVenta - remIvaCompra
   const [abierto, setAbierto] = useState(false)
   const [addEdp, setAddEdp] = useState(false)
   const [addCompra, setAddCompra] = useState(false)
@@ -311,6 +314,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
 
       {(abierto || enModal) && (
         <div style={{ borderTop: '1px solid #EEE9DF', padding: 18 }}>
+          <div style={{ background: remIva >= 0 ? '#FBF3E7' : '#E9F5EC', border: '1px solid ' + (remIva >= 0 ? '#E8C98A' : '#BFE3C8'), borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}><div><div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: C.gris, letterSpacing: '.03em' }}>Remanente de IVA del proyecto</div><div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>IVA ventas {clp(remIvaVenta)} - IVA compras {clp(remIvaCompra)}</div></div><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 700, fontSize: 22, color: remIva >= 0 ? '#B23A0E' : C.verde }}>{clp(remIva)}</div></div>
           {facturasOT.length > 0 && (
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.teal, marginBottom: 6 }}>🧾 Facturas de esta OT (automáticas)</div>
@@ -339,13 +343,13 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['EDP', 'Fecha', 'Venta neta', 'Método', 'Estado', ''].map((h, i) => <th key={i} style={{ textAlign: h === 'Venta neta' ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+              <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['EDP', 'Fecha', 'Venta neta', 'IVA', 'Total', 'Método', 'Estado', 'Fecha pago', 'Banco', ''].map((h, i) => <th key={i} style={{ textAlign: (h === 'Venta neta' || h === 'IVA' || h === 'Total') ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
               <tbody>
                 {(p.edps || []).map((e, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
                     <td style={{ padding: '5px 8px' }}><input value={e.edp} onChange={ev => updEdp(i, { edp: ev.target.value })} style={{ ...inp, width: 120, padding: '5px 7px' }} /></td>
                     <td style={{ padding: '5px 8px' }}><input type="date" value={e.fecha && e.fecha !== '—' ? e.fecha : ''} onChange={ev => updEdp(i, { fecha: ev.target.value || '—' })} style={{ ...inp, width: 140, padding: '5px 7px' }} /></td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right' }}><input value={e.venta} onChange={ev => updEdp(i, { venta: num(ev.target.value) })} style={{ ...inp, width: 110, padding: '5px 7px', textAlign: 'right' }} /></td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right' }}><input value={e.venta} onChange={ev => updEdp(i, { venta: num(ev.target.value) })} style={{ ...inp, width: 110, padding: '5px 7px', textAlign: 'right' }} /></td><td style={{ padding: '5px 8px', textAlign: 'right', color: C.gris }}>{clp(Math.round((+e.venta || 0) * 0.19))}</td><td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600 }}>{clp(Math.round((+e.venta || 0) * 1.19))}</td>
                     <td style={{ padding: '5px 8px' }}>
                       <select value={e.metodo || 'Contado'} onChange={ev => updEdp(i, { metodo: ev.target.value })} style={{ ...inp, width: 100, padding: '5px 7px' }}>
                         <option>Contado</option><option>Crédito</option><option>Factoring</option>
@@ -358,14 +362,14 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
                         <option>Pendiente</option><option>Pagado</option><option>Factoring</option>
                       </select>
                     </td>
-                    <td style={{ padding: '7px 4px', textAlign: 'right' }}><button onClick={() => window.confirm(`¿Eliminar ${e.edp} (${clp(e.venta)})?`) && onUpdate(p.id, { edps: p.edps.filter((_, j) => j !== i) })} style={btnMini}><Trash2 size={14} /></button></td>
+                    <td style={{ padding: '5px 8px' }}><input type="date" value={e.fechaPago && e.fechaPago !== '—' ? e.fechaPago : ''} onChange={ev => updEdp(i, { fechaPago: ev.target.value || '' })} style={{ ...inp, width: 140, padding: '5px 7px' }} /></td><td style={{ padding: '5px 8px' }}><input list="serein-bancos" value={e.banco || ''} onChange={ev => updEdp(i, { banco: ev.target.value })} placeholder="Banco..." style={{ ...inp, width: 130, padding: '5px 7px' }} /></td><td style={{ padding: '7px 4px', textAlign: 'right' }}><button onClick={() => window.confirm(`¿Eliminar ${e.edp} (${clp(e.venta)})?`) && onUpdate(p.id, { edps: p.edps.filter((_, j) => j !== i) })} style={btnMini}><Trash2 size={14} /></button></td>
                   </tr>
                 ))}
-                {(p.edps || []).length === 0 && <tr><td colSpan={6} style={{ padding: 12, color: '#9AA0A6', textAlign: 'center' }}>Sin ventas registradas.</td></tr>}
+                {(p.edps || []).length === 0 && <tr><td colSpan={10} style={{ padding: 12, color: '#9AA0A6', textAlign: 'center' }}>Sin ventas registradas.</td></tr>}
               </tbody>
             </table>
           </div>
-          {addEdp && <FormEdp params={params} onAdd={e => { onUpdate(p.id, { edps: [...(p.edps || []), e] }); setAddEdp(false) }} onCancel={() => setAddEdp(false)} />}
+          <datalist id="serein-bancos"><option value="Banco de Chile" /><option value="BancoEstado" /><option value="BCI" /><option value="Santander" /><option value="Scotiabank" /><option value="Itaú" /><option value="BICE" /><option value="Security" /><option value="Banco Falabella" /><option value="Banco Ripley" /><option value="Consorcio" /><option value="Internacional" /><option value="HSBC" /></datalist>{addEdp && <FormEdp params={params} onAdd={e => { onUpdate(p.id, { edps: [...(p.edps || []), e] }); setAddEdp(false) }} onCancel={() => setAddEdp(false)} />}
 
           {/* COMPRAS */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0 8px' }}>
