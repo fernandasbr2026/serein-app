@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { calcularResumenFin } from './FinanzasModule.jsx'
+import { supabase } from './supabase.js'
 import { AlertTriangle, TrendingUp, TrendingDown, Wallet, Landmark, Receipt, Sparkles, CheckCircle2, ShieldAlert, Info } from 'lucide-react'
 
 const C = { navy: '#061A40', carbon: '#0F1A2E', orange: '#FF6B00', azul: '#25608E', verde: '#12805C', rojo: '#D64545', ambar: '#C9860B', teal: '#0B7285', gray: '#8A929E', line: '#E6E8EE', soft: '#F5F6F8' }
@@ -297,6 +298,38 @@ function FinancialCalendarPanel({ d }) {
   </Card>)
 }
 
+function AreaCostPanel({ fin, facturas }) {
+  const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
+  const AR = ['Santa Rosa', 'Istria', 'Proyectos']
+  const [lc, setLc] = useState([])
+  useEffect(() => { let v = true; supabase.from('libro_compras').select('id, neto').then(({ data }) => { if (v) setLc(data || []) }); return () => { v = false } }, [])
+  let asig = {}; try { asig = JSON.parse(localStorage.getItem('serein_comprasAreas') || '{}') } catch (e) {}
+  const gastos = (fin && fin.gastos) || []
+  const fac = facturas || {}
+  const fijoDe = a => gastos.filter(g => g.tipo === 'fijo' && g.estado !== 'Anulado').reduce((s, g) => { const d = (g.dist || []).find(x => x.area === a); return s + (g.neto || 0) * ((d && d.pct) || 0) / 100 }, 0)
+  const compraDe = a => (lc || []).reduce((s, r) => { const ar = asig[r.id] || []; return ar.includes(a) ? s + (r.neto || 0) / ar.length : s }, 0)
+  const ventaDe = a => ((fac[a]) || []).reduce((s, f) => s + (f.neto || 0), 0)
+  const rows = AR.map(a => { const fj = fijoDe(a), cp = compraDe(a), vt = ventaDe(a); return { a, fj, cp, vt, ut: vt - fj - cp } })
+  const tot = rows.reduce((t, r) => ({ fj: t.fj + r.fj, cp: t.cp + r.cp, vt: t.vt + r.vt, ut: t.ut + r.ut }), { fj: 0, cp: 0, vt: 0, ut: 0 })
+  const th = { textAlign: 'right', padding: '8px 10px', fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }
+  const td = { padding: '8px 10px', textAlign: 'right', whiteSpace: 'nowrap' }
+  return (
+    <div style={{ background: '#fff', border: '1px solid #EEF0F4', borderRadius: 14, boxShadow: '0 1px 3px rgba(16,24,40,.06)', padding: 18, marginTop: 16 }}>
+      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 4 }}>Costos y ventas por area</div>
+      <div style={{ fontSize: 12, color: '#7A8288', marginBottom: 12 }}>Costos fijos por area + compras asignadas (Libro de compras) y venta acumulada por area. Toma los mismos datos de cada modulo.</div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead><tr style={{ borderBottom: '2px solid #061A40' }}><th style={{ ...th, textAlign: 'left' }}>Area</th><th style={th}>Costos fijos</th><th style={th}>Compras asignadas</th><th style={th}>Venta acumulada</th><th style={th}>Utilidad</th></tr></thead>
+          <tbody>
+            {rows.map(r => (<tr key={r.a} style={{ borderBottom: '1px solid #EEE9DF' }}><td style={{ padding: '8px 10px', fontWeight: 600 }}>{r.a}</td><td style={td}>{clp(r.fj)}</td><td style={td}>{clp(r.cp)}</td><td style={td}>{clp(r.vt)}</td><td style={{ ...td, fontWeight: 600, color: r.ut >= 0 ? '#12805C' : '#D64545' }}>{clp(r.ut)}</td></tr>))}
+            <tr style={{ borderTop: '2px solid #061A40', fontWeight: 700 }}><td style={{ padding: '8px 10px' }}>Total</td><td style={td}>{clp(tot.fj)}</td><td style={td}>{clp(tot.cp)}</td><td style={td}>{clp(tot.vt)}</td><td style={{ ...td, color: tot.ut >= 0 ? '#12805C' : '#D64545' }}>{clp(tot.ut)}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 export default function ConsolidadoModule(props) {
   const d = useDatos(props)
   const cc = props.cc || {}
@@ -316,5 +349,6 @@ export default function ConsolidadoModule(props) {
     </div>
     <CustomerRiskPanel d={d} />
     <FinancialCalendarPanel d={d} />
+    <AreaCostPanel fin={props.fin} facturas={props.facturas} />
   </div>)
 }
