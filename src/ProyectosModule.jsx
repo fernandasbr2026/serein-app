@@ -231,7 +231,7 @@ function FichaEditor({ p, onUpdate, onClose }) {
   )
 }
 
-function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasProy = [] }) {
+function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasProy = [], enModal = false }) {
   const facturasOT = facturasDeOT(facturasProy, p)
   const factNetoOT = facturasOT.reduce((a, f) => a + (f.neto || 0), 0)
   const [abierto, setAbierto] = useState(false)
@@ -256,7 +256,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
 
   return (
     <div style={{ background: '#fff', border: '1px solid #E2DED4', marginBottom: 14 }}>
-      <div onClick={() => setAbierto(!abierto)} style={{ padding: '16px 18px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+      <div onClick={() => { if (!enModal) setAbierto(!abierto) }} style={{ padding: '16px 18px', cursor: enModal ? 'default' : 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, color: C.carbon }}>{p.nombre}</div>
           <div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>{p.cliente}{p.m2 ? ` · ${p.m2} m²` : ''}{p.periodo ? ` · ${p.periodo}` : ''}{facturasOT.length > 0 && <span style={{ color: C.teal }}> · 🧾 {facturasOT.length} factura{facturasOT.length > 1 ? 's' : ''} ({clp(factNetoOT)})</span>}</div>
@@ -268,7 +268,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
           <StatHeader label="UT real" valor={hayCompras ? `${pctUtReal.toFixed(0)}%` : '—'} color={hayCompras ? colorUT(pctUtReal) : C.gris} />
           <button onClick={e => { e.stopPropagation(); setEditFicha(v => !v) }} title="Editar ficha" style={{ background: 'none', border: '1px solid #CBD2D6', cursor: 'pointer', color: C.teal, padding: '5px 7px', display: 'flex', alignItems: 'center' }}><Pencil size={15} /></button>
           <button onClick={e => { e.stopPropagation(); window.confirm(`¿Eliminar la OT "${p.nombre}" completa? Esta acción no se puede deshacer.`) && onDelete(p.id) }} title="Eliminar OT" style={{ background: 'none', border: '1px solid #E2C9C2', cursor: 'pointer', color: C.rojo, padding: '5px 7px', display: 'flex', alignItems: 'center' }}><Trash2 size={15} /></button>
-          {abierto ? <ChevronUp size={18} color={C.gris} /> : <ChevronDown size={18} color={C.gris} />}
+          {!enModal && (abierto ? <ChevronUp size={18} color={C.gris} /> : <ChevronDown size={18} color={C.gris} />)}
         </div>
       </div>
 
@@ -309,7 +309,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
         </div>
       </div>
 
-      {abierto && (
+      {(abierto || enModal) && (
         <div style={{ borderTop: '1px solid #EEE9DF', padding: 18 }}>
           {facturasOT.length > 0 && (
             <div style={{ marginBottom: 16 }}>
@@ -412,6 +412,30 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function TileProyecto({ p, onOpen, onDragStart, onDropOn }) {
+  const venta = ventaDe(p), fact = facturadoDe(p)
+  const activa = (p.avance || 0) < 100
+  return (
+    <div onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); onDropOn() }} onClick={onOpen}
+      style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: '3px solid ' + C.azul, padding: 14, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 12, background: C.carbon, color: '#fff', padding: '2px 7px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '60%' }}>{p.ot || 'OT'}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 10.5, fontWeight: 600, color: activa ? C.verde : C.gris, background: activa ? '#E7F2EA' : '#EEE9DF', padding: '2px 8px', borderRadius: 10 }}>{activa ? 'Activa' : 'Cerrada'}</span>
+          <span draggable onDragStart={e => { e.stopPropagation(); onDragStart() }} onClick={e => e.stopPropagation()} title="Arrastrar para reordenar" style={{ cursor: 'grab', color: '#B9C0C6', fontSize: 15, userSelect: 'none', lineHeight: 1, letterSpacing: '-1px' }}>::</span>
+        </div>
+      </div>
+      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, color: C.carbon, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</div>
+      <div style={{ fontSize: 11.5, color: C.gris, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.cliente}</div>
+      <div style={{ marginTop: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <span style={{ fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }}>Venta</span>
+        <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, color: C.carbon }}>{clp(venta)}</span>
+      </div>
+      <Barra pct={venta > 0 ? (fact / venta) * 100 : 0} color={C.teal} alto={5} />
     </div>
   )
 }
@@ -519,6 +543,9 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
   const facturasProy = (facturas && facturas['Proyectos']) || []
   const [creando, setCreando] = useState(false)
   const [vista, setVista] = useState('tarjetas')
+  const [sel, setSel] = useState(null)
+  const dragId = React.useRef(null)
+  const mover = (fromId, toId) => { if (!fromId || fromId === toId) return; setProyectos(ps => { const arr = [...ps]; const from = arr.findIndex(x => x.id === fromId); const to = arr.findIndex(x => x.id === toId); if (from < 0 || to < 0) return ps; const [it] = arr.splice(from, 1); arr.splice(to, 0, it); return arr }) }
   const [emailUser, setEmailUser] = useState('')
   React.useEffect(() => { let v = true; supabase.auth.getUser().then(({ data }) => { if (v) setEmailUser((data && data.user && data.user.email) || '') }); return () => { v = false } }, [])
   const verCotizadorProy = COTIZADOR_PROY_EMAILS.includes((emailUser || '').trim().toLowerCase())
@@ -583,7 +610,24 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
       ) : (vista === 'parametros' && verCotizadorProy) ? (
         <ProyParametros />
       ) : (
-        proyectos.map(p => <TarjetaProyecto key={p.id} p={p} onUpdate={actualizar} onDelete={eliminar} onAddCompra={agregarCompra} params={params} facturasProy={facturasProy} />)
+        (<>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
+            {proyectos.map(p => <TileProyecto key={p.id} p={p} onOpen={() => setSel(p.id)} onDragStart={() => { dragId.current = p.id }} onDropOn={() => { mover(dragId.current, p.id); dragId.current = null }} />)}
+          </div>
+          {(() => { const sp = proyectos.find(x => x.id === sel); return sp ? (
+            <div onClick={() => setSel(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,26,46,.55)', zIndex: 70, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '28px 16px', overflowY: 'auto' }}>
+              <div onClick={e => e.stopPropagation()} style={{ background: '#F7F6F3', width: '100%', maxWidth: 1000, boxShadow: '0 20px 60px -12px rgba(0,0,0,.4)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #E2DED4', background: '#fff', position: 'sticky', top: 0, zIndex: 2 }}>
+                  <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, textTransform: 'uppercase' }}>{sp.nombre}</span>
+                  <button onClick={() => setSel(null)} style={{ background: 'none', border: '1px solid #CBD2D6', cursor: 'pointer', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><X size={15} /> Cerrar</button>
+                </div>
+                <div style={{ padding: 12 }}>
+                  <TarjetaProyecto p={sp} onUpdate={actualizar} onDelete={id => { eliminar(id); setSel(null) }} onAddCompra={agregarCompra} params={params} facturasProy={facturasProy} enModal />
+                </div>
+              </div>
+            </div>
+          ) : null })()}
+        </>)
       )}
 
       <div style={{ fontSize: 12, color: '#9AA0A6', textAlign: 'center', marginTop: 8 }}>
