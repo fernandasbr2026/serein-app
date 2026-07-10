@@ -812,7 +812,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
       <Paginador page={paginar(visibles, page).page} paginas={paginar(visibles, page).paginas} total={visibles.length} setPage={setPage} />
 
       <div style={{ fontSize: 12, color: '#9AA0A6', textAlign: 'center', marginTop: 8 }}>
-        Vista de prueba: los cambios se pierden al recargar. En la versión con base de datos todo queda guardado.
+        Los cambios se guardan automáticamente en la nube (Supabase) y quedan sincronizados en todos los dispositivos.
       </div>
     </div>
   )

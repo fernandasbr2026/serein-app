@@ -587,7 +587,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
       )}
 
       <div style={{ fontSize: 12, color: '#9AA0A6', textAlign: 'center', marginTop: 8 }}>
-        Vista de prueba: los cambios se pierden al recargar. En la versión con base de datos todo queda guardado y sincronizado.
+        Los cambios se guardan automáticamente en la nube (Supabase) y quedan sincronizados en todos los dispositivos.
       </div>
     </div>
   )
