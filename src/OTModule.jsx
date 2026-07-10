@@ -232,7 +232,31 @@ function descargarOT(ot) {
   XLSX.writeFile(wb, `${ot.numero}.xlsx`)
 }
 
-function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = [], mo = null, otsAll = [], instrumentos = null, libroCompras = [] }) {
+function TileOT({ ot, onOpen, onDragStart, onDropOn, verValores }) {
+  const monto = (ot.montoCotizado > 0 ? ot.montoCotizado : (ot.ventas || []).reduce((a, v) => a + (v.neta || 0), 0))
+  return (
+    <div onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); onDropOn() }} onClick={onOpen}
+      style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: '3px solid ' + (ot.area === 'Istria' ? '#1D1D1B' : '#A8501F'), padding: 14, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 12, background: '#161616', color: '#fff', padding: '2px 7px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '58%' }}>{ot.numero}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <ChipEstado estado={ot.estado} />
+          <span draggable onDragStart={e => { e.stopPropagation(); onDragStart() }} onClick={e => e.stopPropagation()} title="Arrastrar para reordenar" style={{ cursor: 'grab', color: '#B9C0C6', fontSize: 15, userSelect: 'none', lineHeight: 1, letterSpacing: '-1px' }}>::</span>
+        </div>
+      </div>
+      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, color: '#161616', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ot.cliente}</div>
+      <div style={{ fontSize: 11.5, color: '#7A8288', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ot.area}{ot.m2 ? ' · ' + ot.m2 + ' m²' : ''}{ot.preparacion ? ' · ' + ot.preparacion : ''}</div>
+      {verValores && monto > 0 && (
+        <div style={{ marginTop: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <span style={{ fontSize: 10.5, color: '#7A8288', textTransform: 'uppercase' }}>Monto</span>
+          <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, color: '#161616' }}>{clp(monto)}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = [], mo = null, otsAll = [], instrumentos = null, libroCompras = [], enModal = false }) {
   const [abierta, setAbierta] = useState(false)
   const [addVenta, setAddVenta] = useState(false)
   const [addCosto, setAddCosto] = useState(false)
@@ -251,7 +275,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
   return (
     <div style={{ background: '#fff', border: '1px solid #E2DED4', marginBottom: 14 }}>
       {/* Cabecera */}
-      <div onClick={() => setAbierta(!abierta)} style={{ padding: '15px 18px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+      <div onClick={() => { if (!enModal) setAbierta(!abierta) }} style={{ padding: '15px 18px', cursor: enModal ? 'default' : 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 700, fontSize: 14, background: '#FF6B00', color: '#fff', padding: '3px 10px', borderRadius: 4, letterSpacing: 0.4 }}>NV {ot.nv || '\u2014'}</span>
@@ -274,7 +298,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
               </div>
             </div>
           )}
-          {abierta ? <ChevronUp size={18} color="#7A8288" /> : <ChevronDown size={18} color="#7A8288" />}
+          {!enModal && (abierta ? <ChevronUp size={18} color="#7A8288" /> : <ChevronDown size={18} color="#7A8288" />)}
         </div>
       </div>
 
@@ -296,7 +320,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
       )}
       {!verValores && <div style={{ padding: '0 18px 14px' }}><span style={{ fontSize: 11.5, color: '#9AA0A6', fontStyle: 'italic' }}>Vista de taller · valores visibles solo para Gerencia.</span></div>}
 
-      {abierta && (
+      {(abierta || enModal) && (
         <div style={{ borderTop: '1px solid #EEE9DF', padding: 18 }}>
           {/* Datos técnicos editables */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 18 }}>
@@ -714,6 +738,9 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   const [creando, setCreando] = useState(false)
   const [fCliente, setFCliente] = useState('')
   const [page, setPage] = useState(1)
+  const [sel, setSel] = useState(null)
+  const dragId = React.useRef(null)
+  const mover = (fromId, toId) => { if (!fromId || fromId === toId) return; setOts(xs => { const arr = [...xs]; const from = arr.findIndex(x => x.id === fromId); const to = arr.findIndex(x => x.id === toId); if (from < 0 || to < 0) return xs; const [it] = arr.splice(from, 1); arr.splice(to, 0, it); return arr }) }
   const [rep, setRep] = useState(false)
   const [repDesde, setRepDesde] = useState('')
   const [repHasta, setRepHasta] = useState('')
@@ -808,7 +835,24 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
       {creando && <FormOT area={areaSel} siguienteNumero={siguiente} onAdd={o => { setOts(xs => [o, ...xs]); setCreando(false) }} onCancel={() => setCreando(false)} />}
 
       {visibles.length === 0 && <div style={{ color: '#9AA0A6', fontSize: 14, padding: 20, textAlign: 'center', background: '#fff', border: '1px dashed #CBD2D6' }}>Sin OTs en {areaSel}. Crea la primera.</div>}
-      {paginar(visibles, page).items.map(o => <TarjetaOT key={o.id} ot={o} onUpdate={actualizar} onDelete={eliminar} verValores={verValores} ordenesCompra={ordenesCompra} mo={mo} otsAll={otsAll} instrumentos={instrumentos} libroCompras={libroCompras} />)}
+      {(<>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
+          {paginar(visibles, page).items.map(o => <TileOT key={o.id} ot={o} verValores={verValores} onOpen={() => setSel(o.id)} onDragStart={() => { dragId.current = o.id }} onDropOn={() => { mover(dragId.current, o.id); dragId.current = null }} />)}
+        </div>
+        {(() => { const so = otsAll.find(x => x.id === sel); return so ? (
+          <div onClick={() => setSel(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,26,46,.55)', zIndex: 70, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '28px 16px', overflowY: 'auto' }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: '#F7F6F3', width: '100%', maxWidth: 1000, boxShadow: '0 20px 60px -12px rgba(0,0,0,.4)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #E2DED4', background: '#fff', position: 'sticky', top: 0, zIndex: 2 }}>
+                <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, textTransform: 'uppercase' }}>{so.numero} · {so.cliente}</span>
+                <button onClick={() => setSel(null)} style={{ background: 'none', border: '1px solid #CBD2D6', cursor: 'pointer', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><X size={15} /> Cerrar</button>
+              </div>
+              <div style={{ padding: 12 }}>
+                <TarjetaOT ot={so} onUpdate={actualizar} onDelete={id => { eliminar(id); setSel(null) }} verValores={verValores} ordenesCompra={ordenesCompra} mo={mo} otsAll={otsAll} instrumentos={instrumentos} libroCompras={libroCompras} enModal />
+              </div>
+            </div>
+          </div>
+        ) : null })()}
+        </>)}
       <Paginador page={paginar(visibles, page).page} paginas={paginar(visibles, page).paginas} total={visibles.length} setPage={setPage} />
 
       <div style={{ fontSize: 12, color: '#9AA0A6', textAlign: 'center', marginTop: 8 }}>
