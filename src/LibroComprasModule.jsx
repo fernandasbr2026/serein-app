@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase.js'
+import { pushState } from './sync.js'
 
 const C = { navy: '#061A40', orange: '#FF6B00', gray: '#F5F7FA', border: '#D8DCE5', text: '#101828', green: '#16A34A', red: '#DC2626', mut: '#7A8288' }
 const clp = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-CL')
@@ -20,6 +21,10 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
   const [mes, setMes] = useState('')
   const [tipo, setTipo] = useState('')
   const [area, setArea] = useState('')
+  const [asig, setAsig] = useState(() => { try { return JSON.parse(localStorage.getItem('serein_comprasAreas') || '{}') } catch (e) { return {} } })
+  const guardarAsig = (obj) => { setAsig(obj); try { localStorage.setItem('serein_comprasAreas', JSON.stringify(obj)); pushState() } catch (e) {} }
+  const toggleArea = (id, a) => { const cur = asig[id] || []; const nx = cur.includes(a) ? cur.filter(x => x !== a) : [...cur, a]; guardarAsig({ ...asig, [id]: nx }) }
+  const setGeneral = (id) => guardarAsig({ ...asig, [id]: ['Santa Rosa', 'Istria', 'Proyectos'] })
 
   const cargar = async () => {
     setLoading(true); setErrMsg('')
@@ -114,7 +119,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 1200 }}>
             <thead>
               <tr style={{ background: C.navy, color: '#fff' }}>
-                {['Emision', 'Proveedor', 'Folio', 'Tipo', 'Neto', 'IVA', 'Total', 'OT', 'Area', 'Pago'].map(h => (
+                {['Emision', 'Proveedor', 'Folio', 'Tipo', 'Neto', 'IVA', 'Total', 'OT', 'Area', 'Pago', 'Reparto area'].map(h => (
                   <th key={h} style={{ textAlign: h === 'Neto' || h === 'IVA' || h === 'Total' ? 'right' : 'left', padding: '9px 10px', fontSize: 11, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -156,6 +161,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
                       </div>
                     ) : null}
                   </td>
+                  <td style={{ padding: '7px 10px' }}><div style={{ display: 'flex', gap: 3, alignItems: 'center', flexWrap: 'wrap' }}>{[['Santa Rosa', 'SR'], ['Istria', 'IST'], ['Proyectos', 'PROY']].map(a => { const on = (asig[r.id] || []).includes(a[0]); return <button key={a[0]} onClick={() => toggleArea(r.id, a[0])} title={a[0]} style={{ border: '1px solid ' + (on ? C.navy : '#CBD2D6'), background: on ? C.navy : '#fff', color: on ? '#fff' : C.mut, fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4, cursor: 'pointer' }}>{a[1]}</button> })}<button onClick={() => setGeneral(r.id)} title="General: 1/3 a cada area" style={{ border: '1px dashed #CBD2D6', background: '#fff', color: C.mut, fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4, cursor: 'pointer' }}>Gen</button></div></td>
                 </tr>
               ))}
             </tbody>
