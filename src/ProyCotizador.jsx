@@ -26,7 +26,6 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
   const [cots, setCots] = useState(cargarCots)
   const [cliente, setCliente] = useState('')
   const [nombre, setNombre] = useState('')
-  const [numero, setNumero] = useState('')
   const [centros, setCentros] = useState([])
   const [modo, setModo] = useState('pct')
   const [margenPct, setMargenPct] = useState(params.margenDefault || 33)
@@ -35,15 +34,17 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
   const [aprobando, setAprobando] = useState(null)
   const [fEntrega, setFEntrega] = useState('')
   const [fResp, setFResp] = useState('')
+  const siguienteNumero = useMemo(() => { const nums = (cots || []).map(c => parseInt(String(c.numero || '').split('-')[0].replace(/\D/g, ''), 10)).filter(n => !isNaN(n)); return (Math.max(1009, ...nums) + 1) + '-2026' }, [cots])
 
   const setCentro = (i, k, v) => setCentros(prev => prev.map((c, j) => j === i ? { ...c, [k]: v } : c))
-  const addCentroVacio = () => setCentros(prev => [...prev, { codigo: '', nombre: '', neto: '', condicionIVA: 'afecto' }])
+  const addCentroVacio = () => setCentros(prev => [...prev, { codigo: 'C' + (prev.length + 1), nombre: '', neto: '', condicionIVA: 'afecto' }])
   const addCentroCat = cod => { const cc = catalogo.find(x => x.codigo === cod); if (!cc) return; setCentros(prev => [...prev, { codigo: cc.codigo, nombre: cc.nombre, neto: '', condicionIVA: cc.condicionIVA || 'afecto' }]) }
   const delCentro = i => setCentros(prev => prev.filter((_, j) => j !== i))
 
   const costoNeto = centros.reduce((a, c) => a + num(c.neto), 0)
   const costoBruto = centros.reduce((a, c) => a + brutoDe(c), 0)
-  const ventaNeta = modo === 'pct' ? Math.round(costoNeto * (1 + (num(margenPct) || 0) / 100)) : num(ventaFija)
+  const _m = Math.min(Math.max(num(margenPct) || 0, 0), 95) / 100
+  const ventaNeta = modo === 'pct' ? ((1 - _m) > 0 ? Math.round(costoNeto / (1 - _m)) : costoNeto) : num(ventaFija)
   const ventaBruta = Math.round(ventaNeta * 1.19)
   const utilidad = ventaNeta - costoNeto
   const margenSobreCosto = costoNeto > 0 ? (utilidad / costoNeto) * 100 : 0
@@ -57,7 +58,7 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
     if (centros.length === 0 || costoNeto <= 0) { setMsg('Agrega al menos un centro de costo con monto.'); return }
     const cot = {
       id: 'pcot' + Date.now(),
-      numero: numero.trim() || (cliente.trim() + ' s/n'),
+      numero: siguienteNumero,
       cliente: cliente.trim(), nombreProyecto: nombre.trim(),
       estado: 'borrador', fecha: new Date().toISOString().slice(0, 10),
       modoMargen: modo, margenPct: num(margenPct), ventaNetaFijada: modo === 'ventaFija' ? num(ventaFija) : null,
@@ -68,7 +69,7 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
     }
     const next = [cot, ...cots]
     setCots(next); guardarCots(next)
-    setCliente(''); setNombre(''); setNumero(''); setCentros([]); setVentaFija(''); setModo('pct'); setMargenPct(params.margenDefault || 33)
+    setCliente(''); setNombre(''); setCentros([]); setVentaFija(''); setModo('pct'); setMargenPct(params.margenDefault || 33)
     setMsg('Borrador guardado: ' + cot.numero)
     setTimeout(() => setMsg(''), 3000)
   }
@@ -85,7 +86,7 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
       origen: 'cotizador-proyecto', fechaEntrega: fEntrega || '', responsable: fResp || '',
       snapshotProy: { centros: c.centros, costoNeto: c.costoNeto, costoBruto: c.costoBruto, ventaNeta: c.ventaNeta, ventaBruta: c.ventaBruta, utilidad: c.utilidad, margenPct: c.margenPct, modoMargen: c.modoMargen, fecha: new Date().toISOString().slice(0, 10) },
     }
-    ;(c.centros || []).forEach(cc => { if (cc.codigo) { nueva.cc[cc.codigo] = cc.neto; nueva.ccNombres[cc.codigo] = cc.nombre } })
+    ;(c.centros || []).forEach((cc, i) => { const key = (cc.codigo || '').trim() || ('C' + (i + 1)); nueva.cc[key] = cc.neto; nueva.ccNombres[key] = cc.nombre || key })
     setProyectos(prev => [nueva, ...(prev || [])])
     const next = cots.map(x => x.id === c.id ? { ...x, estado: 'aprobada', otId: nueva.id, snapshot: nueva.snapshotProy } : x)
     setCots(next); guardarCots(next)
@@ -111,8 +112,8 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
           <label style={lab}>Nombre del proyecto
             <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej: Correas transportadoras" style={inp} />
           </label>
-          <label style={lab}>N° / codigo (ej. TTM 559)
-            <input value={numero} onChange={e => setNumero(e.target.value)} placeholder="TTM 559" style={inp} />
+          <label style={lab}>N° (automatico)
+            <input value={siguienteNumero} readOnly style={{ ...inp, background: '#F1EDE6', fontWeight: 600 }} />
           </label>
         </div>
       </div>
@@ -160,11 +161,11 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
       <div style={card}>
         <div style={h}>Margen y venta</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
-          <button onClick={() => setModo('pct')} style={{ background: modo === 'pct' ? C.azul : '#fff', color: modo === 'pct' ? '#fff' : C.carbon, border: '1px solid ' + (modo === 'pct' ? C.azul : '#CBD2D6'), padding: '7px 12px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>Modo A: % sobre el costo</button>
+          <button onClick={() => setModo('pct')} style={{ background: modo === 'pct' ? C.azul : '#fff', color: modo === 'pct' ? '#fff' : C.carbon, border: '1px solid ' + (modo === 'pct' ? C.azul : '#CBD2D6'), padding: '7px 12px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>Modo A: % de margen sobre la venta</button>
           <button onClick={() => setModo('ventaFija')} style={{ background: modo === 'ventaFija' ? C.azul : '#fff', color: modo === 'ventaFija' ? '#fff' : C.carbon, border: '1px solid ' + (modo === 'ventaFija' ? C.azul : '#CBD2D6'), padding: '7px 12px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>Modo B: fijar la venta</button>
         </div>
         {modo === 'pct' ? (
-          <label style={{ fontSize: 12, color: C.gris }}>Margen sobre el costo (%)
+          <label style={{ fontSize: 12, color: C.gris }}>Margen sobre la venta (%)
             <input value={margenPct} onChange={e => setMargenPct(e.target.value)} style={{ ...inp, width: 90, marginLeft: 8, textAlign: 'right' }} />
             <span style={{ marginLeft: 10, color: C.teal }}>Sugerido por tamano: <b>{sugerido}%</b></span>
           </label>
@@ -204,7 +205,7 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['N°', 'Cliente', 'Proyecto', 'Costo neto', 'Venta neta', 'Margen s/costo', 'Estado', ''].map((t, i) => <th key={i} style={{ textAlign: ['Costo neto', 'Venta neta', 'Margen s/costo'].includes(t) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{t}</th>)}</tr></thead>
+              <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['N°', 'Cliente', 'Proyecto', 'Costo neto', 'Venta neta', 'Margen s/venta', 'Estado', ''].map((t, i) => <th key={i} style={{ textAlign: ['Costo neto', 'Venta neta', 'Margen s/venta'].includes(t) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{t}</th>)}</tr></thead>
               <tbody>
                 {cots.map(c => (
                   <tr key={c.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
@@ -213,7 +214,7 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
                     <td style={{ padding: '6px 8px', color: C.gris }}>{c.nombreProyecto || '—'}</td>
                     <td style={{ padding: '6px 8px', textAlign: 'right' }}>{clp(c.costoNeto)}</td>
                     <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{clp(c.ventaNeta)}</td>
-                    <td style={{ padding: '6px 8px', textAlign: 'right', color: C.verde }}>{(c.margenSobreCosto != null ? c.margenSobreCosto : 0)}%</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', color: C.verde }}>{(c.margenSobreVenta != null ? c.margenSobreVenta : 0)}%</td>
                     <td style={{ padding: '6px 8px', color: C.gris }}>{c.estado}</td>
                     <td style={{ padding: '6px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                       {c.estado === 'borrador' ? <button onClick={() => { setAprobando(c.id); setFEntrega(''); setFResp('') }} style={{ background: C.verde, color: '#fff', border: 'none', padding: '4px 10px', cursor: 'pointer', fontSize: 12, marginRight: 6 }}>Aprobar</button> : <span style={{ fontSize: 11.5, color: C.teal, marginRight: 6 }}>OT creada</span>}
