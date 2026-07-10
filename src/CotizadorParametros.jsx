@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { COTIZADOR_SEED } from './cotizador-data.js'
+import { COTIZADOR_SEED, valorM2Capa } from './cotizador-data.js'
 import { THEME } from './ui.jsx'
 import { Plus, Trash2, ChevronLeft } from 'lucide-react'
 
@@ -84,6 +84,20 @@ export default function CotizadorParametros({ onVolver }) {
         {p.esquemas.map((es, i) => (<div key={i} style={{ border: '1px solid ' + T.borderSoft, borderRadius: 8, padding: 10 }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
             {ti(es.n, v => upd(n => { n.esquemas[i].n = v }), { fontWeight: 600 })}
+          {(() => {
+            const _clp = x => '$' + Math.round(x || 0).toLocaleString('es-CL')
+            const _cte = { constante: (p.constantes && p.constantes.constante) || 1.5, litrosPorGalon: (p.constantes && p.constantes.litrosPorGalon) || 3.785 }
+            const _perd = (p.constantes && p.constantes.perdidaTipica) || 2
+            const _vc = Math.round((es.capas || []).reduce((a, c) => { const pr = (p.productos || []).find(x => x.n === c.p); const _mils = (c.m != null && c.m !== '') ? c.m : (((+c.mMin || 0) + (+c.mMax || +c.mMin || 0)) / 2); return a + valorM2Capa(pr, _mils, c.perdida != null ? c.perdida : _perd, _cte) }, 0))
+            const _man = es.usa_manual && es.valor_manual != null
+            return (<div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+              <span style={{ fontSize: 11, color: '#7A8288' }}>Valor $/m2:</span>
+              <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14 }}>{_clp(_man ? es.valor_manual : _vc)}</span>
+              {_man ? <span style={{ fontSize: 10, fontWeight: 600, color: '#8C4519', background: '#F9E9DE', padding: '1px 6px', borderRadius: 8 }}>manual</span> : <span style={{ fontSize: 10, color: '#9AA0A6' }}>auto ({_clp(_vc)})</span>}
+              <input type="number" placeholder={String(_vc)} value={es.valor_manual != null ? es.valor_manual : ''} onChange={ev => upd(n => { const v = ev.target.value; n.esquemas[i].valor_manual = v === '' ? null : +v; n.esquemas[i].usa_manual = v !== '' })} style={{ width: 90, padding: '4px 6px', border: '1px solid #CBD2D6', fontSize: 12, textAlign: 'right' }} title="Valor manual (override)" />
+              {_man && <button onClick={() => upd(n => { n.esquemas[i].usa_manual = false; n.esquemas[i].valor_manual = null })} style={{ background: 'none', border: '1px solid #CBD2D6', fontSize: 11, padding: '3px 7px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Volver al calculado</button>}
+            </div>)
+          })()}
             <button style={btnDel} onClick={() => upd(n => n.esquemas.splice(i, 1))}><Trash2 size={15} /></button>
           </div>
           {es.capas.map((c, j) => (<div key={j} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 5 }}>
