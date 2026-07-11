@@ -7,6 +7,7 @@ import ProyParametros from './ProyParametros.jsx'
 import ProyCotizador from './ProyCotizador.jsx'
 import ProyComprasLibro from './ProyComprasLibro.jsx'
 import { supabase } from './supabase.js'
+import * as XLSX from 'xlsx'
 // Cotizador de Proyectos visible solo para estos correos (el resto ve la gestion normal de OT)
 const COTIZADOR_PROY_EMAILS = ['administracion@sereinspa.com', 'mario@sereinspa.com']
 // Engancha una factura de Proyectos a su OT comparando los números (≥3 dígitos) de OT/OC
@@ -333,6 +334,33 @@ function AbonosOT({ p, facturasOT, onUpdate }) {
   )
 }
 
+function descargarProyectoXlsx(p, facturasProy, params, ppmPct) {
+  const fs = facturasDeOT(facturasProy, p)
+  const totalDe = f => Math.round(f.monto || (f.neto || 0) * 1.19)
+  const estLoc = f => ((p.facEdp && p.facEdp[f.numero] && p.facEdp[f.numero].estado) || f.estado || '')
+  const venta = ventaDe(p, facturasProy), fact = facturadoDe(p, facturasProy), cobr = cobradoDe(p, facturasProy)
+  const costoReal = comprasDe(p), costoEst = costoEstDe(p), perd = perdidaFactDe(p, facturasProy, params)
+  const ppm = Math.round(fact * ((ppmPct || 0) / 100)), utReal = venta - costoReal - perd - ppm
+  const resumen = [
+    ['INFORME OT ' + (p.ot || ''), ''], ['Cliente', p.cliente || ''], ['Nombre', p.nombre || ''],
+    ['Estado', p.cerrado ? 'CERRADO' : 'Activo'], ['Fecha de cierre', p.fechaCierre || ''],
+    ['Venta cotizada', venta], ['Facturado (neto)', fact], ['Cobrado (neto)', cobr], ['Por facturar', Math.max(0, venta - fact)],
+    ['Costo estimado (topes CC)', costoEst], ['Costo real (compras)', costoReal],
+    ['Perdida factoring', perd], ['PPM (' + (ppmPct || 0) + '%)', ppm], ['Utilidad real', utReal],
+  ]
+  const facturas = fs.map(f => { const ov = (p.facEdp || {})[f.numero] || {}; return { Factura: f.numero, Fecha: f.fecha_emision || '', EDP: ov.edp || '', Neto: f.neto || 0, 'Total c/IVA': totalDe(f), PPM: Math.round((f.neto || 0) * ((ppmPct || 0) / 100)), Estado: estLoc(f), 'Fecha pago': ov.fechaPago || '', Banco: ov.banco || '' } })
+  const abonos = (p.abonos || []).map(a => ({ Fecha: a.fecha || '', Banco: a.banco || '', Factura: a.numero || '(reparto)', Monto: a.monto || 0 }))
+  const compras = (p.compras || []).map(c => ({ CC: c.cc || '', Proveedor: c.proveedor || '', 'N doc': c.folio || '', Detalle: c.detalle || '', Fecha: c.fecha || '', 'Monto neto': c.monto || 0 }))
+  const cc = ccActivos(p).map(x => ({ Codigo: x.id, Nombre: x.nombre, 'Tope neto': topeCC(p, x.id), Consumo: consumoCC(p, x.id), Saldo: topeCC(p, x.id) - consumoCC(p, x.id) }))
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumen), 'Resumen')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(facturas.length ? facturas : [{ Factura: 'Sin facturas' }]), 'Facturas')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(abonos.length ? abonos : [{ Fecha: 'Sin abonos' }]), 'Abonos')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(compras.length ? compras : [{ CC: 'Sin compras' }]), 'Compras')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(cc.length ? cc : [{ Codigo: 'Sin CC' }]), 'Centros de costo')
+  XLSX.writeFile(wb, 'Proyecto_' + (p.ot || 'OT') + '_' + new Date().toISOString().slice(0, 10) + '.xlsx')
+}
+
 function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasProy = [], ppmPct = 2, enModal = false }) {
   const facturasOT = facturasDeOT(facturasProy, p)
   const factNetoOT = facturasOT.reduce((a, f) => a + (f.neto || 0), 0)
@@ -506,7 +534,13 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
             <span>UT est.: <b style={{ color: colorUT(pctUtEst) }}>{clp(utEst)} ({pctUtEst.toFixed(1)}%)</b></span>
             <span>UT real: <b style={{ color: colorUT(pctUtReal) }}>{clp(utReal)} ({pctUtReal.toFixed(1)}%)</b></span>
           </div>
-          <div style={{ marginTop: 14, textAlign: 'right' }}>
+          <div style={{ marginTop: 14, display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={() => descargarProyectoXlsx(p, facturasProy, params, ppmPct)} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Table2 size={14} /> Descargar Excel</button>
+              {p.cerrado
+                ? <button onClick={() => window.confirm('¿Reabrir este proyecto? Volverá a la vista de proyectos activos.') && onUpdate(p.id, { cerrado: false })} style={{ background: C.azul, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>Reabrir proyecto</button>
+                : <button onClick={() => window.confirm('¿Cerrar el proyecto? Pasará a "Proyectos cerrados", pero seguirá sumando en el consolidado.') && onUpdate(p.id, { cerrado: true, fechaCierre: new Date().toISOString().slice(0, 10) })} style={{ background: C.carbon, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>Cerrar proyecto</button>}
+            </div>
             <button onClick={() => window.confirm(`¿Eliminar el proyecto "${p.nombre}" completo?`) && onDelete(p.id)} style={{ background: 'none', border: `1px solid ${C.rojo}`, color: C.rojo, padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Trash2 size={13} /> Eliminar proyecto</button>
           </div>
         </div>
@@ -581,9 +615,43 @@ function Consolidado({ proyectos, facturasProy = [], params = { factoring: [] } 
     const g = {}; proyectos.forEach(p => { (g[p.periodo || '—'] = g[p.periodo || '—'] || []).push(p) }); return Object.entries(g)
   }, [proyectos])
   const celda = (v, alignRight = true, bold = false, color) => <td style={{ padding: '6px 8px', textAlign: alignRight ? 'right' : 'left', fontWeight: bold ? 600 : 400, color, whiteSpace: 'nowrap' }}>{v}</td>
+  const [expTipo, setExpTipo] = useState('mes')
+  const [expRef, setExpRef] = useState(new Date().toISOString().slice(0, 10))
+  const anioActual = new Date().getFullYear()
+  const ventasAnio = (facturasProy || []).filter(f => String(f.fecha_emision || '').slice(0, 4) === String(anioActual)).reduce((a, f) => a + (f.neto || 0), 0)
+  const enRango = fechaStr => {
+    if (expTipo === 'todo') return true
+    if (!fechaStr) return false
+    const d = new Date(fechaStr + 'T00:00:00'), r = new Date(expRef + 'T00:00:00')
+    if (isNaN(d.getTime())) return false
+    if (expTipo === 'anio') return d.getFullYear() === r.getFullYear()
+    if (expTipo === 'mes') return d.getFullYear() === r.getFullYear() && d.getMonth() === r.getMonth()
+    if (expTipo === 'semestre') { const h = m => m < 6 ? 0 : 1; return d.getFullYear() === r.getFullYear() && h(d.getMonth()) === h(r.getMonth()) }
+    if (expTipo === 'semana') { const ini = new Date(r); ini.setDate(ini.getDate() - ((ini.getDay() + 6) % 7)); const fin = new Date(ini); fin.setDate(ini.getDate() + 7); return d >= ini && d < fin }
+    return true
+  }
+  const exportarXlsx = () => {
+    const wb = XLSX.utils.book_new()
+    const cons = proyectos.map(p => ({ OT: p.ot || '', Cliente: p.cliente || '', Estado: p.cerrado ? 'Cerrado' : 'Activo', Venta: ventaDe(p, facturasProy), Facturado: facturadoDe(p, facturasProy), 'Por facturar': porFacturarDe(p, facturasProy), 'Costo est': costoEstDe(p), 'Costo real': comprasDe(p), 'Perdida factoring': perdidaFactDe(p, facturasProy, params) }))
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(cons.length ? cons : [{ OT: 'Sin proyectos' }]), 'Consolidado')
+    const vp = (facturasProy || []).filter(f => enRango(f.fecha_emision)).map(f => { const tot = f.monto || Math.round((f.neto || 0) * 1.19); return [f.numero, f.cliente || '', f.ot || '', f.fecha_emision || '', f.neto || 0, tot - (f.neto || 0), tot, f.estado || ''] })
+    const totNeto = vp.reduce((a, r) => a + (r[4] || 0), 0)
+    const aoa = [['Ventas ' + expTipo + ' - referencia ' + expRef], [], ['Factura', 'Cliente', 'OT', 'Fecha', 'Neto', 'IVA', 'Total', 'Estado'], ...vp, [], ['TOTAL NETO', '', '', '', totNeto]]
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Ventas')
+    XLSX.writeFile(wb, 'Consolidado_Proyectos_' + expTipo + '_' + expRef + '.xlsx')
+  }
 
   return (
     <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 12, overflowX: 'auto' }}>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
+        <div style={{ fontSize: 13 }}>Ventas del año {anioActual}: <b style={{ color: C.azul }}>{clp(ventasAnio)}</b></div>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, color: C.gris }}>Informe Excel:</span>
+          <select value={expTipo} onChange={e => setExpTipo(e.target.value)} style={{ ...inp, fontSize: 12, padding: '5px 7px' }}><option value="semana">Semanal</option><option value="mes">Mensual</option><option value="semestre">Semestral</option><option value="anio">Anual</option><option value="todo">Todo</option></select>
+          <input type="date" value={expRef} onChange={e => setExpRef(e.target.value)} style={{ ...inp, fontSize: 12, padding: '5px 7px' }} />
+          <button onClick={exportarXlsx} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Table2 size={13} /> Descargar Excel</button>
+        </div>
+      </div>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
         <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
           {['OT', 'Cliente', 'Venta', 'Facturado', 'Por facturar', 'Costo est.', 'Costo real', 'Pérdida fact.', 'UT est.', '%', ...CC_DEFS.map(c => c.id)].map((h, i) => (
@@ -599,7 +667,7 @@ function Consolidado({ proyectos, facturasProy = [], params = { factoring: [] } 
               const ut = venta - costoEst, p2 = pct(ut, venta)
               return (
                 <tr key={p.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
-                  {celda(p.ot || '—', false, true)}
+                  {celda((p.ot || '—') + (p.cerrado ? ' · cerrado' : ''), false, true)}
                   {celda(p.cliente, false, false, C.gris)}
                   {celda(clp(venta))}
                   {celda(clp(fact))}
@@ -750,7 +818,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-        {[['tarjetas', 'Tarjetas', LayoutGrid], ...(verCotizadorProy ? [['cotizarProy', 'Cotización Proyecto', Receipt], ['cotizacionesProy', 'Cotizaciones', Receipt], ['comprasSII', 'Compras SII', ShoppingCart]] : []), ['consolidado', 'Consolidado', Table2], ['facturas', 'Facturas', Receipt], ...(verCotizadorProy ? [['parametros', 'Parámetros Proyectos', Target]] : [])].map(([id, lbl, Icon]) => (
+        {[['tarjetas', 'Tarjetas', LayoutGrid], ...(verCotizadorProy ? [['cotizarProy', 'Cotización Proyecto', Receipt], ['cotizacionesProy', 'Cotizaciones', Receipt], ['comprasSII', 'Compras SII', ShoppingCart]] : []), ['consolidado', 'Consolidado', Table2], ['cerrados', 'Proyectos cerrados', LayoutGrid], ['facturas', 'Facturas', Receipt], ...(verCotizadorProy ? [['parametros', 'Parámetros Proyectos', Target]] : [])].map(([id, lbl, Icon]) => (
           <button key={id} onClick={() => setVista(id)} style={{ background: vista === id ? C.carbon : '#fff', color: vista === id ? '#fff' : C.carbon, border: '1px solid #CBD2D6', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Icon size={14} />{lbl}</button>
         ))}
         {!creando && vista === 'tarjetas' && (
@@ -772,16 +840,21 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
         <FacturasModule area="Proyectos" facturas={facturas} setFacturas={setFacturas} params={params} comisionPct={comisionPct} setComisionPct={setComisionPct} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={clientesSugeridos} />
       ) : (vista === 'parametros' && verCotizadorProy) ? (
         <ProyParametros />
+      ) : vista === 'cerrados' ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
+          {proyectos.filter(p => p.cerrado).map(p => <TileProyecto key={p.id} p={p} facturasProy={facturasProy} onOpen={() => setSel(p.id)} onDragStart={() => {}} onDropOn={() => {}} />)}
+          {proyectos.filter(p => p.cerrado).length === 0 && <div style={{ gridColumn: '1 / -1', fontSize: 13, color: C.gris, padding: 12 }}>Aún no hay proyectos cerrados. Ciérralos desde la ficha de cada OT (botón "Cerrar proyecto").</div>}
+        </div>
       ) : (
-        (<>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
-            {proyectos.map(p => <TileProyecto key={p.id} p={p} facturasProy={facturasProy} onOpen={() => setSel(p.id)} onDragStart={() => { dragId.current = p.id }} onDropOn={() => { mover(dragId.current, p.id); dragId.current = null }} />)}
-          </div>
-          {(() => { const sp = proyectos.find(x => x.id === sel); return sp ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
+          {proyectos.filter(p => !p.cerrado).map(p => <TileProyecto key={p.id} p={p} facturasProy={facturasProy} onOpen={() => setSel(p.id)} onDragStart={() => { dragId.current = p.id }} onDropOn={() => { mover(dragId.current, p.id); dragId.current = null }} />)}
+        </div>
+      )}
+      {(() => { const sp = proyectos.find(x => x.id === sel); return (sp && (vista === 'tarjetas' || vista === 'cerrados')) ? (
             <div onClick={() => setSel(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,26,46,.55)', zIndex: 70, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '28px 16px', overflowY: 'auto' }}>
               <div onClick={e => e.stopPropagation()} style={{ background: '#F7F6F3', width: '100%', maxWidth: 1000, boxShadow: '0 20px 60px -12px rgba(0,0,0,.4)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #E2DED4', background: '#fff', position: 'sticky', top: 0, zIndex: 2 }}>
-                  <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, textTransform: 'uppercase' }}>{sp.nombre}</span>
+                  <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, textTransform: 'uppercase' }}>{sp.nombre}{sp.cerrado ? ' · CERRADO' : ''}</span>
                   <button onClick={() => setSel(null)} style={{ background: 'none', border: '1px solid #CBD2D6', cursor: 'pointer', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><X size={15} /> Cerrar</button>
                 </div>
                 <div style={{ padding: 12 }}>
@@ -790,8 +863,6 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
               </div>
             </div>
           ) : null })()}
-        </>)
-      )}
 
       <div style={{ fontSize: 12, color: '#9AA0A6', textAlign: 'center', marginTop: 8 }}>
         Los cambios se guardan automáticamente en la nube (Supabase) y quedan sincronizados en todos los dispositivos.
