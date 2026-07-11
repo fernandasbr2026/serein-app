@@ -618,7 +618,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
           </>
         )}
         {(areaSel === 'Santa Rosa' || areaSel === 'Istria') && (
-          <FacturasModule area={areaSel} facturas={facturas} setFacturas={setFacturas} params={params} comisionPct={comisiones[areaSel] ?? 0} setComisionPct={v => setComisiones(c => ({ ...c, [areaSel]: v }))} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={nombresClientes(contactos)} />
+          <FacturasModule area={areaSel} proyectos={proyectos} ots={ots} facturas={facturas} setFacturas={setFacturas} params={params} comisionPct={comisiones[areaSel] ?? 0} setComisionPct={v => setComisiones(c => ({ ...c, [areaSel]: v }))} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={nombresClientes(contactos)} />
         )}
         </>
         )}
