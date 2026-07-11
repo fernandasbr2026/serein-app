@@ -809,8 +809,10 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
   const totCostoEst = proyectos.reduce((a, p) => a + costoEstDe(p), 0)
   const totCostoReal = proyectos.reduce((a, p) => a + comprasDe(p), 0)
   const totPerdidaFact = facturasProy.reduce((a, f) => a + perdidaFactoringFactura(f, params), 0)
-  const totAbonos = proyectos.reduce((a, p) => a + (p.abonos || []).reduce((s, x) => s + (x.monto || 0), 0), 0)
-  const cajaEsperada = totAbonos - totCostoReal
+  const totCobradoCli = proyectos.reduce((a, p) => a + cobradoDe(p, facturasProy), 0)
+  const totPPM = Math.round(totFact * (ppmPct / 100))
+  const totSalidas = totCostoReal + totPerdidaFact + totPPM
+  const cajaEsperada = totCobradoCli - totSalidas
   const kpi = (label, valor, color) => (
     <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 14, flex: '1 1 140px' }}>
       <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{label}</div>
@@ -824,17 +826,27 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
         <div>
           <div style={{ fontSize: 11, color: '#8C4519', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.4 }}>Debería tener en caja</div>
           <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 30, fontWeight: 700, lineHeight: 1.15, color: cajaEsperada >= 0 ? C.ambar : C.rojo }}>{clp(cajaEsperada)}</div>
-          <div style={{ fontSize: 11.5, color: C.gris, marginTop: 2 }}>Cruce de pagos ingresados menos compras de todas las OT</div>
+          <div style={{ fontSize: 11.5, color: C.gris, marginTop: 2 }}>Pagado por los clientes menos compras, pérdida factoring y PPM</div>
         </div>
-        <div style={{ display: 'flex', gap: 26, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div>
-            <div style={{ fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }}>Pagos ingresados</div>
-            <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: C.verde, whiteSpace: 'nowrap' }}>{clp(totAbonos)}</div>
+            <div style={{ fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }}>Pagado por clientes</div>
+            <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: C.verde, whiteSpace: 'nowrap' }}>{clp(totCobradoCli)}</div>
           </div>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, color: C.gris, alignSelf: 'flex-end' }}>−</div>
+          <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 18, color: C.gris, paddingBottom: 2 }}>−</div>
           <div>
             <div style={{ fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }}>Compras</div>
             <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: C.rojo, whiteSpace: 'nowrap' }}>{clp(totCostoReal)}</div>
+          </div>
+          <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 18, color: C.gris, paddingBottom: 2 }}>−</div>
+          <div>
+            <div style={{ fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }}>Pérdida factoring</div>
+            <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: C.rojo, whiteSpace: 'nowrap' }}>{clp(totPerdidaFact)}</div>
+          </div>
+          <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 18, color: C.gris, paddingBottom: 2 }}>−</div>
+          <div>
+            <div style={{ fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }}>PPM {ppmPct}%</div>
+            <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: C.rojo, whiteSpace: 'nowrap' }}>{clp(totPPM)}</div>
           </div>
         </div>
       </div>
