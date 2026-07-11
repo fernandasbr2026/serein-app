@@ -11,7 +11,22 @@ const AREAS = ['Santa Rosa', 'Istria', 'Proyectos']
 const ESTADOS_PAGO = ['Pendiente', 'Pagada', 'Credito', 'Factoring']
 const colorPago = e => e === 'Pagada' ? C.green : e === 'Factoring' ? C.orange : e === 'Credito' ? '#2563EB' : C.mut
 
-export default function LibroComprasModule({ esGerencia = true, ots = [], factoringList = [] }) {
+export default function LibroComprasModule({ esGerencia = true, ots = [], factoringList = [], proyectos = [], setProyectos = null }) {
+  const otNumProy = p => String(p.ot || '').trim()
+  const otsActivas = [
+    ...(proyectos || []).filter(p => !p.cerrado).map(p => ({ n: otNumProy(p), etq: 'Proyectos · ' + otNumProy(p) + (p.cliente ? ' · ' + p.cliente : '') })),
+    ...(ots || []).filter(o => o.estado !== 'Cerrada').map(o => ({ n: String(o.numero || ''), etq: (o.area || 'OT') + ' · ' + String(o.numero || '') + (o.cliente ? ' · ' + o.cliente : '') }))
+  ].filter(o => o.n)
+  const proyDeOT = n => (proyectos || []).find(p => otNumProy(p) === String(n || '').trim())
+  const ccsDeOT = n => { const p = proyDeOT(n); if (!p) return []; const codes = [...new Set([...Object.keys(p.cc || {}), ...(p.compras || []).map(c => c.cc)])].filter(Boolean); return codes.map(c => ({ id: c, nombre: (p.ccNombres && p.ccNombres[c]) || c })) }
+  const imputarFicha = (r, otNum, ccCode) => {
+    if (!setProyectos) return
+    setProyectos(ps => (ps || []).map(p => {
+      const compras = (p.compras || []).filter(c => c.libroId !== r.id)
+      if (otNumProy(p) !== String(otNum || '').trim() || !ccCode) return { ...p, compras }
+      return { ...p, compras: [...compras, { id: 'lc' + r.id, proveedor: r.provider_name || '', folio: r.document_number || '', rut: r.provider_rut || '', monto: Math.round(Number(r.neto) || 0), cc: ccCode, fecha: r.emission_date || '', detalle: 'SII ' + (r.document_type || ''), origen: 'libro', libroId: r.id }] }
+    }))
+  }
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [errMsg, setErrMsg] = useState('')
@@ -119,7 +134,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 1200 }}>
             <thead>
               <tr style={{ background: C.navy, color: '#fff' }}>
-                {['Emision', 'Proveedor', 'Folio', 'Tipo', 'Neto', 'IVA', 'Total', 'OT', 'Area', 'Pago', 'Reparto area'].map(h => (
+                {['Emision', 'Proveedor', 'Folio', 'Tipo', 'Neto', 'IVA', 'Total', 'OT', 'Centro de costo', 'Area', 'Pago', 'Reparto area'].map(h => (
                   <th key={h} style={{ textAlign: h === 'Neto' || h === 'IVA' || h === 'Total' ? 'right' : 'left', padding: '9px 10px', fontSize: 11, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -135,9 +150,15 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
                   <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', color: C.orange }}>{clp(r.iva)}</td>
                   <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700 }}>{clp(r.document_total)}</td>
                   <td style={{ padding: '7px 10px' }}>
-                    <select style={{ ...sel, minWidth: 100 }} value={r.ot_id || ''} onChange={e => setCampo(r.id, 'ot_id', e.target.value)}>
+                    <select style={{ ...sel, minWidth: 130 }} value={r.ot_id || ''} onChange={e => { const v = e.target.value; setCampo(r.id, 'ot_id', v); setCampo(r.id, 'cc_ot', ''); imputarFicha(r, v, '') }}>
                       <option value="">- sin OT -</option>
-                      {ots.map(o => <option key={o.numero} value={o.numero}>{o.numero}</option>)}
+                      {otsActivas.map(o => <option key={o.etq} value={o.n}>{o.etq}</option>)}
+                    </select>
+                  </td>
+                  <td style={{ padding: '7px 10px' }}>
+                    <select style={{ ...sel, minWidth: 150 }} value={r.cc_ot || ''} disabled={ccsDeOT(r.ot_id).length === 0} onChange={e => { const v = e.target.value; setCampo(r.id, 'cc_ot', v); imputarFicha(r, r.ot_id, v) }}>
+                      <option value="">{ccsDeOT(r.ot_id).length ? '- centro de costo -' : '-'}</option>
+                      {ccsDeOT(r.ot_id).map(c => <option key={c.id} value={c.id}>{c.id} · {c.nombre}</option>)}
                     </select>
                   </td>
                   <td style={{ padding: '7px 10px' }}>
