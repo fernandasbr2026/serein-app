@@ -30,12 +30,21 @@ const IVA = 0.19
 const ivaDe = n => Math.round((parseInt(String(n).replace(/\D/g, ''), 10) || 0) * IVA)
 const brutoDe = n => { const v = parseInt(String(n).replace(/\D/g, ''), 10) || 0; return v + Math.round(v * IVA) }
 
-export default function FacturasModule({ area, facturas, setFacturas, params = { factoring: [] }, comisionPct = 0, setComisionPct = () => {}, ppmPct = 2, setPpmPct = () => {}, clientesSugeridos = [] }) {
+export default function FacturasModule({ area, facturas, setFacturas, params = { factoring: [] }, comisionPct = 0, setComisionPct = () => {}, ppmPct = 2, setPpmPct = () => {}, clientesSugeridos = [], proyectos = [], ots = [] }) {
   const lista = (facturas && facturas[area]) || []
   const esSR = area === 'Santa Rosa'
   const dlId = 'dl-cli-' + norm(area).replace(/\s/g, '')
+  const dlOtId = 'dl-ot-' + norm(area).replace(/\s/g, '')
+  const otNumProy = p => String(p.ot || '').trim()
+  const otNumOT = o => String(o.numero || o.ot || o.n || o.id || '').trim()
+  const otsActivas = [
+    ...(proyectos || []).filter(p => !p.cerrado).map(p => ({ n: otNumProy(p), etq: 'Proyectos · ' + otNumProy(p) + (p.cliente ? ' · ' + p.cliente : '') })),
+    ...(ots || []).filter(o => o.estado !== 'Cerrada').map(o => ({ n: otNumOT(o), etq: (o.area || 'OT') + ' · ' + otNumOT(o) + (o.cliente ? ' · ' + o.cliente : '') }))
+  ].filter(o => o.n)
+  const proyDeOT = n => (proyectos || []).find(p => otNumProy(p) === String(n || '').trim())
+  const ccsDeOT = n => { const p = proyDeOT(n); if (!p) return []; const codes = [...new Set([...Object.keys(p.cc || {}), ...(p.compras || []).map(c => c.cc)])].filter(Boolean); return codes.map(c => ({ id: c, nombre: (p.ccNombres && p.ccNombres[c]) || c })) }
   const [creando, setCreando] = useState(false)
-  const nueva = () => ({ numero: '', cliente: '', ot: '', proyecto: '', fecha_emision: '', neto: '', monto: '', estado: 'Pendiente', fecha_pago: '', banco: '', comentarios: '', vendedor: 'General' })
+  const nueva = () => ({ numero: '', cliente: '', ot: '', cc: '', proyecto: '', fecha_emision: '', neto: '', monto: '', estado: 'Pendiente', fecha_pago: '', banco: '', comentarios: '', vendedor: 'General' })
   const comisionDe = x => x.vendedor === 'Mario' ? Math.round((x.neto || x.monto || 0) * (comisionPct / 100)) : 0
   const [f, setF] = useState(nueva())
   const [busca, setBusca] = useState('')
@@ -180,7 +189,8 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8 }}>
               <input style={inp} placeholder="N° factura *" value={f.numero} onChange={e => setF({ ...f, numero: e.target.value })} />
               <input style={inp} placeholder="Cliente" list={dlId} value={f.cliente} onChange={e => setF({ ...f, cliente: e.target.value })} />
-              <input style={inp} placeholder="OT" value={f.ot} onChange={e => setF({ ...f, ot: e.target.value })} />
+              <input style={inp} placeholder="OT" list={dlOtId} value={f.ot} onChange={e => setF({ ...f, ot: e.target.value, cc: '' })} />
+              <select style={inp} value={f.cc || ''} onChange={e => setF({ ...f, cc: e.target.value })} disabled={ccsDeOT(f.ot).length === 0}><option value="">{ccsDeOT(f.ot).length ? 'Centro de costo…' : 'Sin CC (elige OT)'}</option>{ccsDeOT(f.ot).map(c => <option key={c.id} value={c.id}>{c.id} · {c.nombre}</option>)}</select>
               {esSR && <input style={inp} placeholder="NV / Proyecto (ej. Equipex)" value={f.proyecto} onChange={e => setF({ ...f, proyecto: e.target.value })} />}
               <label style={{ fontSize: 11, color: C.gris }}>Emisión<input type="date" style={{ ...inp, width: '100%' }} value={f.fecha_emision} onChange={e => setF({ ...f, fecha_emision: e.target.value })} /></label>
               <input style={inp} placeholder="Neto CLP *" value={f.neto} onChange={e => setF({ ...f, neto: e.target.value })} />
@@ -198,7 +208,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
         <div style={{ overflowX: 'auto', padding: 12 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
             <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-              {['N° factura', 'Cliente', 'OT / OC', ...(esSR ? ['NV / Proyecto'] : []), 'Emisión', 'Neto', 'IVA', 'Total', `PPM ${ppmPct}%`, 'Estado', 'Fecha pago', 'Banco depósito', 'Comentarios', 'Vendedor', 'Comisión', ''].map((h, i) => (
+              {['N° factura', 'Cliente', 'OT / OC', 'Centro de costo', ...(esSR ? ['NV / Proyecto'] : []), 'Emisión', 'Neto', 'IVA', 'Total', `PPM ${ppmPct}%`, 'Estado', 'Fecha pago', 'Banco depósito', 'Comentarios', 'Vendedor', 'Comisión', ''].map((h, i) => (
                 <th key={i} style={{ textAlign: ['Neto', 'IVA', 'Total', 'Comisión'].includes(h) || h.startsWith('PPM') ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr></thead>
@@ -212,7 +222,8 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                 <tr style={{ borderBottom: '1px solid #EEE9DF', opacity: x.estado === 'Anulada' ? 0.5 : 1 }}>
                   <td style={{ padding: '4px 6px' }}><input value={x.numero} onChange={e => actualizar(x.id, 'numero', e.target.value)} style={{ ...inp, width: 80, fontWeight: 600 }} /></td>
                   <td style={{ padding: '4px 6px' }}><input value={x.cliente} list={dlId} onChange={e => actualizar(x.id, 'cliente', e.target.value)} style={{ ...inp, width: 150 }} /></td>
-                  <td style={{ padding: '4px 6px' }}><input value={x.ot} onChange={e => actualizar(x.id, 'ot', e.target.value)} placeholder="OT/OC" style={{ ...inp, width: 100 }} /></td>
+                  <td style={{ padding: '4px 6px' }}><input value={x.ot} list={dlOtId} onChange={e => actualizar(x.id, 'ot', e.target.value)} placeholder="OT/OC" style={{ ...inp, width: 100 }} /></td>
+                  <td style={{ padding: '4px 6px' }}><select value={x.cc || ''} onChange={e => actualizar(x.id, 'cc', e.target.value)} disabled={ccsDeOT(x.ot).length === 0} style={{ ...inp, width: 150 }}><option value="">{ccsDeOT(x.ot).length ? 'Sin imputar' : '—'}</option>{ccsDeOT(x.ot).map(c => <option key={c.id} value={c.id}>{c.id} · {c.nombre}</option>)}</select></td>
                   {esSR && <td style={{ padding: '4px 6px' }}><input value={x.proyecto || ''} onChange={e => actualizar(x.id, 'proyecto', e.target.value)} placeholder="NV/Proyecto" style={{ ...inp, width: 120 }} /></td>}
                   <td style={{ padding: '4px 6px' }}><input type="date" value={x.fecha_emision} onChange={e => actualizar(x.id, 'fecha_emision', e.target.value)} style={{ ...inp, width: 130 }} /></td>
                   <td style={{ padding: '4px 6px', textAlign: 'right' }}><input value={x.neto} onChange={e => setNeto(x.id, e.target.value)} style={{ ...inp, width: 100, textAlign: 'right' }} /></td>
@@ -239,7 +250,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                 </tr>
                 {x.estado === 'Factoring' && (
                   <tr style={{ background: '#FBF3EE' }}>
-                    <td colSpan={esSR ? 16 : 15} style={{ padding: '8px 10px' }}>
+                    <td colSpan={esSR ? 17 : 16} style={{ padding: '8px 10px' }}>
                       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12 }}>
                         <span style={{ color: C.gris, fontWeight: 600 }}>Factoring:</span>
                         <select value={x.factoringId || (fSel ? fSel.id : '')} onChange={e => actualizar(x.id, 'factoringId', e.target.value)} style={inp}>
@@ -258,12 +269,13 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                 )}
                 </React.Fragment>
               ) })}
-              {mostradas.length === 0 && <tr><td colSpan={esSR ? 16 : 15} style={{ padding: 14, textAlign: 'center', color: '#9AA0A6' }}>{busca ? 'Sin resultados para la búsqueda.' : 'Sin facturas en esta área.'}</td></tr>}
+              {mostradas.length === 0 && <tr><td colSpan={esSR ? 17 : 16} style={{ padding: 14, textAlign: 'center', color: '#9AA0A6' }}>{busca ? 'Sin resultados para la búsqueda.' : 'Sin facturas en esta área.'}</td></tr>}
             </tbody>
           </table>
           <Paginador page={pg.page} paginas={pg.paginas} total={pg.total} setPage={setPage} />
         </div>
         <datalist id={dlId}>{sugerencias.map(s => <option key={s} value={s} />)}</datalist>
+        <datalist id={dlOtId}>{otsActivas.map(o => <option key={o.etq} value={o.n}>{o.etq}</option>)}</datalist>
       </div>
       <div style={{ fontSize: 11, color: '#9AA0A6', marginTop: 6 }}>
         Estas facturas se llenarán automáticamente desde Defontana/SII cuando activemos la sincronización. Por ahora puedes cargarlas y editarlas a mano.
