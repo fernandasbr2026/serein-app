@@ -23,11 +23,13 @@ const nombreDefault = id => (CC_DEFS.find(c => c.id === id)?.nombre) || id
 const nombreCC = (p, id) => (p.ccNombres && p.ccNombres[id]) || nombreDefault(id)
 
 // ---- Cálculos por proyecto ----
-const facturadoDe = p => (p.edps || []).reduce((a, e) => a + e.venta, 0)
-const cobradoDe = p => (p.edps || []).filter(e => e.estado === 'Pagado').reduce((a, e) => a + e.venta, 0)
+const facEdpDe = (p, numero) => (p.facEdp && p.facEdp[numero]) || {}
+const facEstado = (p, f) => (facEdpDe(p, f.numero).estado) || f.estado || ''
+const facturadoDe = (p, fp) => { const fs = facturasDeOT(fp, p); return fs.length ? fs.reduce((a, f) => a + (f.neto || 0), 0) : (p.edps || []).reduce((a, e) => a + (e.venta || 0), 0) }
+const cobradoDe = (p, fp) => { const fs = facturasDeOT(fp, p); return fs.length ? fs.filter(f => String(facEstado(p, f)).toLowerCase().startsWith('pag')).reduce((a, f) => a + (f.neto || 0), 0) : (p.edps || []).filter(e => e.estado === 'Pagado').reduce((a, e) => a + (e.venta || 0), 0) }
 const comprasDe = p => (p.compras || []).reduce((a, c) => a + c.monto, 0)
-const ventaDe = p => (p.venta_cotizada != null && p.venta_cotizada > 0) ? p.venta_cotizada : facturadoDe(p)
-const porFacturarDe = p => Math.max(0, ventaDe(p) - facturadoDe(p))
+const ventaDe = (p, fp) => (p.venta_cotizada != null && p.venta_cotizada > 0) ? p.venta_cotizada : facturadoDe(p, fp)
+const porFacturarDe = (p, fp) => Math.max(0, ventaDe(p, fp) - facturadoDe(p, fp))
 const perdidaFactDe = p => (p.edps || []).reduce((a, e) => a + (e.perdidaFact || 0), 0)
 const CONDICIONES = [{ label: 'Contado', dias: 0 }, { label: '30 días', dias: 30 }, { label: '45 días', dias: 45 }, { label: '60 días', dias: 60 }, { label: '90 días', dias: 90 }]
 const consumoCC = (p, ccId) => (p.compras || []).filter(c => c.cc === ccId).reduce((a, c) => a + c.monto, 0)
@@ -135,18 +137,19 @@ function BloqueCC({ p, onUpdate }) {
   const [editando, setEditando] = useState(false)
   const [tope, setTope] = useState({})
   const [nomb, setNomb] = useState({})
+  const [iva, setIva] = useState({})
   const activos = ccActivos(p)
 
   function abrirEdicion(e) {
     e.stopPropagation()
-    const t = {}, n = {}
-    CC_DEFS.forEach(cc => { t[cc.id] = (p.cc && p.cc[cc.id]) || ''; n[cc.id] = nombreCC(p, cc.id) })
-    setTope(t); setNomb(n); setEditando(true)
+    const t = {}, n = {}, iv = {}
+    CC_DEFS.forEach(cc => { t[cc.id] = (p.cc && p.cc[cc.id]) || ''; n[cc.id] = nombreCC(p, cc.id); iv[cc.id] = (p.ccIva && p.ccIva[cc.id]) || 'con' })
+    setTope(t); setNomb(n); setIva(iv); setEditando(true)
   }
   function guardar() {
-    const cc = {}, ccNombres = {}
-    CC_DEFS.forEach(c => { const v = num(tope[c.id]); if (v > 0) cc[c.id] = v; const nm = (nomb[c.id] || '').trim(); if (nm && nm !== nombreDefault(c.id)) ccNombres[c.id] = nm })
-    onUpdate(p.id, { cc, ccNombres }); setEditando(false)
+    const cc = {}, ccNombres = {}, ccIva = {}
+    CC_DEFS.forEach(c => { const v = num(tope[c.id]); if (v > 0) cc[c.id] = v; const nm = (nomb[c.id] || '').trim(); if (nm && nm !== nombreDefault(c.id)) ccNombres[c.id] = nm; if ((iva[c.id] || 'con') === 'exento') ccIva[c.id] = 'exento' })
+    onUpdate(p.id, { cc, ccNombres, ccIva }); setEditando(false)
   }
 
   return (
@@ -162,7 +165,9 @@ function BloqueCC({ p, onUpdate }) {
             <div key={cc.id} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
               <span style={{ fontSize: 12, fontWeight: 600, width: 24 }}>{cc.id}</span>
               <input value={nomb[cc.id] ?? ''} onChange={e => setNomb({ ...nomb, [cc.id]: e.target.value })} placeholder={nombreDefault(cc.id)} style={{ ...inp, flex: 1 }} />
-              <input value={tope[cc.id] ?? ''} onChange={e => setTope({ ...tope, [cc.id]: e.target.value })} placeholder="Tope CLP" style={{ ...inp, width: 120, textAlign: 'right' }} />
+              <input value={tope[cc.id] ?? ''} onChange={e => setTope({ ...tope, [cc.id]: e.target.value })} placeholder="Neto CLP" style={{ ...inp, width: 110, textAlign: 'right' }} />
+              <select value={iva[cc.id] || 'con'} onChange={e => setIva({ ...iva, [cc.id]: e.target.value })} style={{ ...inp, width: 92 }}><option value="con">Con IVA</option><option value="exento">Exento</option></select>
+              <span style={{ fontSize: 11, color: C.gris, width: 108, textAlign: 'right' }}>{num(tope[cc.id]) > 0 ? 'Total ' + clp(Math.round(num(tope[cc.id]) * ((iva[cc.id] || 'con') === 'exento' ? 1 : 1.19))) : ''}</span>
             </div>
           ))}
           <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
@@ -233,30 +238,47 @@ function FichaEditor({ p, onUpdate, onClose }) {
 
 function AbonosOT({ p, facturasOT, onUpdate }) {
   const [add, setAdd] = useState(false)
-  const [f, setF] = useState({ numero: '', monto: '', fecha: '', banco: '' })
+  const [f, setF] = useState({ monto: '', fecha: '', banco: '' })
   const abonos = p.abonos || []
-  const totalDe = fac => Math.round((fac.neto || 0) * 1.19)
-  const abonadoDe = numero => abonos.filter(a => String(a.numero) === String(numero)).reduce((s, a) => s + (+a.monto || 0), 0)
-  const inp = { border: '1px solid #E2DED4', borderRadius: 4, padding: '6px 8px', fontSize: 12 }
+  // Total real de cada factura: usa el monto con IVA que ya viene calculado (exento => monto = neto)
+  const totalDe = fac => Math.round(fac.monto || (fac.neto || 0) * 1.19)
+  const inpA = { border: '1px solid #E2DED4', borderRadius: 4, padding: '6px 8px', fontSize: 12 }
+  // Facturas ordenadas de la mas antigua a la mas nueva (por fecha de emision)
+  const facturasOrd = [...facturasOT].sort((a, b) => String(a.fecha_emision || '').localeCompare(String(b.fecha_emision || '')) || String(a.numero).localeCompare(String(b.numero)))
+  // Reparto automatico: los abonos antiguos asignados a una factura (con .numero) se respetan;
+  // los pagos nuevos (sin factura) forman una bolsa que se reparte de la mas antigua a la mas nueva.
+  const alloc = {}; facturasOrd.forEach(fac => { alloc[fac.numero] = 0 })
+  let bolsa = 0
+  abonos.forEach(a => {
+    const key = a.numero != null && a.numero !== '' ? String(a.numero) : null
+    if (key && Object.prototype.hasOwnProperty.call(alloc, key)) alloc[key] += (+a.monto || 0)
+    else bolsa += (+a.monto || 0)
+  })
+  facturasOrd.forEach(fac => { const t = totalDe(fac); if (alloc[fac.numero] > t) { bolsa += alloc[fac.numero] - t; alloc[fac.numero] = t } })
+  facturasOrd.forEach(fac => { const t = totalDe(fac); const rem = t - alloc[fac.numero]; if (rem > 0 && bolsa > 0) { const take = Math.min(rem, bolsa); alloc[fac.numero] += take; bolsa -= take } })
+  const saldoFavor = bolsa
+  const totFacturado = facturasOrd.reduce((s, fac) => s + totalDe(fac), 0)
+  const totRecibido = abonos.reduce((s, a) => s + (+a.monto || 0), 0)
+  const totPendiente = Math.max(0, totFacturado - (totRecibido - saldoFavor))
   const guardar = () => {
-    if (!f.numero || !(num(f.monto) > 0)) return
-    onUpdate(p.id, { abonos: [...abonos, { id: 'ab' + Date.now(), numero: f.numero, monto: num(f.monto), fecha: f.fecha || '—', banco: f.banco || '' }] })
-    setF({ numero: '', monto: '', fecha: '', banco: '' }); setAdd(false)
+    if (!(num(f.monto) > 0)) return
+    onUpdate(p.id, { abonos: [...abonos, { id: 'ab' + Date.now(), monto: num(f.monto), fecha: f.fecha || '—', banco: f.banco || '' }] })
+    setF({ monto: '', fecha: '', banco: '' }); setAdd(false)
   }
   const eliminar = id => onUpdate(p.id, { abonos: abonos.filter(a => a.id !== id) })
   return (
     <div style={{ marginBottom: 16, border: '1px solid #E2DED4', borderRadius: 8, padding: 12, background: '#FCFBF9' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.teal }}>Pagos recibidos (abonos)</span>
-        <button onClick={() => setAdd(v => !v)} style={{ background: C.azul, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}>+ Registrar abono</button>
+        <button onClick={() => setAdd(v => !v)} style={{ background: C.azul, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}>+ Registrar pago</button>
       </div>
-      {facturasOT.length === 0 ? (<div style={{ fontSize: 12, color: C.gris }}>Esta OT aún no tiene facturas para abonar.</div>) : (
+      {facturasOT.length === 0 ? (<div style={{ fontSize: 12, color: C.gris }}>Esta OT aun no tiene facturas para abonar.</div>) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Factura', 'Total c/IVA', 'Abonado', 'Saldo', 'Estado'].map((h, i) => <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
             <tbody>
-              {facturasOT.map((fac, i) => {
-                const tot = totalDe(fac); const ab = abonadoDe(fac.numero); const saldo = tot - ab; const pagada = saldo <= 0
+              {facturasOrd.map((fac, i) => {
+                const tot = totalDe(fac); const ab = alloc[fac.numero] || 0; const saldo = tot - ab; const pagada = saldo <= 0
                 return (
                   <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
                     <td style={{ padding: '5px 8px', fontWeight: 600 }}>{fac.numero}</td>
@@ -269,24 +291,29 @@ function AbonosOT({ p, facturasOT, onUpdate }) {
               })}
             </tbody>
           </table>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8, fontSize: 12, color: C.gris }}>
+            <span>Recibido: <b style={{ color: C.verde }}>{clp(totRecibido)}</b></span>
+            <span>Pendiente por cobrar: <b style={{ color: totPendiente > 0 ? '#B23A0E' : C.verde }}>{clp(totPendiente)}</b></span>
+            {saldoFavor > 0 && <span>Saldo a favor del cliente: <b style={{ color: C.teal }}>{clp(saldoFavor)}</b></span>}
+          </div>
         </div>
       )}
       {add && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end', marginTop: 10, paddingTop: 10, borderTop: '1px dashed #E2DED4' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Factura</label><select value={f.numero} onChange={e => setF({ ...f, numero: e.target.value })} style={{ ...inp, minWidth: 120 }}><option value="">— folio —</option>{facturasOT.map((fac, i) => <option key={i} value={fac.numero}>{fac.numero}</option>)}</select></div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Monto abono</label><input value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} style={{ ...inp, width: 110, textAlign: 'right' }} /></div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Fecha</label><input type="date" value={f.fecha && f.fecha !== '—' ? f.fecha : ''} onChange={e => setF({ ...f, fecha: e.target.value })} style={{ ...inp, width: 140 }} /></div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Banco</label><input list="serein-bancos" value={f.banco} onChange={e => setF({ ...f, banco: e.target.value })} placeholder="Banco..." style={{ ...inp, width: 130 }} /></div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Monto pagado</label><input value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} placeholder="Total transferido" style={{ ...inpA, width: 140, textAlign: 'right' }} /></div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Fecha</label><input type="date" value={f.fecha && f.fecha !== '—' ? f.fecha : ''} onChange={e => setF({ ...f, fecha: e.target.value })} style={{ ...inpA, width: 140 }} /></div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Banco</label><input list="serein-bancos" value={f.banco} onChange={e => setF({ ...f, banco: e.target.value })} placeholder="Banco..." style={{ ...inpA, width: 130 }} /></div>
           <button onClick={guardar} style={{ background: C.verde, color: '#fff', border: 'none', borderRadius: 4, padding: '7px 14px', fontSize: 13, cursor: 'pointer' }}>Agregar</button>
           <button onClick={() => setAdd(false)} style={{ background: 'none', border: '1px solid #CBD2D6', borderRadius: 4, padding: '7px 12px', fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+          <div style={{ flexBasis: '100%', fontSize: 11, color: C.gris }}>El pago se reparte solo: cubre primero la factura mas antigua y el sobrante pasa a la siguiente.</div>
         </div>
       )}
       {abonos.length > 0 && (
         <div style={{ marginTop: 10 }}>
-          <div style={{ fontSize: 10, color: C.gris, textTransform: 'uppercase', marginBottom: 4 }}>Abonos registrados</div>
+          <div style={{ fontSize: 10, color: C.gris, textTransform: 'uppercase', marginBottom: 4 }}>Pagos registrados</div>
           {abonos.map(a => (
             <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '3px 0', borderBottom: '1px solid #F0ECE3' }}>
-              <span style={{ color: C.gris }}>Factura {a.numero} · {a.fecha}{a.banco ? ' · ' + a.banco : ''}</span>
+              <span style={{ color: C.gris }}>{a.numero ? 'Factura ' + a.numero + ' · ' : 'Pago · '}{a.fecha}{a.banco ? ' · ' + a.banco : ''}</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}><b>{clp(a.monto)}</b><button onClick={() => eliminar(a.id)} style={{ background: 'none', border: 'none', color: '#B23A0E', cursor: 'pointer', fontSize: 13 }}>x</button></span>
             </div>
           ))}
@@ -299,7 +326,7 @@ function AbonosOT({ p, facturasOT, onUpdate }) {
 function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasProy = [], enModal = false }) {
   const facturasOT = facturasDeOT(facturasProy, p)
   const factNetoOT = facturasOT.reduce((a, f) => a + (f.neto || 0), 0)
-  const remIvaVenta = Math.round((p.edps || []).reduce((a, e) => a + (+e.venta || 0), 0) * 0.19)
+  const remIvaVenta = Math.round(facturasOT.reduce((a, f) => a + ((f.monto || Math.round((f.neto || 0) * 1.19)) - (f.neto || 0)), 0))
   const remIvaCompra = Math.round((p.compras || []).reduce((a, c) => a + (+c.monto || 0), 0) * 0.19)
   const remIva = remIvaVenta - remIvaCompra
   const [abierto, setAbierto] = useState(false)
@@ -308,9 +335,10 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
   const [editFicha, setEditFicha] = useState(false)
   const updEdp = (i, cambios) => onUpdate(p.id, { edps: p.edps.map((x, j) => j === i ? { ...x, ...cambios } : x) })
   const updCompra = (i, cambios) => onUpdate(p.id, { compras: p.compras.map((x, j) => j === i ? { ...x, ...cambios } : x) })
+  const updFac = (numero, cambios) => onUpdate(p.id, { facEdp: { ...(p.facEdp || {}), [numero]: { ...((p.facEdp || {})[numero] || {}), ...cambios } } })
 
-  const facturado = facturadoDe(p), cobrado = cobradoDe(p), pendiente = facturado - cobrado
-  const venta = ventaDe(p), porFacturar = porFacturarDe(p)
+  const facturado = facturadoDe(p, facturasProy), cobrado = cobradoDe(p, facturasProy), pendiente = facturado - cobrado
+  const venta = ventaDe(p, facturasProy), porFacturar = porFacturarDe(p, facturasProy)
   const costoEst = costoEstDe(p), costoReal = comprasDe(p), perdidaFact = perdidaFactDe(p)
   const utEst = venta - costoEst, pctUtEst = pct(utEst, venta)
   const utReal = venta - costoReal - perdidaFact, pctUtReal = pct(utReal, venta)
@@ -380,62 +408,34 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
       {(abierto || enModal) && (
         <div style={{ borderTop: '1px solid #EEE9DF', padding: 18 }}>
           <div style={{ background: remIva >= 0 ? '#FBF3E7' : '#E9F5EC', border: '1px solid ' + (remIva >= 0 ? '#E8C98A' : '#BFE3C8'), borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}><div><div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: C.gris, letterSpacing: '.03em' }}>Remanente de IVA del proyecto</div><div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>IVA ventas {clp(remIvaVenta)} - IVA compras {clp(remIvaCompra)}</div></div><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 700, fontSize: 22, color: remIva >= 0 ? '#B23A0E' : C.verde }}>{clp(remIva)}</div></div>
+          <div style={{ background: '#EEF3F8', border: '1px solid #D3E0EC', borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}><div><div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: C.gris, letterSpacing: '.03em' }}>Disponible del bruto (venta c/IVA − compras)</div><div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>Bruto {clp(Math.round(venta * 1.19))} − compras {clp(costoReal)}</div></div><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 700, fontSize: 22, color: (Math.round(venta * 1.19) - costoReal) >= 0 ? C.verde : C.rojo }}>{clp(Math.round(venta * 1.19) - costoReal)}</div></div>
           {facturasOT.length > 0 && (
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.teal, marginBottom: 6 }}>🧾 Facturas de esta OT (automáticas)</div>
+              <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.teal, marginBottom: 6 }}>🧾 Facturas de esta OT · Estados de pago (EDP)</div>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                  <thead><tr style={{ borderBottom: `1px solid ${C.carbon}` }}>{['N° factura', 'Fecha', 'Neto', 'Estado'].map(h => <th key={h} style={{ textAlign: h === 'Neto' ? 'right' : 'left', padding: '4px 6px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+                  <thead><tr style={{ borderBottom: `1px solid ${C.carbon}` }}>{['N° factura', 'Fecha', 'EDP', 'Neto', 'Total c/IVA', 'Estado pago', 'Fecha pago', 'Banco'].map(h => <th key={h} style={{ textAlign: (h === 'Neto' || h === 'Total c/IVA') ? 'right' : 'left', padding: '4px 6px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
                   <tbody>
-                    {facturasOT.map(fx => (
+                    {facturasOT.map(fx => { const ov = (p.facEdp || {})[fx.numero] || {}; const est = ov.estado || fx.estado || 'Pendiente'; return (
                       <tr key={fx.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
                         <td style={{ padding: '4px 6px', fontWeight: 600 }}>{fx.numero}</td>
                         <td style={{ padding: '4px 6px', color: C.gris }}>{fx.fecha_emision || '—'}</td>
+                        <td style={{ padding: '4px 6px' }}><input value={ov.edp || ''} onChange={ev => updFac(fx.numero, { edp: ev.target.value })} placeholder="EDP" style={{ ...inp, width: 90, padding: '4px 6px' }} /></td>
                         <td style={{ padding: '4px 6px', textAlign: 'right' }}>{clp(fx.neto)}</td>
-                        <td style={{ padding: '4px 6px', color: C.gris }}>{fx.estado}</td>
+                        <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600 }}>{clp(fx.monto || Math.round((fx.neto || 0) * 1.19))}</td>
+                        <td style={{ padding: '4px 6px' }}><select value={est} onChange={ev => updFac(fx.numero, { estado: ev.target.value })} style={{ border: 'none', background: est === 'Pagado' ? '#E7F2EA' : est === 'Factoring' ? '#F9E9DE' : '#F6E0DA', color: est === 'Pagado' ? C.verde : est === 'Factoring' ? C.ambar : '#B23A0E', padding: '3px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}><option>Pendiente</option><option>Pagado</option><option>Factoring</option></select></td>
+                        <td style={{ padding: '4px 6px' }}><input type="date" value={ov.fechaPago && ov.fechaPago !== '—' ? ov.fechaPago : ''} onChange={ev => updFac(fx.numero, { fechaPago: ev.target.value || '' })} style={{ ...inp, width: 140, padding: '4px 6px' }} /></td>
+                        <td style={{ padding: '4px 6px' }}><input list="serein-bancos" value={ov.banco || ''} onChange={ev => updFac(fx.numero, { banco: ev.target.value })} placeholder="Banco..." style={{ ...inp, width: 120, padding: '4px 6px' }} /></td>
                       </tr>
-                    ))}
+                    )})}
                   </tbody>
                 </table>
               </div>
-              <div style={{ fontSize: 12, color: C.gris, marginTop: 4 }}>Facturado (facturas): <b>{clp(factNetoOT)}</b> — se cargan solas al ingresarlas en la pestaña Facturas con esta OT.</div>
+              <div style={{ fontSize: 12, color: C.gris, marginTop: 4 }}>Facturado (facturas): <b>{clp(factNetoOT)}</b> · Cobrado: <b style={{ color: C.verde }}>{clp(cobrado)}</b> — las facturas se cargan solas desde la pestaña Facturas.</div>
             </div>
           )}
           <AbonosOT p={p} facturasOT={facturasOT} onUpdate={onUpdate} />
-          {/* VENTAS / EDP */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.gris }}>Ventas · Estados de pago (EDP)</span>
-            <button onClick={() => setAddEdp(true)} style={{ background: C.azul, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Agregar venta</button>
-          </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['EDP', 'Fecha', 'Venta neta', 'IVA', 'Total', 'Método', 'Estado', 'Fecha pago', 'Banco', ''].map((h, i) => <th key={i} style={{ textAlign: (h === 'Venta neta' || h === 'IVA' || h === 'Total') ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
-              <tbody>
-                {(p.edps || []).map((e, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
-                    <td style={{ padding: '5px 8px' }}><input value={e.edp} onChange={ev => updEdp(i, { edp: ev.target.value })} style={{ ...inp, width: 120, padding: '5px 7px' }} /></td>
-                    <td style={{ padding: '5px 8px' }}><input type="date" value={e.fecha && e.fecha !== '—' ? e.fecha : ''} onChange={ev => updEdp(i, { fecha: ev.target.value || '—' })} style={{ ...inp, width: 140, padding: '5px 7px' }} /></td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right' }}><input value={e.venta} onChange={ev => updEdp(i, { venta: num(ev.target.value) })} style={{ ...inp, width: 110, padding: '5px 7px', textAlign: 'right' }} /></td><td style={{ padding: '5px 8px', textAlign: 'right', color: C.gris }}>{clp(Math.round((+e.venta || 0) * 0.19))}</td><td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600 }}>{clp(Math.round((+e.venta || 0) * 1.19))}</td>
-                    <td style={{ padding: '5px 8px' }}>
-                      <select value={e.metodo || 'Contado'} onChange={ev => updEdp(i, { metodo: ev.target.value })} style={{ ...inp, width: 100, padding: '5px 7px' }}>
-                        <option>Contado</option><option>Crédito</option><option>Factoring</option>
-                      </select>
-                      {e.perdidaFact > 0 && <div style={{ color: C.rojo, fontSize: 11 }}>pérdida {clp(e.perdidaFact)}</div>}
-                    </td>
-                    <td style={{ padding: '7px 8px' }}>
-                      <select value={e.estado} onChange={ev => updEdp(i, { estado: ev.target.value })}
-                        style={{ border: 'none', background: e.estado === 'Pagado' ? '#E7F2EA' : e.estado === 'Factoring' ? '#F9E9DE' : '#F6E0DA', color: e.estado === 'Pagado' ? C.verde : e.estado === 'Factoring' ? C.ambar : C.rojo, padding: '3px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                        <option>Pendiente</option><option>Pagado</option><option>Factoring</option>
-                      </select>
-                    </td>
-                    <td style={{ padding: '5px 8px' }}><input type="date" value={e.fechaPago && e.fechaPago !== '—' ? e.fechaPago : ''} onChange={ev => updEdp(i, { fechaPago: ev.target.value || '' })} style={{ ...inp, width: 140, padding: '5px 7px' }} /></td><td style={{ padding: '5px 8px' }}><input list="serein-bancos" value={e.banco || ''} onChange={ev => updEdp(i, { banco: ev.target.value })} placeholder="Banco..." style={{ ...inp, width: 130, padding: '5px 7px' }} /></td><td style={{ padding: '7px 4px', textAlign: 'right' }}><button onClick={() => window.confirm(`¿Eliminar ${e.edp} (${clp(e.venta)})?`) && onUpdate(p.id, { edps: p.edps.filter((_, j) => j !== i) })} style={btnMini}><Trash2 size={14} /></button></td>
-                  </tr>
-                ))}
-                {(p.edps || []).length === 0 && <tr><td colSpan={10} style={{ padding: 12, color: '#9AA0A6', textAlign: 'center' }}>Sin ventas registradas.</td></tr>}
-              </tbody>
-            </table>
-          </div>
-          <datalist id="serein-bancos"><option value="Banco de Chile" /><option value="BancoEstado" /><option value="BCI" /><option value="Santander" /><option value="Scotiabank" /><option value="Itaú" /><option value="BICE" /><option value="Security" /><option value="Banco Falabella" /><option value="Banco Ripley" /><option value="Consorcio" /><option value="Internacional" /><option value="HSBC" /></datalist>{addEdp && <FormEdp params={params} onAdd={e => { onUpdate(p.id, { edps: [...(p.edps || []), e] }); setAddEdp(false) }} onCancel={() => setAddEdp(false)} />}
+          <datalist id="serein-bancos"><option value="Banco de Chile" /><option value="BancoEstado" /><option value="BCI" /><option value="Santander" /><option value="Scotiabank" /><option value="Itaú" /><option value="BICE" /><option value="Security" /><option value="Banco Falabella" /><option value="Banco Ripley" /><option value="Consorcio" /><option value="Internacional" /><option value="HSBC" /></datalist>
 
           {/* COMPRAS */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0 8px' }}>
@@ -486,8 +486,8 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
   )
 }
 
-function TileProyecto({ p, onOpen, onDragStart, onDropOn }) {
-  const venta = ventaDe(p), fact = facturadoDe(p)
+function TileProyecto({ p, facturasProy = [], onOpen, onDragStart, onDropOn }) {
+  const venta = ventaDe(p, facturasProy), fact = facturadoDe(p, facturasProy)
   const activa = (p.avance || 0) < 100
   return (
     <div onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); onDropOn() }} onClick={onOpen}
@@ -547,7 +547,7 @@ function FormProyecto({ onAdd, onCancel }) {
 }
 
 // ---------- Vista Consolidado (como la primera hoja) ----------
-function Consolidado({ proyectos }) {
+function Consolidado({ proyectos, facturasProy = [] }) {
   const periodos = useMemo(() => {
     const g = {}; proyectos.forEach(p => { (g[p.periodo || '—'] = g[p.periodo || '—'] || []).push(p) }); return Object.entries(g)
   }, [proyectos])
@@ -565,7 +565,7 @@ function Consolidado({ proyectos }) {
           {periodos.map(([per, ps]) => {
             const sub = { venta: 0, fact: 0, porFac: 0, costoEst: 0, costoReal: 0, perdFact: 0 }
             const filas = ps.map(p => {
-              const venta = ventaDe(p), fact = facturadoDe(p), porFac = porFacturarDe(p), costoEst = costoEstDe(p), costoReal = comprasDe(p), perdFact = perdidaFactDe(p)
+              const venta = ventaDe(p, facturasProy), fact = facturadoDe(p, facturasProy), porFac = porFacturarDe(p, facturasProy), costoEst = costoEstDe(p), costoReal = comprasDe(p), perdFact = perdidaFactDe(p)
               sub.venta += venta; sub.fact += fact; sub.porFac += porFac; sub.costoEst += costoEst; sub.costoReal += costoReal; sub.perdFact += perdFact
               const ut = venta - costoEst, p2 = pct(ut, venta)
               return (
@@ -633,9 +633,9 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
     return true
   }
 
-  const totVenta = proyectos.reduce((a, p) => a + ventaDe(p), 0)
-  const totFact = proyectos.reduce((a, p) => a + facturadoDe(p), 0)
-  const totPorFac = proyectos.reduce((a, p) => a + porFacturarDe(p), 0)
+  const totVenta = proyectos.reduce((a, p) => a + ventaDe(p, facturasProy), 0)
+  const totFact = proyectos.reduce((a, p) => a + facturadoDe(p, facturasProy), 0)
+  const totPorFac = proyectos.reduce((a, p) => a + porFacturarDe(p, facturasProy), 0)
   const totCostoEst = proyectos.reduce((a, p) => a + costoEstDe(p), 0)
   const totCostoReal = proyectos.reduce((a, p) => a + comprasDe(p), 0)
   const totPerdidaFact = facturasProy.reduce((a, f) => a + perdidaFactoringFactura(f, params), 0)
@@ -674,7 +674,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
       ) : (vista === 'comprasSII' && verCotizadorProy) ? (
         <ProyComprasLibro proyectos={proyectos} setProyectos={setProyectos} />
       ) : vista === 'consolidado' ? (
-        <Consolidado proyectos={proyectos} />
+        <Consolidado proyectos={proyectos} facturasProy={facturasProy} />
       ) : vista === 'facturas' ? (
         <FacturasModule area="Proyectos" facturas={facturas} setFacturas={setFacturas} params={params} comisionPct={comisionPct} setComisionPct={setComisionPct} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={clientesSugeridos} />
       ) : (vista === 'parametros' && verCotizadorProy) ? (
@@ -682,7 +682,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
       ) : (
         (<>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
-            {proyectos.map(p => <TileProyecto key={p.id} p={p} onOpen={() => setSel(p.id)} onDragStart={() => { dragId.current = p.id }} onDropOn={() => { mover(dragId.current, p.id); dragId.current = null }} />)}
+            {proyectos.map(p => <TileProyecto key={p.id} p={p} facturasProy={facturasProy} onOpen={() => setSel(p.id)} onDragStart={() => { dragId.current = p.id }} onDropOn={() => { mover(dragId.current, p.id); dragId.current = null }} />)}
           </div>
           {(() => { const sp = proyectos.find(x => x.id === sel); return sp ? (
             <div onClick={() => setSel(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,26,46,.55)', zIndex: 70, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '28px 16px', overflowY: 'auto' }}>
