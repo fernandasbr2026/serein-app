@@ -562,7 +562,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
 
 function TileProyecto({ p, facturasProy = [], onOpen, onDragStart, onDropOn }) {
   const venta = ventaDe(p, facturasProy), fact = facturadoDe(p, facturasProy)
-  const activa = (p.avance || 0) < 100
+  const activa = !p.cerrado
   return (
     <div onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); onDropOn() }} onClick={onOpen}
       style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: '3px solid ' + C.azul, padding: 14, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
