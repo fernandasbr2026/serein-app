@@ -26,11 +26,21 @@ const nombreCC = (p, id) => (p.ccNombres && p.ccNombres[id]) || nombreDefault(id
 const facEdpDe = (p, numero) => (p.facEdp && p.facEdp[numero]) || {}
 const facEstado = (p, f) => (facEdpDe(p, f.numero).estado) || f.estado || ''
 const facturadoDe = (p, fp) => { const fs = facturasDeOT(fp, p); return fs.length ? fs.reduce((a, f) => a + (f.neto || 0), 0) : (p.edps || []).reduce((a, e) => a + (e.venta || 0), 0) }
-const cobradoDe = (p, fp) => { const fs = facturasDeOT(fp, p); return fs.length ? fs.filter(f => String(facEstado(p, f)).toLowerCase().startsWith('pag')).reduce((a, f) => a + (f.neto || 0), 0) : (p.edps || []).filter(e => e.estado === 'Pagado').reduce((a, e) => a + (e.venta || 0), 0) }
+const cobradoDe = (p, fp) => { const fs = facturasDeOT(fp, p); return fs.length ? fs.filter(f => { const e = String(facEstado(p, f)).toLowerCase(); return e.startsWith('pag') || e.includes('factor') }).reduce((a, f) => a + (f.neto || 0), 0) : (p.edps || []).filter(e => e.estado === 'Pagado' || e.estado === 'Factoring').reduce((a, e) => a + (e.venta || 0), 0) }
 const comprasDe = p => (p.compras || []).reduce((a, c) => a + c.monto, 0)
 const ventaDe = (p, fp) => (p.venta_cotizada != null && p.venta_cotizada > 0) ? p.venta_cotizada : facturadoDe(p, fp)
 const porFacturarDe = (p, fp) => Math.max(0, ventaDe(p, fp) - facturadoDe(p, fp))
-const perdidaFactDe = p => (p.edps || []).reduce((a, e) => a + (e.perdidaFact || 0), 0)
+const perdidaFacturaOT = (p, f, params) => {
+  const ov = facEdpDe(p, f.numero)
+  const est = ov.estado || f.estado || ''
+  if (!/factor/i.test(est)) return 0
+  const facs = (params && params.factoring) || []
+  const fc = facs.find(x => x.id === ov.factoringId) || facs.find(x => (f.banco || '').toLowerCase().includes((x.nombre || '').toLowerCase().split(' ')[0])) || facs[0]
+  if (!fc) return 0
+  const base = f.monto || Math.round((f.neto || 0) * 1.19)
+  return calcularPerdidaFactoring(base, ov.plazo || f.plazo || f.dias || 30, ov.diasMora || f.diasMora || 0, fc).total
+}
+const perdidaFactDe = (p, fp, params) => facturasDeOT(fp, p).reduce((a, f) => a + perdidaFacturaOT(p, f, params), 0)
 const CONDICIONES = [{ label: 'Contado', dias: 0 }, { label: '30 días', dias: 30 }, { label: '45 días', dias: 45 }, { label: '60 días', dias: 60 }, { label: '90 días', dias: 90 }]
 const consumoCC = (p, ccId) => (p.compras || []).filter(c => c.cc === ccId).reduce((a, c) => a + c.monto, 0)
 const topeCC = (p, ccId) => (p.cc && p.cc[ccId]) || 0
@@ -323,7 +333,7 @@ function AbonosOT({ p, facturasOT, onUpdate }) {
   )
 }
 
-function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasProy = [], enModal = false }) {
+function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasProy = [], ppmPct = 2, enModal = false }) {
   const facturasOT = facturasDeOT(facturasProy, p)
   const factNetoOT = facturasOT.reduce((a, f) => a + (f.neto || 0), 0)
   const remIvaVenta = Math.round(facturasOT.reduce((a, f) => a + ((f.monto || Math.round((f.neto || 0) * 1.19)) - (f.neto || 0)), 0))
@@ -339,9 +349,10 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
 
   const facturado = facturadoDe(p, facturasProy), cobrado = cobradoDe(p, facturasProy), pendiente = facturado - cobrado
   const venta = ventaDe(p, facturasProy), porFacturar = porFacturarDe(p, facturasProy)
-  const costoEst = costoEstDe(p), costoReal = comprasDe(p), perdidaFact = perdidaFactDe(p)
+  const costoEst = costoEstDe(p), costoReal = comprasDe(p), perdidaFact = perdidaFactDe(p, facturasProy, params)
   const utEst = venta - costoEst, pctUtEst = pct(utEst, venta)
-  const utReal = venta - costoReal - perdidaFact, pctUtReal = pct(utReal, venta)
+  const ppm = Math.round(facturado * (ppmPct / 100))
+  const utReal = venta - costoReal - perdidaFact - ppm, pctUtReal = pct(utReal, venta)
   const pctFact = pct(facturado, venta)
   const hayCompras = costoReal > 0 || perdidaFact > 0
 
@@ -387,7 +398,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
           <div style={{ fontSize: 12, marginTop: 4, color: C.gris }}>{clp(facturado)} de {clp(venta)}{porFacturar > 0 && <span style={{ color: C.ambar }}> · por facturar {clp(porFacturar)}</span>}</div>
           <div style={{ fontSize: 12, marginTop: 10, color: C.gris }}>
             Costo estimado (topes CC): <b>{clp(costoEst)}</b> → UT est. <b style={{ color: colorUT(pctUtEst) }}>{clp(utEst)} ({pctUtEst.toFixed(1)}%)</b><br />
-            Costo real (compras): <b>{clp(costoReal)}</b>{perdidaFact > 0 && <> + pérdida factoring <b style={{ color: C.rojo }}>{clp(perdidaFact)}</b></>} → UT real <b style={{ color: colorUT(pctUtReal) }}>{clp(utReal)} ({pctUtReal.toFixed(1)}%)</b>
+            Costo real (compras): <b>{clp(costoReal)}</b>{perdidaFact > 0 && <> + pérdida factoring <b style={{ color: C.rojo }}>{clp(perdidaFact)}</b></>}{ppm > 0 && <> + PPM <b style={{ color: C.teal }}>{clp(ppm)}</b></>} → UT real <b style={{ color: colorUT(pctUtReal) }}>{clp(utReal)} ({pctUtReal.toFixed(1)}%)</b>
           </div>
         </div>
         <div onClick={e => e.stopPropagation()}><BloqueCC p={p} onUpdate={onUpdate} /></div>
@@ -414,19 +425,35 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
               <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.teal, marginBottom: 6 }}>🧾 Facturas de esta OT · Estados de pago (EDP)</div>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                  <thead><tr style={{ borderBottom: `1px solid ${C.carbon}` }}>{['N° factura', 'Fecha', 'EDP', 'Neto', 'Total c/IVA', 'Estado pago', 'Fecha pago', 'Banco'].map(h => <th key={h} style={{ textAlign: (h === 'Neto' || h === 'Total c/IVA') ? 'right' : 'left', padding: '4px 6px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+                  <thead><tr style={{ borderBottom: `1px solid ${C.carbon}` }}>{['N° factura', 'Fecha', 'EDP', 'Neto', 'Total c/IVA', 'PPM ' + ppmPct + '%', 'Estado pago', 'Fecha pago', 'Banco'].map(h => <th key={h} style={{ textAlign: (h === 'Neto' || h === 'Total c/IVA' || h.indexOf('PPM') === 0) ? 'right' : 'left', padding: '4px 6px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
                   <tbody>
-                    {facturasOT.map(fx => { const ov = (p.facEdp || {})[fx.numero] || {}; const est = ov.estado || fx.estado || 'Pendiente'; return (
-                      <tr key={fx.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                    {facturasOT.map(fx => { const ov = (p.facEdp || {})[fx.numero] || {}; const est = ov.estado || fx.estado || 'Pendiente'; const esFact = /factor/i.test(est); const ppmF = Math.round((fx.neto || 0) * (ppmPct / 100)); const facs = (params && params.factoring) || []; const fcSel = facs.find(x => x.id === ov.factoringId) || facs.find(x => (fx.banco || '').toLowerCase().includes((x.nombre || '').toLowerCase().split(' ')[0])) || facs[0]; const baseF = fx.monto || Math.round((fx.neto || 0) * 1.19); const perdF = esFact && fcSel ? calcularPerdidaFactoring(baseF, ov.plazo != null ? ov.plazo : (fx.plazo || fx.dias || 30), ov.diasMora || fx.diasMora || 0, fcSel).total : 0; return (
+                      <React.Fragment key={fx.id}>
+                      <tr style={{ borderBottom: esFact ? 'none' : '1px solid #EEE9DF' }}>
                         <td style={{ padding: '4px 6px', fontWeight: 600 }}>{fx.numero}</td>
                         <td style={{ padding: '4px 6px', color: C.gris }}>{fx.fecha_emision || '—'}</td>
                         <td style={{ padding: '4px 6px' }}><input value={ov.edp || ''} onChange={ev => updFac(fx.numero, { edp: ev.target.value })} placeholder="EDP" style={{ ...inp, width: 90, padding: '4px 6px' }} /></td>
                         <td style={{ padding: '4px 6px', textAlign: 'right' }}>{clp(fx.neto)}</td>
-                        <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600 }}>{clp(fx.monto || Math.round((fx.neto || 0) * 1.19))}</td>
+                        <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600 }}>{clp(baseF)}</td>
+                        <td style={{ padding: '4px 6px', textAlign: 'right', color: C.teal }}>{clp(ppmF)}</td>
                         <td style={{ padding: '4px 6px' }}><select value={est} onChange={ev => updFac(fx.numero, { estado: ev.target.value })} style={{ border: 'none', background: est === 'Pagado' ? '#E7F2EA' : est === 'Factoring' ? '#F9E9DE' : '#F6E0DA', color: est === 'Pagado' ? C.verde : est === 'Factoring' ? C.ambar : '#B23A0E', padding: '3px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}><option>Pendiente</option><option>Pagado</option><option>Factoring</option></select></td>
                         <td style={{ padding: '4px 6px' }}><input type="date" value={ov.fechaPago && ov.fechaPago !== '—' ? ov.fechaPago : ''} onChange={ev => updFac(fx.numero, { fechaPago: ev.target.value || '' })} style={{ ...inp, width: 140, padding: '4px 6px' }} /></td>
                         <td style={{ padding: '4px 6px' }}><input list="serein-bancos" value={ov.banco || ''} onChange={ev => updFac(fx.numero, { banco: ev.target.value })} placeholder="Banco..." style={{ ...inp, width: 120, padding: '4px 6px' }} /></td>
                       </tr>
+                      {esFact && (
+                      <tr style={{ borderBottom: '1px solid #EEE9DF', background: '#FBF3EE' }}>
+                        <td colSpan={9} style={{ padding: '2px 8px 8px' }}>
+                          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', fontSize: 11.5, color: '#8C4519' }}>
+                            <span style={{ fontWeight: 700 }}>Factoring:</span>
+                            <select value={ov.factoringId || (fcSel ? fcSel.id : '')} onChange={ev => updFac(fx.numero, { factoringId: ev.target.value })} style={{ ...inp, padding: '3px 6px' }}>{facs.length === 0 && <option value="">(define en Parámetros)</option>}{facs.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}</select>
+                            <span>Plazo <input value={ov.plazo != null ? ov.plazo : (fx.plazo || 30)} onChange={ev => updFac(fx.numero, { plazo: num(ev.target.value) })} style={{ ...inp, width: 54, padding: '3px 6px', textAlign: 'right' }} /> días</span>
+                            <span>Mora <input value={ov.diasMora || ''} onChange={ev => updFac(fx.numero, { diasMora: num(ev.target.value) })} placeholder="0" style={{ ...inp, width: 54, padding: '3px 6px', textAlign: 'right' }} /> días</span>
+                            <span>Pérdida factoring: <b style={{ color: C.rojo }}>{clp(perdF)}</b></span>
+                          </div>
+                        </td>
+                      </tr>
+                      )}
+                      </React.Fragment>
                     )})}
                   </tbody>
                 </table>
@@ -473,6 +500,8 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
             <span>Por facturar: <b style={{ color: porFacturar > 0 ? C.ambar : C.verde }}>{clp(porFacturar)}</b></span>
             <span>Costo est.: <b>{clp(costoEst)}</b></span>
             <span>Costo real: <b>{clp(costoReal)}</b></span>
+            <span>PPM ({ppmPct}%): <b style={{ color: C.teal }}>{clp(ppm)}</b></span>
+            <span>Neta real (fact − PPM): <b>{clp(facturado - ppm)}</b></span>
             <span>Pérdida factoring: <b style={{ color: perdidaFact > 0 ? C.rojo : C.gris }}>{clp(perdidaFact)}</b></span>
             <span>UT est.: <b style={{ color: colorUT(pctUtEst) }}>{clp(utEst)} ({pctUtEst.toFixed(1)}%)</b></span>
             <span>UT real: <b style={{ color: colorUT(pctUtReal) }}>{clp(utReal)} ({pctUtReal.toFixed(1)}%)</b></span>
@@ -547,7 +576,7 @@ function FormProyecto({ onAdd, onCancel }) {
 }
 
 // ---------- Vista Consolidado (como la primera hoja) ----------
-function Consolidado({ proyectos, facturasProy = [] }) {
+function Consolidado({ proyectos, facturasProy = [], params = { factoring: [] } }) {
   const periodos = useMemo(() => {
     const g = {}; proyectos.forEach(p => { (g[p.periodo || '—'] = g[p.periodo || '—'] || []).push(p) }); return Object.entries(g)
   }, [proyectos])
@@ -565,7 +594,7 @@ function Consolidado({ proyectos, facturasProy = [] }) {
           {periodos.map(([per, ps]) => {
             const sub = { venta: 0, fact: 0, porFac: 0, costoEst: 0, costoReal: 0, perdFact: 0 }
             const filas = ps.map(p => {
-              const venta = ventaDe(p, facturasProy), fact = facturadoDe(p, facturasProy), porFac = porFacturarDe(p, facturasProy), costoEst = costoEstDe(p), costoReal = comprasDe(p), perdFact = perdidaFactDe(p)
+              const venta = ventaDe(p, facturasProy), fact = facturadoDe(p, facturasProy), porFac = porFacturarDe(p, facturasProy), costoEst = costoEstDe(p), costoReal = comprasDe(p), perdFact = perdidaFactDe(p, facturasProy, params)
               sub.venta += venta; sub.fact += fact; sub.porFac += porFac; sub.costoEst += costoEst; sub.costoReal += costoReal; sub.perdFact += perdFact
               const ut = venta - costoEst, p2 = pct(ut, venta)
               return (
@@ -674,7 +703,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
       ) : (vista === 'comprasSII' && verCotizadorProy) ? (
         <ProyComprasLibro proyectos={proyectos} setProyectos={setProyectos} />
       ) : vista === 'consolidado' ? (
-        <Consolidado proyectos={proyectos} facturasProy={facturasProy} />
+        <Consolidado proyectos={proyectos} facturasProy={facturasProy} params={params} />
       ) : vista === 'facturas' ? (
         <FacturasModule area="Proyectos" facturas={facturas} setFacturas={setFacturas} params={params} comisionPct={comisionPct} setComisionPct={setComisionPct} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={clientesSugeridos} />
       ) : (vista === 'parametros' && verCotizadorProy) ? (
@@ -692,7 +721,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
                   <button onClick={() => setSel(null)} style={{ background: 'none', border: '1px solid #CBD2D6', cursor: 'pointer', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><X size={15} /> Cerrar</button>
                 </div>
                 <div style={{ padding: 12 }}>
-                  <TarjetaProyecto p={sp} onUpdate={actualizar} onDelete={id => { eliminar(id); setSel(null) }} onAddCompra={agregarCompra} params={params} facturasProy={facturasProy} enModal />
+                  <TarjetaProyecto p={sp} onUpdate={actualizar} onDelete={id => { eliminar(id); setSel(null) }} onAddCompra={agregarCompra} params={params} facturasProy={facturasProy} ppmPct={ppmPct} enModal />
                 </div>
               </div>
             </div>
