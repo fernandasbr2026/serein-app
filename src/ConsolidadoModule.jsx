@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from 'react'
 import { calcularResumenFin } from './FinanzasModule.jsx'
 import { supabase } from './supabase.js'
 import { AlertTriangle, TrendingUp, TrendingDown, Wallet, Landmark, Receipt, Sparkles, CheckCircle2, ShieldAlert, Info } from 'lucide-react'
+import * as XLSX from 'xlsx'
 
 const C = { navy: '#061A40', carbon: '#0F1A2E', orange: '#FF6B00', azul: '#25608E', verde: '#12805C', rojo: '#D64545', ambar: '#C9860B', teal: '#0B7285', gray: '#8A929E', line: '#E6E8EE', soft: '#F5F6F8' }
 const SEV = { ok: C.verde, warn: C.ambar, crit: C.rojo }
@@ -118,6 +119,63 @@ function useDatos({ cc, facturas, ots, proyectos, cotizaciones, clientes, params
       cobros7, pagos7, caja, saldo7, saldo30, funnel, topVenta, topDeuda, topAtraso, tasaProm, proximos
     }
   }, [cc, facturas, ots, proyectos, cotizaciones, clientes, params, fin, pp, ppmPct])
+}
+
+// ============ VENTAS ANUALES + INFORME EXCEL POR PERIODO ============
+function VentasInformePanel({ facturas }) {
+  const AR = ['Santa Rosa', 'Istria', 'Proyectos']
+  const facs = AR.flatMap(a => ((facturas || {})[a] || []).map(f => ({ ...f, area: a })))
+  const fechaDe = f => ('' + (f.fecha_emision || f.fecha || '')).slice(0, 10)
+  const netoDe = f => num(f.neto) || (num(f.monto) ? Math.round(num(f.monto) / 1.19) : 0)
+  const anio = new Date().getFullYear()
+  const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+  const porMes = meses.map((_, m) => facs.filter(f => { const dd = fechaDe(f); return dd.slice(0, 4) === String(anio) && (+dd.slice(5, 7)) === m + 1 }).reduce((a, f) => a + netoDe(f), 0))
+  const ventasAnio = porMes.reduce((a, v) => a + v, 0)
+  const [tipo, setTipo] = useState('mes')
+  const [ref, setRef] = useState(hoyStr())
+  const enRango = fechaStr => {
+    if (tipo === 'todo') return true
+    if (!fechaStr) return false
+    const dd = new Date(fechaStr + 'T00:00:00'), r = new Date(ref + 'T00:00:00')
+    if (isNaN(dd.getTime())) return false
+    if (tipo === 'anio') return dd.getFullYear() === r.getFullYear()
+    if (tipo === 'mes') return dd.getFullYear() === r.getFullYear() && dd.getMonth() === r.getMonth()
+    if (tipo === 'semestre') { const h = m => m < 6 ? 0 : 1; return dd.getFullYear() === r.getFullYear() && h(dd.getMonth()) === h(r.getMonth()) }
+    if (tipo === 'semana') { const ini = new Date(r); ini.setDate(ini.getDate() - ((ini.getDay() + 6) % 7)); const fin = new Date(ini); fin.setDate(ini.getDate() + 7); return dd >= ini && dd < fin }
+    return true
+  }
+  const exportar = () => {
+    const rango = facs.filter(f => enRango(fechaDe(f)))
+    const rows = rango.map(f => ({ Area: f.area, Factura: f.numero || f.folio || '', Cliente: f.cliente || '', Fecha: fechaDe(f), Neto: netoDe(f), Total: num(f.monto) || Math.round(netoDe(f) * 1.19), Estado: f.estado || '' }))
+    const total = rows.reduce((a, r) => a + (r.Neto || 0), 0)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.length ? rows : [{ Area: 'Sin ventas en el periodo' }]), 'Ventas')
+    const porArea = AR.map(a => ({ Area: a, Neto: rango.filter(f => f.area === a).reduce((s, f) => s + netoDe(f), 0) }))
+    porArea.push({ Area: 'TOTAL', Neto: total })
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(porArea), 'Resumen areas')
+    const mens = meses.map((mm, m) => ({ Mes: mm + ' ' + anio, Neto: porMes[m] }))
+    mens.push({ Mes: 'TOTAL ' + anio, Neto: ventasAnio })
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(mens), 'Ventas por mes')
+    XLSX.writeFile(wb, 'Consolidado_General_Ventas_' + tipo + '_' + ref + '.xlsx')
+  }
+  const ctrl = { padding: '6px 8px', border: '1px solid ' + C.line, borderRadius: 6, fontSize: 12, boxSizing: 'border-box' }
+  return (<Card titulo="Ventas anuales · Informe Excel" icon={Receipt} borde={C.teal}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+      <div style={{ fontSize: 13 }}>Ventas del año {anio} (neto): <b style={{ color: C.azul, fontSize: 16 }}>{clp(ventasAnio)}</b></div>
+      <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: C.gray }}>Informe:</span>
+        <select value={tipo} onChange={e => setTipo(e.target.value)} style={ctrl}><option value="semana">Semanal</option><option value="mes">Mensual</option><option value="semestre">Semestral</option><option value="anio">Anual</option><option value="todo">Todo</option></select>
+        <input type="date" value={ref} onChange={e => setRef(e.target.value)} style={ctrl} />
+        <button onClick={exportar} style={{ background: C.verde, color: '#fff', border: 'none', borderRadius: 6, padding: '7px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Descargar Excel</button>
+      </div>
+    </div>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(92px, 1fr))', gap: 6 }}>
+      {meses.map((mm, m) => (<div key={m} style={{ background: C.soft, borderRadius: 6, padding: '6px 8px', textAlign: 'center' }}>
+        <div style={{ fontSize: 10.5, color: C.gray, textTransform: 'uppercase' }}>{mm}</div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: porMes[m] > 0 ? C.carbon : C.gray }}>{porMes[m] > 0 ? clp(porMes[m]) : '—'}</div>
+      </div>))}
+    </div>
+  </Card>)
 }
 
 // ============ PANELES ============
@@ -336,6 +394,7 @@ export default function ConsolidadoModule(props) {
   const dosCol = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16 }
   return (<div>
     <ExecutiveSummaryCards cc={cc} d={d} />
+    <VentasInformePanel facturas={props.facturas} />
     <AISereinPanel cc={cc} d={d} />
     <CriticalAlertsPanel cc={cc} d={d} />
     <CashFlowPanel cc={cc} d={d} />
