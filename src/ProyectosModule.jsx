@@ -635,6 +635,68 @@ function Consolidado({ proyectos, facturasProy = [], params = { factoring: [] } 
   )
 }
 
+function ProyCotizacionesList({ setProyectos }) {
+  const LSKEY = 'serein_proyCotizaciones'
+  const cargar = () => { try { const s = localStorage.getItem(LSKEY); const o = s ? JSON.parse(s) : []; return Array.isArray(o) ? o : [] } catch (e) { return [] } }
+  const [cots, setCots] = useState(cargar)
+  const persist = a => { setCots(a); try { localStorage.setItem(LSKEY, JSON.stringify(a)) } catch (e) {} }
+  const ESTADOS = ['Alta probabilidad de cierre', 'Mediana probabilidad de cierre', 'Rechazada', 'Aprobada']
+  const colorEstado = e => ({ 'Aprobada': ['#E7F2EA', C.verde], 'Rechazada': ['#F6E0DA', C.rojo], 'Alta probabilidad de cierre': ['#E7EEF2', C.azul], 'Mediana probabilidad de cierre': ['#F9E9DE', '#8C4519'] }[e] || ['#EEE', C.gris])
+  const normEstado = e => { const t = String(e || '').toLowerCase(); if (t.includes('aprob')) return 'Aprobada'; if (t.includes('rechaz')) return 'Rechazada'; if (t.includes('median') || t.includes('baja')) return 'Mediana probabilidad de cierre'; if (t.includes('alta')) return 'Alta probabilidad de cierre'; return 'Alta probabilidad de cierre' }
+  const crearOT = c => {
+    const q = 'T' + (Math.floor(new Date().getMonth() / 3) + 1)
+    const nueva = {
+      id: 'otp' + Date.now(), ot: c.numero, oc: c.numero, periodo: q,
+      nombre: (c.nombreProyecto ? c.nombreProyecto + ' · ' : '') + c.cliente, cliente: c.cliente, m2: null,
+      venta_cotizada: c.ventaNeta, avance: 0, cc: {}, ccNombres: {}, edps: [], compras: [],
+      origen: 'cotizador-proyecto',
+      snapshotProy: { centros: c.centros, costoNeto: c.costoNeto, costoBruto: c.costoBruto, ventaNeta: c.ventaNeta, ventaBruta: c.ventaBruta, utilidad: c.utilidad, margenPct: c.margenPct, modoMargen: c.modoMargen, fecha: new Date().toISOString().slice(0, 10) },
+    }
+    ;(c.centros || []).forEach((cc, i) => { const key = (cc.codigo || '').trim() || ('C' + (i + 1)); nueva.cc[key] = cc.neto; nueva.ccNombres[key] = cc.nombre || key })
+    setProyectos(prev => [nueva, ...(prev || [])])
+    return nueva.id
+  }
+  const cambiarEstado = (c, nuevo) => {
+    if (nuevo === 'Aprobada' && !c.otId) {
+      if (!window.confirm('¿Aprobar ' + c.numero + ' y generar la ficha de OT de proyecto?')) return
+      const otId = crearOT(c)
+      persist(cots.map(x => x.id === c.id ? { ...x, estado: 'Aprobada', otId, snapshot: x.snapshot || null } : x))
+    } else {
+      persist(cots.map(x => x.id === c.id ? { ...x, estado: nuevo } : x))
+    }
+  }
+  const borrar = id => { if (!window.confirm('¿Eliminar esta cotización de proyecto? (no elimina la OT si ya se creó)')) return; persist(cots.filter(x => x.id !== id)) }
+  return (
+    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 12, overflowX: 'auto' }}>
+      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Cotizaciones de proyecto</div>
+      {cots.length === 0 ? (
+        <div style={{ fontSize: 13, color: C.gris }}>Aún no hay cotizaciones. Se agregan solas al guardar un borrador en la pestaña "Cotización Proyecto".</div>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['N°', 'Cliente', 'Proyecto', 'Fecha', 'Costo neto', 'Venta neta', 'Margen s/venta', 'Estado', 'OT', ''].map((h, i) => <th key={i} style={{ textAlign: ['Costo neto', 'Venta neta', 'Margen s/venta'].includes(h) ? 'right' : 'left', padding: '6px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {cots.map(c => { const est = normEstado(c.estado); const col = colorEstado(est); return (
+              <tr key={c.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                <td style={{ padding: '6px 8px', fontWeight: 600 }}>{c.numero}</td>
+                <td style={{ padding: '6px 8px' }}>{c.cliente}</td>
+                <td style={{ padding: '6px 8px', color: C.gris }}>{c.nombreProyecto || '—'}</td>
+                <td style={{ padding: '6px 8px', color: C.gris, whiteSpace: 'nowrap' }}>{c.fecha || '—'}</td>
+                <td style={{ padding: '6px 8px', textAlign: 'right' }}>{clp(c.costoNeto)}</td>
+                <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{clp(c.ventaNeta)}</td>
+                <td style={{ padding: '6px 8px', textAlign: 'right', color: C.verde }}>{(c.margenSobreVenta != null ? c.margenSobreVenta : 0)}%</td>
+                <td style={{ padding: '6px 8px' }}><select value={est} onChange={e => cambiarEstado(c, e.target.value)} style={{ border: 'none', background: col[0], color: col[1], padding: '4px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{ESTADOS.map(sX => <option key={sX} value={sX}>{sX}</option>)}</select></td>
+                <td style={{ padding: '6px 8px', fontSize: 11.5, color: c.otId ? C.teal : C.gris, whiteSpace: 'nowrap' }}>{c.otId ? 'OT creada' : '—'}</td>
+                <td style={{ padding: '6px 4px', textAlign: 'right' }}><button onClick={() => borrar(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button></td>
+              </tr>
+            )})}
+          </tbody>
+        </table>
+      )}
+      <div style={{ fontSize: 11.5, color: '#9AA0A6', marginTop: 8 }}>Cambia el estado según la probabilidad de cierre. Al marcar <b>Aprobada</b> se genera la ficha de OT (pestaña Tarjetas) con el presupuesto por centro de costo.</div>
+    </div>
+  )
+}
+
 export default function ProyectosModule({ proyectos: proyExt, setProyectos: setProyExt, params = { factoring: [] }, facturas = {}, setFacturas = () => {}, comisionPct = 2, setComisionPct = () => {}, ppmPct = 2, setPpmPct = () => {}, clientesSugeridos = [] }) {
   const [proyInt, setProyInt] = useState(PROYECTOS)
   const proyectos = proyExt ?? proyInt
@@ -688,7 +750,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-        {[['tarjetas', 'Tarjetas', LayoutGrid], ...(verCotizadorProy ? [['cotizarProy', 'Cotización Proyecto', Receipt], ['comprasSII', 'Compras SII', ShoppingCart]] : []), ['consolidado', 'Consolidado', Table2], ['facturas', 'Facturas', Receipt], ...(verCotizadorProy ? [['parametros', 'Parámetros Proyectos', Target]] : [])].map(([id, lbl, Icon]) => (
+        {[['tarjetas', 'Tarjetas', LayoutGrid], ...(verCotizadorProy ? [['cotizarProy', 'Cotización Proyecto', Receipt], ['cotizacionesProy', 'Cotizaciones', Receipt], ['comprasSII', 'Compras SII', ShoppingCart]] : []), ['consolidado', 'Consolidado', Table2], ['facturas', 'Facturas', Receipt], ...(verCotizadorProy ? [['parametros', 'Parámetros Proyectos', Target]] : [])].map(([id, lbl, Icon]) => (
           <button key={id} onClick={() => setVista(id)} style={{ background: vista === id ? C.carbon : '#fff', color: vista === id ? '#fff' : C.carbon, border: '1px solid #CBD2D6', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Icon size={14} />{lbl}</button>
         ))}
         {!creando && vista === 'tarjetas' && (
@@ -700,6 +762,8 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
 
       {(vista === 'cotizarProy' && verCotizadorProy) ? (
         <ProyCotizador clientes={clientesSugeridos} proyectos={proyectos} setProyectos={setProyectos} />
+      ) : (vista === 'cotizacionesProy' && verCotizadorProy) ? (
+        <ProyCotizacionesList setProyectos={setProyectos} />
       ) : (vista === 'comprasSII' && verCotizadorProy) ? (
         <ProyComprasLibro proyectos={proyectos} setProyectos={setProyectos} />
       ) : vista === 'consolidado' ? (
