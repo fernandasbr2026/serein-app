@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { supabase } from './supabase.js'
+import { CC_DEFS } from './proyectos-data.js'
 
 // ============================================================
 // Compras SII -> Centro de costo (Proyectos)
@@ -7,12 +8,16 @@ import { supabase } from './supabase.js'
 // a un proyecto-OT + centro de costo. Se agregan a p.compras (con
 // origen 'libro' y libroId para evitar duplicados), asi el consumo por
 // CC del proyecto las toma igual que las compras manuales.
+// La lista de CC incluye SIEMPRE los CC por defecto (A1-A6) + los del
+// proyecto (topes guardados y los usados en compras), para que el
+// selector nunca quede bloqueado.
 // ============================================================
 
 const C = { azul: '#061A40', teal: '#0B7285', ambar: '#FF6B00', rojo: '#D64545', verde: '#12805C', carbon: '#0F1A2E', gris: '#8A929E' }
 const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
 const sel = { padding: '5px 7px', border: '1px solid #CBD2D6', fontSize: 12.5, background: '#fff' }
 const clp = n => '$' + Math.round(+n || 0).toLocaleString('es-CL')
+const nombreDefCC = code => { const c = (CC_DEFS || []).find(x => x.id === code); return (c && c.nombre) || code }
 
 export default function ProyComprasLibro({ proyectos = [], setProyectos = null }) {
   const [rows, setRows] = useState([])
@@ -40,8 +45,11 @@ export default function ProyComprasLibro({ proyectos = [], setProyectos = null }
   }, [])
 
   const proy = proyectos.find(p => p.id === otSel) || null
-  const ccList = proy ? [...new Set([...Object.keys(proy.cc || {}), ...(proy.compras || []).map(c => c.cc)])].filter(Boolean) : []
-  const nombreCC = (p, code) => (p && p.ccNombres && p.ccNombres[code]) || code
+  // CC por defecto + los del proyecto (topes + usados en compras)
+  const ccList = proy
+    ? [...new Set([...(CC_DEFS || []).map(c => c.id), ...Object.keys(proy.cc || {}), ...(proy.compras || []).map(c => c.cc)])].filter(Boolean)
+    : []
+  const nombreCC = (p, code) => (p && p.ccNombres && p.ccNombres[code]) || nombreDefCC(code)
   const impSet = useMemo(() => { const s = new Set(); proyectos.forEach(p => (p.compras || []).forEach(c => { if (c.libroId != null) s.add(String(c.libroId)) })); return s }, [proyectos])
 
   const filtradas = useMemo(() => (rows || []).filter(r => {
@@ -73,19 +81,20 @@ export default function ProyComprasLibro({ proyectos = [], setProyectos = null }
       <div style={card}>
         <div style={h}>Compras del Libro (SII) a centro de costo</div>
         <div style={{ fontSize: 12.5, color: C.gris, marginBottom: 12, lineHeight: 1.4 }}>
-          Elige el proyecto/OT destino y luego imputa las facturas de compra (SII) a un centro de costo. Se descuentan del presupuesto de ese CC igual que las compras manuales. Tambien puedes seguir cargando compras a mano desde la ficha de la OT (pestana Tarjetas).
+          Elige el proyecto/OT destino y luego imputa las facturas de compra (SII) a un centro de costo de esa OT. Se descuentan del presupuesto de ese CC igual que las compras manuales. Tambien puedes seguir cargando compras a mano desde la ficha de la OT (pestana Tarjetas).
         </div>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <label style={{ fontSize: 11, color: C.gris, display: 'flex', flexDirection: 'column', gap: 3 }}>Proyecto / OT destino
-            <select value={otSel} onChange={e => setOtSel(e.target.value)} style={{ ...inp, minWidth: 260 }}>
-              <option value="">- elige el proyecto -</option>
-              {proyectos.map(p => <option key={p.id} value={p.id}>{(p.ot ? p.ot + ' · ' : '') + (p.nombre || p.cliente || 'Proyecto')}</option>)}
+            <select value={otSel} onChange={e => { setOtSel(e.target.value); setCcSel({}) }} style={{ ...inp, minWidth: 260 }}>
+              <option value="">- elige el proyecto / OT -</option>
+              {proyectos.map(p => <option key={p.id} value={p.id}>{(p.ot ? 'OT ' + p.ot + ' · ' : '') + (p.nombre || p.cliente || 'Proyecto')}</option>)}
             </select>
           </label>
           {proy && (
-            <div style={{ fontSize: 12, color: C.gris }}>Centros de costo del proyecto: <b>{ccList.length ? ccList.map(cc => cc + ' ' + nombreCC(proy, cc)).join(' · ') : 'ninguno (agrega presupuesto por CC en la ficha)'}</b></div>
+            <div style={{ fontSize: 12, color: C.gris, maxWidth: 620 }}>Centros de costo de esta OT: <b>{ccList.map(cc => cc + ' ' + nombreCC(proy, cc)).join(' · ')}</b></div>
           )}
         </div>
+        {!proy && <div style={{ fontSize: 12, color: C.ambar, background: '#F9E9DE', padding: '6px 10px', marginTop: 10 }}>Elige primero la OT para poder imputar los centros de costo.</div>}
       </div>
 
       <div style={card}>
@@ -116,8 +125,8 @@ export default function ProyComprasLibro({ proyectos = [], setProyectos = null }
                             <td style={{ padding: '6px 8px', color: C.gris }}>{r.estado_pago || '-'}</td>
                             <td style={{ padding: '6px 8px' }}>
                               {imp ? <span style={{ color: C.teal, fontSize: 12, fontWeight: 600 }}>Ya imputada</span> : (
-                                <select value={ccSel[r.id] || ''} onChange={e => setCcSel({ ...ccSel, [r.id]: e.target.value })} style={{ ...sel, minWidth: 150 }} disabled={!proy || ccList.length === 0}>
-                                  <option value="">- CC -</option>
+                                <select value={ccSel[r.id] || ''} onChange={e => setCcSel({ ...ccSel, [r.id]: e.target.value })} style={{ ...sel, minWidth: 190 }} disabled={!proy}>
+                                  <option value="">{proy ? '- elige centro de costo -' : '- elige la OT primero -'}</option>
                                   {ccList.map(cc => <option key={cc} value={cc}>{cc} · {nombreCC(proy, cc)}</option>)}
                                 </select>
                               )}
