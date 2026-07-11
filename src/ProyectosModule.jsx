@@ -128,7 +128,7 @@ function FormCompra({ p, onAdd, onCancel }) {
         <input style={{ ...inp, width: 100 }} placeholder="N° doc / folio" value={f.folio} onChange={e => setF({ ...f, folio: e.target.value })} />
         <input style={{ ...inp, width: 110 }} placeholder="RUT proveedor" value={f.rut} onChange={e => setF({ ...f, rut: e.target.value })} />
         <select style={{ ...inp }} value={f.cc} onChange={e => setF({ ...f, cc: e.target.value })}>
-          {CC_DEFS.map(cc => <option key={cc.id} value={cc.id}>{cc.id} · {nombreCC(p, cc.id)}</option>)}
+          {ccCodigos(p).map(id => <option key={id} value={id}>{id} · {nombreCC(p, id)}</option>)}
         </select>
         <input style={{ ...inp, width: 130 }} placeholder="Detalle (opcional)" value={f.detalle} onChange={e => setF({ ...f, detalle: e.target.value })} />
         <input style={{ ...inp, width: 120 }} type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} />
@@ -146,20 +146,26 @@ function FormCompra({ p, onAdd, onCancel }) {
 // ---------- Bloque de centros de costo (nombre + tope editables) ----------
 function BloqueCC({ p, onUpdate }) {
   const [editando, setEditando] = useState(false)
-  const [tope, setTope] = useState({})
-  const [nomb, setNomb] = useState({})
-  const [iva, setIva] = useState({})
+  const [filas, setFilas] = useState([])
   const activos = ccActivos(p)
 
   function abrirEdicion(e) {
     e.stopPropagation()
-    const t = {}, n = {}, iv = {}
-    CC_DEFS.forEach(cc => { t[cc.id] = (p.cc && p.cc[cc.id]) || ''; n[cc.id] = nombreCC(p, cc.id); iv[cc.id] = (p.ccIva && p.ccIva[cc.id]) || 'con' })
-    setTope(t); setNomb(n); setIva(iv); setEditando(true)
+    const ids = ccCodigos(p)
+    setFilas(ids.map(id => ({ codigo: id, nombre: nombreCC(p, id), tope: (p.cc && p.cc[id]) || '', iva: (p.ccIva && p.ccIva[id]) || 'con', fijo: true })))
+    setEditando(true)
   }
+  const setFila = (i, k, v) => setFilas(prev => prev.map((f, j) => j === i ? { ...f, [k]: v } : f))
+  const addFila = () => setFilas(prev => [...prev, { codigo: '', nombre: '', tope: '', iva: 'con', fijo: false }])
+  const delFila = i => setFilas(prev => prev.filter((_, j) => j !== i))
   function guardar() {
     const cc = {}, ccNombres = {}, ccIva = {}
-    CC_DEFS.forEach(c => { const v = num(tope[c.id]); if (v > 0) cc[c.id] = v; const nm = (nomb[c.id] || '').trim(); if (nm && nm !== nombreDefault(c.id)) ccNombres[c.id] = nm; if ((iva[c.id] || 'con') === 'exento') ccIva[c.id] = 'exento' })
+    filas.forEach(f => {
+      const cod = (f.codigo || '').trim().toUpperCase(); if (!cod) return
+      const v = num(f.tope); if (v > 0) cc[cod] = v
+      const nm = (f.nombre || '').trim(); if (nm) ccNombres[cod] = nm
+      if ((f.iva || 'con') === 'exento') ccIva[cod] = 'exento'
+    })
     onUpdate(p.id, { cc, ccNombres, ccIva }); setEditando(false)
   }
 
@@ -171,17 +177,21 @@ function BloqueCC({ p, onUpdate }) {
       </div>
       {editando ? (
         <div onClick={e => e.stopPropagation()} style={{ background: '#FAF7F3', padding: 10 }}>
-          <div style={{ fontSize: 11, color: C.gris, marginBottom: 6 }}>Puedes cambiar el nombre y el tope de cada centro de costo (varían según cliente/proyecto).</div>
-          {CC_DEFS.map(cc => (
-            <div key={cc.id} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-              <span style={{ fontSize: 12, fontWeight: 600, width: 24 }}>{cc.id}</span>
-              <input value={nomb[cc.id] ?? ''} onChange={e => setNomb({ ...nomb, [cc.id]: e.target.value })} placeholder={nombreDefault(cc.id)} style={{ ...inp, flex: 1 }} />
-              <input value={tope[cc.id] ?? ''} onChange={e => setTope({ ...tope, [cc.id]: e.target.value })} placeholder="Neto CLP" style={{ ...inp, width: 110, textAlign: 'right' }} />
-              <select value={iva[cc.id] || 'con'} onChange={e => setIva({ ...iva, [cc.id]: e.target.value })} style={{ ...inp, width: 92 }}><option value="con">Con IVA</option><option value="exento">Exento</option></select>
-              <span style={{ fontSize: 11, color: C.gris, width: 108, textAlign: 'right' }}>{num(tope[cc.id]) > 0 ? 'Total ' + clp(Math.round(num(tope[cc.id]) * ((iva[cc.id] || 'con') === 'exento' ? 1 : 1.19))) : ''}</span>
+          <div style={{ fontSize: 11, color: C.gris, marginBottom: 6 }}>Cambia el nombre, el neto y el IVA de cada centro de costo. Puedes agregar los que necesites (los nuevos llevan codigo editable).</div>
+          {filas.map((f, i) => (
+            <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              {f.fijo
+                ? <span style={{ fontSize: 12, fontWeight: 600, width: 34 }}>{f.codigo}</span>
+                : <input value={f.codigo} onChange={e => setFila(i, 'codigo', e.target.value)} placeholder="Cod." style={{ ...inp, width: 56 }} />}
+              <input value={f.nombre} onChange={e => setFila(i, 'nombre', e.target.value)} placeholder="Nombre del centro de costo" style={{ ...inp, flex: '1 1 150px', minWidth: 120 }} />
+              <input value={f.tope} onChange={e => setFila(i, 'tope', e.target.value)} placeholder="Neto CLP" style={{ ...inp, width: 110, textAlign: 'right' }} />
+              <select value={f.iva} onChange={e => setFila(i, 'iva', e.target.value)} style={{ ...inp, width: 92 }}><option value="con">Con IVA</option><option value="exento">Exento</option></select>
+              <span style={{ fontSize: 11, color: C.gris, width: 110, textAlign: 'right' }}>{num(f.tope) > 0 ? 'Total ' + clp(Math.round(num(f.tope) * ((f.iva || 'con') === 'exento' ? 1 : 1.19))) : ''}</span>
+              {!f.fijo && <button onClick={() => delFila(i)} title="Quitar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
             </div>
           ))}
-          <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+          <button onClick={addFila} style={{ background: 'none', border: '1px dashed #CBD2D6', padding: '6px 12px', cursor: 'pointer', fontSize: 12, color: C.gris, marginTop: 2, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Agregar centro de costo</button>
+          <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
             <button onClick={guardar} style={{ background: C.azul, color: '#fff', border: 'none', padding: '6px 14px', cursor: 'pointer', fontSize: 12 }}>Guardar CC</button>
             <button onClick={() => setEditando(false)} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}>Cancelar</button>
           </div>
@@ -189,7 +199,7 @@ function BloqueCC({ p, onUpdate }) {
       ) : activos.length === 0 ? (
         <div style={{ fontSize: 12, color: C.ambar, background: '#F9E9DE', padding: '6px 10px' }}>Sin presupuesto por CC — usa "Editar CC".</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
           {activos.map(cc => {
             const t = topeCC(p, cc.id), cons = consumoCC(p, cc.id)
             const pc = t > 0 ? (cons / t) * 100 : (cons > 0 ? 100 : 0)
@@ -209,7 +219,6 @@ function BloqueCC({ p, onUpdate }) {
     </div>
   )
 }
-
 function StatHeader({ label, valor, color }) {
   return (
     <div style={{ textAlign: 'right' }}>
@@ -419,7 +428,8 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
         </div>
       )}
 
-      <div style={{ padding: '0 18px 14px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
+      <div style={{ padding: '0 18px 14px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
         <div>
           <div style={{ fontSize: 12, color: C.gris, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 5 }}><Receipt size={13} /> Facturado vs venta cotizada</div>
           <Barra pct={pctFact} color={pctFact > 100 ? C.rojo : C.teal} />
@@ -429,7 +439,6 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
             Costo real (compras): <b>{clp(costoReal)}</b>{perdidaFact > 0 && <> + pérdida factoring <b style={{ color: C.rojo }}>{clp(perdidaFact)}</b></>}{ppm > 0 && <> + PPM <b style={{ color: C.teal }}>{clp(ppm)}</b></>} → UT real <b style={{ color: colorUT(pctUtReal) }}>{clp(utReal)} ({pctUtReal.toFixed(1)}%)</b>
           </div>
         </div>
-        <div onClick={e => e.stopPropagation()}><BloqueCC p={p} onUpdate={onUpdate} /></div>
         <div>
           <div style={{ fontSize: 12, color: C.gris, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 5 }}><Hammer size={13} /> Avance físico</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -442,6 +451,8 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
           <Barra pct={pct(cobrado, facturado)} color={C.verde} />
           <div style={{ fontSize: 12, marginTop: 4, color: C.gris }}>{clp(cobrado)} cobrado{pendiente > 0 && <span style={{ color: C.rojo }}> · {clp(pendiente)} por cobrar</span>}</div>
         </div>
+        </div>
+        <div onClick={e => e.stopPropagation()} style={{ marginTop: 16 }}><BloqueCC p={p} onUpdate={onUpdate} /></div>
       </div>
 
       {(abierto || enModal) && (
@@ -506,7 +517,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
                 <tbody>
                   {p.compras.map((c, i) => (
                     <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
-                      <td style={{ padding: '5px 8px' }}><select value={c.cc || CC_DEFS[0].id} onChange={ev => updCompra(i, { cc: ev.target.value })} style={{ ...inp, padding: '5px 7px' }}>{CC_DEFS.map(cc => <option key={cc.id} value={cc.id}>{cc.id} · {nombreCC(p, cc.id)}</option>)}</select></td>
+                      <td style={{ padding: '5px 8px' }}><select value={c.cc || CC_DEFS[0].id} onChange={ev => updCompra(i, { cc: ev.target.value })} style={{ ...inp, padding: '5px 7px' }}>{ccCodigos(p).map(id => <option key={id} value={id}>{id} · {nombreCC(p, id)}</option>)}</select></td>
                       <td style={{ padding: '5px 8px' }}><input value={c.proveedor} onChange={ev => updCompra(i, { proveedor: ev.target.value })} style={{ ...inp, width: 130, padding: '5px 7px' }} /></td>
                       <td style={{ padding: '5px 8px' }}><input value={c.folio || ''} onChange={ev => updCompra(i, { folio: ev.target.value })} placeholder="N° doc" style={{ ...inp, width: 90, padding: '5px 7px' }} /></td>
                       <td style={{ padding: '5px 8px' }}><input value={c.detalle || ''} onChange={ev => updCompra(i, { detalle: ev.target.value })} placeholder="Detalle" style={{ ...inp, width: 130, padding: '5px 7px' }} /></td>
