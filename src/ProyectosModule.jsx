@@ -809,6 +809,8 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
   const totCostoEst = proyectos.reduce((a, p) => a + costoEstDe(p), 0)
   const totCostoReal = proyectos.reduce((a, p) => a + comprasDe(p), 0)
   const totPerdidaFact = facturasProy.reduce((a, f) => a + perdidaFactoringFactura(f, params), 0)
+  const totAbonos = proyectos.reduce((a, p) => a + (p.abonos || []).reduce((s, x) => s + (x.monto || 0), 0), 0)
+  const cajaEsperada = totAbonos - totCostoReal
   const kpi = (label, valor, color) => (
     <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 14, flex: '1 1 140px' }}>
       <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{label}</div>
@@ -818,6 +820,24 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
 
   return (
     <div>
+      <div style={{ background: '#FFF4EC', border: '1px solid #FFD3B0', borderLeft: '6px solid ' + C.ambar, padding: '14px 18px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14 }}>
+        <div>
+          <div style={{ fontSize: 11, color: '#8C4519', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.4 }}>Debería tener en caja</div>
+          <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 30, fontWeight: 700, lineHeight: 1.15, color: cajaEsperada >= 0 ? C.ambar : C.rojo }}>{clp(cajaEsperada)}</div>
+          <div style={{ fontSize: 11.5, color: C.gris, marginTop: 2 }}>Cruce de pagos ingresados menos compras de todas las OT</div>
+        </div>
+        <div style={{ display: 'flex', gap: 26, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }}>Pagos ingresados</div>
+            <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: C.verde, whiteSpace: 'nowrap' }}>{clp(totAbonos)}</div>
+          </div>
+          <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, color: C.gris, alignSelf: 'flex-end' }}>−</div>
+          <div>
+            <div style={{ fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }}>Compras</div>
+            <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: C.rojo, whiteSpace: 'nowrap' }}>{clp(totCostoReal)}</div>
+          </div>
+        </div>
+      </div>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
         {kpi('Proyectos / OT', proyectos.length)}
         {kpi('Venta cotizada', clp(totVenta))}
