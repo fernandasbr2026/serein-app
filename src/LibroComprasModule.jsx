@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
+import * as XLSX from 'xlsx'
 import { supabase } from './supabase.js'
 import { pushState } from './sync.js'
+import { calcularPerdidaFactoring } from './ParametrosModule.jsx'
 
 const C = { navy: '#061A40', orange: '#FF6B00', gray: '#F5F7FA', border: '#D8DCE5', text: '#101828', green: '#16A34A', red: '#DC2626', mut: '#7A8288' }
 const clp = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-CL')
@@ -10,6 +12,9 @@ const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'O
 const AREAS = ['Santa Rosa', 'Istria', 'Proyectos']
 const ESTADOS_PAGO = ['Pendiente', 'Pagada', 'Credito', 'Factoring']
 const colorPago = e => e === 'Pagada' ? C.green : e === 'Factoring' ? C.orange : e === 'Credito' ? '#2563EB' : C.mut
+const DIAS_OPC = [30, 45, 60, 90]
+const LS_XLSX = 'serein_libroComprasXlsx'
+const norm = s => (s || '').toString().toLowerCase()
 
 export default function LibroComprasModule({ esGerencia = true, ots = [], factoringList = [], proyectos = [], setProyectos = null }) {
   const otNumProy = p => String(p.ot || '').trim()
@@ -40,6 +45,55 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
   const guardarAsig = (obj) => { setAsig(obj); try { localStorage.setItem('serein_comprasAreas', JSON.stringify(obj)); pushState() } catch (e) {} }
   const toggleArea = (id, a) => { const cur = asig[id] || []; const nx = cur.includes(a) ? cur.filter(x => x !== a) : [...cur, a]; guardarAsig({ ...asig, [id]: nx }) }
   const setGeneral = (id) => guardarAsig({ ...asig, [id]: ['Santa Rosa', 'Istria', 'Proyectos'] })
+  const fileRef = useRef(null)
+  const [extra, setExtra] = useState(() => { try { return JSON.parse(localStorage.getItem(LS_XLSX) || '[]') } catch (e) { return [] } })
+  const guardarExtra = arr => { setExtra(arr); try { localStorage.setItem(LS_XLSX, JSON.stringify(arr)); pushState() } catch (e) {} }
+
+  function importarExcel(file) {
+    const toInt = v => { const n = Math.round(Number(v)); if (!isNaN(n)) return n; const m = parseInt(String(v).replace(/\D/g, ''), 10); return isNaN(m) ? 0 : m }
+    const fechaDe = v => {
+      if (v == null || v === '') return ''
+      if (typeof v === 'number') { const d = new Date(Math.round((v - 25569) * 86400 * 1000)); return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10) }
+      const s = String(v); let m = s.match(/(\d{4})-(\d{2})-(\d{2})/); if (m) return m[0]
+      m = s.match(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/); if (m) return m[3] + '-' + String(m[2]).padStart(2, '0') + '-' + String(m[1]).padStart(2, '0')
+      return ''
+    }
+    const reader = new FileReader()
+    reader.onload = ev => {
+      try {
+        const wb = XLSX.read(ev.target.result, { type: 'array' })
+        const filas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, blankrows: false })
+        if (!filas.length) { window.alert('El archivo esta vacio.'); return }
+        let hi = 0
+        for (let i = 0; i < Math.min(filas.length, 12); i++) { const tt = (filas[i] || []).map(h => norm(h)).join('|'); if (tt.includes('folio') || tt.includes('proveedor') || tt.includes('neto')) { hi = i; break } }
+        const hdr = (filas[hi] || []).map(h => norm(h).trim())
+        const col = (...nn) => { for (const nm of nn) { const i = hdr.findIndex(h => h.includes(nm)); if (i >= 0) return i } return -1 }
+        const ci = { fecha: col('fecha'), folio: col('folio', 'documento', 'nro'), prov: col('proveedor', 'razon'), rut: col('rut'), tipo: col('tipo'), neto: col('neto', 'afecto'), iva: col('iva'), total: col('total', 'monto') }
+        const nuevas = []
+        for (let r = hi + 1; r < filas.length; r++) {
+          const row = filas[r]; if (!row) continue
+          const folio = String(row[ci.folio] ?? '').replace(/\.0$/, '').trim()
+          const prov = String(row[ci.prov] ?? '').trim()
+          if (!folio && !prov) continue
+          const neto = toInt(row[ci.neto])
+          const iva = ci.iva >= 0 ? toInt(row[ci.iva]) : Math.round(neto * 0.19)
+          const total = ci.total >= 0 && toInt(row[ci.total]) > 0 ? toInt(row[ci.total]) : neto + iva
+          nuevas.push({ id: 'x' + folio + '-' + (String(row[ci.rut] ?? '').trim() || r), origen: 'xlsx', emission_date: fechaDe(row[ci.fecha]), document_number: folio, provider_name: prov, provider_rut: String(row[ci.rut] ?? '').trim(), document_type: String(row[ci.tipo] ?? 'Factura').trim(), neto, iva, document_total: total, centro_costo: '', ot_id: '', cc_ot: '', estado_pago: 'Pendiente', factoring: '', dias: 30, dias_mora: 0, vencimiento: '' })
+        }
+        if (!nuevas.length) { window.alert('No se reconocieron filas. Revisa que el Excel tenga columnas Folio, Proveedor, Neto y Total.'); return }
+        const ids = new Set(nuevas.map(x => x.id))
+        guardarExtra([...nuevas, ...(extra || []).filter(x => !ids.has(x.id))])
+        window.alert('Se importaron ' + nuevas.length + ' documentos. Asignales OT y centro de costo para cargarlos en las fichas.')
+      } catch (err) { window.alert('No se pudo leer el Excel: ' + err) }
+    }
+    reader.readAsArrayBuffer(file)
+  }
+  const perdidaDe = r => {
+    if (r.estado_pago !== 'Factoring') return null
+    const f = (factoringList || []).find(x => x.nombre === r.factoring) || (factoringList || [])[0]
+    if (!f) return null
+    return calcularPerdidaFactoring(Math.round(Number(r.document_total) || 0), r.dias || 30, r.dias_mora || 0, f)
+  }
 
   const cargar = async () => {
     setLoading(true); setErrMsg('')
@@ -63,23 +117,29 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
     setSyncing(false)
   }
 
+  const todas = useMemo(() => {
+    const k = r => (r.document_number || '') + '|' + (r.provider_rut || '')
+    const vistos = new Set((rows || []).map(k))
+    return [...(rows || []), ...(extra || []).filter(r => !vistos.has(k(r)))]
+  }, [rows, extra])
   const meses = useMemo(() => {
-    const s = new Set((rows || []).map(r => (r.emission_date || '').slice(0, 7)).filter(Boolean))
+    const s = new Set(todas.map(r => (r.emission_date || '').slice(0, 7)).filter(Boolean))
     return [...s].sort().reverse()
-  }, [rows])
-  const tipos = useMemo(() => [...new Set((rows || []).map(r => r.document_type).filter(Boolean))].sort(), [rows])
+  }, [todas])
+  const tipos = useMemo(() => [...new Set(todas.map(r => r.document_type).filter(Boolean))].sort(), [todas])
 
-  const filtradas = useMemo(() => (rows || []).filter(r => {
+  const filtradas = useMemo(() => todas.filter(r => {
     if (mes && (r.emission_date || '').slice(0, 7) !== mes) return false
     if (tipo && r.document_type !== tipo) return false
     if (area && (r.centro_costo || '') !== area) return false
     if (q) { const t = (r.provider_name + ' ' + r.provider_rut + ' ' + r.document_number).toLowerCase(); if (!t.includes(q.toLowerCase())) return false }
     return true
-  }), [rows, mes, tipo, area, q])
+  }), [todas, mes, tipo, area, q])
 
   const tot = useMemo(() => filtradas.reduce((a, r) => ({ neto: a.neto + (+r.neto || 0), iva: a.iva + (+r.iva || 0), total: a.total + (+r.document_total || 0) }), { neto: 0, iva: 0, total: 0 }), [filtradas])
 
   const setCampo = async (id, campo, valor) => {
+    if ((extra || []).some(x => x.id === id)) { guardarExtra((extra || []).map(x => x.id === id ? { ...x, [campo]: valor } : x)); return }
     setRows(rs => rs.map(r => r.id === id ? { ...r, [campo]: valor } : r))
     try { await supabase.from('libro_compras').update({ [campo]: valor }).eq('id', id) } catch (e) { /* columna puede no existir aun */ }
   }
@@ -93,9 +153,13 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
           <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 700, fontSize: 20, textTransform: 'uppercase', color: C.navy }}>Libro de Compras</div>
           <div style={{ fontSize: 12, color: C.mut }}>Facturas de compra recibidas (SII) · sincronizado desde Defontana</div>
         </div>
-        <button onClick={sincronizar} disabled={syncing} style={{ background: C.navy, color: '#fff', border: 'none', padding: '9px 16px', borderRadius: 6, cursor: syncing ? 'wait' : 'pointer', fontWeight: 600, fontSize: 13 }}>
-          {syncing ? 'Sincronizando...' : 'Sincronizar con Defontana'}
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.xls,.csv" style={{ display: 'none' }} onChange={e => { const f = e.target.files[0]; if (f) importarExcel(f); e.target.value = '' }} />
+          <button onClick={() => fileRef.current && fileRef.current.click()} style={{ background: C.orange, color: '#fff', border: 'none', padding: '9px 16px', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Importar Excel</button>
+          <button onClick={sincronizar} disabled={syncing} style={{ background: C.navy, color: '#fff', border: 'none', padding: '9px 16px', borderRadius: 6, cursor: syncing ? 'wait' : 'pointer', fontWeight: 600, fontSize: 13 }}>
+            {syncing ? 'Sincronizando...' : 'Sincronizar con Defontana'}
+          </button>
+        </div>
       </div>
 
       {syncMsg ? <div style={{ background: syncMsg.startsWith('Error') ? '#FDECEC' : '#EAF7EE', border: '1px solid ' + (syncMsg.startsWith('Error') ? C.red : C.green), color: syncMsg.startsWith('Error') ? C.red : '#15803D', padding: '8px 12px', borderRadius: 6, fontSize: 12.5, marginBottom: 12 }}>{syncMsg}</div> : null}
@@ -178,7 +242,12 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
                           <option value="">- factoring -</option>
                           {factoringList.map(f => <option key={f.id} value={f.nombre}>{f.nombre}</option>)}
                         </select>
+                        <select style={{ ...sel }} value={r.dias || 30} onChange={e => setCampo(r.id, 'dias', parseInt(e.target.value, 10))}>
+                          {DIAS_OPC.map(d => <option key={d} value={d}>{d} dias</option>)}
+                        </select>
+                        <input placeholder="Mora" style={{ ...sel, width: 70 }} value={r.dias_mora || ''} onChange={e => setCampo(r.id, 'dias_mora', parseInt(String(e.target.value).replace(/\D/g, ''), 10) || 0)} />
                         <input type="date" title="Vencimiento factura" style={{ ...sel }} value={r.vencimiento || ''} onChange={e => setCampo(r.id, 'vencimiento', e.target.value)} />
+                        {perdidaDe(r) ? <span style={{ color: C.red, fontWeight: 700, fontSize: 11.5 }}>Descuento: {clp(perdidaDe(r).total)}</span> : null}
                       </div>
                     ) : null}
                   </td>
