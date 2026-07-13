@@ -13,6 +13,9 @@ import Paginador, { paginar } from './Paginador.jsx'
 const C = { azul: '#061A40', teal: '#0B7285', ambar: '#FF6B00', rojo: '#D64545', verde: '#12805C', carbon: '#0F1A2E', gris: '#8A929E' }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
+// Cantidad con decimales: la coma es separador decimal; el punto se usa como miles
+const numDec = s => { let x = String(s == null ? '' : s).trim().replace(/[^\d.,-]/g, ''); if (x.includes(',')) x = x.replace(/\./g, '').replace(',', '.'); else if (/^-?\d{1,3}(\.\d{3})+$/.test(x)) x = x.replace(/\./g, ''); const v = parseFloat(x); return isNaN(v) ? 0 : v }
+const fmtCant = s => numDec(s).toLocaleString('es-CL', { maximumFractionDigits: 2 })
 const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
 const AREAS = ['Santa Rosa', 'Istria', 'Proyectos']
 const ESTADOS_COT = ['Alta probabilidad de cierre', 'Baja probabilidad de cierre', 'Aprobada', 'Rechazada', 'Otro']
@@ -24,7 +27,7 @@ function _empVal(k, map) { try { const p = JSON.parse(localStorage.getItem('sere
 export const EMPRESA = {}
 ;[['nombre', 'razonSocial'], ['rut', 'rut'], ['giro', 'giro'], ['direccion', 'direccion'], ['telefono', 'telefono'], ['email', 'correo']].forEach(m => Object.defineProperty(EMPRESA, m[0], { get() { return _empVal(m[0], m[1]) }, enumerable: true }))
 
-const itemTotal = it => Math.max(0, Math.round((num(it.cant) * num(it.pUnitario)) - num(it.descuento)))
+const itemTotal = it => Math.max(0, Math.round((numDec(it.cant) * num(it.pUnitario)) - num(it.descuento)))
 function totales(cot) {
   const afecto = (cot.items || []).reduce((a, it) => a + itemTotal(it), 0)
   const iva = Math.round(afecto * 0.19)
@@ -101,8 +104,8 @@ function htmlDoc(cot, { conValores, esOT, conCondiciones }) {
     : ['Item', 'Código', 'Detalle', 'Cant', 'Unidad']
   const filas = (cot.items || []).map((it, i) => {
     const base = `<td>${i + 1}</td><td>${it.codigo || ''}</td><td><b>${it.detalle || ''}</b>${it.descDetallada ? '<br><span style="color:#777">Desc: ' + it.descDetallada + '</span>' : ''}${it.comentario ? '<br><span style="color:#777">Comentario: ' + it.comentario + '</span>' : ''}</td>`
-    if (conValores) return `<tr>${base}<td class="r">${num(it.cant)} ${it.unidad || 'UN'}</td><td class="r">${clp(it.pUnitario)}</td><td class="r">${clp(it.descuento)}</td><td class="r">${clp(itemTotal(it))}</td></tr>`
-    return `<tr>${base}<td class="r">${num(it.cant)}</td><td>${it.unidad || 'UN'}</td></tr>`
+    if (conValores) return `<tr>${base}<td class="r">${fmtCant(it.cant)} ${it.unidad || 'UN'}</td><td class="r">${clp(it.pUnitario)}</td><td class="r">${clp(it.descuento)}</td><td class="r">${clp(itemTotal(it))}</td></tr>`
+    return `<tr>${base}<td class="r">${fmtCant(it.cant)}</td><td>${it.unidad || 'UN'}</td></tr>`
   }).join('')
   const totalesHtml = conValores ? `<table class="tot">
     <tr><td class="lbl">Afecto</td><td class="r">${clp(t.afecto)}</td></tr>
@@ -143,7 +146,7 @@ export function descargarOTPDF(cot) { imprimir(htmlDoc(cot, { conValores: false,
 // OT en PDF a partir de la OT real (refleja esquema, servicios y partidas editados)
 function htmlOTDoc(ot) {
   const items = ot.itemsCot || []
-  const filas = items.map((it, i) => `<tr><td>${i + 1}</td><td>${it.codigo || ''}</td><td><b>${it.detalle || ''}</b>${it.comentario ? '<br><span style="color:#777">Comentario: ' + it.comentario + '</span>' : ''}</td><td class="r">${num(it.cant)}</td><td>${it.unidad || 'UN'}</td></tr>`).join('')
+  const filas = items.map((it, i) => `<tr><td>${i + 1}</td><td>${it.codigo || ''}</td><td><b>${it.detalle || ''}</b>${it.comentario ? '<br><span style="color:#777">Comentario: ' + it.comentario + '</span>' : ''}</td><td class="r">${fmtCant(it.cant)}</td><td>${it.unidad || 'UN'}</td></tr>`).join('')
   const partidas = ot.partidas || []
   const partHtml = partidas.length ? `<div style="margin-top:12px"><b style="font-size:12px">Partidas / entregas de material</b>
     <table class="items" style="margin-top:4px"><thead><tr><th>N°</th><th>Detalle del material</th><th>Fecha estimada</th><th>Estado</th></tr></thead><tbody>
@@ -334,7 +337,7 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
       const t = totales(cot)
       const nuevaOT = {
         id: 'ot' + Date.now(), numero: numeroOT, area: cot.area || 'Santa Rosa', cliente: cot.cliente, fecha: cot.fecha,
-        cotizacion: 'COT ' + cot.folio, oc: '—', m2: (cot.items || []).filter(i => i.unidad === 'm²').reduce((a, i) => a + (Number(i.cant) || 0), 0), montoCotizado: t.afecto,
+        cotizacion: 'COT ' + cot.folio, oc: '—', m2: (cot.items || []).filter(i => i.unidad === 'm²').reduce((a, i) => a + numDec(i.cant), 0), montoCotizado: t.afecto,
         procesos: [], preparacion: '—', esquema: (cot.items || []).map(i => i.comentario).filter(Boolean).join(' · ') || '—',
         estado: 'Cotizada', fechaEntrega, responsable, ventas: [], costos: [], itemsCot: cot.items, folioCot: cot.folio,
       }
