@@ -153,8 +153,18 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
   const sincronizarFicha = r => {
     const libroId = 'LV' + r.id
     const base = {}
-    Object.keys(facturas || {}).forEach(a => { base[a] = (facturas[a] || []).filter(f => f.libroId !== libroId) })
-    if (vaAFacturas(r)) base[r.area] = [fichaDe(r), ...(base[r.area] || [])]
+    let previa = null
+    Object.keys(facturas || {}).forEach(a => {
+      (facturas[a] || []).forEach(f => { if (f.libroId === libroId) previa = f })
+      base[a] = (facturas[a] || []).filter(f => f.libroId !== libroId)
+    })
+    if (vaAFacturas(r)) {
+      // Se conserva lo editado en Facturas (OC, centro de costo, etc.); el libro solo pisa lo que trae con valor
+      const f = fichaDe(r)
+      const merge = { ...(previa || {}) }
+      Object.keys(f).forEach(k => { if (f[k] !== '' && f[k] !== null && f[k] !== undefined) merge[k] = f[k] })
+      base[r.area] = [merge, ...(base[r.area] || [])]
+    }
     setFacturas(base)
   }
 
@@ -174,16 +184,24 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
     return [...(rows || []), ...(extra || []).filter(r => !vistos.has(k(r)))]
   }, [rows, extra])
 
-  // Mantiene Facturas al dia con TODO el libro: cada venta con area asignada aparece sola en su area
+  // Mantiene Facturas al dia con el libro, SIN pisar lo que se edita en Facturas:
+  // solo agrega las ventas nuevas (con area) y saca las que se ocultaron/anularon.
   useEffect(() => {
+    if (loading || !todas.length) return
     const base = {}
-    Object.keys(facturas || {}).forEach(a => { base[a] = (facturas[a] || []).filter(f => f.origen !== 'libroVentas') })
-    todas.forEach(r => { if (vaAFacturas(r)) base[r.area] = [...(base[r.area] || []), fichaDe(r)] })
-    const antes = JSON.stringify(facturas || {})
-    const ahora = JSON.stringify(base)
-    if (antes !== ahora) setFacturas(base)
+    Object.keys(facturas || {}).forEach(a => { base[a] = [...(facturas[a] || [])] })
+    const validos = new Set()
+    todas.forEach(r => {
+      if (!vaAFacturas(r)) return
+      const libroId = 'LV' + r.id
+      validos.add(libroId)
+      const yaEsta = Object.keys(base).some(a => (base[a] || []).some(f => f.libroId === libroId))
+      if (!yaEsta) base[r.area] = [...(base[r.area] || []), fichaDe(r)]
+    })
+    Object.keys(base).forEach(a => { base[a] = (base[a] || []).filter(f => f.origen !== 'libroVentas' || validos.has(f.libroId)) })
+    if (JSON.stringify(facturas || {}) !== JSON.stringify(base)) setFacturas(base)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [todas])
+  }, [todas, loading])
 
   const meses = useMemo(() => [...new Set(todas.map(r => (r.emission_date || '').slice(0, 7)).filter(Boolean))].sort().reverse(), [todas])
   const tipos = useMemo(() => [...new Set(todas.map(r => r.document_type).filter(Boolean))].sort(), [todas])
