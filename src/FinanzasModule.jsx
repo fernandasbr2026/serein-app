@@ -129,7 +129,16 @@ function FormGasto({ tipo, fin, setFin, otsDisponibles, onCerrar }) {
 // ================= LISTA DE GASTOS =================
 function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
   const [creando, setCreando] = useState(false)
-  const gastos = fin.gastos.filter(g => g.tipo === tipo)
+  const [fArea, setFArea] = useState('')
+  const todosDelTipo = fin.gastos.filter(g => g.tipo === tipo)
+  const gastos = fArea ? todosDelTipo.filter(g => (g.dist || []).some(d => d.area === fArea && (+d.pct || 0) > 0)) : todosDelTipo
+  // Con filtro de area, se cuenta solo la parte del gasto asignada a esa area
+  const pctArea = g => fArea ? (g.dist || []).filter(d => d.area === fArea).reduce((a, d) => a + (+d.pct || 0), 0) / 100 : 1
+  const resumen = gastos.filter(g => g.estado !== 'Anulado').reduce((a, g) => {
+    const p = pctArea(g)
+    const nt = netoEf(g, fin.ufValor)
+    return { n: a.n + 1, neto: a.neto + nt * p, total: a.total + (nt + (g.iva || 0)) * p }
+  }, { n: 0, neto: 0, total: 0 })
 
   function duplicarMesSiguiente(g) {
     const d = new Date(g.vencimiento + 'T12:00:00')
@@ -146,6 +155,24 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
         </button>
       )}
       {creando && <FormGasto tipo={tipo} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} onCerrar={() => setCreando(false)} />}
+
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', margin: '14px 0 10px' }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: C.gris, textTransform: 'uppercase' }}>Area</span>
+        <select value={fArea} onChange={e => setFArea(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #CBD2D6', fontSize: 13, background: '#fff' }}>
+          <option value="">Todas las areas</option>
+          {(fin.areas || []).map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
+        {fArea && <button onClick={() => setFArea('')} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '6px 10px', cursor: 'pointer', fontSize: 12 }}>Limpiar</button>}
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+        {[['Gastos', String(resumen.n)], [fArea ? 'Neto ' + fArea : 'Neto total', clp(Math.round(resumen.neto))], [fArea ? 'Total ' + fArea : 'Total con IVA', clp(Math.round(resumen.total))]].map(([k, v], n) => (
+          <div key={n} style={{ flex: '1 1 180px', background: '#fff', border: '1px solid #E2DED4', borderTop: '3px solid ' + C.naranja, padding: '12px 14px' }}>
+            <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase', fontWeight: 700 }}>{k}</div>
+            <div style={{ fontSize: 21, fontWeight: 700, color: C.carbon, fontFamily: "'Oswald',sans-serif" }}>{v}</div>
+          </div>
+        ))}
+      </div>
 
       <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18, overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
