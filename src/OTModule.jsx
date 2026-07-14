@@ -270,7 +270,10 @@ function TileOT({ ot, onOpen, onDragStart, onDropOn, verValores }) {
     <div onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); onDropOn() }} onClick={onOpen}
       style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: '3px solid ' + (ot.area === 'Istria' ? '#1D1D1B' : '#A8501F'), padding: 14, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
-        <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 12, background: '#161616', color: '#fff', padding: '2px 7px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '58%' }}>{ot.numero}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+        <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 12, background: '#161616', color: '#fff', padding: '2px 7px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{ot.numero}</span>
+          {(ot.area === 'Santa Rosa' || ot.sede === 'Santa Rosa') && ot.oc && ot.oc !== '\u2014' ? <span title="Orden de compra del cliente" style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 11.5, background: '#FF6B00', color: '#fff', padding: '2px 7px', borderRadius: 3, whiteSpace: 'nowrap' }}>OC {ot.oc}</span> : null}
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <ChipEstado estado={ot.estado} />
           <span draggable onDragStart={e => { e.stopPropagation(); onDragStart() }} onClick={e => e.stopPropagation()} title="Arrastrar para reordenar" style={{ cursor: 'grab', color: '#B9C0C6', fontSize: 15, userSelect: 'none', lineHeight: 1, letterSpacing: '-1px' }}>::</span>
@@ -597,6 +600,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
               <div><div style={{ fontSize: 11, color: '#7A8288', marginBottom: 2 }}>Correo</div><input style={{ padding: '6px 8px', border: '1px solid #CBD2D6', fontSize: 12.5, width: '100%', boxSizing: 'border-box' }} value={ot.correo || ''} onChange={e => onUpdate(ot.id, { correo: e.target.value })} /></div>
               <div><div style={{ fontSize: 11, color: '#7A8288', marginBottom: 2 }}>Telefono</div><input style={{ padding: '6px 8px', border: '1px solid #CBD2D6', fontSize: 12.5, width: '100%', boxSizing: 'border-box' }} value={ot.telefono || ''} onChange={e => onUpdate(ot.id, { telefono: e.target.value })} /></div>
               <div><div style={{ fontSize: 11, color: '#7A8288', marginBottom: 2 }}>NV (Nota de Venta)</div><input style={{ padding: '6px 8px', border: '1px solid #CBD2D6', fontSize: 12.5, width: '100%', boxSizing: 'border-box' }} value={ot.nv || ''} onChange={e => onUpdate(ot.id, { nv: e.target.value })} /></div>
+              {(ot.area === 'Santa Rosa' || ot.sede === 'Santa Rosa') && <div><div style={{ fontSize: 11, color: '#FF6B00', fontWeight: 700, marginBottom: 2 }}>OC (Orden de compra)</div><input placeholder="Ej. 4500123456" style={{ padding: '6px 8px', border: '2px solid #FF6B00', fontSize: 12.5, fontWeight: 700, width: '100%', boxSizing: 'border-box' }} value={ot.oc && ot.oc !== '\u2014' ? ot.oc : ''} onChange={e => onUpdate(ot.id, { oc: e.target.value })} /></div>}
             </div>
           </div>
           <ProtocolosOT ot={ot} onUpdate={onUpdate} otsAll={otsAll} instrumentos={instrumentos} />
