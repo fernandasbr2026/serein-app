@@ -77,10 +77,24 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
     const reader = new FileReader()
     reader.onload = ev => {
       try {
-        const wb = XLSX.read(ev.target.result, { type: 'array' })
-        const filas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, blankrows: false })
-        // Texto tal como se ve en Excel: la fecha se lee de aqui (dia primero), sin importar como Excel la haya guardado por dentro
-        const filasTxt = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, blankrows: false })
+        // El CSV del SII (separador ;) se lee en crudo: si lo procesa SheetJS, interpreta 07/01/2026 como 7 de julio.
+        const esCsv = /\.csv$/i.test(file.name || '')
+        let filas, filasTxt
+        if (esCsv) {
+          const buf = new Uint8Array(ev.target.result)
+          let txt = new TextDecoder('utf-8').decode(buf)
+          if (txt.includes('\uFFFD')) txt = new TextDecoder('windows-1252').decode(buf)
+          const lineas = txt.split(/\r?\n/).filter(l => l.trim() !== '')
+          const cab = lineas[0] || ''
+          const sep = (cab.split(';').length > cab.split(',').length) ? ';' : ((cab.split('\t').length > cab.split(',').length) ? '\t' : ',')
+          filas = lineas.map(l => l.split(sep).map(c => c.replace(/^"|"$/g, '').trim()))
+          filasTxt = filas
+        } else {
+          const wb = XLSX.read(ev.target.result, { type: 'array' })
+          filas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, blankrows: false })
+          // Texto tal como se ve en Excel: la fecha se lee de aqui (dia primero)
+          filasTxt = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, blankrows: false })
+        }
         if (!filas.length) { window.alert('El archivo esta vacio.'); return }
         let hi = 0
         for (let i = 0; i < Math.min(filas.length, 12); i++) { const tt = (filas[i] || []).map(h => norm(h)).join('|'); if (tt.includes('folio') || tt.includes('proveedor') || tt.includes('neto')) { hi = i; break } }
