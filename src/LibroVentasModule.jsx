@@ -147,14 +147,14 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
   }
 
   // ---------- Sincronizacion automatica hacia las fichas (via Facturas del area) ----------
+  const fichaDe = r => ({ id: 'lv' + r.id, libroId: 'LV' + r.id, origen: 'libroVentas', numero: String(r.document_number || ''), cliente: r.client_name || '', ot: String(r.ot_id || ''), cc: r.cc_ot || '', fecha_emision: r.emission_date || '', vencimiento: r.vencimiento || '', neto: Math.round(Number(r.neto) || 0), monto: Math.round(Number(r.total) || 0), estado: r.estado_pago || 'Pendiente', fecha_pago: r.fecha_pago || '', banco: r.banco || '', factoringId: r.factoring_id || '', dias: r.dias || 30, diasMora: r.dias_mora || 0, comentarios: 'Importada del Libro de Ventas', vendedor: 'General' })
+  const vaAFacturas = r => !!r.area && !r.oculto && r.estado_pago !== 'Anulada'
+
   const sincronizarFicha = r => {
     const libroId = 'LV' + r.id
     const base = {}
     Object.keys(facturas || {}).forEach(a => { base[a] = (facturas[a] || []).filter(f => f.libroId !== libroId) })
-    if (r.area && r.ot_id && r.estado_pago !== 'Anulada') {
-      const f = { id: 'lv' + r.id, libroId, origen: 'libroVentas', numero: String(r.document_number || ''), cliente: r.client_name || '', ot: String(r.ot_id || ''), cc: r.cc_ot || '', fecha_emision: r.emission_date || '', vencimiento: r.vencimiento || '', neto: Math.round(Number(r.neto) || 0), monto: Math.round(Number(r.total) || 0), estado: r.estado_pago || 'Pendiente', fecha_pago: r.fecha_pago || '', banco: r.banco || '', factoringId: r.factoring_id || '', dias: r.dias || 30, diasMora: r.dias_mora || 0, comentarios: 'Importada del Libro de Ventas', vendedor: 'General' }
-      base[r.area] = [f, ...(base[r.area] || [])]
-    }
+    if (vaAFacturas(r)) base[r.area] = [fichaDe(r), ...(base[r.area] || [])]
     setFacturas(base)
   }
 
@@ -173,6 +173,17 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
     const vistos = new Set((rows || []).map(k))
     return [...(rows || []), ...(extra || []).filter(r => !vistos.has(k(r)))]
   }, [rows, extra])
+
+  // Mantiene Facturas al dia con TODO el libro: cada venta con area asignada aparece sola en su area
+  useEffect(() => {
+    const base = {}
+    Object.keys(facturas || {}).forEach(a => { base[a] = (facturas[a] || []).filter(f => f.origen !== 'libroVentas') })
+    todas.forEach(r => { if (vaAFacturas(r)) base[r.area] = [...(base[r.area] || []), fichaDe(r)] })
+    const antes = JSON.stringify(facturas || {})
+    const ahora = JSON.stringify(base)
+    if (antes !== ahora) setFacturas(base)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todas])
 
   const meses = useMemo(() => [...new Set(todas.map(r => (r.emission_date || '').slice(0, 7)).filter(Boolean))].sort().reverse(), [todas])
   const tipos = useMemo(() => [...new Set(todas.map(r => r.document_type).filter(Boolean))].sort(), [todas])
