@@ -16,6 +16,37 @@ export function rendimientoM2Gal(solidos, mils, perdida, K) { const k = K || 1.5
 export function valorGalon(prod, lpg) { const L = lpg || 3.785; return prod && prod.l ? prod.l * L : (prod ? (prod.g || 0) : 0) }
 export function valorM2Capa(prod, mils, perdida, cte) { if (!prod) return 0; const r = rendimientoM2Gal(prod.s, mils, perdida, cte.constante); return r > 0 ? valorGalon(prod, cte.litrosPorGalon) / r : 0 }
 export function pinturaM2(capas, prodPorNombre, cte, perdidaDef) { return (capas || []).reduce((acc, c) => { const prod = prodPorNombre[c.p]; const perd = c.perdida != null ? c.perdida : perdidaDef; return acc + valorM2Capa(prod, c.m, perd, cte) }, 0) }
+// ---- Compra de pintura por envases completos (galon / tineta) ----
+// La pintura se vende por envase cerrado: si el trabajo necesita 10 L y la tineta trae 19 L,
+// igual hay que comprar la tineta completa. El costo del envase entero se carga al trabajo.
+export function litrosM2Capa(prod, mils, perdida, cte) { if (!prod) return 0; const r = rendimientoM2Gal(prod.s, mils, perdida, cte.constante); const L = +cte.litrosPorGalon || 3.785; return r > 0 ? L / r : 0 }
+// Envase del producto: si no tiene definido litros/precio por envase, se asume un galon.
+export function envaseDe(prod, cte) { const LG = +cte.litrosPorGalon || 3.785; const litros = +prod.le > 0 ? +prod.le : LG; const precio = +prod.pe > 0 ? +prod.pe : valorGalon(prod, LG); return { litros, precio } }
+export function comprasPintura(capas, prodPorNombre, cte, perdidaDef, m2) {
+  const m = +m2 || 0
+  const acc = {}
+  ;(capas || []).forEach(c => {
+    const prod = prodPorNombre[c.p]; if (!prod) return
+    const perd = c.perdida != null ? c.perdida : perdidaDef
+    const litros = litrosM2Capa(prod, c.m, perd, cte) * m
+    if (!acc[c.p]) acc[c.p] = { producto: c.p, litros: 0 }
+    acc[c.p].litros += litros
+  })
+  return Object.values(acc).map(x => {
+    const e = envaseDe(prodPorNombre[x.producto], cte)
+    const envases = e.litros > 0 ? Math.ceil(x.litros / e.litros - 1e-9) : 0
+    const litrosComprados = envases * e.litros
+    return { ...x, litrosEnvase: e.litros, precioEnvase: e.precio, envases, litrosComprados, sobrante: Math.max(0, litrosComprados - x.litros), costo: envases * e.precio }
+  })
+}
+// Costo de pintura por m2 comprando envases completos. Sin m2 aun, cae al calculo proporcional por litro.
+export function pinturaCompraM2(capas, prodPorNombre, cte, perdidaDef, m2) {
+  const m = +m2 || 0
+  if (m <= 0) return { costo: 0, costoM2: pinturaM2(capas, prodPorNombre, cte, perdidaDef), compras: [] }
+  const compras = comprasPintura(capas, prodPorNombre, cte, perdidaDef, m)
+  const costo = compras.reduce((a, x) => a + x.costo, 0)
+  return { costo, costoM2: costo / m, compras }
+}
 export function granalladoDirectoMes(sede, sueldosGranallado) { return (+sede.granallaAmortizada || 0) + (+sueldosGranallado || 0) + ((+sede.dieselDia || 0) * (+sede.diasMes || 0)) + (+sede.eppGran || 0) + (+sede.consumiblesGran || 0) }
 export function anclaSP10(sede, sueldosGranallado) { const dm = granalladoDirectoMes(sede, sueldosGranallado); const m2 = +sede.m2GranalladoMes || 1; const f = +sede.factorGradoPredominante || 1; return (dm / m2) / f }
 export function granalladoM2(sede, sueldosGranallado, factorGrado, factorDif) { return anclaSP10(sede, sueldosGranallado) * (+factorGrado || 1) * (+factorDif || 1) }
@@ -24,5 +55,5 @@ export function diluyenteM2(sede, nCapas) { return diluyenteCapaM2(sede) * (+nCa
 export function depreciacionesMes(sede) { return (sede.inversiones || []).reduce((s, i) => s + ((+i.valor || 0) / (+i.vidaMeses || 1)), 0) }
 export function fijosM2(sede, totalFijosSede, sueldosProduccion) { const tf = totalFijosSede != null ? +totalFijosSede : (+sede.totalFijosFallback || 0); const prorr = Math.max(0, tf - (+sueldosProduccion || 0)) + depreciacionesMes(sede); return prorr / (+sede.m2TotalesPlantaMes || 1) }
 export function indexProductos(productos) { const m = {}; (productos || []).forEach(p => { m[p.n] = p }); return m }
-export function desgloseItem(item, ctx) { const cte = ctx.constantes; const idx = ctx.prodPorNombre; const capas = (item.esquema && item.esquema.capas) || []; const nCapas = capas.length; const gran = granalladoM2(ctx.sede, ctx.sueldosGranallado, item.factorGrado, item.factorDif); const dil = diluyenteM2(ctx.sede, nCapas); const pin = pinturaM2(capas, idx, cte, cte.perdidaTipica); const fij = fijosM2(ctx.sede, ctx.totalFijosSede, ctx.sueldosProduccion); const lim = +item.limpiezaSP1 || 0; const costoM2 = gran + lim + dil + pin + fij; return { granallado: gran, limpieza: lim, diluyente: dil, pintura: pin, fijos: fij, costoM2, nCapas } }
+export function desgloseItem(item, ctx) { const cte = ctx.constantes; const idx = ctx.prodPorNombre; const capas = (item.esquema && item.esquema.capas) || []; const nCapas = capas.length; const gran = granalladoM2(ctx.sede, ctx.sueldosGranallado, item.factorGrado, item.factorDif); const dil = diluyenteM2(ctx.sede, nCapas); const pc = pinturaCompraM2(capas, idx, cte, cte.perdidaTipica, item.m2); const pin = pc.costoM2; const fij = fijosM2(ctx.sede, ctx.totalFijosSede, ctx.sueldosProduccion); const lim = +item.limpiezaSP1 || 0; const costoM2 = gran + lim + dil + pin + fij; return { granallado: gran, limpieza: lim, diluyente: dil, pintura: pin, fijos: fij, costoM2, nCapas, comprasPintura: pc.compras, pinturaCosto: pc.costo } }
 export function precioM2(costoM2, pctGanancia) { return costoM2 * (1 + (+pctGanancia || 0) / 100) }
