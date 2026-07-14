@@ -30,8 +30,13 @@ const SEDE_CAMPOS = [
 export default function CotizadorParametros({ onVolver }) {
   const [p, setP] = useState(cargar)
   const [sec, setSec] = useState('productos')
+  const [q, setQ] = useState('')
+  const [mcF, setMcF] = useState('')
   useEffect(() => { try { localStorage.setItem(LS_KEY, JSON.stringify(p)) } catch (e) {} }, [p])
   const upd = fn => setP(prev => { const n = JSON.parse(JSON.stringify(prev)); fn(n); return n })
+  const norm = s => (s || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const prodsFiltrados = () => (p.productos || []).map((pr, i) => ({ pr, i })).filter(({ pr }) => (!mcF || pr.mc === mcF) && (!q || norm(pr.n).includes(norm(q)) || norm(pr.mc).includes(norm(q))))
+  const marcas = () => [...new Set((p.productos || []).map(x => x.mc).filter(Boolean))].sort()
 
   const card = { background: '#fff', border: '1px solid ' + T.border, borderRadius: 12, boxShadow: T.shadow, padding: 16, marginBottom: 16 }
   const inp = { border: '1px solid ' + T.border, borderRadius: 8, padding: '7px 9px', fontSize: 12.5, fontFamily: T.font, width: '100%', boxSizing: 'border-box' }
@@ -55,14 +60,22 @@ export default function CotizadorParametros({ onVolver }) {
 
     {sec === 'productos' && (<div style={card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <div style={{ fontWeight: 600, color: T.text }}>Productos ({p.productos.length})</div>
+            <div style={{ fontWeight: 600, color: T.text }}>Productos ({q || mcF ? prodsFiltrados().length + ' de ' + p.productos.length : p.productos.length})</div>
         <button style={btnP} onClick={() => upd(n => n.productos.unshift({ n: 'NUEVO PRODUCTO', mc: '', s: 60, l: 0, g: 0 }))}><Plus size={14} /> Agregar</button>
       </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar producto o marca..." style={{ flex: '2 1 240px', padding: '8px 10px', border: '1px solid ' + T.border, borderRadius: 8, fontSize: 13 }} />
+            <select value={mcF} onChange={e => setMcF(e.target.value)} style={{ flex: '1 1 150px', padding: '8px 10px', border: '1px solid ' + T.border, borderRadius: 8, fontSize: 13, background: '#fff' }}>
+              <option value="">Todas las marcas</option>
+              {marcas().map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+            {(q || mcF) && <button onClick={() => { setQ(''); setMcF('') }} style={{ background: 'none', border: '1px solid ' + T.border, borderRadius: 8, padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>Limpiar</button>}
+          </div>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }}>
           <thead><tr><th style={th}>Producto</th><th style={th}>Marca</th><th style={th}>Solidos %</th><th style={th}>$/litro</th><th style={th}>$/galon</th><th style={th}></th></tr></thead>
           <tbody>
-            {p.productos.map((pr, i) => (<tr key={i}>
+            {prodsFiltrados().map(({ pr, i }) => (<tr key={i}>
               <td style={tdc}>{ti(pr.n, v => upd(n => { n.productos[i].n = v }), { minWidth: 150 })}</td>
               <td style={tdc}>{ti(pr.mc, v => upd(n => { n.productos[i].mc = v }), { minWidth: 110 })}</td>
               <td style={tdc}>{ni(pr.s, v => upd(n => { n.productos[i].s = v }), { width: 80 })}</td>
@@ -70,6 +83,7 @@ export default function CotizadorParametros({ onVolver }) {
               <td style={tdc}>{ni(pr.g, v => upd(n => { n.productos[i].g = v }), { width: 100 })}</td>
               <td style={tdc}><button style={btnDel} onClick={() => upd(n => n.productos.splice(i, 1))}><Trash2 size={15} /></button></td>
             </tr>))}
+            {prodsFiltrados().length === 0 && <tr><td colSpan={6} style={{ padding: 16, textAlign: 'center', color: T.textMute, fontSize: 13 }}>Sin productos que coincidan con la busqueda.</td></tr>}
           </tbody>
         </table>
       </div>
