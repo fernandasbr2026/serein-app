@@ -8,6 +8,8 @@ const C = { navy: '#061A40', orange: '#FF6B00', gray: '#F5F7FA', border: '#D8DCE
 const clp = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-CL')
 const ip = { padding: '6px 8px', border: '1px solid ' + C.border, fontSize: 12.5, boxSizing: 'border-box', borderRadius: 4 }
 const sel = { padding: '4px 6px', border: '1px solid ' + C.border, fontSize: 12, borderRadius: 4, background: '#fff' }
+// Muestra una fecha ISO (aaaa-mm-dd) como DD/MM/AAAA
+const fmtF = v => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || '')); return m ? m[3] + '/' + m[2] + '/' + m[1] : (v || '-') }
 const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 const AREAS = ['Santa Rosa', 'Istria', 'Proyectos']
 const ESTADOS_PAGO = ['Pendiente', 'Pagado', 'Factoring', 'Vencida', 'Anulada']
@@ -63,17 +65,32 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
   function importarExcel(file) {
     const toInt = v => { const n = Math.round(Number(v)); if (!isNaN(n)) return n; const m = parseInt(String(v).replace(/\D/g, ''), 10); return isNaN(m) ? 0 : m }
     const fechaDe = v => {
-      if (v == null || v === '') return ''
-      if (typeof v === 'number') { const d = new Date(Math.round((v - 25569) * 86400 * 1000)); return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10) }
-      const s = String(v)
-      let m = s.match(/(\d{4})-(\d{2})-(\d{2})/); if (m) return m[0]
-      m = s.match(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/); if (m) return m[3] + '-' + String(m[2]).padStart(2, '0') + '-' + String(m[1]).padStart(2, '0')
+      if (v === null || v === undefined || v === '') return ''
+      if (v instanceof Date && !isNaN(v.getTime())) {
+        const y = v.getFullYear(), mo = String(v.getMonth() + 1).padStart(2, '0'), d = String(v.getDate()).padStart(2, '0')
+        return y + '-' + mo + '-' + d
+      }
+      if (typeof v === 'number' && isFinite(v)) {
+        // Numero de serie de Excel (base 1899-12-30). Se arma en UTC para no correr un dia por zona horaria.
+        const d = new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 86400000)
+        return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10)
+      }
+      const s = String(v).trim()
+      let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)
+      if (m) return m[1] + '-' + String(m[2]).padStart(2, '0') + '-' + String(m[3]).padStart(2, '0')
+      // DD-MM-AAAA o DD/MM/AAAA (formato chileno: el dia va primero)
+      m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/)
+      if (m) {
+        let y = m[3]
+        if (y.length === 2) y = (Number(y) > 70 ? '19' : '20') + y
+        return y + '-' + String(m[2]).padStart(2, '0') + '-' + String(m[1]).padStart(2, '0')
+      }
       return ''
     }
     const reader = new FileReader()
     reader.onload = ev => {
       try {
-        const wb = XLSX.read(ev.target.result, { type: 'array' })
+        const wb = XLSX.read(ev.target.result, { type: 'array', cellDates: true })
         const hoja = wb.SheetNames[0]
         const filas = XLSX.utils.sheet_to_json(wb.Sheets[hoja], { header: 1, raw: true, blankrows: false })
         if (!filas.length) { window.alert('El archivo esta vacio.'); return }
@@ -81,7 +98,12 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
         for (let i = 0; i < Math.min(filas.length, 12); i++) { const t = (filas[i] || []).map(h => norm(h)).join('|'); if (t.includes('folio') || t.includes('documento') || t.includes('neto')) { hi = i; break } }
         const hdr = (filas[hi] || []).map(h => norm(h).trim())
         const col = (...nn) => { for (const nm of nn) { const i = hdr.findIndex(h => h.includes(nm)); if (i >= 0) return i } return -1 }
-        const ci = { fecha: col('fecha'), folio: col('folio', 'documento', 'nro', 'n\u00b0'), rut: col('rut'), tipo: col('tipo'), neto: col('neto', 'afecto'), iva: col('iva'), total: col('total', 'monto'), venc: col('vencim') }
+        const ci = { folio: col('folio', 'documento', 'nro', 'n\u00b0'), rut: col('rut'), tipo: col('tipo'), neto: col('neto', 'afecto'), iva: col('iva'), total: col('total', 'monto'), venc: col('vencim') }
+        // Fecha del documento: nunca las columnas de vencimiento / recepcion / acuse / pago
+        const noFecha = h => h.includes('vencim') || h.includes('recep') || h.includes('acuse') || h.includes('pago') || h.includes('reclam')
+        let iF = hdr.findIndex(h => !noFecha(h) && (h.includes('fecha docto') || h.includes('fecha documento') || h.includes('fecha emis') || h.includes('emision')))
+        if (iF < 0) iF = hdr.findIndex(h => !noFecha(h) && h.includes('fecha'))
+        ci.fecha = iF
         // Nombre del cliente: nunca la columna de RUT (ej. 'Rut Cliente'), y sin acentos ('Raz\u00f3n Social')
         const sinRut = h => !h.includes('rut')
         let ic = hdr.findIndex(h => sinRut(h) && (h.includes('razon') || h.includes('nombre') || h.includes('senor')))
@@ -241,7 +263,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
                 <React.Fragment key={r.id}>
                 <tr style={{ borderBottom: perd ? 'none' : '1px solid #EEECE4' }}>
                   <td style={{ padding: '7px 10px' }}><input type="checkbox" checked={sel.has(r.id)} onChange={() => toggleSel(r.id)} /></td>
-                  <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{r.emission_date || '-'}</td>
+                  <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{fmtF(r.emission_date)}</td>
                   <td style={{ padding: '7px 10px' }}><div style={{ fontWeight: 600 }}>{r.client_name || r.client_rut || '-'}</div><div style={{ color: C.mut, fontSize: 11 }}>{r.client_rut}{r.origen === 'xlsx' ? ' - Excel' : ''}</div></td>
                   <td style={{ padding: '7px 10px' }}>{r.document_number}</td>
                   <td style={{ padding: '7px 10px', fontSize: 11.5 }}>{r.document_type}</td>
