@@ -77,8 +77,10 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
     const reader = new FileReader()
     reader.onload = ev => {
       try {
-        const wb = XLSX.read(ev.target.result, { type: 'array', cellDates: true })
+        const wb = XLSX.read(ev.target.result, { type: 'array' })
         const filas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, blankrows: false })
+        // Texto tal como se ve en Excel: la fecha se lee de aqui (dia primero), sin importar como Excel la haya guardado por dentro
+        const filasTxt = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, blankrows: false })
         if (!filas.length) { window.alert('El archivo esta vacio.'); return }
         let hi = 0
         for (let i = 0; i < Math.min(filas.length, 12); i++) { const tt = (filas[i] || []).map(h => norm(h)).join('|'); if (tt.includes('folio') || tt.includes('proveedor') || tt.includes('neto')) { hi = i; break } }
@@ -99,7 +101,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
           const neto = toInt(row[ci.neto])
           const iva = ci.iva >= 0 ? toInt(row[ci.iva]) : Math.round(neto * 0.19)
           const total = ci.total >= 0 && toInt(row[ci.total]) > 0 ? toInt(row[ci.total]) : neto + iva
-          nuevas.push({ id: 'x' + folio + '-' + (String(row[ci.rut] ?? '').trim() || r), origen: 'xlsx', emission_date: fechaDe(row[ci.fecha]), document_number: folio, provider_name: prov, provider_rut: String(row[ci.rut] ?? '').trim(), document_type: String(row[ci.tipo] ?? 'Factura').trim(), neto, iva, document_total: total, centro_costo: '', ot_id: '', cc_ot: '', estado_pago: 'Pendiente', factoring: '', dias: 30, dias_mora: 0, vencimiento: '' })
+          nuevas.push({ id: 'x' + folio + '-' + (String(row[ci.rut] ?? '').trim() || r), origen: 'xlsx', emission_date: fechaDe((filasTxt[r] || [])[ci.fecha] != null && (filasTxt[r] || [])[ci.fecha] !== '' ? (filasTxt[r] || [])[ci.fecha] : row[ci.fecha]), document_number: folio, provider_name: prov, provider_rut: String(row[ci.rut] ?? '').trim(), document_type: String(row[ci.tipo] ?? 'Factura').trim(), neto, iva, document_total: total, centro_costo: '', ot_id: '', cc_ot: '', estado_pago: 'Pendiente', factoring: '', dias: 30, dias_mora: 0, vencimiento: '' })
         }
         if (!nuevas.length) { window.alert('No se reconocieron filas. Revisa que el Excel tenga columnas Folio, Proveedor, Neto y Total.'); return }
         const ids = new Set(nuevas.map(x => x.id))
