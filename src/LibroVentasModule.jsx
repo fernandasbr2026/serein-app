@@ -147,7 +147,10 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
   }
 
   // ---------- Sincronizacion automatica hacia las fichas (via Facturas del area) ----------
-  const fichaDe = r => ({ id: 'lv' + r.id, libroId: 'LV' + r.id, origen: 'libroVentas', numero: String(r.document_number || ''), cliente: r.client_name || '', ot: String(r.ot_id || ''), cc: r.cc_ot || '', fecha_emision: r.emission_date || '', vencimiento: r.vencimiento || '', neto: Math.round(Number(r.neto) || 0), monto: Math.round(Number(r.total) || 0), estado: r.estado_pago || 'Pendiente', fecha_pago: r.fecha_pago || '', banco: r.banco || '', factoringId: r.factoring_id || '', dias: r.dias || 30, diasMora: r.dias_mora || 0, comentarios: 'Importada del Libro de Ventas', vendedor: 'General' })
+  // Notas de credito (tipo 61): restan de la venta
+  const esNC = r => String(r.document_type || '').trim() === '61'
+  const sgn = r => esNC(r) ? -1 : 1
+  const fichaDe = r => ({ id: 'lv' + r.id, libroId: 'LV' + r.id, origen: 'libroVentas', numero: String(r.document_number || ''), cliente: r.client_name || '', ot: String(r.ot_id || ''), cc: r.cc_ot || '', fecha_emision: r.emission_date || '', vencimiento: r.vencimiento || '', neto: sgn(r) * Math.round(Number(r.neto) || 0), monto: sgn(r) * Math.round(Number(r.total) || 0), estado: r.estado_pago || 'Pendiente', fecha_pago: r.fecha_pago || '', banco: r.banco || '', factoringId: r.factoring_id || '', dias: r.dias || 30, diasMora: r.dias_mora || 0, comentarios: 'Importada del Libro de Ventas', vendedor: 'General' })
   const vaAFacturas = r => !!r.area && !r.oculto && r.estado_pago !== 'Anulada'
 
   const sincronizarFicha = r => {
@@ -246,7 +249,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
     return calcularPerdidaFactoring(Math.round(Number(r.total) || 0), r.dias || 30, r.dias_mora || 0, f)
   }
 
-  const tot = useMemo(() => filtradas.reduce((a, r) => { const p = perdidaDe(r); return { neto: a.neto + (+r.neto || 0), iva: a.iva + (+r.iva || 0), total: a.total + (+r.total || 0), fact: a.fact + (p ? p.total : 0) } }, { neto: 0, iva: 0, total: 0, fact: 0 }), [filtradas, facs])
+  const tot = useMemo(() => filtradas.reduce((a, r) => { const p = perdidaDe(r); const s = sgn(r); return { neto: a.neto + s * (+r.neto || 0), iva: a.iva + s * (+r.iva || 0), total: a.total + s * (+r.total || 0), fact: a.fact + (p ? p.total : 0) } }, { neto: 0, iva: 0, total: 0, fact: 0 }), [filtradas, facs])
   const mesLabel = ym => { const [y, m] = ym.split('-'); return MESES[(+m) - 1] + ' ' + y }
 
   return (
@@ -311,10 +314,10 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
                   <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{fmtF(r.emission_date)}</td>
                   <td style={{ padding: '7px 10px' }}><div style={{ fontWeight: 600 }}>{r.client_name || r.client_rut || '-'}</div><div style={{ color: C.mut, fontSize: 11 }}>{r.client_rut}{r.origen === 'xlsx' ? ' - Excel' : ''}</div></td>
                   <td style={{ padding: '7px 10px' }}>{r.document_number}</td>
-                  <td style={{ padding: '7px 10px', fontSize: 11.5 }}>{r.document_type}</td>
-                  <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>{clp(r.neto)}</td>
-                  <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', color: C.orange }}>{clp(r.iva)}</td>
-                  <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700 }}>{clp(r.total)}</td>
+                  <td style={{ padding: '7px 10px', fontSize: 11.5 }}>{r.document_type}{esNC(r) ? <span style={{ marginLeft: 5, background: C.red, color: '#fff', padding: '1px 5px', borderRadius: 3, fontSize: 10, fontWeight: 700 }}>NC</span> : null}</td>
+                  <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', color: esNC(r) ? C.red : undefined }}>{clp(sgn(r) * (+r.neto || 0))}</td>
+                  <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', color: esNC(r) ? C.red : C.orange }}>{clp(sgn(r) * (+r.iva || 0))}</td>
+                  <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700, color: esNC(r) ? C.red : undefined }}>{clp(sgn(r) * (+r.total || 0))}</td>
                   <td style={{ padding: '7px 10px' }}>
                     <select style={{ ...sel, minWidth: 110 }} value={r.area || ''} onChange={e => setCampo(r, 'area', e.target.value)}>
                       <option value="">- area -</option>
@@ -340,6 +343,21 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
                   </td>
                   <td style={{ padding: '7px 10px' }}><input type="date" style={{ ...sel }} value={r.fecha_pago || ''} onChange={e => setCampo(r, 'fecha_pago', e.target.value)} /></td>
                 </tr>
+                {esNC(r) && (
+                  <tr style={{ background: '#FDECEC', borderBottom: '1px solid #EEECE4' }}>
+                    <td colSpan={13} style={{ padding: '8px 12px' }}>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5 }}>
+                        <b style={{ color: C.red }}>Nota de credito</b>
+                        <span style={{ color: C.mut }}>Anula / rebaja la factura N\u00b0</span>
+                        <input list={'facturas-' + r.id} value={r.anula_folio || ''} onChange={e => setCampo(r, 'anula_folio', e.target.value)} placeholder="Folio de la factura" style={{ ...ip, width: 160 }} />
+                        <datalist id={'facturas-' + r.id}>
+                          {todas.filter(x => !esNC(x) && x.client_rut === r.client_rut).map(x => <option key={x.id} value={String(x.document_number || '')}>{x.document_number} - {clp(x.total)}</option>)}
+                        </datalist>
+                        {r.anula_folio ? <span style={{ color: C.mut }}>Anula la factura {r.anula_folio}</span> : <span style={{ color: C.mut }}>Sin factura asociada</span>}
+                      </div>
+                    </td>
+                  </tr>
+                )}
                 {perd ? (
                   <tr style={{ background: '#FBF3EE', borderBottom: '1px solid #EEECE4' }}>
                     <td colSpan={13} style={{ padding: '8px 12px' }}>
