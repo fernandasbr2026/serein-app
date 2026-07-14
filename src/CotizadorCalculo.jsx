@@ -31,7 +31,20 @@ function BuscadorProducto({ value, productos, onSelect, style }) {
 }
 
 export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {}, cotizaciones = [], setCotizaciones = () => {}, onVolver = () => {} }) {
-  const P = useMemo(cargarParams, [])
+  // Los parametros se releen cuando se guardan en la pantalla de Parametros,
+  // al volver a la pestana, o si cambian en otra pestana del navegador.
+  const [P, setP] = useState(cargarParams)
+  useEffect(() => {
+    const recargar = () => setP(cargarParams())
+    window.addEventListener('cotizador-params', recargar)
+    window.addEventListener('storage', recargar)
+    window.addEventListener('focus', recargar)
+    return () => {
+      window.removeEventListener('cotizador-params', recargar)
+      window.removeEventListener('storage', recargar)
+      window.removeEventListener('focus', recargar)
+    }
+  }, [])
   const idx = useMemo(() => indexProductos(P.productos), [P])
   const cte = P.constantes
   const [sede, setSede] = useState('Santa Rosa')
