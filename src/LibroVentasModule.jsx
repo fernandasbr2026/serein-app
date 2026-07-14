@@ -139,13 +139,38 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
   const meses = useMemo(() => [...new Set(todas.map(r => (r.emission_date || '').slice(0, 7)).filter(Boolean))].sort().reverse(), [todas])
   const tipos = useMemo(() => [...new Set(todas.map(r => r.document_type).filter(Boolean))].sort(), [todas])
 
+  const [sel, setSel] = useState(() => new Set())
+  const [verOcultas, setVerOcultas] = useState(false)
   const filtradas = useMemo(() => todas.filter(r => {
+    if (verOcultas) { if (!r.oculto) return false } else { if (r.oculto) return false }
     if (mes && (r.emission_date || '').slice(0, 7) !== mes) return false
     if (tipo && r.document_type !== tipo) return false
     if (fArea && (r.area || '') !== fArea) return false
     if (q) { const t = ((r.client_name || '') + ' ' + (r.client_rut || '') + ' ' + (r.document_number || '') + ' ' + (r.ot_id || '')).toLowerCase(); if (!t.includes(q.toLowerCase())) return false }
     return true
-  }), [todas, mes, tipo, fArea, q])
+  }), [todas, mes, tipo, fArea, q, verOcultas])
+  const toggleSel = id => setSel(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const toggleTodas = () => setSel(s => s.size === filtradas.length ? new Set() : new Set(filtradas.map(r => r.id)))
+  const eliminarSel = async () => {
+    const elegidas = filtradas.filter(r => sel.has(r.id))
+    if (!elegidas.length) return
+    if (!window.confirm('Se ocultaran ' + elegidas.length + ' documento(s). Dejaran de verse en la tabla y en los totales, y una nueva sincronizacion no los volvera a mostrar. Puedes recuperarlos con el boton "Ver ocultos". Las filas importadas desde Excel se eliminan definitivamente. Continuar?')) return
+    const idsXlsx = elegidas.filter(r => r.origen === 'xlsx').map(r => r.id)
+    if (idsXlsx.length) guardarExtra((extra || []).filter(x => !idsXlsx.includes(x.id)))
+    const idsDb = elegidas.filter(r => r.origen !== 'xlsx').map(r => r.id)
+    if (idsDb.length) {
+      setRows(rs => rs.map(x => idsDb.includes(x.id) ? { ...x, oculto: true } : x))
+      try { await supabase.from('libro_ventas').update({ oculto: true }).in('id', idsDb) } catch (e) {}
+    }
+    setSel(new Set())
+  }
+  const restaurarSel = async () => {
+    const ids = filtradas.filter(r => sel.has(r.id) && r.origen !== 'xlsx').map(r => r.id)
+    if (!ids.length) return
+    setRows(rs => rs.map(x => ids.includes(x.id) ? { ...x, oculto: false } : x))
+    try { await supabase.from('libro_ventas').update({ oculto: false }).in('id', ids) } catch (e) {}
+    setSel(new Set())
+  }
 
   const perdidaDe = r => {
     if (r.estado_pago !== 'Factoring') return null
@@ -189,6 +214,13 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
         <select style={{ ...ip, flex: '1 1 120px' }} value={tipo} onChange={e => setTipo(e.target.value)}><option value="">Todos los tipos</option>{tipos.map(t => <option key={t} value={t}>{t}</option>)}</select>
       </div>
 
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+          <span style={{ fontSize: 12.5, color: C.mut }}>{sel.size} seleccionado(s)</span>
+          {!verOcultas && <button onClick={eliminarSel} disabled={!sel.size} style={{ ...{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5 }, background: sel.size ? C.red : '#E6E8EE', color: sel.size ? '#fff' : C.mut, cursor: sel.size ? 'pointer' : 'default' }}>Eliminar seleccionados</button>}
+          {verOcultas && <button onClick={restaurarSel} disabled={!sel.size} style={{ ...{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5 }, background: sel.size ? C.green : '#E6E8EE', color: sel.size ? '#fff' : C.mut, cursor: sel.size ? 'pointer' : 'default' }}>Restaurar seleccionados</button>}
+          <button onClick={() => { setVerOcultas(v => !v); setSel(new Set()) }} style={{ background: 'transparent', border: '1px solid ' + C.border, padding: '7px 12px', borderRadius: 6, fontSize: 12.5, cursor: 'pointer', color: C.navy }}>{verOcultas ? 'Volver al libro' : 'Ver ocultos'}</button>
+        </div>
+
       {loading ? <div style={{ color: C.mut, padding: 20 }}>Cargando...</div> : errMsg ? <div style={{ background: '#FDECEC', border: '1px solid ' + C.red, color: C.red, padding: '10px 14px', borderRadius: 6, fontSize: 13 }}>{errMsg}</div> : filtradas.length === 0 ? (
         <div style={{ color: C.mut, padding: 20, textAlign: 'center', border: '1px dashed ' + C.border, borderRadius: 8 }}>Sin documentos. Usa <b>Importar Excel</b> o <b>Sincronizar con Defontana</b>.</div>
       ) : (
@@ -196,6 +228,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 1500 }}>
             <thead>
               <tr style={{ background: C.navy, color: '#fff' }}>
+                <th style={{ padding: '9px 10px', width: 34 }}><input type="checkbox" checked={filtradas.length > 0 && sel.size === filtradas.length} onChange={toggleTodas} /></th>
                 {['Emision', 'Cliente', 'Folio', 'Tipo', 'Neto', 'IVA', 'Total', 'Area', 'OT', 'Centro de costo', 'Estado pago', 'Fecha pago'].map(h => (
                   <th key={h} style={{ textAlign: ['Neto', 'IVA', 'Total'].includes(h) ? 'right' : 'left', padding: '9px 10px', fontSize: 11, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
@@ -207,6 +240,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
                 return (
                 <React.Fragment key={r.id}>
                 <tr style={{ borderBottom: perd ? 'none' : '1px solid #EEECE4' }}>
+                  <td style={{ padding: '7px 10px' }}><input type="checkbox" checked={sel.has(r.id)} onChange={() => toggleSel(r.id)} /></td>
                   <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{r.emission_date || '-'}</td>
                   <td style={{ padding: '7px 10px' }}><div style={{ fontWeight: 600 }}>{r.client_name || r.client_rut || '-'}</div><div style={{ color: C.mut, fontSize: 11 }}>{r.client_rut}{r.origen === 'xlsx' ? ' - Excel' : ''}</div></td>
                   <td style={{ padding: '7px 10px' }}>{r.document_number}</td>
@@ -241,7 +275,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
                 </tr>
                 {perd ? (
                   <tr style={{ background: '#FBF3EE', borderBottom: '1px solid #EEECE4' }}>
-                    <td colSpan={12} style={{ padding: '8px 12px' }}>
+                    <td colSpan={13} style={{ padding: '8px 12px' }}>
                       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12 }}>
                         <span style={{ color: C.mut, fontWeight: 700 }}>FACTORING:</span>
                         <select style={sel} value={r.factoring_id || (facs[0] ? facs[0].id : '')} onChange={e => setCampo(r, 'factoring_id', e.target.value)}>
