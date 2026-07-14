@@ -173,7 +173,6 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
           <div style={{ minWidth: 200, flex: 1 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: T.textSoft, padding: '1px 0' }}><span>Granallado /m2 ({it.grado})</span><span>{clp(d.granallado)}</span></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: T.textSoft, padding: '1px 0' }}><span>Limpieza SP-1 /m2</span><span>{clp(d.limpieza)}</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: T.textSoft, padding: '1px 0' }}><span>Aplicacion /m2 ({d.nCapas} capas)</span><span>{clp(d.aplicacion)}</span></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: T.textSoft, padding: '1px 0' }}><span>Diluyente /m2</span><span>{clp(d.diluyente)}</span></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: T.textSoft, padding: '1px 0' }}><span>Pintura /m2</span><span>{clp(d.pintura)}</span></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: T.textSoft, padding: '1px 0' }}><span>Gastos fijos /m2</span><span>{clp(d.fijos)}</span></div>
