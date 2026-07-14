@@ -13,7 +13,7 @@ const AREAS = ['Santa Rosa', 'Istria', 'Proyectos']
 const ESTADOS_PAGO = ['Pendiente', 'Pagado', 'Factoring', 'Vencida', 'Anulada']
 const DIAS_OPC = [30, 45, 60, 90]
 const LS_KEY = 'serein_libroVentasXlsx'
-const norm = s => (s || '').toString().toLowerCase()
+const norm = s => (s || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 const colorPago = e => e === 'Pagado' ? C.green : e === 'Factoring' ? C.orange : e === 'Vencida' ? C.red : C.mut
 
 export default function LibroVentasModule({ ots = [], proyectos = [], facturas = {}, setFacturas = () => {}, params = { factoring: [] } }) {
@@ -81,13 +81,18 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
         for (let i = 0; i < Math.min(filas.length, 12); i++) { const t = (filas[i] || []).map(h => norm(h)).join('|'); if (t.includes('folio') || t.includes('documento') || t.includes('neto')) { hi = i; break } }
         const hdr = (filas[hi] || []).map(h => norm(h).trim())
         const col = (...nn) => { for (const nm of nn) { const i = hdr.findIndex(h => h.includes(nm)); if (i >= 0) return i } return -1 }
-        const ci = { fecha: col('fecha'), folio: col('folio', 'documento', 'nro', 'n°'), cli: col('cliente', 'razon', 'señor'), rut: col('rut'), tipo: col('tipo'), neto: col('neto', 'afecto'), iva: col('iva'), total: col('total', 'monto'), venc: col('vencim') }
+        const ci = { fecha: col('fecha'), folio: col('folio', 'documento', 'nro', 'n\u00b0'), rut: col('rut'), tipo: col('tipo'), neto: col('neto', 'afecto'), iva: col('iva'), total: col('total', 'monto'), venc: col('vencim') }
+        // Nombre del cliente: nunca la columna de RUT (ej. 'Rut Cliente'), y sin acentos ('Raz\u00f3n Social')
+        const sinRut = h => !h.includes('rut')
+        let ic = hdr.findIndex(h => sinRut(h) && (h.includes('razon') || h.includes('nombre') || h.includes('senor')))
+        if (ic < 0) ic = hdr.findIndex(h => sinRut(h) && h.includes('cliente'))
+        ci.cli = ic === ci.rut ? -1 : ic
         const nuevas = []
         for (let r = hi + 1; r < filas.length; r++) {
           const row = filas[r]; if (!row) continue
           const folio = String(row[ci.folio] ?? '').replace(/\.0$/, '').trim()
-          const cliente = String(row[ci.cli] ?? '').trim()
-          if (!folio && !cliente) continue
+          const cliente = ci.cli >= 0 ? String(row[ci.cli] || '').trim() : ''
+          if (!folio) continue
           const neto = toInt(row[ci.neto])
           const iva = ci.iva >= 0 ? toInt(row[ci.iva]) : Math.round(neto * 0.19)
           const total = ci.total >= 0 && toInt(row[ci.total]) > 0 ? toInt(row[ci.total]) : neto + iva
