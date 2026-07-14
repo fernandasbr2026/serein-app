@@ -58,6 +58,11 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
   function cargarEsquema(i, nombre) { const e = P.esquemas.find(x => x.n === nombre); if (!e) return; updItem(i, n => { n.capas = e.capas.map(c => ({ p: c.p, mMin: c.m, mMax: c.m, perdida: cte.perdidaTipica || 2 })) }) }
 
   function guardar() {
+    const sinM2 = items.map((it, i) => ((+it.m2 || 0) > 0 ? 0 : i + 1)).filter(Boolean)
+    if (sinM2.length) {
+      const msg = 'La' + (sinM2.length > 1 ? 's piezas N\u00b0 ' : ' pieza N\u00b0 ') + sinM2.join(', ') + (sinM2.length > 1 ? ' est\u00e1n' : ' est\u00e1') + ' en 0 m\u00b2. Su total quedar\u00e1 en $0 y no sumar\u00e1 al total de la cotizaci\u00f3n.\n\n\u00bfGenerar la cotizaci\u00f3n de todas formas?'
+      if (!window.confirm(msg)) return
+    }
     const numero = proximoNumero(cotizaciones)
     const cli = cliSel || { nombre: cliQuery }
     const cot = { id: 'cot' + Date.now(), numero, folio: numero, area: sede, vencimiento: new Date().toISOString().slice(0, 10), tipo: 'calculo', origen: 'cotizador', estado: 'Alta probabilidad de cierre', cliente: cli.nombre || '', rut: cli.rut || '', giro: cli.giro || '', direccion: cli.direccion || '', comuna: cli.comuna || '', ciudad: cli.ciudad || cli.comuna || '', condicionPago: 'CONTADO', vendedor: cli.vendedor || 'Mario Vidal', sede, fecha: new Date().toISOString().slice(0, 10), margenVenta: +pct, porcentajeGanancia: +pct,
@@ -118,7 +123,7 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 12 }}>
           <div><span style={lab}>Descripcion</span><input value={it.desc} onChange={e => updItem(i, x => x.desc = e.target.value)} style={{ ...inp, width: '100%' }} /></div>
           <div><span style={lab}>RAL / Color</span><input value={it.ral} onChange={e => updItem(i, x => x.ral = e.target.value)} style={{ ...inp, width: '100%' }} /></div>
-          <div><span style={lab}>m2 superficie</span><input type="number" value={it.m2} onChange={e => updItem(i, x => x.m2 = e.target.value)} style={{ ...inp, width: '100%' }} /></div>
+          <div><span style={lab}>m2 superficie</span><input type="number" value={it.m2} onChange={e => updItem(i, x => x.m2 = e.target.value)} style={{ ...inp, width: '100%', border: (+it.m2 || 0) > 0 ? inp.border : '1px solid ' + T.warn }} />{(+it.m2 || 0) > 0 ? null : <span style={{ fontSize: 10.5, color: T.warn, fontWeight: 600, display: 'block', marginTop: 3 }}>{'Sin m\u00b2: esta pieza sumar\u00e1 $0'}</span>}</div>
           <div><span style={lab}>Dificultad</span><select value={it.dif} onChange={e => updItem(i, x => x.dif = e.target.value)} style={{ ...inp, width: '100%' }}>{P.factores.map((f, k) => <option key={k} value={f.nivel}>{f.nivel} (x{f.factor})</option>)}</select><div style={{ fontSize: 11, color: T.textMute, marginTop: 3, lineHeight: 1.3 }}>{CASOS_DIF[(it.dif || '').trim()[0]] || ''}</div></div>
           <div><span style={lab}>Limpieza SP-1 /m2</span><input type="number" value={it.limpieza} onChange={e => updItem(i, x => x.limpieza = e.target.value)} style={{ ...inp, width: '100%' }} /></div>
         </div>
