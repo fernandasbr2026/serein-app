@@ -142,6 +142,36 @@ function imprimir(html) {
 }
 export function descargarCotizacionPDF(cot) { imprimir(htmlDoc(cot, { conValores: true, esOT: false, conCondiciones: true })) }
 export function descargarOTPDF(cot) { imprimir(htmlDoc(cot, { conValores: false, esOT: true })) }
+// ---- Informe de compra de pintura (envases completos) ----
+export function descargarInformePintura(cot) {
+  const items = cot.items || []
+  // Consolida por producto sumando envases de todas las piezas que tengan compras
+  const filas = []
+  let total = 0
+  items.forEach((it, idx) => {
+    ;(it.comprasPintura || []).forEach(cp => {
+      total += cp.costo || 0
+      filas.push({ pieza: idx + 1, detalle: it.detalle || ('Item ' + (idx + 1)), m2: it.m2 || 0, producto: cp.producto, envases: cp.envases, litrosEnvase: cp.litrosEnvase, litrosComprados: cp.litrosComprados, sobrante: cp.sobrante, costo: cp.costo })
+    })
+  })
+  const consol = {}
+  filas.forEach(f => { if (!consol[f.producto]) consol[f.producto] = { producto: f.producto, litrosEnvase: f.litrosEnvase, envases: 0, litrosComprados: 0, costo: 0 }; consol[f.producto].envases += f.envases; consol[f.producto].litrosComprados += f.litrosComprados; consol[f.producto].costo += f.costo })
+  if (!filas.length) { window.alert('Esta cotizacion no tiene detalle de compra de pintura. Vuelve a generarla desde el cotizador (con m2 y esquema) para que quede guardado.'); return }
+  const fmt = n => (Math.round((n || 0) * 10) / 10).toLocaleString('es-CL')
+  const filasHtml = filas.map(f => `<tr><td>${f.pieza}</td><td>${f.detalle}</td><td class="r">${fmt(f.m2)} m\u00b2</td><td>${f.producto}</td><td class="r">${f.envases}</td><td class="r">${fmt(f.litrosEnvase)} L</td><td class="r">${fmt(f.litrosComprados)} L</td><td class="r">${fmt(f.sobrante)} L</td><td class="r">${clp(f.costo)}</td></tr>`).join('')
+  const consolHtml = Object.values(consol).map(c => `<tr><td>${c.producto}</td><td class="r">${c.envases} x ${fmt(c.litrosEnvase)} L</td><td class="r">${fmt(c.litrosComprados)} L</td><td class="r">${clp(c.costo)}</td></tr>`).join('')
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Compra pintura ${cot.folio || ''}</title><style>${estilosDoc()} h2{font-family:Oswald,Arial;color:#061A40;margin:14px 0 6px;font-size:15px} .sub{color:#5A6472;font-size:12px;margin-bottom:10px}</style></head><body>`
+    + `<div class="head"><div class="emp"><b>${EMPRESA.nombre || 'SEREIN SpA'}</b><div>${EMPRESA.rut || ''}</div></div><div class="doc"><div class="t">Compra de pintura</div><div class="f">Cotizaci\u00f3n N\u00b0 ${cot.folio || ''}</div></div></div>`
+    + `<div class="sub">Cliente: <b>${cot.cliente || ''}</b> \u00b7 Fecha: ${cot.fecha || ''} \u00b7 \u00c1rea: ${cot.area || ''}</div>`
+    + `<h2>Total a comprar por producto</h2>`
+    + `<table class="items"><thead><tr><th>Producto</th><th class="r">Envases</th><th class="r">Litros comprados</th><th class="r">Costo</th></tr></thead><tbody>${consolHtml}</tbody></table>`
+    + `<table class="tot"><tr><td class="lbl big">Total compra pintura</td><td class="r big">${clp(total)}</td></tr></table>`
+    + `<h2>Detalle por pieza</h2>`
+    + `<table class="items"><thead><tr><th>Pieza</th><th>Detalle</th><th class="r">m\u00b2</th><th>Producto</th><th class="r">Env.</th><th class="r">L/env</th><th class="r">L comprados</th><th class="r">Sobra</th><th class="r">Costo</th></tr></thead><tbody>${filasHtml}</tbody></table>`
+    + `<div class="sub" style="margin-top:12px">La pintura se vende por envase cerrado; el costo considera envases completos. \u201cSobra\u201d es el remanente que queda del \u00faltimo envase.</div>`
+    + `</body></html>`
+  imprimir(html)
+}
 
 // OT en PDF a partir de la OT real (refleja esquema, servicios y partidas editados)
 function htmlOTDoc(ot) {
@@ -445,6 +475,7 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <button onClick={() => descargarCotizacionPDF(c)} title="Descargar cotización PDF" style={{ background: C.carbon, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 4 }}><Download size={12} /> Cotización</button>
                       {c.estado === 'Aprobada' && <button onClick={() => descargarOTPDF(c)} title="Descargar OT sin valores" style={{ background: C.azul, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 4 }}><Download size={12} /> OT (sin valores)</button>}
+                        {c.estado === 'Aprobada' && (c.items || []).some(it => (it.comprasPintura || []).length) && <button onClick={() => descargarInformePintura(c)} title="Descargar informe de compra de pintura" style={{ background: C.ambar || '#FF6B00', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, borderRadius: 4 }}>Pintura</button>}
                       <button onClick={() => setEditId(c.id)} title="Editar" style={{ background: 'none', border: '1px solid #CBD2D6', padding: '5px 8px', cursor: 'pointer', fontSize: 11.5 }}><FileText size={12} /></button>
                       <button onClick={() => eliminar(c.id)} title="Eliminar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
                     </div>
