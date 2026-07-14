@@ -66,7 +66,7 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
 
   function updItem(i, fn) { setItems(prev => prev.map((x, k) => { if (k !== i) return x; const n = { ...x, capas: x.capas.map(c => ({ ...c })) }; fn(n); return n })) }
   function capasEng(it) { return it.capas.filter(c => c.p).map(c => ({ p: c.p, m: milsProm(c), perdida: c.perdida })) }
-  function dg(it) { const g = P.grados.find(x => x.grado === it.grado); const f = P.factores.find(x => x.nivel === it.dif); return desgloseItem({ esquema: { capas: capasEng(it) }, factorGrado: g ? g.factor : 1, factorDif: f ? f.factor : 1, limpiezaSP1: +it.limpieza || 0 }, ctx) }
+  function dg(it) { const g = P.grados.find(x => x.grado === it.grado); const f = P.factores.find(x => x.nivel === it.dif); return desgloseItem({ esquema: { capas: capasEng(it) }, factorGrado: g ? g.factor : 1, factorDif: f ? f.factor : 1, limpiezaSP1: +it.limpieza || 0, m2: +it.m2 || 0 }, ctx) }
   const totalCot = items.reduce((s, it) => s + precioMargen(dg(it).costoM2, pct) * (+it.m2 || 0), 0)
   function cargarEsquema(i, nombre) { const e = P.esquemas.find(x => x.n === nombre); if (!e) return; updItem(i, n => { n.capas = e.capas.map(c => ({ p: c.p, mMin: c.m, mMax: c.m, perdida: cte.perdidaTipica || 2 })) }) }
 
@@ -189,6 +189,17 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: T.textSoft, padding: '1px 0' }}><span>Diluyente /m2</span><span>{clp(d.diluyente)}</span></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: T.textSoft, padding: '1px 0' }}><span>Pintura /m2</span><span>{clp(d.pintura)}</span></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: T.textSoft, padding: '1px 0' }}><span>Gastos fijos /m2</span><span>{clp(d.fijos)}</span></div>
+            {(d.comprasPintura || []).length > 0 && (+it.m2 || 0) > 0 && (
+              <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px dashed ' + T.border }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: T.navy, textTransform: 'uppercase', marginBottom: 3 }}>Compra de pintura (envases completos)</div>
+                {d.comprasPintura.map((cp, k) => (
+                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.textSoft, padding: '1px 0' }}>
+                    <span>{cp.producto}: {cp.envases} x {cp.litrosEnvase} L</span>
+                    <span>{clp(cp.costo)}{cp.sobrante > 0.05 ? <span style={{ color: T.warn }}> · sobran {cp.sobrante.toFixed(1)} L</span> : null}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div style={{ minWidth: 180 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700, color: T.navy, borderBottom: '1px solid ' + T.border, paddingBottom: 4, marginBottom: 4 }}><span>Costo /m2</span><span>{clp(d.costoM2)}</span></div>
