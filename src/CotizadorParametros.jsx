@@ -32,7 +32,8 @@ export default function CotizadorParametros({ onVolver }) {
   const [sec, setSec] = useState('productos')
   const [q, setQ] = useState('')
   const [mcF, setMcF] = useState('')
-  useEffect(() => { try { localStorage.setItem(LS_KEY, JSON.stringify(p)) } catch (e) {} }, [p])
+  // Al guardar, avisa al cotizador para que reciba los parametros nuevos al instante
+  useEffect(() => { try { localStorage.setItem(LS_KEY, JSON.stringify(p)); window.dispatchEvent(new Event('cotizador-params')) } catch (e) {} }, [p])
   const upd = fn => setP(prev => { const n = JSON.parse(JSON.stringify(prev)); fn(n); return n })
   const norm = s => (s || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   const prodsFiltrados = () => (p.productos || []).map((pr, i) => ({ pr, i })).filter(({ pr }) => (!mcF || pr.mc === mcF) && (!q || norm(pr.n).includes(norm(q)) || norm(pr.mc).includes(norm(q))))
