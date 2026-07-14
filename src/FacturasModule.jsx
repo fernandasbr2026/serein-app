@@ -110,6 +110,22 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
   )
   const hayFiltro = busca || fCli || fEst || fMes
   const pg = paginar(mostradas, page)
+  const [sel, setSel] = useState(() => new Set())
+  const toggleSel = id => setSel(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const toggleTodas = () => setSel(s => s.size === mostradas.length ? new Set() : new Set(mostradas.map(x => x.id)))
+  const eliminarSel = () => {
+    if (!sel.size) return
+    if (!window.confirm('Se eliminaran ' + sel.size + ' factura(s) del area ' + area + '. Esta accion no se puede deshacer. Continuar?')) return
+    setLista(lista.filter(x => !sel.has(x.id)))
+    setSel(new Set())
+  }
+  const vaciarArea = () => {
+    if (!lista.length) return
+    if (!window.confirm('Se eliminaran TODAS las facturas del area ' + area + ' (' + lista.length + '). Esta accion no se puede deshacer. Continuar?')) return
+    if (!window.confirm('Confirmacion final: vaciar por completo las facturas de ' + area + '?')) return
+    setLista([])
+    setSel(new Set())
+  }
   const totalMonto = mostradas.reduce((a, x) => a + brutoDe(x.neto), 0)
   const cobrado = mostradas.filter(x => x.estado === 'Pagado').reduce((a, x) => a + brutoDe(x.neto), 0)
   const totalComision = mostradas.reduce((a, x) => a + comisionDe(x), 0)
@@ -205,9 +221,15 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
           </div>
         )}
 
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '0 12px 10px' }}>
+          <span style={{ fontSize: 12.5, color: C.gris }}>{sel.size} seleccionada(s)</span>
+          <button onClick={eliminarSel} disabled={!sel.size} style={{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5, background: sel.size ? C.rojo : '#E6E8EE', color: sel.size ? '#fff' : C.gris, cursor: sel.size ? 'pointer' : 'default' }}>Eliminar seleccionadas</button>
+          <button onClick={vaciarArea} disabled={!lista.length} style={{ background: 'transparent', border: '1px solid ' + C.rojo, color: C.rojo, padding: '7px 12px', borderRadius: 6, fontSize: 12.5, fontWeight: 700, cursor: lista.length ? 'pointer' : 'default' }}>Vaciar area {area}</button>
+        </div>
         <div style={{ overflowX: 'auto', padding: 12 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
             <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+              <th style={{ padding: '5px 6px', width: 30 }}><input type="checkbox" checked={mostradas.length > 0 && sel.size === mostradas.length} onChange={toggleTodas} /></th>
               {['N° factura', 'Cliente', 'OT / OC', 'Centro de costo', ...(esSR ? ['NV / Proyecto'] : []), 'Emisión', 'Neto', 'IVA', 'Total', `PPM ${ppmPct}%`, 'Estado', 'Fecha pago', 'Banco depósito', 'Comentarios', 'Vendedor', 'Comisión', ''].map((h, i) => (
                 <th key={i} style={{ textAlign: ['Neto', 'IVA', 'Total', 'Comisión'].includes(h) || h.startsWith('PPM') ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
@@ -220,6 +242,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                 return (
                 <React.Fragment key={x.id}>
                 <tr style={{ borderBottom: '1px solid #EEE9DF', opacity: x.estado === 'Anulada' ? 0.5 : 1 }}>
+                  <td style={{ padding: '5px 4px' }}><input type="checkbox" checked={sel.has(x.id)} onChange={() => toggleSel(x.id)} /></td>
                   <td style={{ padding: '4px 6px' }}><input value={x.numero} onChange={e => actualizar(x.id, 'numero', e.target.value)} style={{ ...inp, width: 80, fontWeight: 600 }} /></td>
                   <td style={{ padding: '4px 6px' }}><input value={x.cliente} list={dlId} onChange={e => actualizar(x.id, 'cliente', e.target.value)} style={{ ...inp, width: 150 }} /></td>
                   <td style={{ padding: '4px 6px' }}><input value={x.ot} list={dlOtId} onChange={e => actualizar(x.id, 'ot', e.target.value)} placeholder="OT/OC" style={{ ...inp, width: 100 }} /></td>
@@ -250,7 +273,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                 </tr>
                 {x.estado === 'Factoring' && (
                   <tr style={{ background: '#FBF3EE' }}>
-                    <td colSpan={esSR ? 17 : 16} style={{ padding: '8px 10px' }}>
+                    <td colSpan={esSR ? 18 : 17} style={{ padding: '8px 10px' }}>
                       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12 }}>
                         <span style={{ color: C.gris, fontWeight: 600 }}>Factoring:</span>
                         <select value={x.factoringId || (fSel ? fSel.id : '')} onChange={e => actualizar(x.id, 'factoringId', e.target.value)} style={inp}>
@@ -269,7 +292,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                 )}
                 </React.Fragment>
               ) })}
-              {mostradas.length === 0 && <tr><td colSpan={esSR ? 17 : 16} style={{ padding: 14, textAlign: 'center', color: '#9AA0A6' }}>{busca ? 'Sin resultados para la búsqueda.' : 'Sin facturas en esta área.'}</td></tr>}
+              {mostradas.length === 0 && <tr><td colSpan={esSR ? 18 : 17} style={{ padding: 14, textAlign: 'center', color: '#9AA0A6' }}>{busca ? 'Sin resultados para la búsqueda.' : 'Sin facturas en esta área.'}</td></tr>}
             </tbody>
           </table>
           <Paginador page={pg.page} paginas={pg.paginas} total={pg.total} setPage={setPage} />
