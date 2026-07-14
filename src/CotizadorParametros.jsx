@@ -62,7 +62,7 @@ export default function CotizadorParametros({ onVolver }) {
     {sec === 'productos' && (<div style={card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <div style={{ fontWeight: 600, color: T.text }}>Productos ({q || mcF ? prodsFiltrados().length + ' de ' + p.productos.length : p.productos.length})</div>
-        <button style={btnP} onClick={() => upd(n => n.productos.unshift({ n: 'NUEVO PRODUCTO', mc: '', s: 60, l: 0, g: 0 }))}><Plus size={14} /> Agregar</button>
+        <button style={btnP} onClick={() => upd(n => n.productos.unshift({ n: 'NUEVO PRODUCTO', mc: '', s: 60, l: 0, g: 0, le: 3.785, pe: 0 }))}><Plus size={14} /> Agregar</button>
       </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar producto o marca..." style={{ flex: '2 1 240px', padding: '8px 10px', border: '1px solid ' + T.border, borderRadius: 8, fontSize: 13 }} />
@@ -74,7 +74,7 @@ export default function CotizadorParametros({ onVolver }) {
           </div>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }}>
-          <thead><tr><th style={th}>Producto</th><th style={th}>Marca</th><th style={th}>Solidos %</th><th style={th}>$/litro</th><th style={th}>$/galon</th><th style={th}></th></tr></thead>
+          <thead><tr><th style={th}>Producto</th><th style={th}>Marca</th><th style={th}>Solidos %</th><th style={th}>$/litro</th><th style={th}>$/galon</th><th style={th} title="Litros que trae el envase que se compra: galon 3,785 L / tineta 19 L">L / envase</th><th style={th} title="Precio del envase completo">$ / envase</th><th style={th}></th></tr></thead>
           <tbody>
             {prodsFiltrados().map(({ pr, i }) => (<tr key={i}>
               <td style={tdc}>{ti(pr.n, v => upd(n => { n.productos[i].n = v }), { minWidth: 150 })}</td>
@@ -82,11 +82,14 @@ export default function CotizadorParametros({ onVolver }) {
               <td style={tdc}>{ni(pr.s, v => upd(n => { n.productos[i].s = v }), { width: 80 })}</td>
               <td style={tdc}>{ni(pr.l, v => upd(n => { n.productos[i].l = v }), { width: 100 })}</td>
               <td style={tdc}>{ni(pr.g, v => upd(n => { n.productos[i].g = v }), { width: 100 })}</td>
+              <td style={tdc}>{ni(pr.le, v => upd(n => { n.productos[i].le = v }), { width: 90 })}</td>
+              <td style={tdc}>{ni(pr.pe, v => upd(n => { n.productos[i].pe = v }), { width: 110 })}</td>
               <td style={tdc}><button style={btnDel} onClick={() => upd(n => n.productos.splice(i, 1))}><Trash2 size={15} /></button></td>
             </tr>))}
-            {prodsFiltrados().length === 0 && <tr><td colSpan={6} style={{ padding: 16, textAlign: 'center', color: T.textMute, fontSize: 13 }}>Sin productos que coincidan con la busqueda.</td></tr>}
+            {prodsFiltrados().length === 0 && <tr><td colSpan={8} style={{ padding: 16, textAlign: 'center', color: T.textMute, fontSize: 13 }}>Sin productos que coincidan con la busqueda.</td></tr>}
           </tbody>
         </table>
+        <div style={{ fontSize: 11.5, color: T.textMute, marginTop: 8 }}>La pintura se compra por envase cerrado. <b>L / envase</b> es lo que trae el envase (galon 3,785 L, tineta 19 L) y <b>$ / envase</b> lo que cuesta completo. Si quedan vacios, se asume un galon al precio de la columna $/galon.</div>
       </div>
     </div>)}
 
