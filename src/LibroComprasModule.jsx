@@ -128,13 +128,40 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
   }, [todas])
   const tipos = useMemo(() => [...new Set(todas.map(r => r.document_type).filter(Boolean))].sort(), [todas])
 
+  const [sel, setSel] = useState(() => new Set())
+  const [verOcultas, setVerOcultas] = useState(false)
+
   const filtradas = useMemo(() => todas.filter(r => {
+    if (verOcultas) { if (!r.oculto) return false } else { if (r.oculto) return false }
     if (mes && (r.emission_date || '').slice(0, 7) !== mes) return false
     if (tipo && r.document_type !== tipo) return false
     if (area && (r.centro_costo || '') !== area) return false
     if (q) { const t = (r.provider_name + ' ' + r.provider_rut + ' ' + r.document_number).toLowerCase(); if (!t.includes(q.toLowerCase())) return false }
     return true
-  }), [todas, mes, tipo, area, q])
+  }), [todas, mes, tipo, area, q, verOcultas])
+
+  const toggleSel = id => setSel(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const toggleTodas = () => setSel(s => s.size === filtradas.length ? new Set() : new Set(filtradas.map(r => r.id)))
+  const eliminarSel = async () => {
+    const elegidas = filtradas.filter(r => sel.has(r.id))
+    if (!elegidas.length) return
+    if (!window.confirm('Se ocultaran ' + elegidas.length + ' documento(s). Dejaran de verse en la tabla y en los totales, y una nueva sincronizacion no los volvera a mostrar. Puedes recuperarlos con el boton "Ver ocultos". Las filas importadas desde Excel se eliminan definitivamente. Continuar?')) return
+    const idsXlsx = elegidas.filter(r => (extra || []).some(x => x.id === r.id)).map(r => r.id)
+    if (idsXlsx.length) guardarExtra((extra || []).filter(x => !idsXlsx.includes(x.id)))
+    const idsDb = elegidas.filter(r => !idsXlsx.includes(r.id)).map(r => r.id)
+    if (idsDb.length) {
+      setRows(rs => rs.map(x => idsDb.includes(x.id) ? { ...x, oculto: true } : x))
+      try { await supabase.from('libro_compras').update({ oculto: true }).in('id', idsDb) } catch (e) {}
+    }
+    setSel(new Set())
+  }
+  const restaurarSel = async () => {
+    const ids = filtradas.filter(r => sel.has(r.id) && !(extra || []).some(x => x.id === r.id)).map(r => r.id)
+    if (!ids.length) return
+    setRows(rs => rs.map(x => ids.includes(x.id) ? { ...x, oculto: false } : x))
+    try { await supabase.from('libro_compras').update({ oculto: false }).in('id', ids) } catch (e) {}
+    setSel(new Set())
+  }
 
   const tot = useMemo(() => filtradas.reduce((a, r) => ({ neto: a.neto + (+r.neto || 0), iva: a.iva + (+r.iva || 0), total: a.total + (+r.document_total || 0) }), { neto: 0, iva: 0, total: 0 }), [filtradas])
 
@@ -189,6 +216,13 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
         </select>
       </div>
 
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+        <span style={{ fontSize: 12.5, color: C.mut }}>{sel.size} seleccionado(s)</span>
+        {!verOcultas && <button onClick={eliminarSel} disabled={!sel.size} style={{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5, background: sel.size ? C.red : '#E6E8EE', color: sel.size ? '#fff' : C.mut, cursor: sel.size ? 'pointer' : 'default' }}>Eliminar seleccionados</button>}
+        {verOcultas && <button onClick={restaurarSel} disabled={!sel.size} style={{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5, background: sel.size ? C.green : '#E6E8EE', color: sel.size ? '#fff' : C.mut, cursor: sel.size ? 'pointer' : 'default' }}>Restaurar seleccionados</button>}
+        <button onClick={() => { setVerOcultas(v => !v); setSel(new Set()) }} style={{ background: 'transparent', border: '1px solid ' + C.border, padding: '7px 12px', borderRadius: 6, fontSize: 12.5, cursor: 'pointer', color: C.navy }}>{verOcultas ? 'Volver al libro' : 'Ver ocultos'}</button>
+      </div>
+
       {loading ? <div style={{ color: C.mut, padding: 20 }}>Cargando...</div> : errMsg ? <div style={{ background: '#FDECEC', border: '1px solid ' + C.red, color: C.red, padding: '10px 14px', borderRadius: 6, fontSize: 13 }}>{errMsg}</div> : filtradas.length === 0 ? (
         <div style={{ color: C.mut, padding: 20, textAlign: 'center', border: '1px dashed ' + C.border, borderRadius: 8 }}>
           Sin documentos. Presiona <b>Sincronizar con Defontana</b> para traer el libro de compras del ano.
@@ -198,6 +232,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 1200 }}>
             <thead>
               <tr style={{ background: C.navy, color: '#fff' }}>
+                <th style={{ padding: '9px 10px', width: 34 }}><input type="checkbox" checked={filtradas.length > 0 && sel.size === filtradas.length} onChange={toggleTodas} /></th>
                 {['Emision', 'Proveedor', 'Folio', 'Tipo', 'Neto', 'IVA', 'Total', 'OT', 'Centro de costo', 'Area', 'Pago', 'Reparto area'].map(h => (
                   <th key={h} style={{ textAlign: h === 'Neto' || h === 'IVA' || h === 'Total' ? 'right' : 'left', padding: '9px 10px', fontSize: 11, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
@@ -206,6 +241,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
             <tbody>
               {filtradas.map(r => (
                 <tr key={r.id} style={{ borderBottom: '1px solid #EEECE4' }}>
+                  <td style={{ padding: '7px 10px' }}><input type="checkbox" checked={sel.has(r.id)} onChange={() => toggleSel(r.id)} /></td>
                   <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{r.emission_date || '-'}</td>
                   <td style={{ padding: '7px 10px' }}><div style={{ fontWeight: 600 }}>{r.provider_name || '-'}</div><div style={{ color: C.mut, fontSize: 11 }}>{r.provider_rut}</div></td>
                   <td style={{ padding: '7px 10px' }}>{r.document_number}</td>
