@@ -90,9 +90,11 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
     const reader = new FileReader()
     reader.onload = ev => {
       try {
-        const wb = XLSX.read(ev.target.result, { type: 'array', cellDates: true })
+        const wb = XLSX.read(ev.target.result, { type: 'array' })
         const hoja = wb.SheetNames[0]
         const filas = XLSX.utils.sheet_to_json(wb.Sheets[hoja], { header: 1, raw: true, blankrows: false })
+        // Texto tal como se ve en Excel: la fecha se lee de aqui (dia primero), sin importar como Excel la haya guardado por dentro
+        const filasTxt = XLSX.utils.sheet_to_json(wb.Sheets[hoja], { header: 1, raw: false, blankrows: false })
         if (!filas.length) { window.alert('El archivo esta vacio.'); return }
         let hi = 0
         for (let i = 0; i < Math.min(filas.length, 12); i++) { const t = (filas[i] || []).map(h => norm(h)).join('|'); if (t.includes('folio') || t.includes('documento') || t.includes('neto')) { hi = i; break } }
@@ -118,7 +120,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
           const neto = toInt(row[ci.neto])
           const iva = ci.iva >= 0 ? toInt(row[ci.iva]) : Math.round(neto * 0.19)
           const total = ci.total >= 0 && toInt(row[ci.total]) > 0 ? toInt(row[ci.total]) : neto + iva
-          nuevas.push({ id: 'x' + folio + '-' + (String(row[ci.rut] ?? '').trim() || r), origen: 'xlsx', emission_date: fechaDe(row[ci.fecha]), document_number: folio, client_name: cliente, client_rut: String(row[ci.rut] ?? '').trim(), document_type: String(row[ci.tipo] ?? 'Factura').trim(), neto, iva, total, vencimiento: fechaDe(row[ci.venc]), status: 'Importada', area: '', ot_id: '', cc_ot: '', estado_pago: 'Pendiente', factoring_id: '', dias: 30, dias_mora: 0, fecha_pago: '', banco: '' })
+          nuevas.push({ id: 'x' + folio + '-' + (String(row[ci.rut] ?? '').trim() || r), origen: 'xlsx', emission_date: fechaDe((filasTxt[r] || [])[ci.fecha] != null && (filasTxt[r] || [])[ci.fecha] !== '' ? (filasTxt[r] || [])[ci.fecha] : row[ci.fecha]), document_number: folio, client_name: cliente, client_rut: String(row[ci.rut] ?? '').trim(), document_type: String(row[ci.tipo] ?? 'Factura').trim(), neto, iva, total, vencimiento: fechaDe(row[ci.venc]), status: 'Importada', area: '', ot_id: '', cc_ot: '', estado_pago: 'Pendiente', factoring_id: '', dias: 30, dias_mora: 0, fecha_pago: '', banco: '' })
         }
         if (!nuevas.length) { window.alert('No se reconocieron filas. Revisa que el Excel tenga columnas Folio, Cliente, Neto y Total.') ; return }
         const ids = new Set(nuevas.map(x => x.id))
