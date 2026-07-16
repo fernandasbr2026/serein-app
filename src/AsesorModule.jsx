@@ -30,7 +30,80 @@ function Fila({ k, v, color }) {
   return (<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, fontSize: 13 }}><span style={{ color: C.gray }}>{k}</span><span style={{ fontWeight: 700, color: color || C.navy, whiteSpace: 'nowrap' }}>{v}</span></div>)
 }
 
+const TEMAS = ['Ventas', 'OT', 'OC', 'Facturas', 'Clientes', 'Produccion', 'Compras', 'Cobranza']
+const tabBtn = on => ({ background: on ? C.navy : '#fff', color: on ? '#fff' : C.navy, border: '1px solid ' + C.line, borderRadius: 4, padding: '7px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase' })
+
+function ChatIA() {
+  const [convs, setConvs] = useState([])
+  const [conv, setConv] = useState(null)
+  const [msgs, setMsgs] = useState([])
+  const [texto, setTexto] = useState('')
+  const [error, setError] = useState('')
+  const [cargando, setCargando] = useState(true)
+  const [enviando, setEnviando] = useState(false)
+  useEffect(() => { cargar() }, [])
+  async function cargar() {
+    setCargando(true); setError('')
+    const res = await supabase.from('ai_conversaciones').select('*').order('updated_at', { ascending: false })
+    if (res.error) { setError('No se pudo leer el historial. Falta crear las tablas del chat (corre ai_chat_setup.sql en Supabase). Detalle: ' + res.error.message); setCargando(false); return }
+    setConvs(res.data || [])
+    if (res.data && res.data.length) await abrir(res.data[0].id)
+    else { setConv(null); setMsgs([]) }
+    setCargando(false)
+  }
+  async function abrir(id) {
+    setConv(id)
+    const res = await supabase.from('ai_mensajes').select('*').eq('conversacion_id', id).order('created_at', { ascending: true })
+    setMsgs(res.data || [])
+  }
+  async function nueva() {
+    const res = await supabase.from('ai_conversaciones').insert({ titulo: 'Consulta ' + new Date().toLocaleString('es-CL') }).select().single()
+    if (res.error) { setError(res.error.message); return null }
+    setConvs(c => [res.data, ...c]); setConv(res.data.id); setMsgs([]); return res.data.id
+  }
+  async function enviar(txt, tema) {
+    const contenido = ((txt != null ? txt : texto) || '').trim()
+    if (!contenido || enviando) return
+    setEnviando(true); setTexto('')
+    let cid = conv
+    if (!cid) { cid = await nueva(); if (!cid) { setEnviando(false); return } }
+    const u = await supabase.from('ai_mensajes').insert({ conversacion_id: cid, rol: 'user', texto: contenido, tema: tema || null }).select().single()
+    if (u.error) { setError(u.error.message); setEnviando(false); return }
+    const botTxt = 'Recibido' + (tema ? ' (tema: ' + tema + ')' : '') + '. La consulta inteligente aun no esta activa; por ahora tu mensaje queda guardado en el historial.'
+    const b = await supabase.from('ai_mensajes').insert({ conversacion_id: cid, rol: 'assistant', texto: botTxt }).select().single()
+    setMsgs(m => m.concat([u.data, b.data].filter(Boolean)))
+    supabase.from('ai_conversaciones').update({ updated_at: new Date().toISOString() }).eq('id', cid)
+    setEnviando(false)
+  }
+  return (
+    <div style={{ display: 'flex', gap: 12, minHeight: 500 }}>
+      <div style={{ width: 190, borderRight: '1px solid ' + C.line, paddingRight: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <button onClick={nueva} style={{ background: C.navy, color: '#fff', border: 'none', borderRadius: 4, padding: '8px 10px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>+ Nueva conversacion</button>
+        {convs.map(c => (<button key={c.id} onClick={() => abrir(c.id)} style={{ textAlign: 'left', background: c.id === conv ? '#F1EDE5' : 'transparent', border: '1px solid ' + C.line, borderRadius: 4, padding: '7px 9px', cursor: 'pointer', fontSize: 12, color: C.navy, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.titulo || 'Conversacion'}</button>))}
+        {!cargando && convs.length === 0 ? <div style={{ fontSize: 12, color: C.gray }}>Sin conversaciones aun.</div> : null}
+      </div>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {error ? <div style={{ background: '#FDECEC', border: '1px solid ' + C.red, color: C.red, padding: '8px 12px', borderRadius: 4, fontSize: 12.5, marginBottom: 8 }}>{error}</div> : null}
+        <div style={{ flex: 1, minHeight: 300, overflowY: 'auto', border: '1px solid ' + C.line, borderRadius: 6, padding: 12, background: '#FCFAF6', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {cargando ? <div style={{ color: C.gray, fontSize: 13 }}>Cargando historial...</div> : null}
+          {!cargando && msgs.length === 0 ? <div style={{ color: C.gray, fontSize: 13 }}>Escribe un mensaje o elige un tema para empezar. El historial queda guardado en tu cuenta.</div> : null}
+          {msgs.map((m, i) => (<div key={m.id || i} style={{ alignSelf: m.rol === 'user' ? 'flex-end' : 'flex-start', maxWidth: '78%', background: m.rol === 'user' ? C.navy : '#fff', color: m.rol === 'user' ? '#fff' : C.navy, border: '1px solid ' + C.line, borderRadius: 8, padding: '8px 11px', fontSize: 13 }}>{m.tema && m.rol === 'user' ? <div style={{ fontSize: 10, opacity: 0.85, marginBottom: 2, textTransform: 'uppercase' }}>{m.tema}</div> : null}{m.texto}</div>))}
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '8px 0' }}>
+          {TEMAS.map(t => <button key={t} onClick={() => enviar('Consulta sobre ' + t, t)} disabled={enviando} style={{ background: '#fff', border: '1px solid ' + C.line, borderRadius: 20, padding: '4px 11px', cursor: 'pointer', fontSize: 11.5, color: C.navy }}>{t}</button>)}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input value={texto} onChange={e => setTexto(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') enviar() }} placeholder="Escribe tu consulta..." style={{ flex: 1, border: '1px solid ' + C.line, borderRadius: 6, padding: '10px 12px', fontSize: 13, boxSizing: 'border-box' }} />
+          <button onClick={() => enviar()} disabled={enviando} style={{ background: C.navy, color: '#fff', border: 'none', borderRadius: 6, padding: '0 18px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Enviar</button>
+        </div>
+        <div style={{ fontSize: 11, color: C.gray, marginTop: 6 }}>Arquitectura lista. La inteligencia (respuestas y consultas a Ventas, OT, OC, Facturas, Clientes, Produccion, Compras y Cobranza) se activara en una fase siguiente.</div>
+      </div>
+    </div>
+  )
+}
+
 export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = [], params = {}, onIr }) {
+  const [vista, setVista] = useState('dashboard')
   const [iva, setIva] = useState({ credito: 0, debito: 0, cargado: false })
   const [compras, setCompras] = useState(null)
   const hoyStr = hoy()
@@ -113,6 +186,11 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
 
   return (
     <div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14, borderBottom: '1px solid ' + C.line, paddingBottom: 4 }}>
+        <button onClick={() => setVista('dashboard')} style={tabBtn(vista === 'dashboard')}>Dashboard Inteligente</button>
+        <button onClick={() => setVista('chat')} style={tabBtn(vista === 'chat')}>Chat</button>
+      </div>
+      {vista === 'chat' ? <ChatIA /> : (<div>
       <div style={{ marginBottom: 16 }}>
         <h2 style={{ fontFamily: "'Oswald',sans-serif", fontSize: 24, fontWeight: 600, textTransform: 'uppercase', margin: 0, color: C.navy }}>Dashboard Inteligente</h2>
         <div style={{ fontSize: 12.5, color: C.gray }}>Se actualiza automaticamente al ingresar · datos reales del sistema</div>
@@ -168,6 +246,7 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
           </div>
         </div>
       )}
+      </div>)}
     </div>
   )
 }
