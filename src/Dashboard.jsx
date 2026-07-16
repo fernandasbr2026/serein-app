@@ -323,7 +323,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
 
   // ----- Consolidado y áreas: suman desde las FACTURAS consolidadas (Venta Neta) -----
   const areasFact = ['Santa Rosa', 'Istria', 'Proyectos']
-  const facNeto = a => (facturas[a] || []).reduce((s, x) => s + (x.neto || 0), 0)
+  const facNeto = a => (facturas[a] || []).filter(x => x.estado !== 'Anulada').reduce((s, x) => s + (x.neto || 0), 0)
   const facCobN = a => (facturas[a] || []).filter(x => x.estado === 'Pagado' || x.estado === 'Factoring' || /factor/i.test(x.medio || '')).reduce((s, x) => s + (x.neto || 0), 0)
   const facCount = a => (facturas[a] || []).length
   const esTODAS = esGerencia && areaSel === 'TODAS'
