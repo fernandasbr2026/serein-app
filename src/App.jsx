@@ -67,10 +67,10 @@ export default function App() {
     if (!perfil) return
     let vivo = true
     pullState().then(res => { if (res.ok && res.n === 0) pushState() }).finally(() => { if (vivo) setSincronizado(true) })
-    const id = setInterval(() => { pushState() }, 8000)
+    const id = setInterval(() => { pushState() }, 2000)
     const onHide = () => { pushState() }
-    window.addEventListener('beforeunload', onHide)
-    return () => { vivo = false; clearInterval(id); window.removeEventListener('beforeunload', onHide) }
+    window.addEventListener('beforeunload', onHide); document.addEventListener('visibilitychange', onHide)
+    return () => { vivo = false; clearInterval(id); window.removeEventListener('beforeunload', onHide); document.removeEventListener('visibilitychange', onHide) }
   }, [perfil])
 
   async function salir() {
