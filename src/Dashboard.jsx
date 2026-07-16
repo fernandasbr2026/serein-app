@@ -293,10 +293,30 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const vista = useMemo(() => (esGerencia && areaSel === 'TODAS') ? DATA.global : (DATA.areas[areaSel] || DATA.global), [areaSel, esGerencia])
   const rentab = vista.venta > 0 ? (vista.utilidad / vista.venta) * 100 : 0
 
-  const mesesVista = useMemo(() => DATA.meses.map(m => ({
-    mes: m.mes.slice(0, 3),
-    total: (esGerencia && areaSel === 'TODAS') ? m['Santa Rosa'] + m.Proyectos + m.Istria : (m[areaSel] ?? 0),
-  })), [areaSel, esGerencia])
+  const mesesVista = useMemo(() => {
+    // Gráfico desde las FACTURAS reales (agrupadas por fecha_emision), no desde DATA.meses semilla.
+    const AREAS_FACT = ['Santa Rosa', 'Istria', 'Proyectos']
+    const esTodasV = esGerencia && areaSel === 'TODAS'
+    const areasSel = esTodasV ? AREAS_FACT : (AREAS_FACT.includes(areaSel) ? [areaSel] : null)
+    if (!areasSel) return DATA.meses.map(m => ({ mes: m.mes.slice(0, 3), total: m[areaSel] ?? 0 }))
+    const NOMBRES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+    const acc = {}
+    for (const a of areasSel)
+      for (const f of (facturas[a] || [])) {
+        const mk = (f.fecha_emision || '').slice(0, 7)
+        if (/^\d{4}-\d{2}$/.test(mk)) acc[mk] = (acc[mk] || 0) + (f.neto || 0)
+      }
+    const claves = Object.keys(acc).sort()
+    if (!claves.length) return []
+    const [y0, m0] = claves[0].split('-').map(Number)
+    const [y1, m1] = claves[claves.length - 1].split('-').map(Number)
+    const out = []
+    for (let y = y0, m = m0; y < y1 || (y === y1 && m <= m1);) {
+      out.push({ mes: NOMBRES[m - 1], total: acc[y + '-' + String(m).padStart(2, '0')] || 0 })
+      if (++m > 12) { m = 1; y++ }
+    }
+    return out
+  }, [areaSel, esGerencia, facturas])
 
   const estados = Object.entries(vista.estados || {})
   const totalEst = estados.reduce((a, [, n]) => a + n, 0) || 1
@@ -304,7 +324,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   // ----- Consolidado y áreas: suman desde las FACTURAS consolidadas (Venta Neta) -----
   const areasFact = ['Santa Rosa', 'Istria', 'Proyectos']
   const facNeto = a => (facturas[a] || []).reduce((s, x) => s + (x.neto || 0), 0)
-  const facCobN = a => (facturas[a] || []).filter(x => x.estado === 'Pagado').reduce((s, x) => s + (x.neto || 0), 0)
+  const facCobN = a => (facturas[a] || []).filter(x => x.estado === 'Pagado' || x.estado === 'Factoring' || /factor/i.test(x.medio || '')).reduce((s, x) => s + (x.neto || 0), 0)
   const facCount = a => (facturas[a] || []).length
   const esTODAS = esGerencia && areaSel === 'TODAS'
   const esAreaFact = areasFact.includes(areaSel)
@@ -335,8 +355,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
 
   // ===== RESUMEN FINANCIERO TOTAL (montos con IVA / bruto) =====
   const brutoF = f => { const n = f.neto || 0; return n + Math.round(n * 0.19) }
-  const noPagada = f => f.estado !== 'Pagado' && f.estado !== 'Anulada'
-  const esPagada = f => f.estado === 'Pagado'
+  const noPagada = f => f.estado !== 'Pagado' && f.estado !== 'Anulada' && f.estado !== 'Factoring' && !/factor/i.test(f.medio || '')
+  const esPagada = f => f.estado === 'Pagado' || f.estado === 'Factoring' || /factor/i.test(f.medio || '')
   const facBrutoArea = (a, filtro) => (facturas[a] || []).filter(filtro).reduce((s, f) => s + brutoF(f), 0)
   // Cuentas por cobrar (bruto): facturas no pagadas de las tres áreas
   const cxcTotal = areasFact.reduce((s, a) => s + facBrutoArea(a, noPagada), 0)
