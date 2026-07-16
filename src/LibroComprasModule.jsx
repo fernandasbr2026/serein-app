@@ -31,7 +31,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
     setProyectos(ps => (ps || []).map(p => {
       const compras = (p.compras || []).filter(c => c.libroId !== r.id)
       if (otNumProy(p) !== String(otNum || '').trim() || !ccCode) return { ...p, compras }
-      return { ...p, compras: [...compras, { id: 'lc' + r.id, proveedor: r.provider_name || '', folio: r.document_number || '', rut: r.provider_rut || '',  fecha: r.emission_date || '', monto: Math.round(Number(r.exenta ? (r.document_total || r.neto) : r.neto) || 0), cc: ccCode,] }
+      return { ...p, compras: [...compras, { id: 'lc' + r.id, proveedor: r.provider_name || '', folio: r.document_number || '', rut: r.provider_rut || '', monto: Math.round(Number(r.exenta ? (r.document_total || r.neto) : r.neto) || 0), cc: ccCode, fecha: r.emission_date || '', detalle: 'SII ' + (r.document_type || '') + (r.exenta ? ' (Exenta)' : ''), exento: !!r.exenta, origen: 'libro', libroId: r.id }] }
     }))
   }
   const [rows, setRows] = useState([])
@@ -200,7 +200,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
     setSel(new Set())
   }
 
-  const tot = useMemo(() => color: C.orange }}>{clp(r.exenta ? 0 : r.iva)}</td>, [filtradas])
+  const tot = useMemo(() => filtradas.reduce((a, r) => ({ neto: a.neto + (r.exenta ? (+r.document_total || 0) : (+r.neto || 0)), iva: a.iva + (r.exenta ? 0 : (+r.iva || 0)), total: a.total + (+r.document_total || 0) }), { neto: 0, iva: 0, total: 0 }), [filtradas])
 
   const setCampo = async (id, campo, valor) => {
     if ((extra || []).some(x => x.id === id)) { guardarExtra((extra || []).map(x => x.id === id ? { ...x, [campo]: valor } : x)); return }
@@ -282,9 +282,9 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
                   <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{fmtF(r.emission_date)}</td>
                   <td style={{ padding: '7px 10px' }}><div style={{ fontWeight: 600 }}>{r.provider_name || '-'}</div><div style={{ color: C.mut, fontSize: 11 }}>{r.provider_rut}</div></td>
                   <td style={{ padding: '7px 10px' }}>{r.document_number}</td>
-                  detalle: 'SII ' + (r.document_type || '') + (r.exenta ? ' (Exenta)' : ''), exento: !!r.exenta, origen: 'libro', libroId: r.id }
-                  <td style={{ padding: '7px 10px', textAlign: 'right', <td style={{ padding: '7px 10px', fontSize: 11.5 }}>{r.document_type}<label style={{ display: 'block', marginTop: 3, fontSize: 10.5, color: C.mut, cursor: 'pointer' }}><input type="checkbox" checked={!!r.exenta} onChange={e => setCampo(r.id, 'exenta', e.target.checked)} /> Exenta</label></td>
-                  <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', whiteSpace: 'nowrap' }}>{clp(r.exenta ? (r.document_total || r.neto) : r.neto)}</td>
+                  <td style={{ padding: '7px 10px', fontSize: 11.5 }}>{r.document_type}<label style={{ display: 'block', marginTop: 3, fontSize: 10.5, color: C.mut, cursor: 'pointer' }}><input type="checkbox" checked={!!r.exenta} onChange={e => setCampo(r.id, 'exenta', e.target.checked)} /> Exenta</label></td>
+                  <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>{clp(r.exenta ? (r.document_total || r.neto) : r.neto)}</td>
+                  <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', color: C.orange }}>{clp(r.exenta ? 0 : r.iva)}</td>
                   <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700 }}>{clp(r.document_total)}</td>
                   <td style={{ padding: '7px 10px' }}>
                     <select style={{ ...sel, minWidth: 130 }} value={r.ot_id || ''} onChange={e => { const v = e.target.value; setCampo(r.id, 'ot_id', v); setCampo(r.id, 'cc_ot', ''); imputarFicha(r, v, '') }}>
