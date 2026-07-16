@@ -120,7 +120,7 @@ function FormEdp({ params, onAdd, onCancel }) {
 
 // ---------- Form compra (con CC, folio, rut) ----------
 function FormCompra({ p, onAdd, onCancel }) {
-  const [f, setF] = useState({ proveedor: '', detalle: '', fecha: '', monto: '', cc: CC_DEFS[0].id, folio: '', rut: '' })
+  const [f, setF] = useState({ proveedor: '', detalle: '', fecha: '', monto: '', cc: CC_DEFS[0].id, folio: '', rut: '', exento: false })
   return (
     <div style={{ background: '#F7F4EE', padding: 12, marginTop: 8 }}>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -132,10 +132,10 @@ function FormCompra({ p, onAdd, onCancel }) {
         </select>
         <input style={{ ...inp, width: 130 }} placeholder="Detalle (opcional)" value={f.detalle} onChange={e => setF({ ...f, detalle: e.target.value })} />
         <input style={{ ...inp, width: 120 }} type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} />
-        <input style={{ ...inp, width: 120 }} placeholder="Monto neto CLP" value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} />
+        <input style={{ ...inp, width: 120 }} placeholder="Monto neto CLP" value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} /><label style={{ fontSize: 12, color: C.gris, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" checked={!!f.exento} onChange={e => setF({ ...f, exento: e.target.checked })} /> Exenta (sin IVA)</label>
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-        <button onClick={() => f.proveedor && num(f.monto) > 0 && onAdd({ proveedor: f.proveedor, detalle: f.detalle, fecha: f.fecha || '—', monto: num(f.monto), cc: f.cc, folio: f.folio, rut: f.rut })}
+        <button onClick={() => f.proveedor && num(f.monto) > 0 && onAdd({ proveedor: f.proveedor, detalle: f.detalle, fecha: f.fecha || '—', monto: num(f.monto), cc: f.cc, folio: f.folio, rut: f.rut, exento: !!f.exento })}
           style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Agregar compra</button>
         <button onClick={onCancel} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
       </div>
@@ -522,7 +522,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
                       <td style={{ padding: '5px 8px' }}><input value={c.folio || ''} onChange={ev => updCompra(i, { folio: ev.target.value })} placeholder="N° doc" style={{ ...inp, width: 90, padding: '5px 7px' }} /></td>
                       <td style={{ padding: '5px 8px' }}><input value={c.detalle || ''} onChange={ev => updCompra(i, { detalle: ev.target.value })} placeholder="Detalle" style={{ ...inp, width: 130, padding: '5px 7px' }} /></td>
                       <td style={{ padding: '5px 8px' }}><input type="date" value={c.fecha && c.fecha !== '—' ? c.fecha : ''} onChange={ev => updCompra(i, { fecha: ev.target.value || '—' })} style={{ ...inp, width: 140, padding: '5px 7px' }} /></td>
-                      <td style={{ padding: '5px 8px', textAlign: 'right' }}><input value={c.monto} onChange={ev => updCompra(i, { monto: num(ev.target.value) })} style={{ ...inp, width: 110, padding: '5px 7px', textAlign: 'right' }} /></td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right' }}><input value={c.monto} onChange={ev => updCompra(i, { monto: num(ev.target.value) })} style={{ ...inp, width: 110, padding: '5px 7px', textAlign: 'right' }} /><label style={{ display: 'block', marginTop: 3, fontSize: 10.5, color: C.gris }}><input type="checkbox" checked={!!c.exento} onChange={ev => updCompra(i, { exento: ev.target.checked })} /> Exenta</label></td>
                       <td style={{ padding: '7px 4px', textAlign: 'right' }}><button onClick={() => window.confirm(`¿Eliminar compra de ${c.proveedor} (${clp(c.monto)})?`) && onUpdate(p.id, { compras: p.compras.filter((_, j) => j !== i) })} style={btnMini}><Trash2 size={14} /></button></td>
                     </tr>
                   ))}
