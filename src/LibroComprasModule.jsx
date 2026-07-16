@@ -16,7 +16,7 @@ const ESTADOS_PAGO = ['Pendiente', 'Pagada', 'Credito', 'Factoring']
 const colorPago = e => e === 'Pagada' ? C.green : e === 'Factoring' ? C.orange : e === 'Credito' ? '#2563EB' : C.mut
 const DIAS_OPC = [30, 45, 60, 90]
 const LS_XLSX = 'serein_libroComprasXlsx'
-const norm = s => (s || '').toString().toLowerCase()
+const norm = s => (s || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
 export default function LibroComprasModule({ esGerencia = true, ots = [], factoringList = [], proyectos = [], setProyectos = null }) {
   const otNumProy = p => String(p.ot || '').trim()
@@ -100,7 +100,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
         for (let i = 0; i < Math.min(filas.length, 12); i++) { const tt = (filas[i] || []).map(h => norm(h)).join('|'); if (tt.includes('folio') || tt.includes('proveedor') || tt.includes('neto')) { hi = i; break } }
         const hdr = (filas[hi] || []).map(h => norm(h).trim())
         const col = (...nn) => { for (const nm of nn) { const i = hdr.findIndex(h => h.includes(nm)); if (i >= 0) return i } return -1 }
-        const ci = { folio: col('folio', 'documento', 'nro'), prov: col('proveedor', 'razon'), rut: col('rut'), tipo: col('tipo'), neto: col('neto', 'afecto'), iva: col('iva'), total: col('total', 'monto') }
+        const colProv = () => { let pi = hdr.findIndex(h => h.includes('razon') || h.includes('nombre')); if (pi < 0) pi = hdr.findIndex(h => h.includes('proveedor') && !h.includes('rut')); return pi }; const ci = { folio: col('folio', 'documento', 'nro'), prov: colProv(), rut: col('rut'), tipo: col('tipo'), neto: col('neto', 'afecto'), iva: col('iva'), total: col('total', 'monto') }
         // Fecha del documento: nunca las columnas de vencimiento / recepcion / acuse / pago
         const noFecha = h => h.includes('vencim') || h.includes('recep') || h.includes('acuse') || h.includes('pago') || h.includes('reclam')
         let iF = hdr.findIndex(h => !noFecha(h) && (h.includes('fecha docto') || h.includes('fecha documento') || h.includes('fecha emis') || h.includes('emision')))
