@@ -63,7 +63,7 @@ export default function ProyComprasLibro({ proyectos = [], setProyectos = null }
     if (!otSel) { setMsg('Primero elige el proyecto/OT destino (arriba).'); return }
     const cc = ccSel[r.id]
     if (!cc) { setMsg('Elige el centro de costo para la factura ' + r.document_number + '.'); return }
-    const compra = { proveedor: r.provider_name || '', folio: String(r.document_number || ''), rut: r.provider_rut || '', monto: Math.round(+r.neto || 0), cc, fecha: r.emission_date || '—', detalle: 'SII ' + (r.document_type || ''), origen: 'libro', libroId: String(r.id) }
+    const compra = { proveedor: r.provider_name || '', folio: String(r.document_number || ''), rut: r.provider_rut || '', detalle: 'SII ' + (r.document_type || '') + (r.exenta ? ' (Exenta)' : ''), exento: !!r.exenta, origen: 'libro', libroId: String(r.id) } r.emission_date || '—', monto: Math.round(+(r.exenta ? (r.document_total || r.neto) : r.neto) || 0), cc, fecha:
     setProyectos(prev => prev.map(p => p.id === otSel ? { ...p, compras: [...(p.compras || []), compra] } : p))
     setMsg('Factura ' + r.document_number + ' imputada a ' + cc + ' (' + nombreCC(proy, cc) + ').')
     setTimeout(() => setMsg(''), 3200)
