@@ -304,7 +304,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   // ----- Consolidado y áreas: suman desde las FACTURAS consolidadas (Venta Neta) -----
   const areasFact = ['Santa Rosa', 'Istria', 'Proyectos']
   const facNeto = a => (facturas[a] || []).reduce((s, x) => s + (x.neto || 0), 0)
-  const facCobN = a => (facturas[a] || []).filter(x => x.estado === 'Pagado').reduce((s, x) => s + (x.neto || 0), 0)
+  const facCobN = a => (facturas[a] || []).filter(x => x.estado === 'Pagado' || x.estado === 'Factoring' || /factor/i.test(x.medio || '')).reduce((s, x) => s + (x.neto || 0), 0)
   const facCount = a => (facturas[a] || []).length
   const esTODAS = esGerencia && areaSel === 'TODAS'
   const esAreaFact = areasFact.includes(areaSel)
@@ -335,8 +335,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
 
   // ===== RESUMEN FINANCIERO TOTAL (montos con IVA / bruto) =====
   const brutoF = f => { const n = f.neto || 0; return n + Math.round(n * 0.19) }
-  const noPagada = f => f.estado !== 'Pagado' && f.estado !== 'Anulada'
-  const esPagada = f => f.estado === 'Pagado'
+  const noPagada = f => f.estado !== 'Pagado' && f.estado !== 'Anulada' && f.estado !== 'Factoring' && !/factor/i.test(f.medio || '')
+  const esPagada = f => f.estado === 'Pagado' || f.estado === 'Factoring' || /factor/i.test(f.medio || '')
   const facBrutoArea = (a, filtro) => (facturas[a] || []).filter(filtro).reduce((s, f) => s + brutoF(f), 0)
   // Cuentas por cobrar (bruto): facturas no pagadas de las tres áreas
   const cxcTotal = areasFact.reduce((s, a) => s + facBrutoArea(a, noPagada), 0)
