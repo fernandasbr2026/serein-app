@@ -44,7 +44,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
   const proyDeOT = n => (proyectos || []).find(p => otNumProy(p) === String(n || '').trim())
   const ccsDeOT = n => { const p = proyDeOT(n); if (!p) return []; const codes = [...new Set([...Object.keys(p.cc || {}), ...(p.compras || []).map(c => c.cc)])].filter(Boolean); return codes.map(c => ({ id: c, nombre: (p.ccNombres && p.ccNombres[c]) || c })) }
   const [creando, setCreando] = useState(false)
-  const nueva = () => ({ numero: '', cliente: '', ot: '', cc: '', proyecto: '', nv: '', fecha_emision: '', neto: '', monto: '', estado: 'Pendiente', fecha_pago: '', banco: '', comentarios: '', vendedor: 'General' })
+  const nueva = () => ({ numero: '', cliente: '', ot: '', cc: '', proyecto: '', nv: '', fecha_emision: '', neto: '', monto: '', iva: 'afecta', estado: 'Pendiente', fecha_pago: '', banco: '', comentarios: '', vendedor: 'General' })
   const comisionDe = x => x.vendedor === 'Mario' ? Math.round((x.neto || x.monto || 0) * (comisionPct / 100)) : 0
   const [f, setF] = useState(nueva())
   const [busca, setBusca] = useState('')
@@ -60,7 +60,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
   function agregar() {
     const nt = num(f.neto)
     if (!f.numero || nt <= 0) return
-    setLista([{ id: 'f' + Date.now(), ...f, neto: nt, monto: brutoDe(nt) }, ...lista])
+    setLista([{ id: 'f' + Date.now(), ...f, neto: nt, monto: f.iva === 'exenta' ? nt : brutoDe(nt) }, ...lista])
     setF(nueva()); setCreando(false)
   }
   // Al cambiar el neto, recalcula el bruto automáticamente (IVA 19%)
@@ -93,7 +93,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
           const numero = String(row[ci.doc] ?? '').replace(/\.0$/, '').trim()
           const cliente = String(row[ci.cli] ?? '').trim()
           if (!numero && !cliente) continue
-          nuevas.push({ id: 'imp' + r, numero, cliente, ot: String(row[ci.oc] ?? '').trim(), fecha_emision: excelDate(row[ci.fecha]), neto: toInt(row[ci.neto]), monto: toInt(row[ci.total]) || toInt(row[ci.neto]), estado: estadoN(row[ci.est]), fecha_pago: '', banco: String(row[ci.ent] ?? '').trim(), vencimiento: excelDate(row[ci.venc]), comentarios: String(row[ci.obs] ?? '').trim() })
+          nuevas.push({ id: 'imp' + r, numero, cliente, ot: String(row[ci.oc] ?? '').trim(), fecha_emision: excelDate(row[ci.fecha]), neto: toInt(row[ci.neto]) || toInt(row[ci.total]), monto: toInt(row[ci.total]) || toInt(row[ci.neto]), estado: estadoN(row[ci.est]), fecha_pago: '', banco: String(row[ci.ent] ?? '').trim(), vencimiento: excelDate(row[ci.venc]), comentarios: String(row[ci.obs] ?? '').trim() })
         }
         if (!nuevas.length) { window.alert('No se encontraron facturas en la hoja "' + sheet + '".'); return }
         if (window.confirm('Se importarán ' + nuevas.length + ' facturas de la hoja "' + sheet + '" y reemplazarán las de ' + area + '. ¿Continuar?')) setLista(nuevas)
@@ -214,8 +214,8 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
               {esIstria && <input style={inp} placeholder="Proyecto (nombre)" value={f.proyecto} onChange={e => setF({ ...f, proyecto: e.target.value })} />}
               {esIstria && <input style={inp} placeholder="NV (codigo)" value={f.nv} onChange={e => setF({ ...f, nv: e.target.value })} />}
               <label style={{ fontSize: 11, color: C.gris }}>Emisión<input type="date" style={{ ...inp, width: '100%' }} value={f.fecha_emision} onChange={e => setF({ ...f, fecha_emision: e.target.value })} /></label>
-              <input style={inp} placeholder="Neto CLP *" value={f.neto} onChange={e => setF({ ...f, neto: e.target.value })} />
-              <div style={{ ...inp, background: '#F1EDE6', color: C.gris, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>IVA {clp(ivaDe(f.neto))} · Total <b style={{ color: C.carbon, marginLeft: 4 }}>{clp(brutoDe(f.neto))}</b></div>
+              <input style={inp} placeholder="Neto CLP *" value={f.neto} onChange={e => setF({ ...f, neto: e.target.value })} /><select style={inp} value={f.iva} onChange={e => setF({ ...f, iva: e.target.value })}><option value="afecta">Afecta (con IVA)</option><option value="exenta">Exenta (sin IVA)</option></select>
+              <div style={{ ...inp, background: '#F1EDE6', color: C.gris, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>IVA {clp(f.iva === 'exenta' ? 0 : ivaDe(f.neto))} · Total <b style={{ color: C.carbon, marginLeft: 4 }}>{clp(f.iva === 'exenta' ? num(f.neto) : brutoDe(f.neto))}</b></div>
               <select style={inp} value={f.vendedor} onChange={e => setF({ ...f, vendedor: e.target.value })}>{VENDEDORES.map(v => <option key={v} value={v}>Vendedor: {v}</option>)}</select>
             </div>
             <input style={{ ...inp, width: '100%', marginTop: 8 }} placeholder="Observación / comentario (opcional)" value={f.comentarios} onChange={e => setF({ ...f, comentarios: e.target.value })} />
