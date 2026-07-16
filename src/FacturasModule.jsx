@@ -60,6 +60,8 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
   function agregar() {
     const nt = num(f.neto)
     if (!f.numero || nt <= 0) return
+    const claveF = x => (x.numero || '').trim().toLowerCase() + '|' + (x.cliente || '').trim().toLowerCase() + '|' + (x.iva || 'afecta')
+    if (lista.some(x => claveF(x) === claveF(f))) { window.alert('Ya existe una factura con ese N°, cliente y tipo en ' + area + '. No se agrego (duplicado).'); return }
     setLista([{ id: 'f' + Date.now(), ...f, neto: nt, monto: f.iva === 'exenta' ? nt : brutoDe(nt) }, ...lista])
     setF(nueva()); setCreando(false)
   }
@@ -96,7 +98,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
           nuevas.push({ id: 'imp' + r, numero, cliente, ot: String(row[ci.oc] ?? '').trim(), fecha_emision: excelDate(row[ci.fecha]), neto: toInt(row[ci.neto]) || toInt(row[ci.total]), monto: toInt(row[ci.total]) || toInt(row[ci.neto]), estado: estadoN(row[ci.est]), fecha_pago: '', banco: String(row[ci.ent] ?? '').trim(), vencimiento: excelDate(row[ci.venc]), comentarios: String(row[ci.obs] ?? '').trim() })
         }
         if (!nuevas.length) { window.alert('No se encontraron facturas en la hoja "' + sheet + '".'); return }
-        if (window.confirm('Se importarán ' + nuevas.length + ' facturas de la hoja "' + sheet + '" y reemplazarán las de ' + area + '. ¿Continuar?')) setLista(nuevas)
+        if (window.confirm('Se importarán ' + nuevas.length + ' facturas de la hoja "' + sheet + '" y reemplazarán las de ' + area + '. ¿Continuar?')) { const vistos = new Set(); const sinDup = nuevas.filter(x => { const k = (x.numero || '').trim().toLowerCase() + '|' + (x.cliente || '').trim().toLowerCase() + '|' + (x.iva || 'afecta'); if (vistos.has(k)) return false; vistos.add(k); return true }); if (sinDup.length < nuevas.length) window.alert('Se omitieron ' + (nuevas.length - sinDup.length) + ' factura(s) duplicada(s) en el archivo.'); setLista(sinDup) }
       } catch (err) { window.alert('No se pudo leer el Excel: ' + err) }
     }
     reader.readAsArrayBuffer(file)
