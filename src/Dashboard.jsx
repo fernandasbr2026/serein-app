@@ -360,6 +360,9 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const facBrutoArea = (a, filtro) => (facturas[a] || []).filter(filtro).reduce((s, f) => s + brutoF(f), 0)
   // Cuentas por cobrar (bruto): facturas no pagadas de las tres áreas
   const cxcTotal = areasFact.reduce((s, a) => s + facBrutoArea(a, noPagada), 0)
+  const kCobradoBruto = esTODAS ? areasFact.reduce((s, a) => s + facBrutoArea(a, esPagada), 0) : (esAreaFact ? facBrutoArea(areaSel, esPagada) : (vista.cobrado || 0))
+  const kVentaBruto = esTODAS ? areasFact.reduce((s, a) => s + facBrutoArea(a, esPagada) + facBrutoArea(a, noPagada), 0) : (esAreaFact ? facBrutoArea(areaSel, esPagada) + facBrutoArea(areaSel, noPagada) : (vista.venta || 0))
+  const kPendBruto = Math.max(0, kVentaBruto - kCobradoBruto)
   // Cuentas por pagar (bruto): gastos + cuotas + facturas de proveedores pendientes
   const cxpTotal = gastosPend.reduce((a, g) => a + ((g.neto || 0) + (g.iva || 0)), 0) + cuotasPend.reduce((a, c) => a + (c.total || 0), 0) + porPagarDocs.reduce((a, d) => a + d.monto, 0)
   // OT en curso por facturar: OT (SR/Istria) + saldo de proyectos vs presupuesto
@@ -388,18 +391,19 @@ export default function Dashboard({ perfil, email, onLogout }) {
   }
   // Recuadro reutilizable: resumen financiero de un área
   const resumenFinancieroArea = a => {
-    const venta = facNeto(a), cobradoA = facBrutoArea(a, esPagada), porCobrarA = facBrutoArea(a, noPagada), porPagarA = pagarArea(a)
-    const resultadoA = porCobrarA - porPagarA
-    const it = (l, v, c) => (<div><div style={{ fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>{l}</div><div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: c || C.carbon, whiteSpace: 'nowrap' }}>{clp(v)}</div></div>)
+    const venta = facNeto(a), ventaBruta = facBrutoArea(a, esPagada) + facBrutoArea(a, noPagada), cobradoNeto = facCobN(a), cobradoA = facBrutoArea(a, esPagada), porPagarA = pagarArea(a)
+    const pendienteNeto = Math.max(0, venta - cobradoNeto), pendienteBruto = Math.max(0, ventaBruta - cobradoA)
+    const _sinResultado = true
+    const it = (l, v, c, sub) => (<div><div style={{ fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>{l}</div><div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: c || C.carbon, whiteSpace: 'nowrap' }}>{clp(v)}</div>{sub !== undefined && <div style={{ fontSize: 11, color: '#7A8288', whiteSpace: 'nowrap' }}>Bruto {clp(sub)}</div>}</div>)
     return (
       <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `4px solid ${AREA_COLOR[a] || C.teal}`, marginBottom: 16 }}>
         <div style={{ padding: '14px 18px 6px', fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Resumen financiero · {a}</div>
         <div style={{ padding: '0 18px 16px', display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          {it('Venta neta', venta, C.azul)}
-          {it('Cobrado', cobradoA, C.verde)}
-          {it('Por cobrar', porCobrarA, C.rojo)}
+          {it('Venta neta', venta, C.azul, ventaBruta)}
+          {it('Cobrado', cobradoNeto, C.verde, cobradoA)}
+          {it('Pendiente por cobrar', pendienteNeto, pendienteNeto > 0 ? C.rojo : C.verde, pendienteBruto)}
           {it('Por pagar', porPagarA, C.ambar)}
-          {it('Resultado (por cobrar − por pagar)', resultadoA, resultadoA >= 0 ? C.verde : C.rojo)}
+          
         </div>
       </div>
     )
@@ -482,9 +486,9 @@ export default function Dashboard({ perfil, email, onLogout }) {
         ) : (
         <>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-          <Kpi label="Venta Neta" valor={clp(kVenta)} sub={`${kNFact} facturas`} color={C.azul} icon={TrendingUp} />
-          <Kpi label="Cobrado" valor={clp(kCobrado)} sub={`${((kCobrado / ((kCobrado + kPend) || 1)) * 100).toFixed(0)}% de la cartera`} color={C.verde} icon={Wallet} />
-          <Kpi label="Por Cobrar" valor={clp(kPend)} sub="pendiente" color={C.rojo} icon={AlertTriangle} />
+          <Kpi label="Venta Neta" valor={clp(kVenta)} sub={`Bruto ${clp(kVentaBruto)} · ${kNFact} facturas`} color={C.azul} icon={TrendingUp} />
+          <Kpi label="Cobrado" valor={clp(kCobrado)} sub={`Bruto ${clp(kCobradoBruto)} · ${((kCobrado / ((kCobrado + kPend) || 1)) * 100).toFixed(0)}% cartera`} color={C.verde} icon={Wallet} />
+          <Kpi label="Por Cobrar" valor={clp(kPend)} sub={`Bruto ${clp(kPendBruto)} · pendiente`} color={C.rojo} icon={AlertTriangle} />
           <Kpi label="Pérdida Factoring" valor={clp(kPerd)} sub={kVenta > 0 ? `${((kPerd / kVenta) * 100).toFixed(2)}% s/ venta` : '—'} color={C.ambar} icon={Landmark} />
           {esGerencia && <Kpi label="Carga financiera" valor={clp(calcularResumenFin(fin, new Date().toISOString().slice(0, 7)).deudaVigente)} sub="deuda total propia" color="#061A40" icon={Landmark} />}
             {esTODAS && <Kpi label="% Factorizado" valor={`${pctFactorizado.toFixed(1)}%`} sub={`${clp(netoFactTotal)} de ${clp(netoTotalFact)}`} color={C.teal} icon={Landmark} />}
