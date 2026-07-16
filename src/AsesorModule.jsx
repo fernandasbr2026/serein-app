@@ -104,6 +104,11 @@ function ChatIA() {
 
 export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = [], params = {}, onIr }) {
   const [vista, setVista] = useState('dashboard')
+  const [alertasDB, setAlertasDB] = useState([])
+  async function cargarAlertas() { try { const res = await supabase.from('alertas').select('*').order('fecha', { ascending: false }); setAlertasDB(res.data || []) } catch (e) {} }
+  async function revisarAlerta(id) { try { await supabase.from('alertas').update({ estado: 'Revisada', fecha_revision: new Date().toISOString() }).eq('id', id); cargarAlertas() } catch (e) {} }
+  async function resolverAlerta(id) { try { await supabase.from('alertas').update({ estado: 'Resuelta', fecha_resolucion: new Date().toISOString() }).eq('id', id); cargarAlertas() } catch (e) {} }
+  useEffect(() => { cargarAlertas() }, [])
   const [iva, setIva] = useState({ credito: 0, debito: 0, cargado: false })
   const [compras, setCompras] = useState(null)
   const hoyStr = hoy()
@@ -162,6 +167,22 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
     } catch (e) { return { alertas: [], estado: 'amarillo', r: { salidaCaja: 0, deudaVigente: 0, totalCuotasMes: 0, cuotasVencidas: [] }, ingresos: 0, ratio: null } }
   }, [fin, pp, proyectos, ots, iva, mes, hoyStr])
 
+  useEffect(() => {
+    const acts = (analisis.alertas || []).filter(a => a.sev !== 'verde')
+    if (!acts.length) return
+    let vivo = true
+    ;(async () => {
+      try {
+        const u = await supabase.auth.getUser(); const uid = u && u.data && u.data.user ? u.data.user.id : null
+        if (!uid) return
+        const rows = acts.map(a => ({ usuario: uid, area: a.area, prioridad: a.sev === 'rojo' ? 'Alta' : 'Media', registro_relacionado: a.ir || a.area, descripcion: a.titulo + ' - ' + a.detalle, clave: a.area + '::' + a.titulo.replace(/[0-9]+/g, '#') }))
+        await supabase.from('alertas').upsert(rows, { onConflict: 'usuario,clave' })
+        if (vivo) cargarAlertas()
+      } catch (e) {}
+    })()
+    return () => { vivo = false }
+  }, [analisis])
+
   const hayFin = (fin.gastos || []).length || (fin.obligaciones || []).length
   const hayProy = (proyectos || []).length
 
@@ -188,9 +209,38 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
     <div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, borderBottom: '1px solid ' + C.line, paddingBottom: 4 }}>
         <button onClick={() => setVista('dashboard')} style={tabBtn(vista === 'dashboard')}>Dashboard Inteligente</button>
+        <button onClick={() => setVista('alertas')} style={tabBtn(vista === 'alertas')}>Alertas</button>
         <button onClick={() => setVista('chat')} style={tabBtn(vista === 'chat')}>Chat</button>
       </div>
-      {vista === 'chat' ? <ChatIA /> : (<div>
+      {vista === 'chat' ? <ChatIA /> : vista === 'alertas' ? (<div>
+        <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: C.navy }}>Motor de alertas</div>
+        <div style={{ fontSize: 12.5, color: C.gray, marginBottom: 12 }}>Se revisa automaticamente al ingresar. Cada alerta queda guardada en la base de datos.</div>
+        {alertasDB.length === 0 ? <div style={{ color: C.gray, fontSize: 13, border: '1px dashed ' + C.line, borderRadius: 6, padding: 16, textAlign: 'center' }}>No hay alertas registradas. Si es la primera vez, corre alertas_setup.sql en Supabase.</div> : (
+          <div style={{ overflowX: 'auto', border: '1px solid ' + C.line, borderRadius: 6 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 900 }}>
+              <thead><tr style={{ background: C.navy, color: '#fff' }}>{['Fecha', 'Area', 'Prioridad', 'Estado', 'Registro', 'Descripcion', 'Revision', 'Resolucion', ''].map(h => <th key={h} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 11, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
+              <tbody>
+                {alertasDB.map(a => (
+                  <tr key={a.id} style={{ borderBottom: '1px solid #EEECE4' }}>
+                    <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{(a.fecha || '').slice(0, 10)}</td>
+                    <td style={{ padding: '7px 10px' }}>{a.area || '-'}</td>
+                    <td style={{ padding: '7px 10px', fontWeight: 700, color: a.prioridad === 'Alta' ? C.red : a.prioridad === 'Media' ? C.orange : C.gray }}>{a.prioridad || '-'}</td>
+                    <td style={{ padding: '7px 10px' }}><span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: a.estado === 'Resuelta' ? '#E7F2EA' : a.estado === 'Revisada' ? '#FBF0E2' : '#F6E0DA', color: a.estado === 'Resuelta' ? C.green : a.estado === 'Revisada' ? C.orange : C.red }}>{a.estado}</span></td>
+                    <td style={{ padding: '7px 10px', fontSize: 11.5, color: C.gray }}>{a.registro_relacionado || '-'}</td>
+                    <td style={{ padding: '7px 10px' }}>{a.descripcion}</td>
+                    <td style={{ padding: '7px 10px', whiteSpace: 'nowrap', color: C.gray }}>{a.fecha_revision ? a.fecha_revision.slice(0, 10) : '-'}</td>
+                    <td style={{ padding: '7px 10px', whiteSpace: 'nowrap', color: C.gray }}>{a.fecha_resolucion ? a.fecha_resolucion.slice(0, 10) : '-'}</td>
+                    <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>
+                      {a.estado !== 'Resuelta' ? <button onClick={() => revisarAlerta(a.id)} disabled={a.estado === 'Revisada'} style={{ background: 'transparent', border: '1px solid ' + C.line, borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: 11, marginRight: 4, color: C.navy }}>Revisar</button> : null}
+                      {a.estado !== 'Resuelta' ? <button onClick={() => resolverAlerta(a.id)} style={{ background: C.green, border: 'none', color: '#fff', borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: 11 }}>Resolver</button> : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>) : (<div>
       <div style={{ marginBottom: 16 }}>
         <h2 style={{ fontFamily: "'Oswald',sans-serif", fontSize: 24, fontWeight: 600, textTransform: 'uppercase', margin: 0, color: C.navy }}>Dashboard Inteligente</h2>
         <div style={{ fontSize: 12.5, color: C.gray }}>Se actualiza automaticamente al ingresar · datos reales del sistema</div>
