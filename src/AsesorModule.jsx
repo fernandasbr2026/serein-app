@@ -364,7 +364,44 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
 
   const comercial = useMemo(() => { if (!hayProy) return null; let cot = 0, fac = 0, cob = 0; proyectos.forEach(p => { cot += (+p.venta_cotizada || 0); const e = p.edps || []; fac += e.reduce((a, x) => a + (+x.venta || 0), 0); cob += e.filter(x => /pag/i.test(x.estado || '')).reduce((a, x) => a + (+x.venta || 0), 0) }); return { nOT: proyectos.length, cot, fac, porFac: Math.max(0, cot - fac), cob } }, [hayProy, proyectos])
 
-  const cobranza = useMemo(() => { const edps = (proyectos || []).reduce((a, p) => a.concat((p.edps || []).map(e => ({ ...e, ot: p.ot || p.nombre }))), []); if (!edps.length) return null; const pend = edps.filter(e => !/pag/i.test(e.estado || '')); const venc = pend.filter(e => e.fecha && e.fecha !== '—' && e.fecha < hoyStr); return { porCobrar: pend.reduce((a, e) => a + (+e.venta || 0), 0), nPend: pend.length, nVenc: venc.length, montoVenc: venc.reduce((a, e) => a + (+e.venta || 0), 0) } }, [proyectos, hoyStr])
+  const cobranza = useMemo(() => {
+    const edps = (proyectos || []).reduce((a, p) => a.concat((p.edps || []).map(e => ({ ...e, ot: p.ot || p.nombre, cliente: p.cliente || 'Sin cliente' }))), [])
+    if (!edps.length) return null
+    const monto = e => +e.venta || 0
+    const esPag = e => /pag/i.test(e.estado || '')
+    const diasAtr = e => (e.fecha && e.fecha !== '—' && e.fecha < hoyStr) ? Math.round((new Date(hoyStr) - new Date(e.fecha)) / 86400000) : 0
+    const pend = edps.filter(e => !esPag(e))
+    const pag = edps.filter(esPag)
+    const venc = pend.filter(e => diasAtr(e) > 0)
+    const atrasos = venc.map(diasAtr)
+    let factN = 0
+    for (const p of (proyectos || [])) { const fe = p.facEdp || {}; for (const kk in fe) { if (/factoring/i.test((fe[kk] && fe[kk].estado) || '')) factN++ } }
+    const byCli = {}
+    for (const e of edps) { const c = e.cliente; if (!byCli[c]) byCli[c] = { cliente: c, fact: 0, cobr: 0, pend: 0, venc: 0, nVenc: 0, atrMax: 0 }; const o = byCli[c]; o.fact += monto(e); if (esPag(e)) o.cobr += monto(e); else { o.pend += monto(e); const d = diasAtr(e); if (d > 0) { o.venc += monto(e); o.nVenc++; if (d > o.atrMax) o.atrMax = d } } }
+    const porCliente = Object.values(byCli).sort((a, b) => b.pend - a.pend)
+    return { facturado: edps.reduce((a, e) => a + monto(e), 0), cobrado: pag.reduce((a, e) => a + monto(e), 0), porCobrar: pend.reduce((a, e) => a + monto(e), 0), nPend: pend.length, nPag: pag.length, nEdp: edps.length, nVenc: venc.length, montoVenc: venc.reduce((a, e) => a + monto(e), 0), atrasoMax: atrasos.length ? Math.max(...atrasos) : 0, atrasoProm: atrasos.length ? Math.round(atrasos.reduce((a, b) => a + b, 0) / atrasos.length) : 0, factN, porCliente }
+  }, [proyectos, hoyStr])
+
+  useEffect(() => {
+    if (!cobranza) return
+    ;(async () => {
+      try {
+        const u = await supabase.auth.getUser()
+        const uid = u && u.data && u.data.user && u.data.user.id
+        if (!uid) return
+        const A = (area, valor, resumen, detalle) => ({ usuario: uid, fecha: new Date().toISOString(), periodo: mes, area, valor: Math.round(valor || 0), resumen, detalle: detalle || null, fuente: 'regla', clave: mes + '::cob::' + area })
+        const rows = [
+          A('Facturas', cobranza.facturado, cobranza.nEdp + ' EDP; facturado ' + clp(cobranza.facturado) + '.'),
+          A('Pagos', cobranza.cobrado, cobranza.nPag + ' EDP pagadas; cobrado ' + clp(cobranza.cobrado) + '.'),
+          A('Abonos', cobranza.cobrado, 'Montos abonados/cobrados a la fecha: ' + clp(cobranza.cobrado) + '.'),
+          A('Dias de atraso', cobranza.montoVenc, cobranza.nVenc + ' EDP vencidas; atraso max ' + cobranza.atrasoMax + ' dias, promedio ' + cobranza.atrasoProm + '.'),
+          A('Historial cliente', cobranza.porCobrar, 'Por cobrar ' + clp(cobranza.porCobrar) + ' en ' + cobranza.porCliente.length + ' clientes.', cobranza.porCliente),
+          A('Factoring', cobranza.factN, cobranza.factN + ' EDP en factoring.')
+        ]
+        await supabase.from('analisis_cobranza').upsert(rows, { onConflict: 'usuario,clave' })
+      } catch (e) {}
+    })()
+  }, [cobranza])
 
   const produccion = useMemo(() => { if (!hayProy && !(ots || []).length) return null; const act = (proyectos || []).filter(p => !p.cerrado); const conAv = act.filter(p => typeof p.avance === 'number'); const avg = conAv.length ? Math.round(conAv.reduce((a, p) => a + (+p.avance || 0), 0) / conAv.length) : null; return { nAct: act.length, avg, m2: act.reduce((a, p) => a + (+p.m2 || 0), 0), nOTs: (ots || []).length } }, [hayProy, proyectos, ots])
 
@@ -548,6 +585,10 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
         </Tarjeta>
         <Tarjeta icon={Banknote} titulo="Cobranza" color={C.green} vacio={!cobranza}>
           {cobranza && <Fila k="Por cobrar" v={clp(cobranza.porCobrar)} color={C.orange} />}
+          {cobranza && <Fila k="Facturado" v={clp(cobranza.facturado)} />}
+          {cobranza && <Fila k="Cobrado" v={clp(cobranza.cobrado)} color={C.green} />}
+          {cobranza && cobranza.atrasoMax > 0 && <Fila k="Atraso max" v={cobranza.atrasoMax + ' dias'} color={C.red} />}
+          {cobranza && cobranza.factN > 0 && <Fila k="En factoring" v={cobranza.factN + ' EDP'} />}
           {cobranza && <Fila k="EDP pendientes" v={cobranza.nPend} />}
           {cobranza && <Fila k="Vencidas" v={cobranza.nVenc + (cobranza.montoVenc ? ' (' + clp(cobranza.montoVenc) + ')' : '')} color={cobranza.nVenc ? C.red : C.gray} />}
         </Tarjeta>
@@ -556,6 +597,32 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
           {recomendaciones && recomendaciones.map((r, i) => (<div key={i} style={{ fontSize: 12, color: C.gray }}><b style={{ color: C.orange }}>{r.area}:</b> {r.texto}</div>))}
         </Tarjeta>
       </div>
+      {cobranza && cobranza.porCliente.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 15, fontWeight: 600, textTransform: 'uppercase', color: C.navy, marginBottom: 10 }}>Cobranza · Historial por cliente</div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+            {[['Facturado', cobranza.facturado, C.navy], ['Cobrado (pagos/abonos)', cobranza.cobrado, C.green], ['Por cobrar', cobranza.porCobrar, C.orange], ['Vencido', cobranza.montoVenc, C.red]].map(pair => <div key={pair[0]} style={{ flex: '1 1 150px', background: '#fff', border: '1px solid ' + C.line, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, color: C.gray }}>{pair[0]}</div><div style={{ fontSize: 17, fontWeight: 700, color: pair[2] }}>{clp(pair[1])}</div></div>)}
+          </div>
+          <div style={{ fontSize: 12, color: C.gray, marginBottom: 10 }}>Atraso maximo {cobranza.atrasoMax} dias · promedio {cobranza.atrasoProm} dias · {cobranza.nVenc} EDP vencidas{cobranza.factN ? ' · ' + cobranza.factN + ' EDP en factoring' : ''}</div>
+          <div style={{ overflowX: 'auto', border: '1px solid ' + C.line, borderRadius: 8 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+              <thead><tr style={{ background: C.navy, color: '#fff' }}>{['Cliente', 'Facturado', 'Cobrado', 'Por cobrar', 'Vencido', 'Atraso max'].map(h => <th key={h} style={{ padding: '7px 9px', textAlign: h === 'Cliente' ? 'left' : 'right', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
+              <tbody>
+                {cobranza.porCliente.map((c, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid ' + C.line }}>
+                    <td style={{ padding: '6px 9px', whiteSpace: 'nowrap' }}>{c.cliente}</td>
+                    <td style={{ padding: '6px 9px', textAlign: 'right', whiteSpace: 'nowrap' }}>{clp(c.fact)}</td>
+                    <td style={{ padding: '6px 9px', textAlign: 'right', whiteSpace: 'nowrap', color: C.green }}>{clp(c.cobr)}</td>
+                    <td style={{ padding: '6px 9px', textAlign: 'right', whiteSpace: 'nowrap', color: c.pend ? C.orange : C.gray }}>{clp(c.pend)}</td>
+                    <td style={{ padding: '6px 9px', textAlign: 'right', whiteSpace: 'nowrap', color: c.venc ? C.red : C.gray }}>{clp(c.venc)}</td>
+                    <td style={{ padding: '6px 9px', textAlign: 'right', whiteSpace: 'nowrap', color: c.atrMax > 0 ? C.red : C.gray }}>{c.atrMax > 0 ? c.atrMax + ' d' : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
       {orden.length > 0 && (
         <div>
           <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 15, fontWeight: 600, textTransform: 'uppercase', color: C.navy, marginBottom: 10 }}>Detalle de alertas</div>
