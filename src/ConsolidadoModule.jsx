@@ -405,10 +405,11 @@ export default function ConsolidadoModule(props) {
       const key = r => (r.document_number || '') + '|' + (r.provider_rut || '')
       const vistos = new Set(db.map(key))
       const compras = [...db, ...lcx.filter(r => !vistos.has(key(r)))]
+      const sgn = r => (String(r.document_type || '').trim() === '61' ? -1 : 1)
       let vNeta = 0, vBruta = 0, ivaDeb = 0
-      for (const r of lv) { const nt = num(r.neto); vNeta += nt; vBruta += num(r.total) || (nt + num(r.iva)); ivaDeb += num(r.iva) }
+      for (const r of lv) { if (r.oculto) continue; const g = sgn(r); vNeta += g * num(r.neto); vBruta += g * (num(r.total) || (num(r.neto) + num(r.iva))); ivaDeb += g * num(r.iva) }
       let cNeto = 0, cTotal = 0, ivaCred = 0
-      for (const r of compras) { const nt = r.exenta ? (num(r.document_total) || num(r.neto)) : num(r.neto); cNeto += nt; cTotal += num(r.document_total); ivaCred += num(r.iva) }
+      for (const r of compras) { if (r.oculto) continue; const g = sgn(r); const base = r.exenta ? (num(r.document_total) || num(r.neto)) : num(r.neto); cNeto += g * base; cTotal += g * num(r.document_total); ivaCred += g * num(r.iva) }
       setLibroCons({ vNeta, vBruta, nV: lv.length, cNeto, cTotal, nC: compras.length, ivaDeb, ivaCred })
     })()
     return () => { vivo = false }
