@@ -16,9 +16,9 @@ const ESTADOS_PAGO = ['Pendiente', 'Pagada', 'Credito', 'Factoring']
 const colorPago = e => e === 'Pagada' ? C.green : e === 'Factoring' ? C.orange : e === 'Credito' ? '#2563EB' : C.mut
 const DIAS_OPC = [30, 45, 60, 90]
 const LS_XLSX = 'serein_libroComprasXlsx'
-const TIPOS = ['Pintura','Diluyente','Materiales','EPP','Diesel','Combustible','Herramientas','Repuestos','Fletes','Insumos','Viaticos','Peajes','Mantencion','Granalla','Servicios','Telefonia','Internet','Arriendo','Seguros','Leasing','Banco','Tag','Cafeteria','Honorarios','Software','Servicios basicos','Impuestos','Otros']
-const CLASIF = { Pintura:'Variable', Diluyente:'Variable', Materiales:'Variable', EPP:'Variable', Diesel:'Variable', Combustible:'Variable', Herramientas:'Variable', Repuestos:'Variable', Fletes:'Variable', Insumos:'Variable', Viaticos:'Variable', Peajes:'Variable', Mantencion:'Variable', Granalla:'Variable', Servicios:'Variable', Telefonia:'Fijo', Internet:'Fijo', Arriendo:'Fijo', Seguros:'Fijo', Leasing:'Fijo', Banco:'Fijo', Tag:'Fijo', Cafeteria:'Fijo', Honorarios:'Fijo', Software:'Fijo', 'Servicios basicos':'Fijo', Impuestos:'Fijo', Otros:'' }
-const REGLAS = [[['combustible','copec','shell','petrobras','enex','terpel','lampa','esmax'],'Combustible'],[['sherwin','renner','coating','jotun','ppg','tricolor','pintura','ceresita','soquina'],'Pintura'],[['diluyente','thinner','solvente'],'Diluyente'],[['diesel','petroleo'],'Diesel'],[['ferreteria','acero','cubiertas','kubiec','estructura','sodimac','construmart','imperial','prodalam','novoplast','stratford','sanitarios','materiales','fierro','planchas'],'Materiales'],[['maestranza','mecanizado','metalica','galvaniz'],'Servicios'],[['automovil','automotriz','vulcaniz','neumatic','lubricentro','repuesto'],'Mantencion'],[['seguridad industrial','proteccion','implementos de seguridad','elementos de proteccion'],'EPP'],[['granalla','abrasivo'],'Granalla'],[['telefon','movistar','entel','claro chile','wom'],'Telefonia'],[['internet','fibra','mundo pacifico','gtd'],'Internet'],[['leasing'],'Leasing'],[['banco','santander','scotiabank','bancoestado'],'Banco'],[['seguro','mapfre','consorcio','zurich','hdi'],'Seguros'],[['arriendo','inmobiliaria'],'Arriendo'],[['contab','auditor','honorario'],'Honorarios'],[['casino','cafeteria'],'Cafeteria'],[['autopista','costanera','vespucio'],'Tag'],[['flete','transporte','logistica'],'Fletes']]
+const TIPOS = ['Pintura','Diluyente','Materiales','EPP','Diesel','Combustible','Herramientas','Repuestos','Fletes','Insumos','Viaticos','Peajes','Mantencion','Granalla','Servicios','Telefonia','Internet','Arriendo','Seguros','Leasing','Banco','Tag','Cafeteria','Honorarios','Software','Servicios basicos','Impuestos','Factoring','Credito','Intereses','Comisiones','Remuneraciones','Electricidad','Agua','Gas','Publicidad','Capacitacion','Notaria','Aduana','Courier','Suscripciones','Patentes','Contribuciones','Otros']
+const CLASIF = { Pintura:'Variable', Diluyente:'Variable', Materiales:'Variable', EPP:'Variable', Diesel:'Variable', Combustible:'Variable', Herramientas:'Variable', Repuestos:'Variable', Fletes:'Variable', Insumos:'Variable', Viaticos:'Variable', Peajes:'Variable', Mantencion:'Variable', Granalla:'Variable', Servicios:'Variable', Telefonia:'Fijo', Internet:'Fijo', Arriendo:'Fijo', Seguros:'Fijo', Leasing:'Fijo', Banco:'Fijo', Tag:'Fijo', Cafeteria:'Fijo', Honorarios:'Fijo', Software:'Fijo', 'Servicios basicos':'Fijo', Impuestos:'Fijo', Factoring:'Variable', Credito:'Fijo', Intereses:'Variable', Comisiones:'Variable', Remuneraciones:'Fijo', Electricidad:'Variable', Agua:'Variable', Gas:'Variable', Publicidad:'Variable', Capacitacion:'Variable', Notaria:'Variable', Aduana:'Variable', Courier:'Variable', Suscripciones:'Fijo', Patentes:'Fijo', Contribuciones:'Fijo', Otros:'' }
+const REGLAS = [[['combustible','copec','shell','petrobras','enex','terpel','lampa','esmax'],'Combustible'],[['sherwin','renner','coating','jotun','ppg','tricolor','pintura','ceresita','soquina'],'Pintura'],[['diluyente','thinner','solvente'],'Diluyente'],[['diesel','petroleo'],'Diesel'],[['ferreteria','acero','cubiertas','kubiec','estructura','sodimac','construmart','imperial','prodalam','novoplast','stratford','sanitarios','materiales','fierro','planchas'],'Materiales'],[['maestranza','mecanizado','metalica','galvaniz'],'Servicios'],[['automovil','automotriz','vulcaniz','neumatic','lubricentro','repuesto'],'Mantencion'],[['seguridad industrial','proteccion','implementos de seguridad','elementos de proteccion'],'EPP'],[['granalla','abrasivo'],'Granalla'],[['telefon','movistar','entel','claro chile','wom'],'Telefonia'],[['internet','fibra','mundo pacifico','gtd'],'Internet'],[['leasing'],'Leasing'],[['banco','santander','scotiabank','bancoestado'],'Banco'],[['seguro','mapfre','consorcio','zurich','hdi'],'Seguros'],[['arriendo','inmobiliaria'],'Arriendo'],[['contab','auditor','honorario'],'Honorarios'],[['casino','cafeteria'],'Cafeteria'],[['autopista','costanera','vespucio'],'Tag'],[['flete','transporte','logistica'],'Fletes'],[['factoring','factotal','tanner','incofin','primus capital'],'Factoring'],[['remuneracion','sueldo','finiquito'],'Remuneraciones'],[['publicidad','marketing','imprenta','grafica'],'Publicidad'],[['notaria','conservador de bienes'],'Notaria'],[['chilexpress','starken','correos de chile','courier','encomienda'],'Courier'],[['electricidad','enel','saesa','frontel','compania general de electricidad'],'Electricidad'],[['aguas andinas','essbio','esval','nuevosur','aguas nuevas'],'Agua']]
 const rutN = r => String(r || '').split('.').join('').split(' ').join('').toUpperCase()
 const reglaTipo = nombre => { const n = (nombre || '').toLowerCase(); for (const par of REGLAS) { for (const k of par[0]) { if (n.indexOf(k) >= 0) return par[1] } } return '' }
 const norm = s => (s || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -41,14 +41,27 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
   }
   const [rows, setRows] = useState([])
   const [provTipo, setProvTipo] = useState({})
+  const [customTipos, setCustomTipos] = useState(() => { try { return JSON.parse(localStorage.getItem('serein_tiposCustom') || '[]') } catch (e) { return [] } })
   const tipoAuto = r => provTipo[rutN(r && r.provider_rut)] || reglaTipo(r && r.provider_name) || ''
+  const clasifDe = t => (CLASIF[t] !== undefined ? CLASIF[t] : ((customTipos.find(c => c.tipo === t) || {}).clasif || ''))
+  const agregarTipoCustom = () => {
+    const nombre = (window.prompt('Nombre del nuevo tipo de gasto (ej: Factoring, Publicidad):') || '').trim()
+    if (!nombre) return null
+    const cl = (window.prompt('Clasificacion para "' + nombre + '": escribe F para Fijo, V para Variable, o deja vacio para ninguna', 'V') || '').trim().toUpperCase()
+    const clasif = cl.charAt(0) === 'F' ? 'Fijo' : cl.charAt(0) === 'V' ? 'Variable' : ''
+    setCustomTipos(cur => { if (cur.some(c => c.tipo === nombre)) return cur; const nx = [...cur, { tipo: nombre, clasif }]; try { localStorage.setItem('serein_tiposCustom', JSON.stringify(nx)) } catch (e) {} return nx })
+    return { tipo: nombre, clasif }
+  }
   const setTipoCompra = (r, v) => {
-    setCampo(r.id, 'tipo_compra', v)
-    setCampo(r.id, 'clasificacion', CLASIF[v] || '')
+    let tipo = v, clasif = ''
+    if (v === '__add__') { const nuevo = agregarTipoCustom(); if (!nuevo) return; tipo = nuevo.tipo; clasif = nuevo.clasif }
+    else { clasif = clasifDe(tipo) }
+    setCampo(r.id, 'tipo_compra', tipo)
+    setCampo(r.id, 'clasificacion', clasif || '')
     const k = rutN(r.provider_rut)
-    if (k && v) {
-      setProvTipo(m => ({ ...m, [k]: v }))
-      supabase.from('proveedor_tipo').upsert({ rut: k, tipo: v, clasificacion: CLASIF[v] || '', fuente: 'manual', updated_at: new Date().toISOString() }, { onConflict: 'rut' }).then(() => {}, () => {})
+    if (k && tipo) {
+      setProvTipo(m => ({ ...m, [k]: tipo }))
+      supabase.from('proveedor_tipo').upsert({ rut: k, tipo, clasificacion: clasif || '', fuente: 'manual', updated_at: new Date().toISOString() }, { onConflict: 'rut' }).then(() => {}, () => {})
     }
   }
   useEffect(() => { supabase.from('proveedor_tipo').select('rut, tipo').then(res => { const m = {}; (res.data || []).forEach(x => { m[x.rut] = x.tipo }); if (Object.keys(m).length) setProvTipo(m) }, () => {}) }, [])
@@ -312,8 +325,11 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
                     <select value={r.tipo_compra || tipoAuto(r)} onChange={e => setTipoCompra(r, e.target.value)} style={{ fontSize: 11, padding: '3px 5px', borderRadius: 6, border: '1px solid ' + C.border, background: '#fff', color: C.text, maxWidth: 130 }}>
                       <option value="">—</option>
                       {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
+                      {customTipos.map(c => <option key={c.tipo} value={c.tipo}>{c.tipo}</option>)}
+                      {r.tipo_compra && !TIPOS.includes(r.tipo_compra) && !customTipos.some(c => c.tipo === r.tipo_compra) ? <option value={r.tipo_compra}>{r.tipo_compra}</option> : null}
+                      <option value="__add__">➕ Agregar tipo nuevo…</option>
                     </select>
-                    {(() => { const tv = r.tipo_compra || tipoAuto(r); const cl = CLASIF[tv] || ''; return cl ? <div style={{ fontSize: 10, fontWeight: 700, marginTop: 3, color: cl === 'Fijo' ? '#2563EB' : C.orange }}>{cl}</div> : null })()}
+                    {(() => { const tv = r.tipo_compra || tipoAuto(r); const cl = clasifDe(tv) || (r.clasificacion || ''); return cl ? <div style={{ fontSize: 10, fontWeight: 700, marginTop: 3, color: cl === 'Fijo' ? '#2563EB' : C.orange }}>{cl}</div> : null })()}
                   </td>
                   <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>{clp(r.exenta ? (r.document_total || r.neto) : r.neto)}</td>
                   <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', color: C.orange }}>{clp(r.exenta ? 0 : r.iva)}</td>
