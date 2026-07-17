@@ -104,6 +104,10 @@ function ChatIA() {
 
 export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = [], params = {}, onIr }) {
   const [vista, setVista] = useState('dashboard')
+  const [userEmail, setUserEmail] = useState('')
+  useEffect(() => { supabase.auth.getUser().then(u => { setUserEmail(((u && u.data && u.data.user && u.data.user.email) || '').toLowerCase()) }) }, [])
+  const soloOp = ['joce@sereinspa.com', 'produccion@sereinspa.com'].includes(userEmail)
+  useEffect(() => { if (soloOp) setVista('operacional') }, [soloOp])
   const [alertasDB, setAlertasDB] = useState([])
   async function cargarAlertas() { try { const res = await supabase.from('alertas').select('*').order('fecha', { ascending: false }); setAlertasDB(res.data || []) } catch (e) {} }
   async function revisarAlerta(id) { try { await supabase.from('alertas').update({ estado: 'Revisada', fecha_revision: new Date().toISOString() }).eq('id', id); cargarAlertas() } catch (e) {} }
@@ -360,13 +364,13 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
   return (
     <div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14, borderBottom: '1px solid ' + C.line, paddingBottom: 4 }}>
-        <button onClick={() => setVista('dashboard')} style={tabBtn(vista === 'dashboard')}>Dashboard Inteligente</button>
-        <button onClick={() => setVista('alertas')} style={tabBtn(vista === 'alertas')}>Alertas</button>
-        <button onClick={() => setVista('analista')} style={tabBtn(vista === 'analista')}>Analista Financiero</button>
-        <button onClick={() => setVista('comercial')} style={tabBtn(vista === 'comercial')}>Analista Comercial</button>
+        {!soloOp && <button onClick={() => setVista('dashboard')} style={tabBtn(vista === 'dashboard')}>Dashboard Inteligente</button>}
+        {!soloOp && <button onClick={() => setVista('alertas')} style={tabBtn(vista === 'alertas')}>Alertas</button>}
+        {!soloOp && <button onClick={() => setVista('analista')} style={tabBtn(vista === 'analista')}>Analista Financiero</button>}
+        {!soloOp && <button onClick={() => setVista('comercial')} style={tabBtn(vista === 'comercial')}>Analista Comercial</button>}
         <button onClick={() => setVista('operacional')} style={tabBtn(vista === 'operacional')}>Analista Operacional</button>
-        <button onClick={() => setVista('recs')} style={tabBtn(vista === 'recs')}>Recomendaciones</button>
-        <button onClick={() => setVista('chat')} style={tabBtn(vista === 'chat')}>Chat</button>
+        {!soloOp && <button onClick={() => setVista('recs')} style={tabBtn(vista === 'recs')}>Recomendaciones</button>}
+        {!soloOp && <button onClick={() => setVista('chat')} style={tabBtn(vista === 'chat')}>Chat</button>}
       </div>
       {vista === 'chat' ? <ChatIA /> : vista === 'operacional' ? (<div>
         <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: C.navy }}>Analista Operacional</div>
