@@ -407,6 +407,57 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
     })()
   }, [cobranza])
 
+  const [ceo, setCeo] = useState(null)
+  useEffect(() => {
+    let vivo = true
+    const cargarCeo = async () => {
+      try {
+        const [af, ac, ao, acob, al, rec] = await Promise.all([
+          supabase.from('analisis_financiero').select('area, valor, resumen'),
+          supabase.from('analisis_comercial').select('area, valor, resumen'),
+          supabase.from('analisis_operacional').select('area, valor, resumen'),
+          supabase.from('analisis_cobranza').select('area, valor, resumen'),
+          supabase.from('alertas').select('area, prioridad, descripcion, estado'),
+          supabase.from('recomendaciones').select('titulo, descripcion, prioridad, modulo, estado')
+        ])
+        if (vivo) setCeo({ af: (af && af.data) || [], ac: (ac && ac.data) || [], ao: (ao && ao.data) || [], acob: (acob && acob.data) || [], al: (al && al.data) || [], rec: (rec && rec.data) || [] })
+      } catch (e) {}
+    }
+    cargarCeo()
+    const tt = setTimeout(cargarCeo, 2600)
+    return () => { vivo = false; clearTimeout(tt) }
+  }, [])
+  const ceoView = useMemo(() => {
+    if (!ceo) return null
+    const pick = (rows, area) => (rows || []).find(r => (r.area || '').toLowerCase() === area.toLowerCase())
+    const linea = (rows, areas) => { for (const a of areas) { const r = pick(rows, a); if (r && r.resumen) return r.resumen } return null }
+    const resumen = [
+      { area: 'Finanzas', texto: linea(ceo.af, ['Rentabilidad', 'Flujo de Caja', 'Ventas']) },
+      { area: 'Comercial', texto: linea(ceo.ac, ['Conversion', 'Ventas', 'Cotizaciones']) },
+      { area: 'Produccion', texto: linea(ceo.ao, ['Produccion', 'OT', 'Retrasos']) },
+      { area: 'Cobranza', texto: linea(ceo.acob, ['Historial cliente', 'Dias de atraso', 'Pagos']) },
+      { area: 'Compras', texto: linea(ceo.af, ['Compras', 'Gastos', 'IVA']) },
+      { area: 'RRHH', texto: null }
+    ].map(x => ({ area: x.area, texto: x.texto || 'No existe informacion suficiente para este analisis.' }))
+    const abiertas = (ceo.al || []).filter(a => (a.estado || '') !== 'Resuelta')
+    let criticas = abiertas.filter(a => (a.prioridad || '').toLowerCase() === 'alta')
+    if (!criticas.length) criticas = abiertas.filter(a => (a.prioridad || '').toLowerCase() === 'media')
+    criticas = criticas.slice(0, 8)
+    const prio = []
+    const add = (area, texto, peso) => { if (texto) prio.push({ area, texto, peso }) }
+    abiertas.filter(a => (a.prioridad || '').toLowerCase() === 'alta').forEach(a => add(a.area || 'General', a.descripcion, 100))
+    const flujo = pick(ceo.af, 'Flujo de Caja'); if (flujo && (+flujo.valor) < 0) add('Finanzas', 'Flujo de caja negativo: ' + flujo.resumen, 96)
+    const cobAtr = pick(ceo.acob, 'Dias de atraso'); if (cobAtr && (+cobAtr.valor) > 0) add('Cobranza', 'Gestionar cobranza vencida: ' + cobAtr.resumen, 92)
+    const rent = pick(ceo.af, 'Rentabilidad'); if (rent && (+rent.valor) <= 0) add('Finanzas', 'Rentabilidad en riesgo: ' + rent.resumen, 84)
+    const retr = pick(ceo.ao, 'Retrasos'); if (retr && (+retr.valor) > 0) add('Produccion', 'Atender retrasos de produccion: ' + retr.resumen, 72)
+    const conv = pick(ceo.ac, 'Conversion'); if (conv && conv.resumen) add('Comercial', conv.resumen, 55)
+    const seen = new Set()
+    const prioridades = prio.filter(p => { const k = (p.texto || '').slice(0, 50); if (seen.has(k)) return false; seen.add(k); return true }).sort((a, b) => b.peso - a.peso).slice(0, 6)
+    const recs = (ceo.rec || []).filter(r => { const e = (r.estado || ''); return e !== 'Descartada' && e !== 'Aplicada' }).slice(0, 6)
+    const vacio = !ceo.af.length && !ceo.ac.length && !ceo.ao.length && !ceo.acob.length && !abiertas.length && !recs.length
+    return { resumen, criticas, prioridades, recs, vacio }
+  }, [ceo])
+
   const produccion = useMemo(() => { if (!hayProy && !(ots || []).length) return null; const act = (proyectos || []).filter(p => !p.cerrado); const conAv = act.filter(p => typeof p.avance === 'number'); const avg = conAv.length ? Math.round(conAv.reduce((a, p) => a + (+p.avance || 0), 0) / conAv.length) : null; return { nAct: act.length, avg, m2: act.reduce((a, p) => a + (+p.m2 || 0), 0), nOTs: (ots || []).length } }, [hayProy, proyectos, ots])
 
   const comprasCard = useMemo(() => { if (compras === null) return { cargando: true }; if (!compras.length) return null; const meses = [...new Set(compras.map(r => mesDe(r.emission_date)).filter(Boolean))].sort().reverse(); const ult = meses[0]; const delUlt = compras.filter(r => mesDe(r.emission_date) === ult); const byProv = {}; delUlt.forEach(r => { const n = r.provider_name || '—'; byProv[n] = (byProv[n] || 0) + (+r.neto || 0) }); const top = Object.keys(byProv).map(n => [n, byProv[n]]).sort((a, b) => b[1] - a[1]).slice(0, 3); return { nTotal: compras.length, ult, nUlt: delUlt.length, netoUlt: delUlt.reduce((a, r) => a + (+r.neto || 0), 0), top } }, [compras])
@@ -550,6 +601,36 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
           </div>
         )}
       </div>) : (<div>
+      {ceoView && (
+        <div style={{ border: '2px solid ' + C.navy, borderRadius: 12, padding: 18, marginBottom: 18, background: '#FBFAF7' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4, flexWrap: 'wrap' }}>
+            <div style={{ background: C.navy, color: '#fff', fontFamily: "'Oswald',sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: 1, padding: '4px 10px', borderRadius: 6 }}>CEO IA</div>
+            <div style={{ fontSize: 12, color: C.gray }}>Coordina Finanzas, Comercial, Produccion, Cobranza, Compras y RRHH · se actualiza al ingresar</div>
+          </div>
+          {ceoView.vacio ? (
+            <div style={{ fontSize: 13, color: C.gray, padding: 10 }}>No existe informacion suficiente para este analisis.</div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14, marginTop: 12 }}>
+              <div>
+                <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', fontSize: 13, color: C.red, marginBottom: 6 }}>Prioridades</div>
+                {ceoView.prioridades.length ? ceoView.prioridades.map((p, i) => <div key={i} style={{ fontSize: 12.5, marginBottom: 5, paddingLeft: 10, borderLeft: '3px solid ' + C.red }}><b style={{ color: C.navy }}>{p.area}:</b> {p.texto}</div>) : <div style={{ fontSize: 12, color: C.gray }}>Sin prioridades definidas.</div>}
+              </div>
+              <div>
+                <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', fontSize: 13, color: C.orange, marginBottom: 6 }}>Alertas criticas</div>
+                {ceoView.criticas.length ? ceoView.criticas.map((a, i) => <div key={i} style={{ fontSize: 12.5, marginBottom: 5, paddingLeft: 10, borderLeft: '3px solid ' + C.orange }}><b style={{ color: C.navy }}>{a.area || 'General'}:</b> {a.descripcion}</div>) : <div style={{ fontSize: 12, color: C.gray }}>Sin alertas criticas abiertas.</div>}
+              </div>
+              <div>
+                <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', fontSize: 13, color: C.navy, marginBottom: 6 }}>Resumen ejecutivo</div>
+                {ceoView.resumen.map((r, i) => <div key={i} style={{ fontSize: 12.5, marginBottom: 5 }}><b style={{ color: C.navy }}>{r.area}:</b> <span style={{ color: C.gray }}>{r.texto}</span></div>)}
+              </div>
+              <div>
+                <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', fontSize: 13, color: C.green, marginBottom: 6 }}>Recomendaciones</div>
+                {ceoView.recs.length ? ceoView.recs.map((r, i) => <div key={i} style={{ fontSize: 12.5, marginBottom: 5, paddingLeft: 10, borderLeft: '3px solid ' + C.green }}><b style={{ color: C.navy }}>{r.modulo || 'General'}:</b> {r.titulo}</div>) : <div style={{ fontSize: 12, color: C.gray }}>Sin recomendaciones activas.</div>}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       <div style={{ marginBottom: 16 }}>
         <h2 style={{ fontFamily: "'Oswald',sans-serif", fontSize: 24, fontWeight: 600, textTransform: 'uppercase', margin: 0, color: C.navy }}>Dashboard Inteligente</h2>
         <div style={{ fontSize: 12.5, color: C.gray }}>Se actualiza automaticamente al ingresar · datos reales del sistema</div>
