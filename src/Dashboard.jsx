@@ -328,7 +328,12 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const facCount = a => (facturas[a] || []).length
   const esTODAS = esGerencia && areaSel === 'TODAS'
   const esAreaFact = areasFact.includes(areaSel)
-  const kVenta = esTODAS ? areasFact.reduce((s, a) => s + facNeto(a), 0) : (esAreaFact ? facNeto(areaSel) : vista.venta)
+  let kVenta = esTODAS ? areasFact.reduce((s, a) => s + facNeto(a), 0) : (esAreaFact ? facNeto(areaSel) : vista.venta)
+  const _lvR = (() => { try { return JSON.parse(localStorage.getItem('serein_libroVentasXlsx') || '[]') } catch (e) { return [] } })()
+  const _sgnR = r => (String(r.document_type || '').trim() === '61' ? -1 : 1)
+  let kVentaLibroBruto = 0, kNFactLibro = 0, _kvLibro = 0
+  for (const _r of _lvR) { if (_r.oculto) continue; const _g = _sgnR(_r); _kvLibro += _g * (Number(_r.neto) || 0); kVentaLibroBruto += _g * ((Number(_r.total) || 0) || ((Number(_r.neto) || 0) + (Number(_r.iva) || 0))); kNFactLibro++ }
+  if (_lvR.length) kVenta = _kvLibro
   const kCobrado = esTODAS ? areasFact.reduce((s, a) => s + facCobN(a), 0) : (esAreaFact ? facCobN(areaSel) : vista.cobrado)
   const kPend = (esTODAS || esAreaFact) ? (kVenta - kCobrado) : vista.pendiente
   const perdFactArea = a => (facturas[a] || []).reduce((s, f) => s + perdidaFactoringFactura(f, params), 0)
@@ -486,7 +491,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
         ) : (
         <>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-          <Kpi label="Venta Neta" valor={clp(kVenta)} sub={`Bruto ${clp(kVentaBruto)} · ${kNFact} facturas`} color={C.azul} icon={TrendingUp} />
+          <Kpi label="Venta Neta" valor={clp(kVenta)} sub={`Bruto ${clp(_lvR.length ? kVentaLibroBruto : kVentaBruto)} · ${_lvR.length ? kNFactLibro : kNFact} facturas`} color={C.azul} icon={TrendingUp} />
           <Kpi label="Cobrado" valor={clp(kCobrado)} sub={`Bruto ${clp(kCobradoBruto)} · ${((kCobrado / ((kCobrado + kPend) || 1)) * 100).toFixed(0)}% cartera`} color={C.verde} icon={Wallet} />
           <Kpi label="Por Cobrar" valor={clp(kPend)} sub={`Bruto ${clp(kPendBruto)} · pendiente`} color={C.rojo} icon={AlertTriangle} />
           <Kpi label="Pérdida Factoring" valor={clp(kPerd)} sub={kVenta > 0 ? `${((kPerd / kVenta) * 100).toFixed(2)}% s/ venta` : '—'} color={C.ambar} icon={Landmark} />
