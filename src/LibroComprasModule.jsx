@@ -57,6 +57,15 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
     setNuevoSD({ fecha: '', monto: '', categoria: '', area: '', ot: '', centro_costo: '', glosa: '' })
   }
   const eliminarSinDoc = async (id) => { setSinDoc(cur => cur.filter(x => x.id !== id)); try { await supabase.from('compras_sin_doc').delete().eq('id', id) } catch (e) {} }
+  const marcarTodasPago = async (estado) => {
+    if (!window.confirm('Marcar TODAS las facturas de compra como ' + estado + '? Luego puedes cambiar las que quieras una por una.')) return
+    setRows(rs => rs.map(r => ({ ...r, estado_pago: estado })))
+    if (extra && extra.length) guardarExtra(extra.map(x => ({ ...x, estado_pago: estado })))
+    const ids = (rows || []).map(r => r.id).filter(Boolean)
+    if (ids.length) { try { await supabase.from('libro_compras').update({ estado_pago: estado }).in('id', ids) } catch (e) {} }
+  }
+  const marcarTodasPagadas = () => marcarTodasPago('Pagada')
+  const marcarTodasPendientes = () => marcarTodasPago('Pendiente')
   useEffect(() => { supabase.from('tipos_gasto').select('tipo, clasificacion').then(res => { const list = res.data || []; if (!list.length) return; setCustomTipos(cur => { const map = {}; cur.forEach(c => { map[c.tipo] = c }); list.forEach(x => { map[x.tipo] = { tipo: x.tipo, clasif: x.clasificacion || '' } }); const merged = Object.values(map); try { localStorage.setItem('serein_tiposCustom', JSON.stringify(merged)) } catch (e) {} return merged }) }, () => {}) }, [])
   const tipoAuto = r => provTipo[rutN(r && r.provider_rut)] || reglaTipo(r && r.provider_name) || ''
   const clasifDe = t => (CLASIF[t] !== undefined ? CLASIF[t] : ((customTipos.find(c => c.tipo === t) || {}).clasif || ''))
@@ -361,6 +370,13 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
         <button onClick={() => { setVerOcultas(v => !v); setSel(new Set()) }} style={{ background: 'transparent', border: '1px solid ' + C.border, padding: '7px 12px', borderRadius: 6, fontSize: 12.5, cursor: 'pointer', color: C.navy }}>{verOcultas ? 'Volver al libro' : 'Ver ocultos'}</button>
       </div>
 
+      {filtradas.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button onClick={marcarTodasPagadas} style={{ padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 12.5, fontWeight: 600, border: 'none', background: C.green, color: '#fff' }}>Marcar todas como pagadas</button>
+          <button onClick={marcarTodasPendientes} style={{ padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 12.5, fontWeight: 600, border: '1px solid ' + C.border, background: '#fff', color: C.text }}>Marcar todas como pendientes</button>
+          <span style={{ fontSize: 11.5, color: C.mut }}>Marca todo de una vez y luego cambia solo las que no correspondan.</span>
+        </div>
+      )}
       {(filtradas.length || sinDoc.length) ? (() => {
         const montoDe = r => Number(r.exenta ? (r.document_total || r.neto || 0) : (r.neto || 0))
         const tipoDe = r => r.tipo_compra || tipoAuto(r) || 'Sin tipo'
