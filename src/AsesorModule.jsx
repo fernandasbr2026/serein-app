@@ -120,6 +120,9 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
   const [analisisCom, setAnalisisCom] = useState([])
   async function cargarComercial() { try { const res = await supabase.from('analisis_comercial').select('*'); setAnalisisCom(res.data || []) } catch (e) {} }
   useEffect(() => { cargarComercial() }, [])
+  const [analisisOp, setAnalisisOp] = useState([])
+  async function cargarOperacional() { try { const res = await supabase.from('analisis_operacional').select('*'); setAnalisisOp(res.data || []) } catch (e) {} }
+  useEffect(() => { cargarOperacional() }, [])
   const [iva, setIva] = useState({ credito: 0, debito: 0, cargado: false })
   const [compras, setCompras] = useState(null)
   const hoyStr = hoy()
@@ -292,6 +295,46 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
     return () => { vivo = false }
   }, [analisis, proyectos])
 
+  useEffect(() => {
+    let vivo = true
+    ;(async () => {
+      try {
+        const u = await supabase.auth.getUser(); const uid = u && u.data && u.data.user ? u.data.user.id : null
+        if (!uid) return
+        let ots = [], mo = {}
+        try { ots = JSON.parse(localStorage.getItem('serein_ots') || '[]') } catch (e) {}
+        try { mo = JSON.parse(localStorage.getItem('serein_mo') || '{}') } catch (e) {}
+        const P = proyectos || []
+        const trab = mo.trabajadores || []; const asist = mo.asistencias || []
+        const h = hoyStr
+        const cerr = e => /entreg|termin|cerr/i.test(e || '')
+        const totalOT = ots.length + P.length
+        const activasOT = ots.filter(o => !cerr(o.estado)).length + P.filter(p => !p.cerrado).length
+        const act = P.filter(p => !p.cerrado); const conAv = act.filter(p => typeof p.avance === 'number'); const avg = conAv.length ? Math.round(conAv.reduce((a, p) => a + (+p.avance || 0), 0) / conAv.length) : 0
+        const retra = ots.filter(o => o.fechaEntrega && o.fechaEntrega < h && !cerr(o.estado)).length
+        const conPlan = ots.filter(o => ((o.esquema || '').trim() || (o.preparacion || '').trim())).length
+        const calidadPct = ots.length ? Math.round(conPlan / ots.length * 100) : null
+        const HH = asist.reduce((sm, a) => sm + (a.trabajadorIds || []).length * (/media/i.test(a.jornada || '') ? 4.5 : 9), 0)
+        const dias = new Set(asist.map(a => a.fecha)).size
+        const dotacion = trab.length; const capDia = dotacion * 9
+        const util = (dias > 0 && capDia > 0) ? Math.round(HH / (capDia * dias) * 100) : null
+        const A = (area, valor, resumen) => ({ usuario: uid, fecha: new Date().toISOString(), periodo: mes, area: area, valor: Math.round(valor || 0), resumen: resumen, fuente: 'regla', clave: mes + '::' + area })
+        const rows = [
+          A('OT', totalOT, activasOT + ' OT activas de ' + totalOT + ' en el sistema.'),
+          A('Produccion', avg, act.length + ' OT en produccion; avance fisico promedio ' + avg + '%.'),
+          A('Planta', dotacion, dotacion + ' trabajador(es) en la dotacion.'),
+          A('Calidad', calidadPct || 0, calidadPct === null ? 'Sin OT para evaluar.' : conPlan + ' de ' + ots.length + ' OT con plan de calidad (' + calidadPct + '%).'),
+          A('Retrasos', retra, retra + ' OT con fecha de entrega vencida sin cerrar.'),
+          A('Horas Hombre', HH, HH + ' HH registradas en ' + dias + ' dia(s) de asistencia.'),
+          A('Capacidad', util === null ? 0 : util, util === null ? ('Dotacion ' + dotacion + ' trabajadores; sin asistencias para calcular uso.') : ('Utilizacion ' + util + '% (' + HH + ' HH de ' + (capDia * dias) + ' disponibles).'))
+        ]
+        await supabase.from('analisis_operacional').upsert(rows, { onConflict: 'usuario,clave' })
+        if (vivo) cargarOperacional()
+      } catch (e) {}
+    })()
+    return () => { vivo = false }
+  }, [analisis, proyectos])
+
   const hayFin = (fin.gastos || []).length || (fin.obligaciones || []).length
   const hayProy = (proyectos || []).length
 
@@ -316,15 +359,31 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14, borderBottom: '1px solid ' + C.line, paddingBottom: 4 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14, borderBottom: '1px solid ' + C.line, paddingBottom: 4 }}>
         <button onClick={() => setVista('dashboard')} style={tabBtn(vista === 'dashboard')}>Dashboard Inteligente</button>
         <button onClick={() => setVista('alertas')} style={tabBtn(vista === 'alertas')}>Alertas</button>
         <button onClick={() => setVista('analista')} style={tabBtn(vista === 'analista')}>Analista Financiero</button>
         <button onClick={() => setVista('comercial')} style={tabBtn(vista === 'comercial')}>Analista Comercial</button>
+        <button onClick={() => setVista('operacional')} style={tabBtn(vista === 'operacional')}>Analista Operacional</button>
         <button onClick={() => setVista('recs')} style={tabBtn(vista === 'recs')}>Recomendaciones</button>
         <button onClick={() => setVista('chat')} style={tabBtn(vista === 'chat')}>Chat</button>
       </div>
-      {vista === 'chat' ? <ChatIA /> : vista === 'comercial' ? (<div>
+      {vista === 'chat' ? <ChatIA /> : vista === 'operacional' ? (<div>
+        <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: C.navy }}>Analista Operacional</div>
+        <div style={{ fontSize: 12.5, color: C.gray, marginBottom: 12 }}>Servicio que analiza automaticamente al ingresar y guarda los resultados en la base. Todo dentro del Dashboard.</div>
+        {analisisOp.length === 0 ? <div style={{ color: C.gray, fontSize: 13, border: '1px dashed ' + C.line, borderRadius: 6, padding: 16, textAlign: 'center' }}>Aun no hay analisis guardado. Si es la primera vez, corre serein_ai_setup.sql en Supabase.</div> : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
+            {['OT', 'Produccion', 'Planta', 'Calidad', 'Retrasos', 'Horas Hombre', 'Capacidad'].map(area => { const a = analisisOp.find(x => x.area === area); if (!a) return null; const v = (area === 'Produccion' || area === 'Calidad' || area === 'Capacidad') ? (a.valor + '%') : String(a.valor); return (
+              <div key={area} style={{ background: '#fff', border: '1px solid ' + C.line, borderTop: '3px solid ' + C.navy, borderRadius: 6, padding: '12px 14px' }}>
+                <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 13, textTransform: 'uppercase', color: C.navy }}>{a.area}</div>
+                <div style={{ fontSize: 21, fontWeight: 700, color: C.navy, fontFamily: "'Oswald',sans-serif", margin: '2px 0 4px' }}>{v}</div>
+                <div style={{ fontSize: 12, color: '#3A4045' }}>{a.resumen}</div>
+                <div style={{ fontSize: 10.5, color: C.gray, marginTop: 6 }}>{(a.fecha || '').slice(0, 10)} · fuente: {a.fuente}</div>
+              </div>
+            ) })}
+          </div>
+        )}
+      </div>) : vista === 'comercial' ? (<div>
         <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: C.navy }}>Analista Comercial</div>
         <div style={{ fontSize: 12.5, color: C.gray, marginBottom: 12 }}>Servicio que analiza automaticamente al ingresar y guarda los resultados en la base. Preparado para reglas inteligentes.</div>
         {analisisCom.length === 0 ? <div style={{ color: C.gray, fontSize: 13, border: '1px dashed ' + C.line, borderRadius: 6, padding: 16, textAlign: 'center' }}>Aun no hay analisis guardado. Si es la primera vez, corre serein_ai_setup.sql en Supabase.</div> : (
