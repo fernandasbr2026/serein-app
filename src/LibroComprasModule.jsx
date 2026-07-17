@@ -303,7 +303,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
       </div>
 
       {filtradas.length ? (() => {
-        const montoDe = r => Number(r.document_total || ((Number(r.neto) || 0) + (Number(r.iva) || 0)) || r.neto || 0)
+        const montoDe = r => Number(r.exenta ? (r.document_total || r.neto || 0) : (r.neto || 0))
         const tipoDe = r => r.tipo_compra || tipoAuto(r) || 'Sin tipo'
         const fv = { Fijo: 0, Variable: 0, 'Sin clasificar': 0 }
         const cat = {}, mesG = {}, otG = {}, ccG = {}
@@ -336,7 +336,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
                   {card('Gastos fijos', fv.Fijo, '#2563EB')}
                   {card('Gastos variables', fv.Variable, C.orange)}
-                  {card('Total compras', total, C.navy)}
+                  {card('Total neto', total, C.navy)}
                 </div>
                 {fv['Sin clasificar'] > 0 ? <div style={{ fontSize: 11, color: C.mut, marginBottom: 10 }}>Sin clasificar (falta asignar tipo): {clp(fv['Sin clasificar'])}</div> : null}
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
