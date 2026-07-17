@@ -131,6 +131,24 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
   const [compras, setCompras] = useState(null)
   const hoyStr = hoy()
   const mes = mesDe(hoyStr)
+  const [gastosLC, setGastosLC] = useState(null)
+  useEffect(() => {
+    let vivo = true
+    supabase.from('libro_compras').select('tipo_compra, clasificacion, document_total, neto, iva').then(res => {
+      if (!vivo) return
+      const src = res.data || []
+      let fijo = 0, variable = 0, sin = 0, total = 0
+      const cat = {}
+      for (const r of src) {
+        const m = Number(r.document_total || ((Number(r.neto) || 0) + (Number(r.iva) || 0)) || r.neto || 0)
+        total += m
+        if (r.clasificacion === 'Fijo') fijo += m; else if (r.clasificacion === 'Variable') variable += m; else sin += m
+        const t = r.tipo_compra || 'Sin tipo'; cat[t] = (cat[t] || 0) + m
+      }
+      setGastosLC({ fijo, variable, sin, total, cat: Object.entries(cat).sort((a, b) => b[1] - a[1]) })
+    }, () => {})
+    return () => { vivo = false }
+  }, [])
 
   useEffect(() => {
     let vivo = true
@@ -405,6 +423,30 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
       </div>) : vista === 'analista' ? (<div>
         <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: C.navy }}>Analista Financiero</div>
         <div style={{ fontSize: 12.5, color: C.gray, marginBottom: 12 }}>Servicio que analiza automaticamente al ingresar y guarda los resultados en la base. Preparado para ejecucion automatica.</div>
+        {gastosLC ? (() => {
+          const maxV = Math.max(1, ...gastosLC.cat.map(x => Math.abs(x[1])))
+          const cardG = (lbl, val, col) => <div style={{ flex: '1 1 150px', background: '#fff', border: '1px solid ' + C.line, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, color: C.gray }}>{lbl}</div><div style={{ fontSize: 18, fontWeight: 700, color: col }}>{clp(val)}</div></div>
+          return (
+            <div style={{ border: '1px solid ' + C.line, borderRadius: 8, padding: 14, marginBottom: 14, background: '#F8FAFC' }}>
+              <div style={{ fontWeight: 700, color: C.navy, marginBottom: 10 }}>Gastos del Libro de Compras · Fijos vs Variables</div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+                {cardG('Gastos fijos', gastosLC.fijo, '#2563EB')}
+                {cardG('Gastos variables', gastosLC.variable, '#D97706')}
+                {cardG('Total compras', gastosLC.total, C.navy)}
+              </div>
+              {gastosLC.sin > 0 ? <div style={{ fontSize: 11, color: C.gray, marginBottom: 10 }}>Sin clasificar (abre el Libro de Compras para autoclasificar): {clp(gastosLC.sin)}</div> : null}
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}><tbody>
+                {gastosLC.cat.map(([k, v]) => (
+                  <tr key={k} style={{ borderBottom: '1px solid ' + C.line }}>
+                    <td style={{ padding: '5px 8px', whiteSpace: 'nowrap' }}>{k}</td>
+                    <td style={{ padding: '5px 8px', width: '50%' }}><div style={{ background: C.navy, height: 8, borderRadius: 4, width: (Math.abs(v) / maxV * 100) + '%', minWidth: 2 }} /></td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }}>{clp(v)}</td>
+                  </tr>
+                ))}
+              </tbody></table>
+            </div>
+          )
+        })() : null}
         {analisisFin.length === 0 ? <div style={{ color: C.gray, fontSize: 13, border: '1px dashed ' + C.line, borderRadius: 6, padding: 16, textAlign: 'center' }}>Aun no hay analisis guardado. Si es la primera vez, corre serein_ai_setup.sql en Supabase.</div> : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
             {['Ventas', 'Compras', 'IVA', 'Factoring', 'Creditos', 'Leasing', 'Gastos', 'Flujo de Caja', 'Rentabilidad'].map(area => { const a = analisisFin.find(x => x.area === area); if (!a) return null; return (
