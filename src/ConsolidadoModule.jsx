@@ -410,7 +410,15 @@ export default function ConsolidadoModule(props) {
       for (const r of lv) { if (r.oculto) continue; const g = sgn(r); vNeta += g * num(r.neto); vBruta += g * (num(r.total) || (num(r.neto) + num(r.iva))); ivaDeb += g * num(r.iva) }
       let cNeto = 0, cTotal = 0, ivaCred = 0
       for (const r of compras) { if (r.oculto) continue; const g = sgn(r); const base = r.exenta ? (num(r.document_total) || num(r.neto)) : num(r.neto); cNeto += g * base; cTotal += g * num(r.document_total); ivaCred += g * num(r.iva) }
-      setLibroCons({ vNeta, vBruta, nV: lv.length, cNeto, cTotal, nC: compras.length, ivaDeb, ivaCred })
+      const fin = props.fin || {}
+      let gastosOp = 0
+      for (const gx of (fin.gastos || [])) gastosOp += num(gx.neto) + num(gx.iva)
+      const mesAct = new Date().toISOString().slice(0, 7)
+      let cuotasMes = 0
+      for (const o of (fin.obligaciones || [])) for (const c of (o.cuotas || [])) { if ((c.vencimiento || '').slice(0, 7) === mesAct && c.estado !== 'Pagada') cuotasMes += num(c.total) }
+      let sinDoc = 0
+      try { const rs = await supabase.from('compras_sin_doc').select('monto'); sinDoc = ((rs && rs.data) || []).reduce((a, x) => a + num(x.monto), 0) } catch (e) {}
+      setLibroCons({ vNeta, vBruta, nV: lv.length, cNeto, cTotal, nC: compras.length, ivaDeb, ivaCred, gastosOp, cuotasMes, sinDoc })
     })()
     return () => { vivo = false }
   }, [])
@@ -433,6 +441,28 @@ export default function ConsolidadoModule(props) {
             <div style={lcCard}><div style={lbl}>IVA (debito - credito)</div><div style={{ ...val, color: C.navy }}>{clp(libroCons.ivaDeb - libroCons.ivaCred)}</div><div style={sub}>ventas {clp(libroCons.ivaDeb)} / compras {clp(libroCons.ivaCred)}</div></div>
           </div>
           <div style={{ fontSize: 11, color: C.gray, marginTop: 10 }}>El cobrado y el factoring se muestran abajo desde proyectos, porque el Libro de Ventas no registra el estado de pago ni el factoring por factura.</div>
+          <div style={{ marginTop: 14, borderTop: '1px solid ' + C.line, paddingTop: 12 }}>
+            {(() => {
+              const cobrado = num(cc.kCobrado)
+              const ivaPagar = Math.max(0, libroCons.ivaDeb - libroCons.ivaCred)
+              const egr = num(libroCons.cNeto) + num(libroCons.sinDoc) + num(libroCons.gastosOp) + num(libroCons.cuotasMes) + ivaPagar
+              const caja = cobrado - egr
+              const linea = (t, v, neg) => (<div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '3px 0' }}><span style={{ color: C.gray }}>{t}</span><span style={{ fontWeight: 600, color: neg ? C.rojo : C.navy }}>{neg ? '- ' : ''}{clp(v)}</span></div>)
+              return (<div>
+                <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 700, color: C.navy, fontSize: 13, textTransform: 'uppercase', marginBottom: 6 }}>Caja que deberias tener</div>
+                <div style={{ maxWidth: 480 }}>
+                  {linea('Cobrado (ingresos reales)', cobrado, false)}
+                  {linea('Compras (Libro de Compras)', num(libroCons.cNeto), true)}
+                  {linea('Compras sin documento', num(libroCons.sinDoc), true)}
+                  {linea('Sueldos y gastos operativos', num(libroCons.gastosOp), true)}
+                  {linea('Cuotas de creditos/leasing (mes)', num(libroCons.cuotasMes), true)}
+                  {linea('IVA a pagar', ivaPagar, true)}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid ' + C.navy, marginTop: 6, paddingTop: 6 }}><span style={{ fontWeight: 700, color: C.navy }}>Caja que deberias tener</span><span style={{ fontWeight: 800, fontSize: 18, color: caja < 0 ? C.rojo : C.verde }}>{clp(caja)}</span></div>
+                </div>
+                <div style={{ fontSize: 11, color: C.gray, marginTop: 8 }}>Base: lo efectivamente cobrado. Descuenta compras, compras sin documento, sueldos y gastos operativos, cuotas de deuda del mes e IVA a pagar.</div>
+              </div>)
+            })()}
+          </div>
         </div>
       )
     })()}
