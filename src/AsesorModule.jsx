@@ -117,6 +117,9 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
   const [analisisFin, setAnalisisFin] = useState([])
   async function cargarAnalisis() { try { const res = await supabase.from('analisis_financiero').select('*'); setAnalisisFin(res.data || []) } catch (e) {} }
   useEffect(() => { cargarAnalisis() }, [])
+  const [analisisCom, setAnalisisCom] = useState([])
+  async function cargarComercial() { try { const res = await supabase.from('analisis_comercial').select('*'); setAnalisisCom(res.data || []) } catch (e) {} }
+  useEffect(() => { cargarComercial() }, [])
   const [iva, setIva] = useState({ credito: 0, debito: 0, cargado: false })
   const [compras, setCompras] = useState(null)
   const hoyStr = hoy()
@@ -251,6 +254,44 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
     return () => { vivo = false }
   }, [analisis, compras])
 
+  useEffect(() => {
+    let vivo = true
+    ;(async () => {
+      try {
+        const u = await supabase.auth.getUser(); const uid = u && u.data && u.data.user ? u.data.user.id : null
+        if (!uid) return
+        let cots = [], clientes = []
+        try { cots = JSON.parse(localStorage.getItem('serein_cotizaciones') || '[]') } catch (e) {}
+        try { clientes = JSON.parse(localStorage.getItem('serein_clientes') || '[]') } catch (e) {}
+        const P = proyectos || []
+        const numDe = v => { const n = parseInt(String(v == null ? '' : v).replace(/[^0-9]/g, ''), 10); return isNaN(n) ? 0 : n }
+        const valCot = c => (c.items || []).reduce((a, it) => a + (numDe(it.cant) * numDe(it.pUnitario) - numDe(it.descuento)), 0)
+        const esAprob = c => /aprob/i.test(c.estado || '')
+        const esRech = c => /rechaz/i.test(c.estado || '')
+        const nCot = cots.length
+        const nAprob = cots.filter(esAprob).length
+        const nSeg = cots.filter(c => !esAprob(c) && !esRech(c)).length
+        const conv = nCot > 0 ? Math.round(nAprob / nCot * 100) : null
+        const valorCot = cots.reduce((a, c) => a + valCot(c), 0)
+        const facturado = P.reduce((a, p) => a + (p.edps || []).reduce((x, e) => x + (+e.venta || 0), 0), 0)
+        let venta = 0, costo = 0; P.forEach(p => { venta += (+p.venta_cotizada || 0) || (p.edps || []).reduce((x, e) => x + (+e.venta || 0), 0); costo += (p.compras || []).reduce((x, c) => x + (+c.monto || 0), 0) })
+        const margen = venta > 0 ? Math.round((venta - costo) / venta * 100) : null
+        const A = (area, valor, resumen) => ({ usuario: uid, fecha: new Date().toISOString(), periodo: mes, area: area, valor: Math.round(valor || 0), resumen: resumen, fuente: 'regla', clave: mes + '::' + area })
+        const rows = [
+          A('Cotizaciones', valorCot, nCot + ' cotizacion(es) por ' + clp(valorCot) + '.'),
+          A('Clientes', clientes.length, clientes.length + ' cliente(s) registrados.'),
+          A('Seguimientos', nSeg, nSeg + ' cotizacion(es) en seguimiento (sin aprobar ni rechazar).'),
+          A('Conversion', conv || 0, conv === null ? 'Sin cotizaciones para calcular conversion.' : conv + '% de conversion (' + nAprob + ' aprobadas de ' + nCot + ').'),
+          A('Ventas', facturado, 'Facturado ' + clp(facturado) + '.'),
+          A('Margenes', margen || 0, margen === null ? 'Sin datos suficientes.' : 'Margen ' + margen + '% sobre venta.')
+        ]
+        await supabase.from('analisis_comercial').upsert(rows, { onConflict: 'usuario,clave' })
+        if (vivo) cargarComercial()
+      } catch (e) {}
+    })()
+    return () => { vivo = false }
+  }, [analisis, proyectos])
+
   const hayFin = (fin.gastos || []).length || (fin.obligaciones || []).length
   const hayProy = (proyectos || []).length
 
@@ -279,10 +320,26 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
         <button onClick={() => setVista('dashboard')} style={tabBtn(vista === 'dashboard')}>Dashboard Inteligente</button>
         <button onClick={() => setVista('alertas')} style={tabBtn(vista === 'alertas')}>Alertas</button>
         <button onClick={() => setVista('analista')} style={tabBtn(vista === 'analista')}>Analista Financiero</button>
+        <button onClick={() => setVista('comercial')} style={tabBtn(vista === 'comercial')}>Analista Comercial</button>
         <button onClick={() => setVista('recs')} style={tabBtn(vista === 'recs')}>Recomendaciones</button>
         <button onClick={() => setVista('chat')} style={tabBtn(vista === 'chat')}>Chat</button>
       </div>
-      {vista === 'chat' ? <ChatIA /> : vista === 'analista' ? (<div>
+      {vista === 'chat' ? <ChatIA /> : vista === 'comercial' ? (<div>
+        <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: C.navy }}>Analista Comercial</div>
+        <div style={{ fontSize: 12.5, color: C.gray, marginBottom: 12 }}>Servicio que analiza automaticamente al ingresar y guarda los resultados en la base. Preparado para reglas inteligentes.</div>
+        {analisisCom.length === 0 ? <div style={{ color: C.gray, fontSize: 13, border: '1px dashed ' + C.line, borderRadius: 6, padding: 16, textAlign: 'center' }}>Aun no hay analisis guardado. Si es la primera vez, corre serein_ai_setup.sql en Supabase.</div> : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
+            {['Cotizaciones', 'Clientes', 'Seguimientos', 'Conversion', 'Ventas', 'Margenes'].map(area => { const a = analisisCom.find(x => x.area === area); if (!a) return null; const v = (area === 'Conversion' || area === 'Margenes') ? (a.valor + '%') : (area === 'Clientes' || area === 'Seguimientos') ? String(a.valor) : clp(a.valor); return (
+              <div key={area} style={{ background: '#fff', border: '1px solid ' + C.line, borderTop: '3px solid ' + C.navy, borderRadius: 6, padding: '12px 14px' }}>
+                <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 13, textTransform: 'uppercase', color: C.navy }}>{a.area}</div>
+                <div style={{ fontSize: 21, fontWeight: 700, color: C.navy, fontFamily: "'Oswald',sans-serif", margin: '2px 0 4px' }}>{v}</div>
+                <div style={{ fontSize: 12, color: '#3A4045' }}>{a.resumen}</div>
+                <div style={{ fontSize: 10.5, color: C.gray, marginTop: 6 }}>{(a.fecha || '').slice(0, 10)} · fuente: {a.fuente}</div>
+              </div>
+            ) })}
+          </div>
+        )}
+      </div>) : vista === 'analista' ? (<div>
         <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: C.navy }}>Analista Financiero</div>
         <div style={{ fontSize: 12.5, color: C.gray, marginBottom: 12 }}>Servicio que analiza automaticamente al ingresar y guarda los resultados en la base. Preparado para ejecucion automatica.</div>
         {analisisFin.length === 0 ? <div style={{ color: C.gray, fontSize: 13, border: '1px dashed ' + C.line, borderRadius: 6, padding: 16, textAlign: 'center' }}>Aun no hay analisis guardado. Si es la primera vez, corre serein_ai_setup.sql en Supabase.</div> : (
