@@ -44,6 +44,19 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
   const [customTipos, setCustomTipos] = useState(() => { try { return JSON.parse(localStorage.getItem('serein_tiposCustom') || '[]') } catch (e) { return [] } })
   const [verConsol, setVerConsol] = useState(false)
   const [dimConsol, setDimConsol] = useState('cat')
+  const [sub, setSub] = useState('doc')
+  const [sinDoc, setSinDoc] = useState([])
+  const [nuevoSD, setNuevoSD] = useState({ fecha: '', monto: '', categoria: '', area: '', ot: '', centro_costo: '', glosa: '' })
+  useEffect(() => { supabase.from('compras_sin_doc').select('*').order('fecha', { ascending: false }).then(res => { if (res.data) setSinDoc(res.data) }, () => {}) }, [])
+  const totalSinDoc = (sinDoc || []).reduce((a, x) => a + (Number(x.monto) || 0), 0)
+  const agregarSinDoc = async () => {
+    const monto = Number(nuevoSD.monto) || 0
+    if (!monto) { window.alert('Ingresa un monto valido'); return }
+    const reg = { fecha: nuevoSD.fecha || new Date().toISOString().slice(0, 10), monto, categoria: nuevoSD.categoria || null, clasificacion: clasifDe(nuevoSD.categoria) || null, area: nuevoSD.area || null, ot: nuevoSD.ot || null, centro_costo: nuevoSD.centro_costo || null, glosa: nuevoSD.glosa || null }
+    try { const res = await supabase.from('compras_sin_doc').insert(reg).select().single(); if (res.data) { setSinDoc(cur => [res.data, ...cur]) } else { setSinDoc(cur => [{ ...reg, id: 'tmp' + Date.now() }, ...cur]) } } catch (e) { setSinDoc(cur => [{ ...reg, id: 'tmp' + Date.now() }, ...cur]) }
+    setNuevoSD({ fecha: '', monto: '', categoria: '', area: '', ot: '', centro_costo: '', glosa: '' })
+  }
+  const eliminarSinDoc = async (id) => { setSinDoc(cur => cur.filter(x => x.id !== id)); try { await supabase.from('compras_sin_doc').delete().eq('id', id) } catch (e) {} }
   useEffect(() => { supabase.from('tipos_gasto').select('tipo, clasificacion').then(res => { const list = res.data || []; if (!list.length) return; setCustomTipos(cur => { const map = {}; cur.forEach(c => { map[c.tipo] = c }); list.forEach(x => { map[x.tipo] = { tipo: x.tipo, clasif: x.clasificacion || '' } }); const merged = Object.values(map); try { localStorage.setItem('serein_tiposCustom', JSON.stringify(merged)) } catch (e) {} return merged }) }, () => {}) }, [])
   const tipoAuto = r => provTipo[rutN(r && r.provider_rut)] || reglaTipo(r && r.provider_name) || ''
   const clasifDe = t => (CLASIF[t] !== undefined ? CLASIF[t] : ((customTipos.find(c => c.tipo === t) || {}).clasif || ''))
@@ -254,6 +267,52 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
 
   return (
     <div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+        <button onClick={() => setSub('doc')} style={{ padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, border: '1px solid ' + C.border, background: sub === 'doc' ? C.navy : '#fff', color: sub === 'doc' ? '#fff' : C.text }}>Documentos</button>
+        <button onClick={() => setSub('sindoc')} style={{ padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, border: '1px solid ' + C.border, background: sub === 'sindoc' ? C.navy : '#fff', color: sub === 'sindoc' ? '#fff' : C.text }}>Compras sin documentos{totalSinDoc ? ' (' + clp(totalSinDoc) + ')' : ''}</button>
+      </div>
+      {sub === 'sindoc' && (
+        <div>
+          <div style={{ fontSize: 12.5, color: C.mut, marginBottom: 12 }}>Gastos sin documentacion (efectivo, boletas no ingresadas, etc.). Se suman al consolidado y se descuentan de la caja real en el Analista Financiero.</div>
+          <div style={{ border: '1px solid ' + C.border, borderRadius: 8, padding: 14, marginBottom: 14, background: C.gray, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
+            <label style={{ fontSize: 11, color: C.mut }}>Fecha<input type="date" value={nuevoSD.fecha} onChange={e => setNuevoSD(v => ({ ...v, fecha: e.target.value }))} style={ip} /></label>
+            <label style={{ fontSize: 11, color: C.mut }}>Monto<input type="number" value={nuevoSD.monto} onChange={e => setNuevoSD(v => ({ ...v, monto: e.target.value }))} placeholder="0" style={ip} /></label>
+            <label style={{ fontSize: 11, color: C.mut }}>Categoria<select value={nuevoSD.categoria} onChange={e => setNuevoSD(v => ({ ...v, categoria: e.target.value }))} style={ip}><option value="">- tipo -</option>{TIPOS.map(t => <option key={t} value={t}>{t}</option>)}{customTipos.map(c => <option key={c.tipo} value={c.tipo}>{c.tipo}</option>)}</select></label>
+            <label style={{ fontSize: 11, color: C.mut }}>Clasificacion<input value={clasifDe(nuevoSD.categoria) || '-'} disabled style={{ ...ip, background: '#eee' }} /></label>
+            <label style={{ fontSize: 11, color: C.mut }}>Area<select value={nuevoSD.area} onChange={e => setNuevoSD(v => ({ ...v, area: e.target.value }))} style={ip}><option value="">- area -</option>{AREAS.map(a => <option key={a} value={a}>{a}</option>)}</select></label>
+            <label style={{ fontSize: 11, color: C.mut }}>OT<input value={nuevoSD.ot} onChange={e => setNuevoSD(v => ({ ...v, ot: e.target.value }))} placeholder="OT" style={ip} /></label>
+            <label style={{ fontSize: 11, color: C.mut }}>Centro de costo<input value={nuevoSD.centro_costo} onChange={e => setNuevoSD(v => ({ ...v, centro_costo: e.target.value }))} placeholder="CC" style={ip} /></label>
+            <label style={{ fontSize: 11, color: C.mut, gridColumn: '1 / -1' }}>Glosa<input value={nuevoSD.glosa} onChange={e => setNuevoSD(v => ({ ...v, glosa: e.target.value }))} placeholder="Descripcion del gasto" style={ip} /></label>
+            <button onClick={agregarSinDoc} style={{ padding: '9px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, border: 'none', background: C.orange, color: '#fff' }}>Agregar gasto</button>
+          </div>
+          {sinDoc.length === 0 ? (
+            <div style={{ color: C.mut, padding: 20, textAlign: 'center', border: '1px dashed ' + C.border, borderRadius: 8 }}>Sin gastos registrados. Agrega el primero arriba.</div>
+          ) : (
+            <div style={{ overflowX: 'auto', border: '1px solid ' + C.border, borderRadius: 8 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead><tr style={{ background: C.navy, color: '#fff' }}>{['Fecha', 'Glosa', 'Categoria', 'Clasif.', 'Area', 'OT', 'CC', 'Monto', ''].map(h => <th key={h} style={{ padding: '7px 9px', textAlign: h === 'Monto' ? 'right' : 'left', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {sinDoc.map(x => (
+                    <tr key={x.id} style={{ borderBottom: '1px solid ' + C.border }}>
+                      <td style={{ padding: '6px 9px', whiteSpace: 'nowrap' }}>{x.fecha}</td>
+                      <td style={{ padding: '6px 9px' }}>{x.glosa}</td>
+                      <td style={{ padding: '6px 9px', whiteSpace: 'nowrap' }}>{x.categoria || '-'}</td>
+                      <td style={{ padding: '6px 9px', whiteSpace: 'nowrap', color: x.clasificacion === 'Fijo' ? '#2563EB' : x.clasificacion === 'Variable' ? C.orange : C.mut }}>{x.clasificacion || '-'}</td>
+                      <td style={{ padding: '6px 9px', whiteSpace: 'nowrap' }}>{x.area || '-'}</td>
+                      <td style={{ padding: '6px 9px', whiteSpace: 'nowrap' }}>{x.ot || '-'}</td>
+                      <td style={{ padding: '6px 9px', whiteSpace: 'nowrap' }}>{x.centro_costo || '-'}</td>
+                      <td style={{ padding: '6px 9px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 600 }}>{clp(x.monto)}</td>
+                      <td style={{ padding: '6px 9px' }}><button onClick={() => eliminarSinDoc(x.id)} style={{ border: 'none', background: 'transparent', color: C.red, cursor: 'pointer', fontSize: 12 }}>Eliminar</button></td>
+                    </tr>
+                  ))}
+                  <tr style={{ background: C.gray, fontWeight: 700 }}><td colSpan={7} style={{ padding: '7px 9px', textAlign: 'right' }}>Total sin documentos</td><td style={{ padding: '7px 9px', textAlign: 'right' }}>{clp(totalSinDoc)}</td><td></td></tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+      {sub === 'doc' && (<>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
         <div>
           <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 700, fontSize: 20, textTransform: 'uppercase', color: C.navy }}>Libro de Compras</div>
@@ -302,13 +361,14 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
         <button onClick={() => { setVerOcultas(v => !v); setSel(new Set()) }} style={{ background: 'transparent', border: '1px solid ' + C.border, padding: '7px 12px', borderRadius: 6, fontSize: 12.5, cursor: 'pointer', color: C.navy }}>{verOcultas ? 'Volver al libro' : 'Ver ocultos'}</button>
       </div>
 
-      {filtradas.length ? (() => {
+      {(filtradas.length || sinDoc.length) ? (() => {
         const montoDe = r => Number(r.exenta ? (r.document_total || r.neto || 0) : (r.neto || 0))
         const tipoDe = r => r.tipo_compra || tipoAuto(r) || 'Sin tipo'
         const fv = { Fijo: 0, Variable: 0, 'Sin clasificar': 0 }
         const cat = {}, mesG = {}, otG = {}, ccG = {}
         let total = 0
-        for (const r of filtradas) {
+        const _srcSD = [...filtradas, ...sinDoc.map(x => ({ tipo_compra: x.categoria, clasificacion: x.clasificacion, neto: x.monto, document_total: x.monto, exenta: false, emission_date: x.fecha, ot_id: x.ot, centro_costo: x.centro_costo }))]
+        for (const r of _srcSD) {
           const m = montoDe(r); total += m
           const t = tipoDe(r)
           const clRaw = clasifDe(r.tipo_compra || tipoAuto(r)) || r.clasificacion || ''
@@ -445,6 +505,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
           </table>
         </div>
       )}
+      </>)}
     </div>
   )
 }
