@@ -104,9 +104,9 @@ function ChatIA() {
 
 export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = [], params = {}, onIr }) {
   const [vista, setVista] = useState('dashboard')
-  const [userEmail, setUserEmail] = useState('')
-  useEffect(() => { supabase.auth.getUser().then(u => { setUserEmail(((u && u.data && u.data.user && u.data.user.email) || '').toLowerCase()) }) }, [])
-  const soloOp = ['joce@sereinspa.com', 'produccion@sereinspa.com'].includes(userEmail)
+  const [perfilTipo, setPerfilTipo] = useState(null)
+  useEffect(() => { supabase.auth.getUser().then(async u => { const id = u && u.data && u.data.user && u.data.user.id; if (!id) return; try { const res = await supabase.from('perfiles').select('tipo').eq('id', id).single(); setPerfilTipo((res.data && res.data.tipo) || '') } catch (e) { setPerfilTipo('') } }) }, [])
+  const soloOp = perfilTipo !== null && perfilTipo !== 'gerencia'
   useEffect(() => { if (soloOp) setVista('operacional') }, [soloOp])
   const [alertasDB, setAlertasDB] = useState([])
   async function cargarAlertas() { try { const res = await supabase.from('alertas').select('*').order('fecha', { ascending: false }); setAlertasDB(res.data || []) } catch (e) {} }
