@@ -16,6 +16,11 @@ const ESTADOS_PAGO = ['Pendiente', 'Pagada', 'Credito', 'Factoring']
 const colorPago = e => e === 'Pagada' ? C.green : e === 'Factoring' ? C.orange : e === 'Credito' ? '#2563EB' : C.mut
 const DIAS_OPC = [30, 45, 60, 90]
 const LS_XLSX = 'serein_libroComprasXlsx'
+const TIPOS = ['Pintura','Diluyente','Materiales','EPP','Diesel','Combustible','Herramientas','Repuestos','Fletes','Insumos','Viaticos','Peajes','Mantencion','Granalla','Servicios','Telefonia','Internet','Arriendo','Seguros','Leasing','Banco','Tag','Cafeteria','Honorarios','Software','Servicios basicos','Impuestos','Otros']
+const CLASIF = { Pintura:'Variable', Diluyente:'Variable', Materiales:'Variable', EPP:'Variable', Diesel:'Variable', Combustible:'Variable', Herramientas:'Variable', Repuestos:'Variable', Fletes:'Variable', Insumos:'Variable', Viaticos:'Variable', Peajes:'Variable', Mantencion:'Variable', Granalla:'Variable', Servicios:'Variable', Telefonia:'Fijo', Internet:'Fijo', Arriendo:'Fijo', Seguros:'Fijo', Leasing:'Fijo', Banco:'Fijo', Tag:'Fijo', Cafeteria:'Fijo', Honorarios:'Fijo', Software:'Fijo', 'Servicios basicos':'Fijo', Impuestos:'Fijo', Otros:'' }
+const REGLAS = [[['combustible','copec','shell','petrobras','enex','terpel','lampa','esmax'],'Combustible'],[['sherwin','renner','coating','jotun','ppg','tricolor','pintura','ceresita','soquina'],'Pintura'],[['diluyente','thinner','solvente'],'Diluyente'],[['diesel','petroleo'],'Diesel'],[['ferreteria','acero','cubiertas','kubiec','estructura','sodimac','construmart','imperial','prodalam','novoplast','stratford','sanitarios','materiales','fierro','planchas'],'Materiales'],[['maestranza','mecanizado','metalica','galvaniz'],'Servicios'],[['automovil','automotriz','vulcaniz','neumatic','lubricentro','repuesto'],'Mantencion'],[['seguridad industrial','proteccion','implementos de seguridad','elementos de proteccion'],'EPP'],[['granalla','abrasivo'],'Granalla'],[['telefon','movistar','entel','claro chile','wom'],'Telefonia'],[['internet','fibra','mundo pacifico','gtd'],'Internet'],[['leasing'],'Leasing'],[['banco','santander','scotiabank','bancoestado'],'Banco'],[['seguro','mapfre','consorcio','zurich','hdi'],'Seguros'],[['arriendo','inmobiliaria'],'Arriendo'],[['contab','auditor','honorario'],'Honorarios'],[['casino','cafeteria'],'Cafeteria'],[['autopista','costanera','vespucio'],'Tag'],[['flete','transporte','logistica'],'Fletes']]
+const rutN = r => String(r || '').split('.').join('').split(' ').join('').toUpperCase()
+const reglaTipo = nombre => { const n = (nombre || '').toLowerCase(); for (const par of REGLAS) { for (const k of par[0]) { if (n.indexOf(k) >= 0) return par[1] } } return '' }
 const norm = s => (s || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
 export default function LibroComprasModule({ esGerencia = true, ots = [], factoringList = [], proyectos = [], setProyectos = null }) {
@@ -35,6 +40,26 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
     }))
   }
   const [rows, setRows] = useState([])
+  const [provTipo, setProvTipo] = useState({})
+  const tipoAuto = r => provTipo[rutN(r && r.provider_rut)] || reglaTipo(r && r.provider_name) || ''
+  const setTipoCompra = (r, v) => {
+    setCampo(r.id, 'tipo_compra', v)
+    setCampo(r.id, 'clasificacion', CLASIF[v] || '')
+    const k = rutN(r.provider_rut)
+    if (k && v) {
+      setProvTipo(m => ({ ...m, [k]: v }))
+      supabase.from('proveedor_tipo').upsert({ rut: k, tipo: v, clasificacion: CLASIF[v] || '', fuente: 'manual', updated_at: new Date().toISOString() }, { onConflict: 'rut' }).then(() => {}, () => {})
+    }
+  }
+  useEffect(() => { supabase.from('proveedor_tipo').select('rut, tipo').then(res => { const m = {}; (res.data || []).forEach(x => { m[x.rut] = x.tipo }); if (Object.keys(m).length) setProvTipo(m) }, () => {}) }, [])
+  useEffect(() => {
+    if (!rows.length) return
+    const pend = rows.filter(r => !r.tipo_compra && tipoAuto(r))
+    if (!pend.length) return
+    const mp = {}; pend.forEach(r => { mp[r.id] = tipoAuto(r) })
+    setRows(rs => rs.map(r => mp[r.id] ? { ...r, tipo_compra: mp[r.id], clasificacion: CLASIF[mp[r.id]] || '' } : r))
+    ;(async () => { const ids = Object.keys(mp); for (let i = 0; i < ids.length; i += 20) { await Promise.all(ids.slice(i, i + 20).map(id => supabase.from('libro_compras').update({ tipo_compra: mp[id], clasificacion: CLASIF[mp[id]] || '' }).eq('id', id).then(() => {}, () => {}))) } })()
+  }, [rows, provTipo])
   const [loading, setLoading] = useState(true)
   const [errMsg, setErrMsg] = useState('')
   const [syncing, setSyncing] = useState(false)
@@ -270,7 +295,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
             <thead>
               <tr style={{ background: C.navy, color: '#fff' }}>
                 <th style={{ padding: '9px 10px', width: 34 }}><input type="checkbox" checked={filtradas.length > 0 && sel.size === filtradas.length} onChange={toggleTodas} /></th>
-                {['Emision', 'Proveedor', 'Folio', 'Tipo', 'Neto', 'IVA', 'Total', 'OT', 'Centro de costo', 'Area', 'Pago', 'Reparto area'].map(h => (
+                {['Emision', 'Proveedor', 'Folio', 'Tipo', 'Tipo compra', 'Neto', 'IVA', 'Total', 'OT', 'Centro de costo', 'Area', 'Pago', 'Reparto area'].map(h => (
                   <th key={h} style={{ textAlign: h === 'Neto' || h === 'IVA' || h === 'Total' ? 'right' : 'left', padding: '9px 10px', fontSize: 11, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -283,6 +308,13 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
                   <td style={{ padding: '7px 10px' }}><div style={{ fontWeight: 600 }}>{r.provider_name || '-'}</div><div style={{ color: C.mut, fontSize: 11 }}>{r.provider_rut}</div></td>
                   <td style={{ padding: '7px 10px' }}>{r.document_number}</td>
                   <td style={{ padding: '7px 10px', fontSize: 11.5 }}>{r.document_type}<label style={{ display: 'block', marginTop: 3, fontSize: 10.5, color: C.mut, cursor: 'pointer' }}><input type="checkbox" checked={!!r.exenta} onChange={e => setCampo(r.id, 'exenta', e.target.checked)} /> Exenta</label></td>
+                  <td style={{ padding: '7px 10px' }}>
+                    <select value={r.tipo_compra || tipoAuto(r)} onChange={e => setTipoCompra(r, e.target.value)} style={{ fontSize: 11, padding: '3px 5px', borderRadius: 6, border: '1px solid ' + C.border, background: '#fff', color: C.text, maxWidth: 130 }}>
+                      <option value="">—</option>
+                      {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    {(() => { const tv = r.tipo_compra || tipoAuto(r); const cl = CLASIF[tv] || ''; return cl ? <div style={{ fontSize: 10, fontWeight: 700, marginTop: 3, color: cl === 'Fijo' ? '#2563EB' : C.orange }}>{cl}</div> : null })()}
+                  </td>
                   <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>{clp(r.exenta ? (r.document_total || r.neto) : r.neto)}</td>
                   <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', color: C.orange }}>{clp(r.exenta ? 0 : r.iva)}</td>
                   <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700 }}>{clp(r.document_total)}</td>
