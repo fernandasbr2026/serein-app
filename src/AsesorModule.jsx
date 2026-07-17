@@ -114,6 +114,9 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
   async function aplicarRec(id) { try { await supabase.from('recomendaciones').update({ estado: 'Aplicada' }).eq('id', id); cargarRecs() } catch (e) {} }
   async function descartarRec(id) { try { await supabase.from('recomendaciones').update({ estado: 'Descartada' }).eq('id', id); cargarRecs() } catch (e) {} }
   useEffect(() => { cargarRecs() }, [])
+  const [analisisFin, setAnalisisFin] = useState([])
+  async function cargarAnalisis() { try { const res = await supabase.from('analisis_financiero').select('*'); setAnalisisFin(res.data || []) } catch (e) {} }
+  useEffect(() => { cargarAnalisis() }, [])
   const [iva, setIva] = useState({ credito: 0, debito: 0, cargado: false })
   const [compras, setCompras] = useState(null)
   const hoyStr = hoy()
@@ -204,6 +207,50 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
     return () => { vivo = false }
   }, [analisis])
 
+  useEffect(() => {
+    if (!(proyectos || []).length && !(fin.gastos || []).length) return
+    let vivo = true
+    ;(async () => {
+      try {
+        const u = await supabase.auth.getUser(); const uid = u && u.data && u.data.user ? u.data.user.id : null
+        if (!uid) return
+        const r = analisis.r || {}
+        const P = proyectos || []
+        const facturado = P.reduce((a, p) => a + (p.edps || []).reduce((x, e) => x + (+e.venta || 0), 0), 0)
+        const cotizada = P.reduce((a, p) => a + (+p.venta_cotizada || 0), 0)
+        const cr = compras || []
+        const mesesC = [...new Set(cr.map(x => mesDe(x.emission_date)).filter(Boolean))].sort().reverse()
+        const ultC = mesesC[0]; const netoCompras = cr.filter(x => mesDe(x.emission_date) === ultC).reduce((a, x) => a + (+x.neto || 0), 0)
+        const ivaPos = (iva.debito || 0) - (iva.credito || 0)
+        const edpsAll = P.reduce((a, p) => a.concat(p.edps || []), [])
+        const enFactoring = edpsAll.filter(e => /factor/i.test((e.metodo || '') + (e.estado || ''))).reduce((a, e) => a + (+e.venta || 0), 0)
+        const perdFact = edpsAll.reduce((a, e) => a + (+e.perdidaFact || 0), 0)
+        const obs = fin.obligaciones || []
+        const deudaTipo = t => { let deuda = 0, mesT = 0, n = 0; obs.filter(o => o.tipo === t).forEach(o => { n++; (o.cuotas || []).forEach(c => { if (!/pag/i.test(c.estado || '')) { deuda += (+c.total || 0); if (mesDe(c.vencimiento) === mes) mesT += (+c.total || 0) } }) }); return { deuda: deuda, mesT: mesT, n: n } }
+        const cred = deudaTipo('Cr\u00e9dito'); const leas = deudaTipo('Leasing')
+        const gastosMes = (fin.gastos || []).filter(g => g.tipo === 'fijo').reduce((a, g) => a + (+g.neto || 0), 0)
+        const salida = +r.salidaCaja || 0; const ingresos = +analisis.ingresos || 0; const flujo = ingresos - salida
+        let venta = 0, costo = 0; P.forEach(p => { venta += (+p.venta_cotizada || 0) || (p.edps || []).reduce((x, e) => x + (+e.venta || 0), 0); costo += (p.compras || []).reduce((x, c) => x + (+c.monto || 0), 0) })
+        const ut = venta - costo; const margen = venta > 0 ? Math.round(ut / venta * 100) : null
+        const A = (area, valor, resumen) => ({ usuario: uid, fecha: new Date().toISOString(), periodo: mes, area: area, valor: Math.round(valor || 0), resumen: resumen, fuente: 'regla', clave: mes + '::' + area })
+        const rows = [
+          A('Ventas', facturado, 'Facturado ' + clp(facturado) + ' de ' + clp(cotizada) + ' cotizado.'),
+          A('Compras', netoCompras, 'Neto de compras ' + (ultC ? mesLabel(ultC) : '') + ': ' + clp(netoCompras) + '.'),
+          A('IVA', ivaPos, ivaPos > 0 ? 'IVA por pagar del periodo: ' + clp(ivaPos) + '.' : 'Credito fiscal a favor: ' + clp(-ivaPos) + '.'),
+          A('Factoring', perdFact, 'En factoring ' + clp(enFactoring) + '; perdida estimada ' + clp(perdFact) + '.'),
+          A('Creditos', cred.deuda, cred.n + ' credito(s): deuda vigente ' + clp(cred.deuda) + ', cuota del mes ' + clp(cred.mesT) + '.'),
+          A('Leasing', leas.deuda, leas.n + ' leasing: deuda vigente ' + clp(leas.deuda) + ', cuota del mes ' + clp(leas.mesT) + '.'),
+          A('Gastos', gastosMes, 'Gastos fijos del mes: ' + clp(gastosMes) + '.'),
+          A('Flujo de Caja', flujo, 'Ingresos ' + clp(ingresos) + ' menos salidas ' + clp(salida) + ' = ' + clp(flujo) + '.'),
+          A('Rentabilidad', ut, margen === null ? 'Sin datos suficientes.' : 'Utilidad ' + clp(ut) + ' (' + margen + '% sobre venta).')
+        ]
+        await supabase.from('analisis_financiero').upsert(rows, { onConflict: 'usuario,clave' })
+        if (vivo) cargarAnalisis()
+      } catch (e) {}
+    })()
+    return () => { vivo = false }
+  }, [analisis, compras])
+
   const hayFin = (fin.gastos || []).length || (fin.obligaciones || []).length
   const hayProy = (proyectos || []).length
 
@@ -231,10 +278,26 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, borderBottom: '1px solid ' + C.line, paddingBottom: 4 }}>
         <button onClick={() => setVista('dashboard')} style={tabBtn(vista === 'dashboard')}>Dashboard Inteligente</button>
         <button onClick={() => setVista('alertas')} style={tabBtn(vista === 'alertas')}>Alertas</button>
+        <button onClick={() => setVista('analista')} style={tabBtn(vista === 'analista')}>Analista Financiero</button>
         <button onClick={() => setVista('recs')} style={tabBtn(vista === 'recs')}>Recomendaciones</button>
         <button onClick={() => setVista('chat')} style={tabBtn(vista === 'chat')}>Chat</button>
       </div>
-      {vista === 'chat' ? <ChatIA /> : vista === 'recs' ? (<div>
+      {vista === 'chat' ? <ChatIA /> : vista === 'analista' ? (<div>
+        <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: C.navy }}>Analista Financiero</div>
+        <div style={{ fontSize: 12.5, color: C.gray, marginBottom: 12 }}>Servicio que analiza automaticamente al ingresar y guarda los resultados en la base. Preparado para ejecucion automatica.</div>
+        {analisisFin.length === 0 ? <div style={{ color: C.gray, fontSize: 13, border: '1px dashed ' + C.line, borderRadius: 6, padding: 16, textAlign: 'center' }}>Aun no hay analisis guardado. Si es la primera vez, corre serein_ai_setup.sql en Supabase.</div> : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
+            {['Ventas', 'Compras', 'IVA', 'Factoring', 'Creditos', 'Leasing', 'Gastos', 'Flujo de Caja', 'Rentabilidad'].map(area => { const a = analisisFin.find(x => x.area === area); if (!a) return null; return (
+              <div key={area} style={{ background: '#fff', border: '1px solid ' + C.line, borderTop: '3px solid ' + C.navy, borderRadius: 6, padding: '12px 14px' }}>
+                <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 13, textTransform: 'uppercase', color: C.navy }}>{a.area}</div>
+                <div style={{ fontSize: 21, fontWeight: 700, color: C.navy, fontFamily: "'Oswald',sans-serif", margin: '2px 0 4px' }}>{clp(a.valor)}</div>
+                <div style={{ fontSize: 12, color: '#3A4045' }}>{a.resumen}</div>
+                <div style={{ fontSize: 10.5, color: C.gray, marginTop: 6 }}>{(a.fecha || '').slice(0, 10)} · fuente: {a.fuente}</div>
+              </div>
+            ) })}
+          </div>
+        )}
+      </div>) : vista === 'recs' ? (<div>
         <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: C.navy }}>Recomendaciones</div>
         <div style={{ fontSize: 12.5, color: C.gray, marginBottom: 12 }}>Generadas por reglas del sistema (preparado para que la IA las genere despues). Todo dentro del Dashboard.</div>
         {recsDB.length === 0 ? <div style={{ color: C.gray, fontSize: 13, border: '1px dashed ' + C.line, borderRadius: 6, padding: 16, textAlign: 'center' }}>No hay recomendaciones registradas. Si es la primera vez, corre serein_ai_setup.sql en Supabase.</div> : (
