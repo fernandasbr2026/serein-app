@@ -374,12 +374,14 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
     const pag = edps.filter(esPag)
     const venc = pend.filter(e => diasAtr(e) > 0)
     const atrasos = venc.map(diasAtr)
-    let factN = 0
-    for (const p of (proyectos || [])) { const fe = p.facEdp || {}; for (const kk in fe) { if (/factoring/i.test((fe[kk] && fe[kk].estado) || '')) factN++ } }
+    let factN = 0, factMonto = 0
+    const facCli = {}
+    for (const p of (proyectos || [])) { const fe = p.facEdp || {}; const labs = new Set(); for (const kk in fe) { if (/factoring/i.test((fe[kk] && fe[kk].estado) || '')) { const lab = ((fe[kk] && fe[kk].edp) || '').trim().toLowerCase(); if (lab) labs.add(lab) } } if (!labs.size) continue; const cli = p.cliente || 'Sin cliente'; for (const e of (p.edps || [])) { if (labs.has(((e.edp) || '').trim().toLowerCase())) { factN++; factMonto += (+e.venta || 0); facCli[cli] = (facCli[cli] || 0) + (+e.venta || 0) } } }
     const byCli = {}
     for (const e of edps) { const c = e.cliente; if (!byCli[c]) byCli[c] = { cliente: c, fact: 0, cobr: 0, pend: 0, venc: 0, nVenc: 0, atrMax: 0 }; const o = byCli[c]; o.fact += monto(e); if (esPag(e)) o.cobr += monto(e); else { o.pend += monto(e); const d = diasAtr(e); if (d > 0) { o.venc += monto(e); o.nVenc++; if (d > o.atrMax) o.atrMax = d } } }
+    Object.keys(byCli).forEach(c => { byCli[c].facMonto = facCli[c] || 0 })
     const porCliente = Object.values(byCli).sort((a, b) => b.pend - a.pend)
-    return { facturado: edps.reduce((a, e) => a + monto(e), 0), cobrado: pag.reduce((a, e) => a + monto(e), 0), porCobrar: pend.reduce((a, e) => a + monto(e), 0), nPend: pend.length, nPag: pag.length, nEdp: edps.length, nVenc: venc.length, montoVenc: venc.reduce((a, e) => a + monto(e), 0), atrasoMax: atrasos.length ? Math.max(...atrasos) : 0, atrasoProm: atrasos.length ? Math.round(atrasos.reduce((a, b) => a + b, 0) / atrasos.length) : 0, factN, porCliente }
+    return { facturado: edps.reduce((a, e) => a + monto(e), 0), cobrado: pag.reduce((a, e) => a + monto(e), 0), porCobrar: pend.reduce((a, e) => a + monto(e), 0), nPend: pend.length, nPag: pag.length, nEdp: edps.length, nVenc: venc.length, montoVenc: venc.reduce((a, e) => a + monto(e), 0), atrasoMax: atrasos.length ? Math.max(...atrasos) : 0, atrasoProm: atrasos.length ? Math.round(atrasos.reduce((a, b) => a + b, 0) / atrasos.length) : 0, factN, factMonto, porCliente }
   }, [proyectos, hoyStr])
 
   useEffect(() => {
@@ -396,7 +398,7 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
           A('Abonos', cobranza.cobrado, 'Montos abonados/cobrados a la fecha: ' + clp(cobranza.cobrado) + '.'),
           A('Dias de atraso', cobranza.montoVenc, cobranza.nVenc + ' EDP vencidas; atraso max ' + cobranza.atrasoMax + ' dias, promedio ' + cobranza.atrasoProm + '.'),
           A('Historial cliente', cobranza.porCobrar, 'Por cobrar ' + clp(cobranza.porCobrar) + ' en ' + cobranza.porCliente.length + ' clientes.', cobranza.porCliente),
-          A('Factoring', cobranza.factN, cobranza.factN + ' EDP en factoring.')
+          A('Factoring', cobranza.factMonto, cobranza.factN + ' EDP en factoring por ' + clp(cobranza.factMonto) + '.')
         ]
         await supabase.from('analisis_cobranza').upsert(rows, { onConflict: 'usuario,clave' })
       } catch (e) {}
@@ -588,7 +590,7 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
           {cobranza && <Fila k="Facturado" v={clp(cobranza.facturado)} />}
           {cobranza && <Fila k="Cobrado" v={clp(cobranza.cobrado)} color={C.green} />}
           {cobranza && cobranza.atrasoMax > 0 && <Fila k="Atraso max" v={cobranza.atrasoMax + ' dias'} color={C.red} />}
-          {cobranza && cobranza.factN > 0 && <Fila k="En factoring" v={cobranza.factN + ' EDP'} />}
+          {cobranza && cobranza.factN > 0 && <Fila k="En factoring" v={cobranza.factN + ' EDP (' + clp(cobranza.factMonto) + ')'} />}
           {cobranza && <Fila k="EDP pendientes" v={cobranza.nPend} />}
           {cobranza && <Fila k="Vencidas" v={cobranza.nVenc + (cobranza.montoVenc ? ' (' + clp(cobranza.montoVenc) + ')' : '')} color={cobranza.nVenc ? C.red : C.gray} />}
         </Tarjeta>
@@ -603,10 +605,10 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
             {[['Facturado', cobranza.facturado, C.navy], ['Cobrado (pagos/abonos)', cobranza.cobrado, C.green], ['Por cobrar', cobranza.porCobrar, C.orange], ['Vencido', cobranza.montoVenc, C.red]].map(pair => <div key={pair[0]} style={{ flex: '1 1 150px', background: '#fff', border: '1px solid ' + C.line, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, color: C.gray }}>{pair[0]}</div><div style={{ fontSize: 17, fontWeight: 700, color: pair[2] }}>{clp(pair[1])}</div></div>)}
           </div>
-          <div style={{ fontSize: 12, color: C.gray, marginBottom: 10 }}>Atraso maximo {cobranza.atrasoMax} dias · promedio {cobranza.atrasoProm} dias · {cobranza.nVenc} EDP vencidas{cobranza.factN ? ' · ' + cobranza.factN + ' EDP en factoring' : ''}</div>
+          <div style={{ fontSize: 12, color: C.gray, marginBottom: 10 }}>Atraso maximo {cobranza.atrasoMax} dias · promedio {cobranza.atrasoProm} dias · {cobranza.nVenc} EDP vencidas{cobranza.factN ? ' · ' + cobranza.factN + ' EDP en factoring (' + clp(cobranza.factMonto) + ')' : ''}</div>
           <div style={{ overflowX: 'auto', border: '1px solid ' + C.line, borderRadius: 8 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-              <thead><tr style={{ background: C.navy, color: '#fff' }}>{['Cliente', 'Facturado', 'Cobrado', 'Por cobrar', 'Vencido', 'Atraso max'].map(h => <th key={h} style={{ padding: '7px 9px', textAlign: h === 'Cliente' ? 'left' : 'right', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
+              <thead><tr style={{ background: C.navy, color: '#fff' }}>{['Cliente', 'Facturado', 'Cobrado', 'Por cobrar', 'Vencido', 'Factoring', 'Atraso max'].map(h => <th key={h} style={{ padding: '7px 9px', textAlign: h === 'Cliente' ? 'left' : 'right', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
               <tbody>
                 {cobranza.porCliente.map((c, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid ' + C.line }}>
@@ -615,6 +617,7 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
                     <td style={{ padding: '6px 9px', textAlign: 'right', whiteSpace: 'nowrap', color: C.green }}>{clp(c.cobr)}</td>
                     <td style={{ padding: '6px 9px', textAlign: 'right', whiteSpace: 'nowrap', color: c.pend ? C.orange : C.gray }}>{clp(c.pend)}</td>
                     <td style={{ padding: '6px 9px', textAlign: 'right', whiteSpace: 'nowrap', color: c.venc ? C.red : C.gray }}>{clp(c.venc)}</td>
+                    <td style={{ padding: '6px 9px', textAlign: 'right', whiteSpace: 'nowrap', color: c.facMonto ? C.navy : C.gray }}>{c.facMonto ? clp(c.facMonto) : '-'}</td>
                     <td style={{ padding: '6px 9px', textAlign: 'right', whiteSpace: 'nowrap', color: c.atrMax > 0 ? C.red : C.gray }}>{c.atrMax > 0 ? c.atrMax + ' d' : '-'}</td>
                   </tr>
                 ))}
