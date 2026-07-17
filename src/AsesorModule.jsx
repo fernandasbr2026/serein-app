@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from './supabase.js'
 import { calcularResumenFin } from './FinanzasModule.jsx'
+import { calcularPerdidaFactoring } from './ParametrosModule.jsx'
 import { AlertTriangle, CheckCircle2, TrendingDown, TrendingUp, Wallet, Landmark, Receipt, Info, Flag, Factory, ShoppingCart, Banknote, Lightbulb } from 'lucide-react'
 
 const C = { navy: '#1A2733', line: '#E2DED4', gray: '#7A8288', red: '#B5432E', orange: '#D2642F', green: '#3D7A4E' }
@@ -374,14 +375,15 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
     const pag = edps.filter(esPag)
     const venc = pend.filter(e => diasAtr(e) > 0)
     const atrasos = venc.map(diasAtr)
-    let factN = 0, factMonto = 0
-    const facCli = {}
-    for (const p of (proyectos || [])) { const fe = p.facEdp || {}; const labs = new Set(); for (const kk in fe) { if (/factoring/i.test((fe[kk] && fe[kk].estado) || '')) { const lab = ((fe[kk] && fe[kk].edp) || '').trim().toLowerCase(); if (lab) labs.add(lab) } } if (!labs.size) continue; const cli = p.cliente || 'Sin cliente'; for (const e of (p.edps || [])) { if (labs.has(((e.edp) || '').trim().toLowerCase())) { factN++; factMonto += (+e.venta || 0); facCli[cli] = (facCli[cli] || 0) + (+e.venta || 0) } } }
+    let factN = 0, factMonto = 0, factPerd = 0
+    const facCli = {}, facPerdCli = {}
+    const facList = (params && params.factoring) || []
+    for (const p of (proyectos || [])) { const fe = p.facEdp || {}; const cli = p.cliente || 'Sin cliente'; const edpByLab = {}; for (const e of (p.edps || [])) { edpByLab[((e.edp) || '').trim().toLowerCase()] = e } for (const kk in fe) { const info = fe[kk] || {}; if (!/factoring/i.test(info.estado || '')) continue; const e = edpByLab[((info.edp) || '').trim().toLowerCase()]; if (!e) continue; const mto = +e.venta || 0; factN++; factMonto += mto; facCli[cli] = (facCli[cli] || 0) + mto; const fc = facList.find(x => x.id === info.factoringId) || facList.find(x => (e.banco || '').toLowerCase().includes((x.nombre || '').toLowerCase().split(' ')[0])) || facList[0]; const perd = fc ? calcularPerdidaFactoring(mto, 30, 0, fc).total : 0; factPerd += perd; facPerdCli[cli] = (facPerdCli[cli] || 0) + perd } }
     const byCli = {}
     for (const e of edps) { const c = e.cliente; if (!byCli[c]) byCli[c] = { cliente: c, fact: 0, cobr: 0, pend: 0, venc: 0, nVenc: 0, atrMax: 0 }; const o = byCli[c]; o.fact += monto(e); if (esPag(e)) o.cobr += monto(e); else { o.pend += monto(e); const d = diasAtr(e); if (d > 0) { o.venc += monto(e); o.nVenc++; if (d > o.atrMax) o.atrMax = d } } }
-    Object.keys(byCli).forEach(c => { byCli[c].facMonto = facCli[c] || 0 })
+    Object.keys(byCli).forEach(c => { byCli[c].facMonto = facCli[c] || 0; byCli[c].facPerd = facPerdCli[c] || 0 })
     const porCliente = Object.values(byCli).sort((a, b) => b.pend - a.pend)
-    return { facturado: edps.reduce((a, e) => a + monto(e), 0), cobrado: pag.reduce((a, e) => a + monto(e), 0), porCobrar: pend.reduce((a, e) => a + monto(e), 0), nPend: pend.length, nPag: pag.length, nEdp: edps.length, nVenc: venc.length, montoVenc: venc.reduce((a, e) => a + monto(e), 0), atrasoMax: atrasos.length ? Math.max(...atrasos) : 0, atrasoProm: atrasos.length ? Math.round(atrasos.reduce((a, b) => a + b, 0) / atrasos.length) : 0, factN, factMonto, porCliente }
+    return { facturado: edps.reduce((a, e) => a + monto(e), 0), cobrado: pag.reduce((a, e) => a + monto(e), 0), porCobrar: pend.reduce((a, e) => a + monto(e), 0), nPend: pend.length, nPag: pag.length, nEdp: edps.length, nVenc: venc.length, montoVenc: venc.reduce((a, e) => a + monto(e), 0), atrasoMax: atrasos.length ? Math.max(...atrasos) : 0, atrasoProm: atrasos.length ? Math.round(atrasos.reduce((a, b) => a + b, 0) / atrasos.length) : 0, factN, factMonto, factPerd, porCliente }
   }, [proyectos, hoyStr])
 
   useEffect(() => {
@@ -398,7 +400,7 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
           A('Abonos', cobranza.cobrado, 'Montos abonados/cobrados a la fecha: ' + clp(cobranza.cobrado) + '.'),
           A('Dias de atraso', cobranza.montoVenc, cobranza.nVenc + ' EDP vencidas; atraso max ' + cobranza.atrasoMax + ' dias, promedio ' + cobranza.atrasoProm + '.'),
           A('Historial cliente', cobranza.porCobrar, 'Por cobrar ' + clp(cobranza.porCobrar) + ' en ' + cobranza.porCliente.length + ' clientes.', cobranza.porCliente),
-          A('Factoring', cobranza.factMonto, cobranza.factN + ' EDP en factoring por ' + clp(cobranza.factMonto) + '.')
+          A('Factoring', cobranza.factMonto, cobranza.factN + ' EDP en factoring por ' + clp(cobranza.factMonto) + '; perdida estimada ' + clp(cobranza.factPerd) + '.')
         ]
         await supabase.from('analisis_cobranza').upsert(rows, { onConflict: 'usuario,clave' })
       } catch (e) {}
@@ -591,6 +593,7 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
           {cobranza && <Fila k="Cobrado" v={clp(cobranza.cobrado)} color={C.green} />}
           {cobranza && cobranza.atrasoMax > 0 && <Fila k="Atraso max" v={cobranza.atrasoMax + ' dias'} color={C.red} />}
           {cobranza && cobranza.factN > 0 && <Fila k="En factoring" v={cobranza.factN + ' EDP (' + clp(cobranza.factMonto) + ')'} />}
+          {cobranza && cobranza.factPerd > 0 && <Fila k="Perdida factoring" v={clp(cobranza.factPerd)} color={C.red} />}
           {cobranza && <Fila k="EDP pendientes" v={cobranza.nPend} />}
           {cobranza && <Fila k="Vencidas" v={cobranza.nVenc + (cobranza.montoVenc ? ' (' + clp(cobranza.montoVenc) + ')' : '')} color={cobranza.nVenc ? C.red : C.gray} />}
         </Tarjeta>
@@ -605,10 +608,10 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
             {[['Facturado', cobranza.facturado, C.navy], ['Cobrado (pagos/abonos)', cobranza.cobrado, C.green], ['Por cobrar', cobranza.porCobrar, C.orange], ['Vencido', cobranza.montoVenc, C.red]].map(pair => <div key={pair[0]} style={{ flex: '1 1 150px', background: '#fff', border: '1px solid ' + C.line, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, color: C.gray }}>{pair[0]}</div><div style={{ fontSize: 17, fontWeight: 700, color: pair[2] }}>{clp(pair[1])}</div></div>)}
           </div>
-          <div style={{ fontSize: 12, color: C.gray, marginBottom: 10 }}>Atraso maximo {cobranza.atrasoMax} dias · promedio {cobranza.atrasoProm} dias · {cobranza.nVenc} EDP vencidas{cobranza.factN ? ' · ' + cobranza.factN + ' EDP en factoring (' + clp(cobranza.factMonto) + ')' : ''}</div>
+          <div style={{ fontSize: 12, color: C.gray, marginBottom: 10 }}>Atraso maximo {cobranza.atrasoMax} dias · promedio {cobranza.atrasoProm} dias · {cobranza.nVenc} EDP vencidas{cobranza.factN ? ' · ' + cobranza.factN + ' EDP en factoring (' + clp(cobranza.factMonto) + ', perdida est. ' + clp(cobranza.factPerd) + ')' : ''}</div>
           <div style={{ overflowX: 'auto', border: '1px solid ' + C.line, borderRadius: 8 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-              <thead><tr style={{ background: C.navy, color: '#fff' }}>{['Cliente', 'Facturado', 'Cobrado', 'Por cobrar', 'Vencido', 'Factoring', 'Atraso max'].map(h => <th key={h} style={{ padding: '7px 9px', textAlign: h === 'Cliente' ? 'left' : 'right', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
+              <thead><tr style={{ background: C.navy, color: '#fff' }}>{['Cliente', 'Facturado', 'Cobrado', 'Por cobrar', 'Vencido', 'Factoring', 'Perd. fact.', 'Atraso max'].map(h => <th key={h} style={{ padding: '7px 9px', textAlign: h === 'Cliente' ? 'left' : 'right', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
               <tbody>
                 {cobranza.porCliente.map((c, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid ' + C.line }}>
@@ -618,6 +621,7 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
                     <td style={{ padding: '6px 9px', textAlign: 'right', whiteSpace: 'nowrap', color: c.pend ? C.orange : C.gray }}>{clp(c.pend)}</td>
                     <td style={{ padding: '6px 9px', textAlign: 'right', whiteSpace: 'nowrap', color: c.venc ? C.red : C.gray }}>{clp(c.venc)}</td>
                     <td style={{ padding: '6px 9px', textAlign: 'right', whiteSpace: 'nowrap', color: c.facMonto ? C.navy : C.gray }}>{c.facMonto ? clp(c.facMonto) : '-'}</td>
+                    <td style={{ padding: '6px 9px', textAlign: 'right', whiteSpace: 'nowrap', color: c.facPerd ? C.red : C.gray }}>{c.facPerd ? clp(c.facPerd) : '-'}</td>
                     <td style={{ padding: '6px 9px', textAlign: 'right', whiteSpace: 'nowrap', color: c.atrMax > 0 ? C.red : C.gray }}>{c.atrMax > 0 ? c.atrMax + ' d' : '-'}</td>
                   </tr>
                 ))}
