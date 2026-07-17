@@ -42,6 +42,9 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
   const [rows, setRows] = useState([])
   const [provTipo, setProvTipo] = useState({})
   const [customTipos, setCustomTipos] = useState(() => { try { return JSON.parse(localStorage.getItem('serein_tiposCustom') || '[]') } catch (e) { return [] } })
+  const [verConsol, setVerConsol] = useState(false)
+  const [dimConsol, setDimConsol] = useState('cat')
+  useEffect(() => { supabase.from('tipos_gasto').select('tipo, clasificacion').then(res => { const list = res.data || []; if (!list.length) return; setCustomTipos(cur => { const map = {}; cur.forEach(c => { map[c.tipo] = c }); list.forEach(x => { map[x.tipo] = { tipo: x.tipo, clasif: x.clasificacion || '' } }); const merged = Object.values(map); try { localStorage.setItem('serein_tiposCustom', JSON.stringify(merged)) } catch (e) {} return merged }) }, () => {}) }, [])
   const tipoAuto = r => provTipo[rutN(r && r.provider_rut)] || reglaTipo(r && r.provider_name) || ''
   const clasifDe = t => (CLASIF[t] !== undefined ? CLASIF[t] : ((customTipos.find(c => c.tipo === t) || {}).clasif || ''))
   const agregarTipoCustom = () => {
@@ -50,6 +53,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
     const cl = (window.prompt('Clasificacion para "' + nombre + '": escribe F para Fijo, V para Variable, o deja vacio para ninguna', 'V') || '').trim().toUpperCase()
     const clasif = cl.charAt(0) === 'F' ? 'Fijo' : cl.charAt(0) === 'V' ? 'Variable' : ''
     setCustomTipos(cur => { if (cur.some(c => c.tipo === nombre)) return cur; const nx = [...cur, { tipo: nombre, clasif }]; try { localStorage.setItem('serein_tiposCustom', JSON.stringify(nx)) } catch (e) {} return nx })
+    supabase.from('tipos_gasto').upsert({ tipo: nombre, clasificacion: clasif }, { onConflict: 'tipo' }).then(() => {}, () => {})
     return { tipo: nombre, clasif }
   }
   const setTipoCompra = (r, v) => {
@@ -297,6 +301,68 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
         {verOcultas && <button onClick={restaurarSel} disabled={!sel.size} style={{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5, background: sel.size ? C.green : '#E6E8EE', color: sel.size ? '#fff' : C.mut, cursor: sel.size ? 'pointer' : 'default' }}>Restaurar seleccionados</button>}
         <button onClick={() => { setVerOcultas(v => !v); setSel(new Set()) }} style={{ background: 'transparent', border: '1px solid ' + C.border, padding: '7px 12px', borderRadius: 6, fontSize: 12.5, cursor: 'pointer', color: C.navy }}>{verOcultas ? 'Volver al libro' : 'Ver ocultos'}</button>
       </div>
+
+      {filtradas.length ? (() => {
+        const montoDe = r => Number(r.document_total || ((Number(r.neto) || 0) + (Number(r.iva) || 0)) || r.neto || 0)
+        const tipoDe = r => r.tipo_compra || tipoAuto(r) || 'Sin tipo'
+        const fv = { Fijo: 0, Variable: 0, 'Sin clasificar': 0 }
+        const cat = {}, mesG = {}, otG = {}, ccG = {}
+        let total = 0
+        for (const r of filtradas) {
+          const m = montoDe(r); total += m
+          const t = tipoDe(r)
+          const clRaw = clasifDe(r.tipo_compra || tipoAuto(r)) || r.clasificacion || ''
+          const cl = clRaw === 'Fijo' ? 'Fijo' : clRaw === 'Variable' ? 'Variable' : 'Sin clasificar'
+          fv[cl] += m
+          cat[t] = (cat[t] || 0) + m
+          const mm = (r.emission_date || '').slice(0, 7) || 'Sin fecha'; mesG[mm] = (mesG[mm] || 0) + m
+          const oo = r.ot_id ? ('OT ' + r.ot_id) : 'Sin OT'; otG[oo] = (otG[oo] || 0) + m
+          const ccx = r.centro_costo || 'Sin centro'; ccG[ccx] = (ccG[ccx] || 0) + m
+        }
+        const ent = o => Object.entries(o).sort((a, b) => b[1] - a[1])
+        const dims = { cat: ent(cat), fv: ent(fv), mes: Object.entries(mesG).sort((a, b) => a[0] < b[0] ? 1 : -1), ot: ent(otG), cc: ent(ccG) }
+        const rowsDim = dims[dimConsol] || []
+        const maxV = Math.max(1, ...rowsDim.map(x => Math.abs(x[1])))
+        const tb = (id, txt) => <button onClick={() => setDimConsol(id)} style={{ padding: '4px 10px', fontSize: 12, borderRadius: 6, cursor: 'pointer', border: '1px solid ' + C.border, background: dimConsol === id ? C.navy : '#fff', color: dimConsol === id ? '#fff' : C.text }}>{txt}</button>
+        const card = (lbl, val, col) => <div style={{ flex: '1 1 150px', background: '#fff', border: '1px solid ' + C.border, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, color: C.mut }}>{lbl}</div><div style={{ fontSize: 18, fontWeight: 700, color: col }}>{clp(val)}</div></div>
+        return (
+          <div style={{ border: '1px solid ' + C.border, borderRadius: 8, padding: 14, marginBottom: 12, background: C.gray }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+              <b style={{ color: C.navy, fontSize: 14 }}>Consolidado de compras {verConsol ? '' : '· ' + clp(total)}</b>
+              <button onClick={() => setVerConsol(v => !v)} style={{ padding: '4px 10px', fontSize: 12, borderRadius: 6, cursor: 'pointer', border: '1px solid ' + C.border, background: '#fff', color: C.text }}>{verConsol ? 'Ocultar' : 'Ver consolidado'}</button>
+            </div>
+            {verConsol ? (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+                  {card('Gastos fijos', fv.Fijo, '#2563EB')}
+                  {card('Gastos variables', fv.Variable, C.orange)}
+                  {card('Total compras', total, C.navy)}
+                </div>
+                {fv['Sin clasificar'] > 0 ? <div style={{ fontSize: 11, color: C.mut, marginBottom: 10 }}>Sin clasificar (falta asignar tipo): {clp(fv['Sin clasificar'])}</div> : null}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                  {tb('cat', 'Por categoria')}
+                  {tb('fv', 'Fijo / Variable')}
+                  {tb('mes', 'Por mes')}
+                  {tb('ot', 'Por OT')}
+                  {tb('cc', 'Por centro de costo')}
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                  <tbody>
+                    {rowsDim.map(([k, v]) => (
+                      <tr key={k} style={{ borderBottom: '1px solid ' + C.border }}>
+                        <td style={{ padding: '5px 8px', whiteSpace: 'nowrap' }}>{k}</td>
+                        <td style={{ padding: '5px 8px', width: '50%' }}><div style={{ background: C.navy, height: 8, borderRadius: 4, width: (Math.abs(v) / maxV * 100) + '%', minWidth: 2 }} /></td>
+                        <td style={{ padding: '5px 8px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 600 }}>{clp(v)}</td>
+                        <td style={{ padding: '5px 8px', textAlign: 'right', color: C.mut, whiteSpace: 'nowrap' }}>{total > 0 ? Math.round(v / total * 100) : 0}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+          </div>
+        )
+      })() : null}
 
       {loading ? <div style={{ color: C.mut, padding: 20 }}>Cargando...</div> : errMsg ? <div style={{ background: '#FDECEC', border: '1px solid ' + C.red, color: C.red, padding: '10px 14px', borderRadius: 6, fontSize: 13 }}>{errMsg}</div> : filtradas.length === 0 ? (
         <div style={{ color: C.mut, padding: 20, textAlign: 'center', border: '1px dashed ' + C.border, borderRadius: 8 }}>
