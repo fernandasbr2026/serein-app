@@ -109,6 +109,11 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
   async function revisarAlerta(id) { try { await supabase.from('alertas').update({ estado: 'Revisada', fecha_revision: new Date().toISOString() }).eq('id', id); cargarAlertas() } catch (e) {} }
   async function resolverAlerta(id) { try { await supabase.from('alertas').update({ estado: 'Resuelta', fecha_resolucion: new Date().toISOString() }).eq('id', id); cargarAlertas() } catch (e) {} }
   useEffect(() => { cargarAlertas() }, [])
+  const [recsDB, setRecsDB] = useState([])
+  async function cargarRecs() { try { const res = await supabase.from('recomendaciones').select('*').order('fecha', { ascending: false }); setRecsDB(res.data || []) } catch (e) {} }
+  async function aplicarRec(id) { try { await supabase.from('recomendaciones').update({ estado: 'Aplicada' }).eq('id', id); cargarRecs() } catch (e) {} }
+  async function descartarRec(id) { try { await supabase.from('recomendaciones').update({ estado: 'Descartada' }).eq('id', id); cargarRecs() } catch (e) {} }
+  useEffect(() => { cargarRecs() }, [])
   const [iva, setIva] = useState({ credito: 0, debito: 0, cargado: false })
   const [compras, setCompras] = useState(null)
   const hoyStr = hoy()
@@ -183,6 +188,22 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
     return () => { vivo = false }
   }, [analisis])
 
+  useEffect(() => {
+    const acts = (analisis.alertas || []).filter(a => a.sev !== 'verde')
+    if (!acts.length) return
+    let vivo = true
+    ;(async () => {
+      try {
+        const u = await supabase.auth.getUser(); const uid = u && u.data && u.data.user ? u.data.user.id : null
+        if (!uid) return
+        const rows = acts.map(a => ({ usuario: uid, titulo: a.area + ' - accion recomendada', descripcion: a.recomendacion, motivo: a.titulo + '. ' + a.detalle, prioridad: a.sev === 'rojo' ? 'Alta' : 'Media', modulo: a.ir || a.area, fuente: 'regla', clave: 'rec::' + a.area + '::' + a.titulo.replace(/[0-9]+/g, '#') }))
+        await supabase.from('recomendaciones').upsert(rows, { onConflict: 'usuario,clave' })
+        if (vivo) cargarRecs()
+      } catch (e) {}
+    })()
+    return () => { vivo = false }
+  }, [analisis])
+
   const hayFin = (fin.gastos || []).length || (fin.obligaciones || []).length
   const hayProy = (proyectos || []).length
 
@@ -210,9 +231,31 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, borderBottom: '1px solid ' + C.line, paddingBottom: 4 }}>
         <button onClick={() => setVista('dashboard')} style={tabBtn(vista === 'dashboard')}>Dashboard Inteligente</button>
         <button onClick={() => setVista('alertas')} style={tabBtn(vista === 'alertas')}>Alertas</button>
+        <button onClick={() => setVista('recs')} style={tabBtn(vista === 'recs')}>Recomendaciones</button>
         <button onClick={() => setVista('chat')} style={tabBtn(vista === 'chat')}>Chat</button>
       </div>
-      {vista === 'chat' ? <ChatIA /> : vista === 'alertas' ? (<div>
+      {vista === 'chat' ? <ChatIA /> : vista === 'recs' ? (<div>
+        <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: C.navy }}>Recomendaciones</div>
+        <div style={{ fontSize: 12.5, color: C.gray, marginBottom: 12 }}>Generadas por reglas del sistema (preparado para que la IA las genere despues). Todo dentro del Dashboard.</div>
+        {recsDB.length === 0 ? <div style={{ color: C.gray, fontSize: 13, border: '1px dashed ' + C.line, borderRadius: 6, padding: 16, textAlign: 'center' }}>No hay recomendaciones registradas. Si es la primera vez, corre serein_ai_setup.sql en Supabase.</div> : (
+          <div style={{ display: 'grid', gap: 10 }}>
+            {recsDB.map(r => (
+              <div key={r.id} style={{ background: '#fff', border: '1px solid ' + C.line, borderLeft: '5px solid ' + (r.prioridad === 'Alta' ? C.red : r.prioridad === 'Media' ? C.orange : C.gray), borderRadius: 6, padding: '12px 14px', opacity: r.estado === 'Descartada' ? 0.55 : 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                  <span style={{ fontWeight: 700, fontSize: 14, color: C.navy }}>{r.titulo}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 3, border: '1px solid ' + C.line, color: C.gray, textTransform: 'uppercase' }}>{r.modulo}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 3, color: '#fff', background: r.prioridad === 'Alta' ? C.red : r.prioridad === 'Media' ? C.orange : C.gray }}>{r.prioridad}</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: r.estado === 'Aplicada' ? '#E7F2EA' : r.estado === 'Descartada' ? '#EEE' : '#FBF0E2', color: r.estado === 'Aplicada' ? C.green : r.estado === 'Descartada' ? C.gray : C.orange }}>{r.estado}</span>
+                </div>
+                <div style={{ fontSize: 13, color: '#3A4045', marginBottom: 4 }}>{r.descripcion}</div>
+                <div style={{ fontSize: 12, color: C.gray }}><b>Motivo:</b> {r.motivo}</div>
+                <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>{(r.fecha || '').slice(0, 10)} · fuente: {r.fuente}</div>
+                {r.estado === 'Nueva' ? <div style={{ marginTop: 8, display: 'flex', gap: 6 }}><button onClick={() => aplicarRec(r.id)} style={{ background: C.green, border: 'none', color: '#fff', borderRadius: 3, padding: '5px 10px', cursor: 'pointer', fontSize: 12 }}>Aplicar</button><button onClick={() => descartarRec(r.id)} style={{ background: 'transparent', border: '1px solid ' + C.line, color: C.navy, borderRadius: 3, padding: '5px 10px', cursor: 'pointer', fontSize: 12 }}>Descartar</button></div> : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>) : vista === 'alertas' ? (<div>
         <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: C.navy }}>Motor de alertas</div>
         <div style={{ fontSize: 12.5, color: C.gray, marginBottom: 12 }}>Se revisa automaticamente al ingresar. Cada alerta queda guardada en la base de datos.</div>
         {alertasDB.length === 0 ? <div style={{ color: C.gray, fontSize: 13, border: '1px dashed ' + C.line, borderRadius: 6, padding: 16, textAlign: 'center' }}>No hay alertas registradas. Si es la primera vez, corre alertas_setup.sql en Supabase.</div> : (
