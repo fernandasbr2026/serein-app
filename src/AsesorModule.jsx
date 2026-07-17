@@ -133,6 +133,17 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
   const hoyStr = hoy()
   const mes = mesDe(hoyStr)
   const [gastosLC, setGastosLC] = useState(null)
+  const [cajaInfo, setCajaInfo] = useState(null)
+  useEffect(() => {
+    Promise.all([
+      supabase.from('compras_sin_doc').select('monto'),
+      supabase.from('analisis_financiero').select('valor').eq('area', 'Flujo de Caja').order('fecha', { ascending: false }).limit(1)
+    ]).then(([sd, fl]) => {
+      const sinDoc = ((sd && sd.data) || []).reduce((a, x) => a + (Number(x.monto) || 0), 0)
+      const flujo = (fl && fl.data && fl.data[0]) ? (Number(fl.data[0].valor) || 0) : null
+      setCajaInfo({ sinDoc, flujo, cajaReal: flujo === null ? null : flujo - sinDoc })
+    }, () => {})
+  }, [])
   useEffect(() => {
     let vivo = true
     supabase.from('libro_compras').select('tipo_compra, clasificacion, document_total, neto, iva, exenta').then(res => {
@@ -515,6 +526,17 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
       </div>) : vista === 'analista' ? (<div>
         <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: C.navy }}>Analista Financiero</div>
         <div style={{ fontSize: 12.5, color: C.gray, marginBottom: 12 }}>Servicio que analiza automaticamente al ingresar y guarda los resultados en la base. Preparado para ejecucion automatica.</div>
+        {cajaInfo && cajaInfo.cajaReal !== null && (
+          <div style={{ border: '1px solid ' + C.line, borderRadius: 8, padding: 14, marginBottom: 14, background: '#F8FAFC' }}>
+            <div style={{ fontWeight: 700, color: C.navy, marginBottom: 10 }}>Caja real</div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 150px', background: '#fff', border: '1px solid ' + C.line, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, color: C.gray }}>Flujo de caja (esperado)</div><div style={{ fontSize: 18, fontWeight: 700, color: C.navy }}>{clp(cajaInfo.flujo)}</div></div>
+              <div style={{ flex: '1 1 150px', background: '#fff', border: '1px solid ' + C.line, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, color: C.gray }}>Gastos sin documento</div><div style={{ fontSize: 18, fontWeight: 700, color: C.red }}>- {clp(cajaInfo.sinDoc)}</div></div>
+              <div style={{ flex: '1 1 150px', background: '#fff', border: '2px solid ' + C.navy, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, color: C.gray }}>Caja real</div><div style={{ fontSize: 18, fontWeight: 700, color: cajaInfo.cajaReal < 0 ? C.red : C.green }}>{clp(cajaInfo.cajaReal)}</div></div>
+            </div>
+            <div style={{ fontSize: 11, color: C.gray, marginTop: 8 }}>Caja real = flujo de caja del periodo menos los gastos sin documentacion registrados.</div>
+          </div>
+        )}
         {gastosLC ? (() => {
           const maxV = Math.max(1, ...gastosLC.cat.map(x => Math.abs(x[1])))
           const cardG = (lbl, val, col) => <div style={{ flex: '1 1 150px', background: '#fff', border: '1px solid ' + C.line, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, color: C.gray }}>{lbl}</div><div style={{ fontSize: 18, fontWeight: 700, color: col }}>{clp(val)}</div></div>
