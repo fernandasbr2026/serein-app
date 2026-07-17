@@ -391,8 +391,50 @@ function AreaCostPanel({ fin, facturas }) {
 export default function ConsolidadoModule(props) {
   const d = useDatos(props)
   const cc = props.cc || {}
+  const [libroCons, setLibroCons] = useState(null)
+  useEffect(() => {
+    let vivo = true
+    ;(async () => {
+      const num = x => Number(x) || 0
+      let lv = [], lcx = []
+      try { lv = JSON.parse(localStorage.getItem('serein_libroVentasXlsx') || '[]') } catch (e) {}
+      try { lcx = JSON.parse(localStorage.getItem('serein_libroComprasXlsx') || '[]') } catch (e) {}
+      let db = []
+      try { const res = await supabase.from('libro_compras').select('document_number, provider_rut, neto, iva, document_total, exenta'); db = (res && res.data) || [] } catch (e) {}
+      if (!vivo) return
+      const key = r => (r.document_number || '') + '|' + (r.provider_rut || '')
+      const vistos = new Set(db.map(key))
+      const compras = [...db, ...lcx.filter(r => !vistos.has(key(r)))]
+      let vNeta = 0, vBruta = 0, ivaDeb = 0
+      for (const r of lv) { const nt = num(r.neto); vNeta += nt; vBruta += num(r.total) || (nt + num(r.iva)); ivaDeb += num(r.iva) }
+      let cNeto = 0, cTotal = 0, ivaCred = 0
+      for (const r of compras) { const nt = r.exenta ? (num(r.document_total) || num(r.neto)) : num(r.neto); cNeto += nt; cTotal += num(r.document_total); ivaCred += num(r.iva) }
+      setLibroCons({ vNeta, vBruta, nV: lv.length, cNeto, cTotal, nC: compras.length, ivaDeb, ivaCred })
+    })()
+    return () => { vivo = false }
+  }, [])
   const dosCol = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16 }
   return (<div>
+    {libroCons && (() => {
+      const lcCard = { background: '#fff', border: '1px solid ' + C.line, borderRadius: 8, padding: 10 }
+      const lbl = { fontSize: 11, color: C.gray, marginBottom: 2 }
+      const val = { fontSize: 18, fontWeight: 700 }
+      const sub = { fontSize: 10.5, color: C.gray, marginTop: 2 }
+      const res = libroCons.vNeta - libroCons.cNeto
+      return (
+        <div style={{ border: '2px solid ' + C.navy, borderRadius: 12, padding: 16, marginBottom: 18, background: C.soft }}>
+          <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 700, color: C.navy, fontSize: 15, textTransform: 'uppercase', letterSpacing: 0.5 }}>Consolidado segun libros</div>
+          <div style={{ fontSize: 12, color: C.gray, marginBottom: 12 }}>Cifras reales del Libro de Ventas ({libroCons.nV} facturas) y del Libro de Compras ({libroCons.nC} documentos).</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+            <div style={lcCard}><div style={lbl}>Venta neta (Libro de Ventas)</div><div style={{ ...val, color: C.azul }}>{clp(libroCons.vNeta)}</div><div style={sub}>Bruto {clp(libroCons.vBruta)}</div></div>
+            <div style={lcCard}><div style={lbl}>Compras neto (Libro de Compras)</div><div style={{ ...val, color: C.orange }}>{clp(libroCons.cNeto)}</div><div style={sub}>Bruto {clp(libroCons.cTotal)}</div></div>
+            <div style={lcCard}><div style={lbl}>Resultado (venta - compra)</div><div style={{ ...val, color: res < 0 ? C.rojo : C.verde }}>{clp(res)}</div><div style={sub}>neto, sin impuestos</div></div>
+            <div style={lcCard}><div style={lbl}>IVA (debito - credito)</div><div style={{ ...val, color: C.navy }}>{clp(libroCons.ivaDeb - libroCons.ivaCred)}</div><div style={sub}>ventas {clp(libroCons.ivaDeb)} / compras {clp(libroCons.ivaCred)}</div></div>
+          </div>
+          <div style={{ fontSize: 11, color: C.gray, marginTop: 10 }}>El cobrado y el factoring se muestran abajo desde proyectos, porque el Libro de Ventas no registra el estado de pago ni el factoring por factura.</div>
+        </div>
+      )
+    })()}
     <ExecutiveSummaryCards cc={cc} d={d} />
     <VentasInformePanel facturas={props.facturas} />
     <AISereinPanel cc={cc} d={d} />
