@@ -134,13 +134,13 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
   const [gastosLC, setGastosLC] = useState(null)
   useEffect(() => {
     let vivo = true
-    supabase.from('libro_compras').select('tipo_compra, clasificacion, document_total, neto, iva').then(res => {
+    supabase.from('libro_compras').select('tipo_compra, clasificacion, document_total, neto, iva, exenta').then(res => {
       if (!vivo) return
       const src = res.data || []
       let fijo = 0, variable = 0, sin = 0, total = 0
       const cat = {}
       for (const r of src) {
-        const m = Number(r.document_total || ((Number(r.neto) || 0) + (Number(r.iva) || 0)) || r.neto || 0)
+        const m = Number(r.exenta ? (r.document_total || r.neto || 0) : (r.neto || 0))
         total += m
         if (r.clasificacion === 'Fijo') fijo += m; else if (r.clasificacion === 'Variable') variable += m; else sin += m
         const t = r.tipo_compra || 'Sin tipo'; cat[t] = (cat[t] || 0) + m
@@ -432,7 +432,7 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
                 {cardG('Gastos fijos', gastosLC.fijo, '#2563EB')}
                 {cardG('Gastos variables', gastosLC.variable, '#D97706')}
-                {cardG('Total compras', gastosLC.total, C.navy)}
+                {cardG('Total neto', gastosLC.total, C.navy)}
               </div>
               {gastosLC.sin > 0 ? <div style={{ fontSize: 11, color: C.gray, marginBottom: 10 }}>Sin clasificar (abre el Libro de Compras para autoclasificar): {clp(gastosLC.sin)}</div> : null}
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}><tbody>
