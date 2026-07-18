@@ -204,7 +204,7 @@ function htmlOTDoc(ot) {
     <table class="items" style="margin-top:4px"><thead><tr><th>N°</th><th>Detalle del material</th><th>Fecha estimada</th><th>Estado</th></tr></thead><tbody>
     ${partidas.map((p, i) => `<tr><td>${i + 1}</td><td>${p.detalle || ''}</td><td>${p.fecha || ''}</td><td>${p.estado || ''}</td></tr>`).join('')}</tbody></table></div>` : ''
   const esquema = (ot.esquema && ot.esquema !== '—') ? String(ot.esquema).replace(/\n/g, '<br>') : ''
-  const servicios = ot.servicios ? String(ot.servicios).replace(/\n/g, '<br>') : ''
+  const servicios = ot.servicios ? String(ot.servicios).replace(/\n/g, '<br>') : ''; const pintHtml = (ot.pinturaCotizada && ot.pinturaCotizada.length) ? '<div style="margin-top:12px"><b style="font-size:12px">Pintura cotizada (tope de consumo)</b><table class="items" style="margin-top:4px"><thead><tr><th>Producto</th><th>Envases</th><th>Litros</th></tr></thead><tbody>' + ot.pinturaCotizada.map(p => '<tr><td>' + (p.producto || '') + '</td><td>' + (p.envases || 0) + '</td><td>' + (Math.round((p.litros || 0) * 10) / 10) + ' L</td></tr>').join('') + '</tbody></table><div style="font-size:10px;color:#777;margin-top:3px">No usar mas pintura que la cotizada para este proyecto.</div></div>' : ''
   return `<!doctype html><html><head><meta charset="utf-8"><title>OT ${ot.numero || ''}</title><style>${estilosDoc()}</style></head><body>
     <div class="head">
       ${(function(){var _l='';try{_l=localStorage.getItem('serein_logo')||''}catch(e){}return _l?'<img src="'+_l+'" style="height:46px;display:block;margin-bottom:8px"/>':''})()}
@@ -219,6 +219,7 @@ function htmlOTDoc(ot) {
     ${esquema ? `<div style="margin-top:12px;font-size:11px"><b>Esquema de pintura:</b><br>${esquema}</div>` : ''}
     ${servicios ? `<div style="margin-top:8px;font-size:11px"><b>Servicios / observaciones:</b><br>${servicios}</div>` : ''}
     ${partHtml}
+    ${pintHtml}
     <div class="badge" style="margin-top:12px">DOCUMENTO SIN VALORES · USO INTERNO / TALLER</div>
   </body></html>`
 }
@@ -391,7 +392,7 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
         id: 'ot' + Date.now(), numero: numeroOT, area: cot.area || 'Santa Rosa', cliente: cot.cliente, fecha: cot.fecha,
         cotizacion: 'COT ' + cot.folio, oc: '—', m2: (cot.items || []).filter(i => i.unidad === 'm²').reduce((a, i) => a + numDec(i.cant), 0), montoCotizado: t.afecto,
         procesos: [], preparacion: '—', esquema: (cot.items || []).map(i => i.comentario).filter(Boolean).join(' · ') || '—',
-        estado: 'Cotizada', fechaEntrega, responsable, ventas: [], costos: [], itemsCot: cot.items, folioCot: cot.folio,
+        estado: 'Cotizada', fechaEntrega, responsable, ventas: [], costos: [], itemsCot: cot.items, folioCot: cot.folio, pinturaCotizada: (() => { const m = {}; (cot.items || []).forEach(it => (it.comprasPintura || []).forEach(cp => { if (!m[cp.producto]) m[cp.producto] = { producto: cp.producto, litrosEnvase: cp.litrosEnvase, envases: 0, litros: 0 }; m[cp.producto].envases += cp.envases; m[cp.producto].litros += (cp.litrosComprados || 0) })); return Object.values(m) })(),
       }
       setOts([nuevaOT, ...(ots || [])])
     }
