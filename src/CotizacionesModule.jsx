@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Plus, Trash2, FileText, Download, CheckCircle2, Search, X } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import Paginador, { paginar } from './Paginador.jsx'
+import { PROVEEDORES_FICHA } from './proveedores-data.js'
 
 // ============================================================
 // MÓDULO: Cotizaciones (formato PDF descargable) + generación de OT
@@ -228,7 +229,7 @@ export function descargarOTDesdeOT(ot) { imprimir(htmlOTDoc(ot)) }
 // Cotización vacía nueva
 const hoy = () => new Date().toISOString().slice(0, 10)
 function nuevaCot(folio) {
-  return { id: 'cot' + Date.now(), folio: String(folio || ''), fecha: hoy(), vencimiento: hoy(), area: 'Santa Rosa', cliente: '', rut: '', giro: '', ciudad: '', comuna: '', direccion: '', condicionPago: 'CONTADO', vendedor: 'Mario Vidal', comentario: '', estado: 'Alta probabilidad de cierre', estadoOtro: '', items: [{ codigo: 'SPP', detalle: 'SERVICIO GRANALLADO Y PINTURA EN PLANTA', cant: '', unidad: 'UN', pUnitario: '', descuento: '', descDetallada: '', comentario: '' }] }
+  return { id: 'cot' + Date.now(), folio: String(folio || ''), fecha: hoy(), vencimiento: hoy(), area: 'Santa Rosa', cliente: '', rut: '', giro: '', ciudad: '', comuna: '', direccion: '', condicionPago: 'CONTADO', vendedor: 'Mario Vidal', comentario: '', estado: 'Alta probabilidad de cierre', estadoOtro: '', proveedorPintura: '', items: [{ codigo: 'SPP', detalle: 'SERVICIO GRANALLADO Y PINTURA EN PLANTA', cant: '', unidad: 'UN', pUnitario: '', descuento: '', descDetallada: '', comentario: '' }] }
 }
 
 // Mini panel para añadir un cliente nuevo a la lista maestra
@@ -297,6 +298,7 @@ function FormCotizacion({ inicial, onGuardar, onCancelar, clientes = [], onAddCl
         <label style={lab}>Vendedor<input style={inp} value={f.vendedor} onChange={e => set('vendedor', e.target.value)} /></label>
         <label style={lab}>Fecha documento<input type="date" style={inp} value={f.fecha} onChange={e => set('fecha', e.target.value)} /></label>
         <label style={lab}>Fecha vencimiento<input type="date" style={inp} value={f.vencimiento} onChange={e => set('vencimiento', e.target.value)} /></label>
+        <label style={{ ...lab, gridColumn: '1 / -1' }}>Proveedor de pintura (para la OC)<input list="dl-cot-provpint" style={inp} value={f.proveedorPintura || ''} onChange={e => set('proveedorPintura', e.target.value)} placeholder="Escribe o elige un proveedor de pintura" /><datalist id="dl-cot-provpint">{PROVEEDORES_FICHA.map(p => <option key={p.id || p.nombre} value={p.nombre} />)}</datalist></label>
       </div>
 
       <div style={{ fontSize: 12, fontWeight: 600, color: C.gris, textTransform: 'uppercase', margin: '14px 0 6px' }}>Ítems</div>
@@ -340,7 +342,7 @@ function FormCotizacion({ inicial, onGuardar, onCancelar, clientes = [], onAddCl
 import CotizadorParametros from './CotizadorParametros.jsx'
 import CotizadorCalculo from './CotizadorCalculo.jsx'
 
-export default function CotizacionesModule({ cotizaciones = [], setCotizaciones = () => {}, ots = [], setOts = () => {}, clientes = [], onAddCliente = () => {} }) {
+export default function CotizacionesModule({ cotizaciones = [], setCotizaciones = () => {}, ots = [], setOts = () => {}, clientes = [], onAddCliente = () => {}, pp = { ocs: [] }, setPp = () => {} }) {
   const [creando, setCreando] = useState(false)
   const [modo, setModo] = useState('rapida'); const [calcInicial, setCalcInicial] = useState(null)
   const [aproCot, setAproCot] = useState(null)
@@ -400,6 +402,25 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
     window.alert('Cotización aprobada. Se generó la ' + numeroOT + ' en el módulo Órdenes de Trabajo. Ya puedes descargar la OT (sin valores).')
   }
 
+  const generarOCPintura = (cot) => {
+  const prov = (cot.proveedorPintura || '').trim()
+  if (!prov) { window.alert('Primero elige el proveedor de pintura en la cotizacion (boton Editar, o en el cotizador por calculo).'); return }
+  const ocs = pp.ocs || []
+  if (ocs.some(o => o.origenCot === cot.folio && o.categoria === 'Pintura') && !window.confirm('Ya existe una OC de pintura para la cotizacion ' + cot.folio + '. Crear otra?')) return
+  const maxOC = ocs.reduce((m, o) => Math.max(m, parseInt(String(o.numero).replace(/\D/g, ''), 10) || 0), 517)
+  const numero = String(maxOC + 1)
+  const _nn = s => (s || '').trim().toLowerCase()
+  const ficha = (PROVEEDORES_FICHA || []).find(p => _nn(p.nombre) === _nn(prov)) || {}
+  const consol = {}
+  ;(cot.items || []).forEach(it => (it.comprasPintura || []).forEach(cp => { if (!consol[cp.producto]) consol[cp.producto] = { producto: cp.producto, envases: 0, costo: 0 }; consol[cp.producto].envases += cp.envases; consol[cp.producto].costo += (cp.costo || 0) }))
+  const ocItems = Object.values(consol).map(c => ({ codigo: '', producto: c.producto, cantidad: c.envases, precio: c.envases ? Math.round(c.costo / c.envases) : 0, comentario: 'Envases completos' }))
+  const f0 = new Date().toISOString().slice(0, 10)
+  const v0 = new Date(new Date(f0 + 'T12:00:00').getTime() + 30 * 86400000).toISOString().slice(0, 10)
+  const oc = { id: 'oc' + Date.now(), numero, proveedor: prov, rut: ficha.rut || '', categoria: 'Pintura', detalle: 'Pintura cotizacion ' + cot.folio + (cot.cliente ? ' - ' + cot.cliente : ''), area: cot.area || 'Santa Rosa', fecha: f0, plazo: 30, vencimiento: v0, estadoPago: 'Pendiente', asignaciones: [], items: ocItems, direccion: ficha.direccion || '', despacho: 'Santa Rosa 70, Lampa', adjunto: '', obs: 'Generada desde la cotizacion ' + cot.folio, origenCot: cot.folio }
+  setPp({ ...pp, ocs: [oc, ...ocs] })
+  window.alert('OC N ' + numero + ' creada en Ordenes de Compra (proveedor: ' + prov + '). Revisala y descarga su PDF en el modulo Ordenes de Compra.')
+}
+
   const updateCot = (id, cambios) => setCotizaciones(cotizaciones.map(x => x.id === id ? { ...x, ...cambios } : x))
   const setEstadoCot = (c, nuevo) => { if (nuevo === 'Aprobada' && c.estado !== 'Aprobada') setAproCot(c); else updateCot(c.id, { estado: nuevo }) }
 
@@ -414,7 +435,7 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
   }
 
   if (modo === 'params') return <CotizadorParametros onVolver={() => setModo('rapida')} />
-  if (modo === 'calculo') return <CotizadorCalculo clientes={clientes} onAddCliente={onAddCliente} cotizaciones={cotizaciones} setCotizaciones={setCotizaciones} inicial={calcInicial} onVolver={() => { setModo('rapida'); setCalcInicial(null) }} />
+  if (modo === 'calculo') return <CotizadorCalculo clientes={clientes} onAddCliente={onAddCliente} cotizaciones={cotizaciones} setCotizaciones={setCotizaciones} proveedores={PROVEEDORES_FICHA} inicial={calcInicial} onVolver={() => { setModo('rapida'); setCalcInicial(null) }} />
 
   return (
     <div>
@@ -500,6 +521,7 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
                       {c.estado === 'Aprobada' && <button onClick={() => descargarOTPDF(c)} title="Descargar OT sin valores" style={{ background: C.azul, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 4 }}><Download size={12} /> OT (sin valores)</button>}
                         {c.estado === 'Aprobada' && (c.items || []).some(it => (it.comprasPintura || []).length) && <button onClick={() => descargarInformePintura(c)} title="Descargar informe de compra de pintura" style={{ background: C.ambar || '#FF6B00', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, borderRadius: 4 }}>Pintura</button>}
                         {c.estado === 'Aprobada' && (c.items || []).some(it => (it.comprasPintura || []).length) && <button onClick={() => descargarSolicitudPintura(c)} title="Descargar solicitud de compra al proveedor (PDF)" style={{ background: '#0B7285', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, borderRadius: 4 }}>Solicitud proveedor</button>}
+                        {(c.proveedorPintura || (c.items || []).some(it => (it.comprasPintura || []).length)) && <button onClick={() => generarOCPintura(c)} title="Generar Orden de Compra de pintura" style={{ background: '#12805C', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, borderRadius: 4 }}>Generar OC</button>}
                       {c.tipo === 'calculo' && <button onClick={() => { setCalcInicial(c); setModo('calculo') }} title="Abrir/editar en la calculadora por calculo" style={{ background: '#061A40', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, borderRadius: 4 }}>Calculadora</button>}
                       <button onClick={() => setEditId(c.id)} title="Editar" style={{ background: 'none', border: '1px solid #CBD2D6', padding: '5px 8px', cursor: 'pointer', fontSize: 11.5 }}><FileText size={12} /></button>
                       <button onClick={() => eliminar(c.id)} title="Eliminar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
