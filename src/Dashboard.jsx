@@ -1,4 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react'
+import SereinChatWidget from './serein-ai/SereinChatWidget.jsx'
+const SEREIN_AI_ACTIVO = true
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { LogOut, TrendingUp, Wallet, AlertTriangle, Landmark, User } from 'lucide-react'
 import { DATA } from './data.js'
@@ -657,6 +659,9 @@ export default function Dashboard({ perfil, email, onLogout }) {
         </div>
       </div>
       </main>
+            {SEREIN_AI_ACTIVO && (
+        <SereinChatWidget perfil={perfil} email={email} areaSel={areaSel} onNavegar={setAreaSel} datos={{ ots, proyectos, facturas, cotizaciones, avances, params, pp }} />
+      )}
     </div>
   )
 }
