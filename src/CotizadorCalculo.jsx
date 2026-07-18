@@ -30,7 +30,7 @@ function BuscadorProducto({ value, productos, onSelect, style }) {
   </div>)
 }
 
-export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {}, cotizaciones = [], setCotizaciones = () => {}, onVolver = () => {} }) {
+export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {}, cotizaciones = [], setCotizaciones = () => {}, onVolver = () => {}, inicial = null }) {
   // Los parametros se releen cuando se guardan en la pantalla de Parametros,
   // al volver a la pestana, o si cambian en otra pestana del navegador.
   const [P, setP] = useState(cargarParams)
@@ -47,12 +47,12 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
   }, [])
   const idx = useMemo(() => indexProductos(P.productos), [P])
   const cte = P.constantes
-  const [sede, setSede] = useState('Santa Rosa')
-  const [cliQuery, setCliQuery] = useState('')
-  const [cliSel, setCliSel] = useState(null)
+  const [sede, setSede] = useState((inicial && (inicial.sede || inicial.area)) || 'Santa Rosa')
+  const [cliQuery, setCliQuery] = useState((inicial && inicial.cliente) || '')
+  const [cliSel, setCliSel] = useState(inicial && inicial.cliente ? { nombre: inicial.cliente, rut: inicial.rut || '', giro: inicial.giro || '', direccion: inicial.direccion || '', comuna: inicial.comuna || '' } : null)
   const [cliOpen, setCliOpen] = useState(false)
-  const [items, setItems] = useState([nuevoItem()])
-  const [pct, setPct] = useState(35)
+  const [items, setItems] = useState(() => (inicial && inicial.items && inicial.items.length) ? inicial.items.map(it => ({ desc: it.descripcion || '', ral: it.ral || '', m2: it.m2 || 0, grado: it.gradoSSPC || 'SP-10 (near-white)', dif: it.factorDificultad || 'A - Estandar', limpieza: it.limpiezaSP1 || 0, capas: (it.capas || []).map(c => ({ p: c.p || '', mMin: (c.mMin != null ? c.mMin : (c.m != null ? c.m : 2)), mMax: (c.mMax != null ? c.mMax : (c.m != null ? c.m : 4)), perdida: (c.perdida != null ? c.perdida : 2) })) })) : [nuevoItem()])
+  const [pct, setPct] = useState((inicial && (inicial.margenVenta != null ? inicial.margenVenta : inicial.porcentajeGanancia)) || 35)
   const [sg, setSg] = useState(3380000)
   const [sp, setSp] = useState(2700000)
   const [guardado, setGuardado] = useState('')
@@ -76,14 +76,14 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
       const msg = 'La' + (sinM2.length > 1 ? 's piezas N\u00b0 ' : ' pieza N\u00b0 ') + sinM2.join(', ') + (sinM2.length > 1 ? ' est\u00e1n' : ' est\u00e1') + ' en 0 m\u00b2. Su total quedar\u00e1 en $0 y no sumar\u00e1 al total de la cotizaci\u00f3n.\n\n\u00bfGenerar la cotizaci\u00f3n de todas formas?'
       if (!window.confirm(msg)) return
     }
-    const numero = proximoNumero(cotizaciones)
+    const numero = (inicial && (inicial.numero || inicial.folio)) || proximoNumero(cotizaciones)
     const cli = cliSel || { nombre: cliQuery }
-    const cot = { id: 'cot' + Date.now(), numero, folio: numero, area: sede, vencimiento: new Date().toISOString().slice(0, 10), tipo: 'calculo', origen: 'cotizador', estado: 'Alta probabilidad de cierre', cliente: cli.nombre || '', rut: cli.rut || '', giro: cli.giro || '', direccion: cli.direccion || '', comuna: cli.comuna || '', ciudad: cli.ciudad || cli.comuna || '', condicionPago: 'CONTADO', vendedor: cli.vendedor || 'Mario Vidal', sede, fecha: new Date().toISOString().slice(0, 10), margenVenta: +pct, porcentajeGanancia: +pct,
+    const cot = { id: (inicial && inicial.id) || ('cot' + Date.now()), numero, folio: numero, area: sede, vencimiento: new Date().toISOString().slice(0, 10), tipo: 'calculo', origen: 'cotizador', estado: (inicial && inicial.estado) || 'Alta probabilidad de cierre', cliente: cli.nombre || '', rut: cli.rut || '', giro: cli.giro || '', direccion: cli.direccion || '', comuna: cli.comuna || '', ciudad: cli.ciudad || cli.comuna || '', condicionPago: 'CONTADO', vendedor: cli.vendedor || 'Mario Vidal', sede, fecha: new Date().toISOString().slice(0, 10), margenVenta: +pct, porcentajeGanancia: +pct,
       items: items.map((it, i) => { const d = dg(it); const pm = precioMargen(d.costoM2, pct); return { codigo: it.grado || '', detalle: (it.desc || 'Item ' + (i + 1)) + (it.ral ? ' - ' + it.ral : '') + ' - ' + (it.capas.filter(c => c.p).map(c => c.p).join(' + ') || 'solo granallado ' + it.grado), cant: +it.m2 || 0, unidad: 'm²', pUnitario: Math.round(pm), descuento: 0, comentario: (it.capas.filter(c => c.p).map(c => c.p + ' ' + milsProm(c) + ' mils').join(' + ') || 'Solo granallado') + ' - ' + it.grado, descripcion: it.desc, ral: it.ral, m2: +it.m2 || 0, gradoSSPC: it.grado, factorDificultad: it.dif, limpiezaSP1: +it.limpieza || 0, capas: it.capas.filter(c => c.p), costoM2: Math.round(d.costoM2), precioM2: Math.round(pm), comprasPintura: d.comprasPintura || [], pinturaCompraTotal: (d.comprasPintura || []).reduce((a, cp) => a + (cp.costo || 0), 0), total: Math.round(pm * (+it.m2 || 0)), desglose: { granallado: Math.round(d.granallado), limpieza: Math.round(d.limpieza), diluyente: Math.round(d.diluyente), pintura: Math.round(d.pintura), fijos: Math.round(d.fijos) } } }),
       total: Math.round(totalCot), montoCotizado: Math.round(totalCot), supuestos: { sueldosGranallado: +sg, sueldosPintores: +sp, totalFijos } }
-    setCotizaciones([...(cotizaciones || []), cot])
+    setCotizaciones(inicial ? (cotizaciones || []).map(x => x.id === cot.id ? cot : x) : [...(cotizaciones || []), cot])
     if (!cliSel && cliQuery.trim()) { try { onAddCliente(cliQuery.trim()) } catch (e) {} }
-    setGuardado('Borrador ' + numero + ' guardado en Cotizaciones.')
+    setGuardado('Borrador ' + numero + (inicial ? ' actualizado.' : ' guardado en Cotizaciones.'))
   }
 
   const card = { background: '#fff', border: '1px solid ' + T.border, borderRadius: 12, boxShadow: T.shadow, padding: 16, marginBottom: 16 }

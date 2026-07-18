@@ -173,6 +173,28 @@ export function descargarInformePintura(cot) {
   imprimir(html)
 }
 
+// ---- Solicitud de compra de pintura al proveedor (PDF) ----
+export function descargarSolicitudPintura(cot) {
+const items = cot.items || []
+const consol = {}
+items.forEach(it => { (it.comprasPintura || []).forEach(cp => { if (!consol[cp.producto]) consol[cp.producto] = { producto: cp.producto, litrosEnvase: cp.litrosEnvase, envases: 0 }; consol[cp.producto].envases += cp.envases }) })
+const rows = Object.values(consol)
+if (!rows.length) { window.alert('Esta cotizacion no tiene detalle de compra de pintura. Genera la cotizacion desde el cotizador (con m2 y esquema) para que quede guardado.'); return }
+const fmt = n => (Math.round((n || 0) * 10) / 10).toLocaleString('es-CL')
+const totEnv = rows.reduce((a, c) => a + c.envases, 0)
+const filasHtml = rows.map((c, i) => `<tr><td>${i + 1}</td><td>${c.producto}</td><td class="r">${c.envases}</td><td class="r">${fmt(c.litrosEnvase)} L</td><td class="r">${fmt(c.envases * c.litrosEnvase)} L</td></tr>`).join('')
+const html = `<!doctype html><html><head><meta charset="utf-8"><title>Solicitud pintura ${cot.folio || ''}</title><style>${estilosDoc()} h2{font-family:Oswald,Arial;color:#061A40;margin:14px 0 6px;font-size:15px} .sub{color:#5A6472;font-size:12px;margin-bottom:10px}</style></head><body>`
++ `<div class="head"><div class="emp"><b>${EMPRESA.nombre || 'SEREIN SpA'}</b><div>R.U.T: ${EMPRESA.rut || ''}</div><div>${EMPRESA.direccion || ''}</div><div>${EMPRESA.email || ''}</div></div><div class="doc"><div class="t">Solicitud de compra</div><div class="f">Pintura · Cot. N° ${cot.folio || ''}</div></div></div>`
++ `<div class="sub">Fecha: ${new Date().toISOString().slice(0, 10)} · Obra/Cliente: ${cot.cliente || ''} · Área: ${cot.area || ''}</div>`
++ `<div style="font-size:12px;margin:6px 0 10px">Estimado proveedor, solicitamos cotizar y despachar los siguientes productos (envases completos):</div>`
++ `<table class="items"><thead><tr><th>#</th><th>Producto</th><th class="r">Envases</th><th class="r">Contenido/env</th><th class="r">Total litros</th></tr></thead><tbody>${filasHtml}</tbody></table>`
++ `<table class="tot"><tr><td class="lbl big">Total envases</td><td class="r big">${totEnv}</td></tr></table>`
++ `<div class="sub" style="margin-top:14px">Favor confirmar disponibilidad, precio y plazo de entrega. Despachar a: ${EMPRESA.direccion || ''}.</div>`
++ `<div class="datos" style="margin-top:10px;border:1px solid #D8DCE5;padding:10px;font-size:11px">Contacto: ${EMPRESA.nombre || ''} · ${EMPRESA.email || ''} · Tel: ${EMPRESA.telefono || ''}</div>`
++ `</body></html>`
+imprimir(html)
+}
+
 // OT en PDF a partir de la OT real (refleja esquema, servicios y partidas editados)
 function htmlOTDoc(ot) {
   const items = ot.itemsCot || []
@@ -182,7 +204,7 @@ function htmlOTDoc(ot) {
     <table class="items" style="margin-top:4px"><thead><tr><th>N°</th><th>Detalle del material</th><th>Fecha estimada</th><th>Estado</th></tr></thead><tbody>
     ${partidas.map((p, i) => `<tr><td>${i + 1}</td><td>${p.detalle || ''}</td><td>${p.fecha || ''}</td><td>${p.estado || ''}</td></tr>`).join('')}</tbody></table></div>` : ''
   const esquema = (ot.esquema && ot.esquema !== '—') ? String(ot.esquema).replace(/\n/g, '<br>') : ''
-  const servicios = ot.servicios ? String(ot.servicios).replace(/\n/g, '<br>') : ''
+  const servicios = ot.servicios ? String(ot.servicios).replace(/\n/g, '<br>') : ''; const pintHtml = (ot.pinturaCotizada && ot.pinturaCotizada.length) ? '<div style="margin-top:12px"><b style="font-size:12px">Pintura cotizada (tope de consumo)</b><table class="items" style="margin-top:4px"><thead><tr><th>Producto</th><th>Envases</th><th>Litros</th></tr></thead><tbody>' + ot.pinturaCotizada.map(p => '<tr><td>' + (p.producto || '') + '</td><td>' + (p.envases || 0) + '</td><td>' + (Math.round((p.litros || 0) * 10) / 10) + ' L</td></tr>').join('') + '</tbody></table><div style="font-size:10px;color:#777;margin-top:3px">No usar mas pintura que la cotizada para este proyecto.</div></div>' : ''
   return `<!doctype html><html><head><meta charset="utf-8"><title>OT ${ot.numero || ''}</title><style>${estilosDoc()}</style></head><body>
     <div class="head">
       ${(function(){var _l='';try{_l=localStorage.getItem('serein_logo')||''}catch(e){}return _l?'<img src="'+_l+'" style="height:46px;display:block;margin-bottom:8px"/>':''})()}
@@ -197,6 +219,7 @@ function htmlOTDoc(ot) {
     ${esquema ? `<div style="margin-top:12px;font-size:11px"><b>Esquema de pintura:</b><br>${esquema}</div>` : ''}
     ${servicios ? `<div style="margin-top:8px;font-size:11px"><b>Servicios / observaciones:</b><br>${servicios}</div>` : ''}
     ${partHtml}
+    ${pintHtml}
     <div class="badge" style="margin-top:12px">DOCUMENTO SIN VALORES · USO INTERNO / TALLER</div>
   </body></html>`
 }
@@ -284,12 +307,12 @@ function FormCotizacion({ inicial, onGuardar, onCancelar, clientes = [], onAddCl
             {f.items.map((it, i) => (
               <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
                 <td style={{ padding: '3px 4px' }}><input value={it.codigo} onChange={e => setItem(i, 'codigo', e.target.value)} style={{ ...inp, width: 60, padding: '5px 6px' }} /></td>
-                <td style={{ padding: '3px 4px' }}><input value={it.detalle} onChange={e => setItem(i, 'detalle', e.target.value)} style={{ ...inp, width: 200, padding: '5px 6px' }} /></td>
+                <td style={{ padding: '3px 4px', verticalAlign: 'top' }}><textarea value={it.detalle} onChange={e => setItem(i, 'detalle', e.target.value)} rows={3} style={{ ...inp, width: 280, minWidth: 240, padding: '6px 8px', resize: 'both', fontFamily: 'inherit', lineHeight: 1.4 }} /></td>
                 <td style={{ padding: '3px 4px', textAlign: 'right' }}><input value={it.cant} onChange={e => setItem(i, 'cant', e.target.value)} style={{ ...inp, width: 55, padding: '5px 6px', textAlign: 'right' }} /></td>
                 <td style={{ padding: '3px 4px' }}><input value={it.unidad} onChange={e => setItem(i, 'unidad', e.target.value)} style={{ ...inp, width: 44, padding: '5px 6px' }} /></td>
                 <td style={{ padding: '3px 4px', textAlign: 'right' }}><input value={it.pUnitario} onChange={e => setItem(i, 'pUnitario', e.target.value)} style={{ ...inp, width: 90, padding: '5px 6px', textAlign: 'right' }} /></td>
                 <td style={{ padding: '3px 4px', textAlign: 'right' }}><input value={it.descuento} onChange={e => setItem(i, 'descuento', e.target.value)} style={{ ...inp, width: 70, padding: '5px 6px', textAlign: 'right' }} /></td>
-                <td style={{ padding: '3px 4px' }}><input value={it.comentario} onChange={e => setItem(i, 'comentario', e.target.value)} placeholder="Esquema / detalle" style={{ ...inp, width: 150, padding: '5px 6px' }} /></td>
+                <td style={{ padding: '3px 4px', verticalAlign: 'top' }}><textarea value={it.comentario} onChange={e => setItem(i, 'comentario', e.target.value)} placeholder="Esquema / detalle" rows={3} style={{ ...inp, width: 240, minWidth: 200, padding: '6px 8px', resize: 'both', fontFamily: 'inherit', lineHeight: 1.4 }} /></td>
                 <td style={{ padding: '3px 6px', textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }}>{clp(itemTotal(it))}</td>
                 <td style={{ padding: '3px 2px', textAlign: 'right' }}>{f.items.length > 1 && <button onClick={() => delItem(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button>}</td>
               </tr>
@@ -299,7 +322,7 @@ function FormCotizacion({ inicial, onGuardar, onCancelar, clientes = [], onAddCl
       </div>
       <button onClick={addItem} style={{ background: 'none', border: '1px dashed #CBD2D6', padding: '6px 12px', cursor: 'pointer', fontSize: 12, color: C.gris, marginTop: 8 }}>+ Agregar ítem</button>
 
-      <input style={{ ...inp, width: '100%', marginTop: 10 }} placeholder="Comentario general de la cotización (opcional)" value={f.comentario} onChange={e => set('comentario', e.target.value)} />
+      <textarea rows={3} style={{ ...inp, width: '100%', marginTop: 10, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.4 }} placeholder="Comentario general de la cotización (opcional)" value={f.comentario} onChange={e => set('comentario', e.target.value)} />
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 24, marginTop: 12, fontSize: 13 }}>
         <span>Afecto: <b>{clp(t.afecto)}</b></span>
@@ -319,7 +342,7 @@ import CotizadorCalculo from './CotizadorCalculo.jsx'
 
 export default function CotizacionesModule({ cotizaciones = [], setCotizaciones = () => {}, ots = [], setOts = () => {}, clientes = [], onAddCliente = () => {} }) {
   const [creando, setCreando] = useState(false)
-  const [modo, setModo] = useState('rapida')
+  const [modo, setModo] = useState('rapida'); const [calcInicial, setCalcInicial] = useState(null)
   const [aproCot, setAproCot] = useState(null)
   const [aproFecha, setAproFecha] = useState('')
   const [aproResp, setAproResp] = useState('')
@@ -369,7 +392,7 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
         id: 'ot' + Date.now(), numero: numeroOT, area: cot.area || 'Santa Rosa', cliente: cot.cliente, fecha: cot.fecha,
         cotizacion: 'COT ' + cot.folio, oc: '—', m2: (cot.items || []).filter(i => i.unidad === 'm²').reduce((a, i) => a + numDec(i.cant), 0), montoCotizado: t.afecto,
         procesos: [], preparacion: '—', esquema: (cot.items || []).map(i => i.comentario).filter(Boolean).join(' · ') || '—',
-        estado: 'Cotizada', fechaEntrega, responsable, ventas: [], costos: [], itemsCot: cot.items, folioCot: cot.folio,
+        estado: 'Cotizada', fechaEntrega, responsable, ventas: [], costos: [], itemsCot: cot.items, folioCot: cot.folio, pinturaCotizada: (() => { const m = {}; (cot.items || []).forEach(it => (it.comprasPintura || []).forEach(cp => { if (!m[cp.producto]) m[cp.producto] = { producto: cp.producto, litrosEnvase: cp.litrosEnvase, envases: 0, litros: 0 }; m[cp.producto].envases += cp.envases; m[cp.producto].litros += (cp.litrosComprados || 0) })); return Object.values(m) })(),
       }
       setOts([nuevaOT, ...(ots || [])])
     }
@@ -391,13 +414,13 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
   }
 
   if (modo === 'params') return <CotizadorParametros onVolver={() => setModo('rapida')} />
-  if (modo === 'calculo') return <CotizadorCalculo clientes={clientes} onAddCliente={onAddCliente} cotizaciones={cotizaciones} setCotizaciones={setCotizaciones} onVolver={() => setModo('rapida')} />
+  if (modo === 'calculo') return <CotizadorCalculo clientes={clientes} onAddCliente={onAddCliente} cotizaciones={cotizaciones} setCotizaciones={setCotizaciones} inicial={calcInicial} onVolver={() => { setModo('rapida'); setCalcInicial(null) }} />
 
   return (
     <div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, borderBottom: '1px solid #E6E8EE', paddingBottom: 8 }}>
         <button onClick={() => setModo('rapida')} style={{ background: 'transparent', border: 'none', borderBottom: '2px solid #FF6B00', padding: '6px 2px', marginRight: 12, cursor: 'pointer', fontWeight: 600, fontSize: 13, color: '#061A40' }}>Cotizacion rapida</button>
-        <button onClick={() => setModo('calculo')} style={{ background: 'transparent', border: 'none', padding: '6px 2px', marginRight: 12, cursor: 'pointer', fontWeight: 500, fontSize: 13, color: '#5A6472' }}>Nueva por calculo</button>
+        <button onClick={() => { setCalcInicial(null); setModo('calculo') }} style={{ background: 'transparent', border: 'none', padding: '6px 2px', marginRight: 12, cursor: 'pointer', fontWeight: 500, fontSize: 13, color: '#5A6472' }}>Nueva por calculo</button>
         <button onClick={() => setModo('params')} style={{ background: 'transparent', border: 'none', padding: '6px 2px', cursor: 'pointer', fontWeight: 500, fontSize: 13, color: '#5A6472' }}>Parametros Cotizador</button>
       </div>
       {aproCot && (<div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(6,26,64,.45)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
@@ -476,6 +499,8 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
                       <button onClick={() => descargarCotizacionPDF(c)} title="Descargar cotización PDF" style={{ background: C.carbon, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 4 }}><Download size={12} /> Cotización</button>
                       {c.estado === 'Aprobada' && <button onClick={() => descargarOTPDF(c)} title="Descargar OT sin valores" style={{ background: C.azul, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 4 }}><Download size={12} /> OT (sin valores)</button>}
                         {c.estado === 'Aprobada' && (c.items || []).some(it => (it.comprasPintura || []).length) && <button onClick={() => descargarInformePintura(c)} title="Descargar informe de compra de pintura" style={{ background: C.ambar || '#FF6B00', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, borderRadius: 4 }}>Pintura</button>}
+                        {c.estado === 'Aprobada' && (c.items || []).some(it => (it.comprasPintura || []).length) && <button onClick={() => descargarSolicitudPintura(c)} title="Descargar solicitud de compra al proveedor (PDF)" style={{ background: '#0B7285', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, borderRadius: 4 }}>Solicitud proveedor</button>}
+                      {c.tipo === 'calculo' && <button onClick={() => { setCalcInicial(c); setModo('calculo') }} title="Abrir/editar en la calculadora por calculo" style={{ background: '#061A40', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, borderRadius: 4 }}>Calculadora</button>}
                       <button onClick={() => setEditId(c.id)} title="Editar" style={{ background: 'none', border: '1px solid #CBD2D6', padding: '5px 8px', cursor: 'pointer', fontSize: 11.5 }}><FileText size={12} /></button>
                       <button onClick={() => eliminar(c.id)} title="Eliminar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
                     </div>
