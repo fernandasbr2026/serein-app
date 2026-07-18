@@ -354,6 +354,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
         </div>
       )}
       {!verValores && <div style={{ padding: '0 18px 14px' }}><span style={{ fontSize: 11.5, color: '#9AA0A6', fontStyle: 'italic' }}>Vista de taller · valores visibles solo para Gerencia.</span></div>}
+      {(ot.pinturaCotizada || []).length > 0 && <div style={{ padding: '0 18px 14px' }}><div style={{ fontSize: 11, fontWeight: 700, color: '#061A40', textTransform: 'uppercase', marginBottom: 4 }}>Pintura cotizada (tope — no exceder)</div>{ot.pinturaCotizada.map((p, k) => <div key={k} style={{ fontSize: 12.5, color: '#344054' }}>{p.producto}: <b>{p.envases} envase(s)</b> · {Math.round((p.litros || 0) * 10) / 10} L</div>)}</div>}
 
       {(abierta || enModal) && (
         <div style={{ borderTop: '1px solid #EEE9DF', padding: 18 }}>
