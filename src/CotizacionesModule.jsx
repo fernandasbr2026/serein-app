@@ -284,12 +284,12 @@ function FormCotizacion({ inicial, onGuardar, onCancelar, clientes = [], onAddCl
             {f.items.map((it, i) => (
               <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
                 <td style={{ padding: '3px 4px' }}><input value={it.codigo} onChange={e => setItem(i, 'codigo', e.target.value)} style={{ ...inp, width: 60, padding: '5px 6px' }} /></td>
-                <td style={{ padding: '3px 4px' }}><input value={it.detalle} onChange={e => setItem(i, 'detalle', e.target.value)} style={{ ...inp, width: 200, padding: '5px 6px' }} /></td>
+                <td style={{ padding: '3px 4px', verticalAlign: 'top' }}><textarea value={it.detalle} onChange={e => setItem(i, 'detalle', e.target.value)} rows={3} style={{ ...inp, width: 280, minWidth: 240, padding: '6px 8px', resize: 'both', fontFamily: 'inherit', lineHeight: 1.4 }} /></td>
                 <td style={{ padding: '3px 4px', textAlign: 'right' }}><input value={it.cant} onChange={e => setItem(i, 'cant', e.target.value)} style={{ ...inp, width: 55, padding: '5px 6px', textAlign: 'right' }} /></td>
                 <td style={{ padding: '3px 4px' }}><input value={it.unidad} onChange={e => setItem(i, 'unidad', e.target.value)} style={{ ...inp, width: 44, padding: '5px 6px' }} /></td>
                 <td style={{ padding: '3px 4px', textAlign: 'right' }}><input value={it.pUnitario} onChange={e => setItem(i, 'pUnitario', e.target.value)} style={{ ...inp, width: 90, padding: '5px 6px', textAlign: 'right' }} /></td>
                 <td style={{ padding: '3px 4px', textAlign: 'right' }}><input value={it.descuento} onChange={e => setItem(i, 'descuento', e.target.value)} style={{ ...inp, width: 70, padding: '5px 6px', textAlign: 'right' }} /></td>
-                <td style={{ padding: '3px 4px' }}><input value={it.comentario} onChange={e => setItem(i, 'comentario', e.target.value)} placeholder="Esquema / detalle" style={{ ...inp, width: 150, padding: '5px 6px' }} /></td>
+                <td style={{ padding: '3px 4px', verticalAlign: 'top' }}><textarea value={it.comentario} onChange={e => setItem(i, 'comentario', e.target.value)} placeholder="Esquema / detalle" rows={3} style={{ ...inp, width: 240, minWidth: 200, padding: '6px 8px', resize: 'both', fontFamily: 'inherit', lineHeight: 1.4 }} /></td>
                 <td style={{ padding: '3px 6px', textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }}>{clp(itemTotal(it))}</td>
                 <td style={{ padding: '3px 2px', textAlign: 'right' }}>{f.items.length > 1 && <button onClick={() => delItem(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button>}</td>
               </tr>
@@ -299,7 +299,7 @@ function FormCotizacion({ inicial, onGuardar, onCancelar, clientes = [], onAddCl
       </div>
       <button onClick={addItem} style={{ background: 'none', border: '1px dashed #CBD2D6', padding: '6px 12px', cursor: 'pointer', fontSize: 12, color: C.gris, marginTop: 8 }}>+ Agregar ítem</button>
 
-      <input style={{ ...inp, width: '100%', marginTop: 10 }} placeholder="Comentario general de la cotización (opcional)" value={f.comentario} onChange={e => set('comentario', e.target.value)} />
+      <textarea rows={3} style={{ ...inp, width: '100%', marginTop: 10, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.4 }} placeholder="Comentario general de la cotización (opcional)" value={f.comentario} onChange={e => set('comentario', e.target.value)} />
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 24, marginTop: 12, fontSize: 13 }}>
         <span>Afecto: <b>{clp(t.afecto)}</b></span>
