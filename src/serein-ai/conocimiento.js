@@ -132,4 +132,4 @@ export function buscarProcedimiento(pregunta) {
     if (!mejor || score > mejor.score) mejor = score > 0 ? { ...p, score } : mejor
   }
   return mejor && mejor.score > 0 ? mejor : null
-}0
+}

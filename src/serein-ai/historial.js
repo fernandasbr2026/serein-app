@@ -78,4 +78,4 @@ export async function registrarAuditoria(reg) {
       modelo: reg.modelo || 'reglas',
     })
   } catch (e) { /* silencioso */ }
-}0
+}
