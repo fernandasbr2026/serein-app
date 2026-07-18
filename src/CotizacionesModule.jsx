@@ -341,7 +341,7 @@ import CotizadorCalculo from './CotizadorCalculo.jsx'
 
 export default function CotizacionesModule({ cotizaciones = [], setCotizaciones = () => {}, ots = [], setOts = () => {}, clientes = [], onAddCliente = () => {} }) {
   const [creando, setCreando] = useState(false)
-  const [modo, setModo] = useState('rapida')
+  const [modo, setModo] = useState('rapida'); const [calcInicial, setCalcInicial] = useState(null)
   const [aproCot, setAproCot] = useState(null)
   const [aproFecha, setAproFecha] = useState('')
   const [aproResp, setAproResp] = useState('')
@@ -413,13 +413,13 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
   }
 
   if (modo === 'params') return <CotizadorParametros onVolver={() => setModo('rapida')} />
-  if (modo === 'calculo') return <CotizadorCalculo clientes={clientes} onAddCliente={onAddCliente} cotizaciones={cotizaciones} setCotizaciones={setCotizaciones} onVolver={() => setModo('rapida')} />
+  if (modo === 'calculo') return <CotizadorCalculo clientes={clientes} onAddCliente={onAddCliente} cotizaciones={cotizaciones} setCotizaciones={setCotizaciones} inicial={calcInicial} onVolver={() => { setModo('rapida'); setCalcInicial(null) }} />
 
   return (
     <div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, borderBottom: '1px solid #E6E8EE', paddingBottom: 8 }}>
         <button onClick={() => setModo('rapida')} style={{ background: 'transparent', border: 'none', borderBottom: '2px solid #FF6B00', padding: '6px 2px', marginRight: 12, cursor: 'pointer', fontWeight: 600, fontSize: 13, color: '#061A40' }}>Cotizacion rapida</button>
-        <button onClick={() => setModo('calculo')} style={{ background: 'transparent', border: 'none', padding: '6px 2px', marginRight: 12, cursor: 'pointer', fontWeight: 500, fontSize: 13, color: '#5A6472' }}>Nueva por calculo</button>
+        <button onClick={() => { setCalcInicial(null); setModo('calculo') }} style={{ background: 'transparent', border: 'none', padding: '6px 2px', marginRight: 12, cursor: 'pointer', fontWeight: 500, fontSize: 13, color: '#5A6472' }}>Nueva por calculo</button>
         <button onClick={() => setModo('params')} style={{ background: 'transparent', border: 'none', padding: '6px 2px', cursor: 'pointer', fontWeight: 500, fontSize: 13, color: '#5A6472' }}>Parametros Cotizador</button>
       </div>
       {aproCot && (<div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(6,26,64,.45)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
@@ -499,6 +499,7 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
                       {c.estado === 'Aprobada' && <button onClick={() => descargarOTPDF(c)} title="Descargar OT sin valores" style={{ background: C.azul, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 4 }}><Download size={12} /> OT (sin valores)</button>}
                         {c.estado === 'Aprobada' && (c.items || []).some(it => (it.comprasPintura || []).length) && <button onClick={() => descargarInformePintura(c)} title="Descargar informe de compra de pintura" style={{ background: C.ambar || '#FF6B00', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, borderRadius: 4 }}>Pintura</button>}
                         {c.estado === 'Aprobada' && (c.items || []).some(it => (it.comprasPintura || []).length) && <button onClick={() => descargarSolicitudPintura(c)} title="Descargar solicitud de compra al proveedor (PDF)" style={{ background: '#0B7285', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, borderRadius: 4 }}>Solicitud proveedor</button>}
+                      {c.tipo === 'calculo' && <button onClick={() => { setCalcInicial(c); setModo('calculo') }} title="Abrir/editar en la calculadora por calculo" style={{ background: '#061A40', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, borderRadius: 4 }}>Calculadora</button>}
                       <button onClick={() => setEditId(c.id)} title="Editar" style={{ background: 'none', border: '1px solid #CBD2D6', padding: '5px 8px', cursor: 'pointer', fontSize: 11.5 }}><FileText size={12} /></button>
                       <button onClick={() => eliminar(c.id)} title="Eliminar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
                     </div>
