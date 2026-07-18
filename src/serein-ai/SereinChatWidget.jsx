@@ -54,6 +54,7 @@ function Widget({ perfil = {}, email = '', areaSel, onNavegar, datos = {} }) {
   ]))
   const finRef = useRef(null)
   const inputRef = useRef(null)
+  const memoriaRef = useRef({ ultimasEntidades: [] })
 
   useEffect(() => { if (abierto) finRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensajes, pensando, abierto])
   useEffect(() => { if (abierto) { setNoLeido(false); setTimeout(() => inputRef.current?.focus(), 60) } }, [abierto])
@@ -62,6 +63,7 @@ function Widget({ perfil = {}, email = '', areaSel, onNavegar, datos = {} }) {
     setConvId(null)
     setMensajes([{ rol: 'assistant', texto: saludo(ctx.nombre), fuentes: [], ts: Date.now() }])
     setTexto('')
+    memoriaRef.current = { ultimasEntidades: [] }
   }
 
   async function enviar(e) {
@@ -81,9 +83,13 @@ function Widget({ perfil = {}, email = '', areaSel, onNavegar, datos = {} }) {
 
     let r
     try {
-      r = await responder(pregunta, ctx, datos, { areaSel })
+      r = await responder(pregunta, ctx, datos, { areaSel, memoria: memoriaRef.current })
     } catch (x) {
       r = { texto: 'No pude consultar esta informacion en este momento. El error quedo registrado para revision.', fuentes: [], intent: 'error', ok: false, error: String(x), meta: {}, duracion_ms: 0 }
+    }
+    // Recuerda las entidades de esta respuesta (ej: la lista de OT) para resolver preguntas de seguimiento como "cual tiene mas m2".
+    if (r.meta && Array.isArray(r.meta.entidades) && r.meta.entidades.length > 0) {
+      memoriaRef.current = { ultimasEntidades: r.meta.entidades }
     }
     setMensajes(m => [...m, { rol: 'assistant', texto: r.texto, fuentes: r.fuentes || [], ts: Date.now() }])
     setPensando(false)
