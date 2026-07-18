@@ -173,6 +173,28 @@ export function descargarInformePintura(cot) {
   imprimir(html)
 }
 
+// ---- Solicitud de compra de pintura al proveedor (PDF) ----
+export function descargarSolicitudPintura(cot) {
+const items = cot.items || []
+const consol = {}
+items.forEach(it => { (it.comprasPintura || []).forEach(cp => { if (!consol[cp.producto]) consol[cp.producto] = { producto: cp.producto, litrosEnvase: cp.litrosEnvase, envases: 0 }; consol[cp.producto].envases += cp.envases }) })
+const rows = Object.values(consol)
+if (!rows.length) { window.alert('Esta cotizacion no tiene detalle de compra de pintura. Genera la cotizacion desde el cotizador (con m2 y esquema) para que quede guardado.'); return }
+const fmt = n => (Math.round((n || 0) * 10) / 10).toLocaleString('es-CL')
+const totEnv = rows.reduce((a, c) => a + c.envases, 0)
+const filasHtml = rows.map((c, i) => `<tr><td>${i + 1}</td><td>${c.producto}</td><td class="r">${c.envases}</td><td class="r">${fmt(c.litrosEnvase)} L</td><td class="r">${fmt(c.envases * c.litrosEnvase)} L</td></tr>`).join('')
+const html = `<!doctype html><html><head><meta charset="utf-8"><title>Solicitud pintura ${cot.folio || ''}</title><style>${estilosDoc()} h2{font-family:Oswald,Arial;color:#061A40;margin:14px 0 6px;font-size:15px} .sub{color:#5A6472;font-size:12px;margin-bottom:10px}</style></head><body>`
++ `<div class="head"><div class="emp"><b>${EMPRESA.nombre || 'SEREIN SpA'}</b><div>R.U.T: ${EMPRESA.rut || ''}</div><div>${EMPRESA.direccion || ''}</div><div>${EMPRESA.email || ''}</div></div><div class="doc"><div class="t">Solicitud de compra</div><div class="f">Pintura · Cot. N° ${cot.folio || ''}</div></div></div>`
++ `<div class="sub">Fecha: ${new Date().toISOString().slice(0, 10)} · Obra/Cliente: ${cot.cliente || ''} · Área: ${cot.area || ''}</div>`
++ `<div style="font-size:12px;margin:6px 0 10px">Estimado proveedor, solicitamos cotizar y despachar los siguientes productos (envases completos):</div>`
++ `<table class="items"><thead><tr><th>#</th><th>Producto</th><th class="r">Envases</th><th class="r">Contenido/env</th><th class="r">Total litros</th></tr></thead><tbody>${filasHtml}</tbody></table>`
++ `<table class="tot"><tr><td class="lbl big">Total envases</td><td class="r big">${totEnv}</td></tr></table>`
++ `<div class="sub" style="margin-top:14px">Favor confirmar disponibilidad, precio y plazo de entrega. Despachar a: ${EMPRESA.direccion || ''}.</div>`
++ `<div class="datos" style="margin-top:10px;border:1px solid #D8DCE5;padding:10px;font-size:11px">Contacto: ${EMPRESA.nombre || ''} · ${EMPRESA.email || ''} · Tel: ${EMPRESA.telefono || ''}</div>`
++ `</body></html>`
+imprimir(html)
+}
+
 // OT en PDF a partir de la OT real (refleja esquema, servicios y partidas editados)
 function htmlOTDoc(ot) {
   const items = ot.itemsCot || []
@@ -476,6 +498,7 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
                       <button onClick={() => descargarCotizacionPDF(c)} title="Descargar cotización PDF" style={{ background: C.carbon, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 4 }}><Download size={12} /> Cotización</button>
                       {c.estado === 'Aprobada' && <button onClick={() => descargarOTPDF(c)} title="Descargar OT sin valores" style={{ background: C.azul, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 4 }}><Download size={12} /> OT (sin valores)</button>}
                         {c.estado === 'Aprobada' && (c.items || []).some(it => (it.comprasPintura || []).length) && <button onClick={() => descargarInformePintura(c)} title="Descargar informe de compra de pintura" style={{ background: C.ambar || '#FF6B00', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, borderRadius: 4 }}>Pintura</button>}
+                        {c.estado === 'Aprobada' && (c.items || []).some(it => (it.comprasPintura || []).length) && <button onClick={() => descargarSolicitudPintura(c)} title="Descargar solicitud de compra al proveedor (PDF)" style={{ background: '#0B7285', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, borderRadius: 4 }}>Solicitud proveedor</button>}
                       <button onClick={() => setEditId(c.id)} title="Editar" style={{ background: 'none', border: '1px solid #CBD2D6', padding: '5px 8px', cursor: 'pointer', fontSize: 11.5 }}><FileText size={12} /></button>
                       <button onClick={() => eliminar(c.id)} title="Eliminar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
                     </div>
