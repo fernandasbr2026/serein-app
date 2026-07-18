@@ -810,12 +810,15 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   const eliminar = id => setOts(xs => xs.filter(o => o.id !== id))
 
   const visibles = ots.filter(o => o.area === areaSel && (!fCliente || _norm(o.cliente) === _norm(fCliente)))
-  const ventaTot = visibles.reduce((a, o) => a + o.ventas.reduce((x, v) => x + v.neta, 0), 0)
-  const costoTot = visibles.reduce((a, o) => a + o.costos.reduce((x, c) => x + c.monto, 0) + costoOCdeOT(ordenesCompra, o.numero) + costoMOdeOT(mo, o.numero), 0)
+  const ventaTot = visibles.reduce((a, o) => a + (o.ventas || []).reduce((x, v) => x + (v.neta || 0), 0), 0)
+  const costoTot = visibles.reduce((a, o) => a + (o.costos || []).reduce((x, c) => x + (c.monto || 0), 0) + costoOCdeOT(ordenesCompra, o.numero) + costoMOdeOT(mo, o.numero), 0)
   const utilTot = ventaTot - costoTot
 
-  const nums = ots.map(o => parseInt((o.numero.match(/(\d+)$/) || [0, 0])[1], 10))
-  const siguiente = `OT-2026-${String(Math.max(100, ...nums) + 1).padStart(3, '0')}`
+  // Solo se considera el correlativo de OTs con el formato propio de este módulo (OT-AAAA-NNN).
+  // Las OT creadas al aprobar una cotización usan 'OT-<folio>' (sin año) y no deben mezclarse con esta secuencia.
+  const anioActual = new Date().getFullYear()
+  const nums = ots.filter(o => /^OT-\d{4}-\d+$/.test(o.numero || '')).map(o => parseInt((o.numero.match(/(\d+)$/) || [0, 0])[1], 10))
+  const siguiente = `OT-${anioActual}-${String(Math.max(100, ...nums) + 1).padStart(3, '0')}`
 
   const kpis = verValores
     ? [['OTs', visibles.length], ['Venta neta', clp(ventaTot)], ['Costos', clp(costoTot)], ['Utilidad real', clp(utilTot)]]

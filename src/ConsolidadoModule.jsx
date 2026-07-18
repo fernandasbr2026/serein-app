@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from 'react'
 import { calcularResumenFin } from './FinanzasModule.jsx'
+import { totales as totalesCot } from './CotizacionesModule.jsx'
 import { supabase } from './supabase.js'
 import { AlertTriangle, TrendingUp, TrendingDown, Wallet, Landmark, Receipt, Sparkles, CheckCircle2, ShieldAlert, Info } from 'lucide-react'
 import * as XLSX from 'xlsx'
@@ -78,11 +79,15 @@ function useDatos({ cc, facturas, ots, proyectos, cotizaciones, clientes, params
     const saldo30 = caja + num(cc.saldoProy)
 
     // Embudo comercial
+    // El monto de una cotización solo queda guardado en el objeto (total/montoCotizado) cuando
+    // se creó desde el Cotizador por cálculo; las cotizaciones "rápidas" no lo persisten, así que
+    // hay que recurrir a totales(c) (mismo cálculo que usa CotizacionesModule) como último recurso.
+    const montoCot = c => num(c.total) || num(c.montoCotizado) || totalesCot(c).total
     const cots = cotizaciones || []
     const cotAprob = cots.filter(c => /aprob/i.test(c.estado || ''))
     const funnel = [
-      { et: 'Cotizaciones', n: cots.length, monto: cots.reduce((a, c) => a + (num(c.total) || num(c.montoCotizado)), 0) },
-      { et: 'Aprobadas', n: cotAprob.length, monto: cotAprob.reduce((a, c) => a + (num(c.total) || num(c.montoCotizado)), 0) },
+      { et: 'Cotizaciones', n: cots.length, monto: cots.reduce((a, c) => a + montoCot(c), 0) },
+      { et: 'Aprobadas', n: cotAprob.length, monto: cotAprob.reduce((a, c) => a + montoCot(c), 0) },
       { et: 'OT', n: L.length, monto: L.reduce((a, o) => a + meOT(o), 0) },
       { et: 'Facturas', n: facs.length, monto: facs.reduce((a, f) => a + num(f.neto), 0) },
       { et: 'Cobros', n: facs.filter(f => f.estado === 'Pagado').length, monto: facs.filter(f => f.estado === 'Pagado').reduce((a, f) => a + num(f.neto), 0) }

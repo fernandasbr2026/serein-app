@@ -2,7 +2,7 @@ import React from 'react'
 import { Hourglass, CheckCircle2, ArrowRight } from 'lucide-react'
 
 const C = { azul: '#061A40', teal: '#0B7285', ambar: '#FF6B00', rojo: '#D64545', verde: '#12805C', carbon: '#0F1A2E' }
-const clp = n => '$' + Math.round(n).toLocaleString('es-CL')
+const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const AREA_COLOR = { 'Santa Rosa': '#A8501F', 'Istria': '#1D1D1B', 'Proyectos': '#D2642F' }
 
 const EN_CURSO = ['Cotizada', 'En ejecución', 'Terminada']
@@ -11,15 +11,15 @@ const FACTURADAS = ['Facturada', 'Cerrada']
 // Monto esperado: lo cotizado; si no hay cotización cargada, lo ya facturado
 const montoEsperado = ot => (ot.montoCotizado && ot.montoCotizado > 0)
   ? ot.montoCotizado
-  : ot.ventas.reduce((a, v) => a + v.neta, 0)
+  : (ot.ventas || []).reduce((a, v) => a + (v.neta || 0), 0)
 
 export default function PipelineOT({ ots }) {
   const enCurso = ots.filter(o => EN_CURSO.includes(o.estado))
   const facturadas = ots.filter(o => FACTURADAS.includes(o.estado))
 
   const totPorFacturar = enCurso.reduce((a, o) => a + montoEsperado(o), 0)
-  const totFacturado = facturadas.reduce((a, o) => a + o.ventas.reduce((x, v) => x + v.neta, 0), 0)
-  const porCobrar = facturadas.reduce((a, o) => a + o.ventas.filter(v => v.estadoPago === 'Pendiente').reduce((x, v) => x + v.neta, 0), 0)
+  const totFacturado = facturadas.reduce((a, o) => a + (o.ventas || []).reduce((x, v) => x + (v.neta || 0), 0), 0)
+  const porCobrar = facturadas.reduce((a, o) => a + (o.ventas || []).filter(v => v.estadoPago === 'Pendiente').reduce((x, v) => x + (v.neta || 0), 0), 0)
 
   const fila = (o, monto, esPipeline) => (
     <tr key={o.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
@@ -88,7 +88,7 @@ export default function PipelineOT({ ots }) {
             <div style={{ fontSize: 13, color: '#9AA0A6', padding: '8px 0' }}>Aún no hay OTs facturadas.</div>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <tbody>{facturadas.map(o => fila(o, o.ventas.reduce((a, v) => a + v.neta, 0), false))}</tbody>
+              <tbody>{facturadas.map(o => fila(o, (o.ventas || []).reduce((a, v) => a + (v.neta || 0), 0), false))}</tbody>
             </table>
           )}
         </div>
