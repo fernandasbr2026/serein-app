@@ -118,7 +118,7 @@ function Nodo({ persona, personas, costos, mostrarCostos, esGerencia, onEditar, 
 function PanelAsesores({ asesores }) {
   if (!asesores.length) return null
   return (
-    <div style={{ position: 'absolute', left: 0, top: 0, width: 170, border: '1.5px dashed #B9B4AE', borderRadius: 4, background: '#FAF7F4', padding: 10 }}>
+    <div style={{ position: 'absolute', right: 0, top: 0, width: 170, border: '1.5px dashed #B9B4AE', borderRadius: 4, background: '#FAF7F4', padding: 10 }}>
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: C.gris, marginBottom: 6, letterSpacing: '.04em' }}>Asesores externos</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {asesores.map(a => (
