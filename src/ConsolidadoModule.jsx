@@ -53,7 +53,7 @@ function useDatos({ cc, facturas, ots, proyectos, cotizaciones, clientes, params
     const facs = areasFact.flatMap(a => ((facturas || {})[a] || []).map(f => ({ ...f, area: a })))
     const vencDe = f => f.vencimiento || f.fechaVencimiento || f.fecha_venc || (f.fecha ? addDias(f.fecha, num(f.plazo) || 30) : null)
     const brutoF = f => num(f.monto) || (num(f.neto) + Math.round(num(f.neto) * 0.19))
-    const facPend = facs.filter(f => f.estado !== 'Pagado' && f.estado !== 'Anulada')
+    const facPend = facs.filter(f => f.estado !== 'Pagado' && f.estado !== 'Anulada' && f.estado !== 'Factoring' && !/factor/i.test(f.medio || ''))
     const facVencidas = facPend.filter(f => { const v = vencDe(f); return v && v < hoy })
     const montoVencidas = facVencidas.reduce((a, f) => a + brutoF(f), 0)
 

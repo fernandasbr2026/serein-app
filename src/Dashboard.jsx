@@ -361,7 +361,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const saldoProy = totalEntrar - totalPagar
 
   // ===== RESUMEN FINANCIERO TOTAL (montos con IVA / bruto) =====
-  const brutoF = f => { const n = f.neto || 0; return n + Math.round(n * 0.19) }
+  const brutoF = f => f.monto || (f.iva === 'exenta' ? (f.neto || 0) : (f.neto || 0) + Math.round((f.neto || 0) * 0.19))
   const noPagada = f => f.estado !== 'Pagado' && f.estado !== 'Anulada' && f.estado !== 'Factoring' && !/factor/i.test(f.medio || '')
   const esPagada = f => f.estado === 'Pagado' || f.estado === 'Factoring' || /factor/i.test(f.medio || '')
   const facBrutoArea = (a, filtro) => (facturas[a] || []).filter(filtro).reduce((s, f) => s + brutoF(f), 0)

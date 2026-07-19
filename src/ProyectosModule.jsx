@@ -28,7 +28,7 @@ const facEdpDe = (p, numero) => (p.facEdp && p.facEdp[numero]) || {}
 const facEstado = (p, f) => (facEdpDe(p, f.numero).estado) || f.estado || ''
 const facturadoDe = (p, fp) => { const fs = facturasDeOT(fp, p); return fs.length ? fs.reduce((a, f) => a + (f.neto || 0), 0) : (p.edps || []).reduce((a, e) => a + (e.venta || 0), 0) }
 const cobradoDe = (p, fp) => { const fs = facturasDeOT(fp, p); return fs.length ? fs.filter(f => { const e = String(facEstado(p, f)).toLowerCase(); return e.startsWith('pag') || e.includes('factor') }).reduce((a, f) => a + (f.neto || 0), 0) : (p.edps || []).filter(e => e.estado === 'Pagado' || e.estado === 'Factoring').reduce((a, e) => a + (e.venta || 0), 0) }
-const comprasDe = p => (p.compras || []).reduce((a, c) => a + c.monto, 0)
+const comprasDe = p => (p.compras || []).reduce((a, c) => a + (c.monto || 0), 0)
 const ventaDe = (p, fp) => (p.venta_cotizada != null && p.venta_cotizada > 0) ? p.venta_cotizada : facturadoDe(p, fp)
 const porFacturarDe = (p, fp) => Math.max(0, ventaDe(p, fp) - facturadoDe(p, fp))
 const perdidaFacturaOT = (p, f, params) => {
@@ -43,7 +43,7 @@ const perdidaFacturaOT = (p, f, params) => {
 }
 const perdidaFactDe = (p, fp, params) => facturasDeOT(fp, p).reduce((a, f) => a + perdidaFacturaOT(p, f, params), 0)
 const CONDICIONES = [{ label: 'Contado', dias: 0 }, { label: '30 días', dias: 30 }, { label: '45 días', dias: 45 }, { label: '60 días', dias: 60 }, { label: '90 días', dias: 90 }]
-const consumoCC = (p, ccId) => (p.compras || []).filter(c => c.cc === ccId).reduce((a, c) => a + c.monto, 0)
+const consumoCC = (p, ccId) => (p.compras || []).filter(c => c.cc === ccId).reduce((a, c) => a + (c.monto || 0), 0)
 const topeCC = (p, ccId) => (p.cc && p.cc[ccId]) || 0
 const costoEstDe = p => Object.values(p.cc || {}).reduce((a, v) => a + (+v || 0), 0)   // costo estimado = suma de topes (todos los CC)
 const ccCodigos = p => [...new Set([...CC_DEFS.map(c => c.id), ...Object.keys(p.cc || {}), ...(p.compras || []).map(c => c.cc)])].filter(Boolean)
@@ -374,7 +374,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
   const facturasOT = facturasDeOT(facturasProy, p)
   const factNetoOT = facturasOT.reduce((a, f) => a + (f.neto || 0), 0)
   const remIvaVenta = Math.round(facturasOT.reduce((a, f) => a + ((f.monto || Math.round((f.neto || 0) * 1.19)) - (f.neto || 0)), 0))
-  const remIvaCompra = Math.round((p.compras || []).reduce((a, c) => a + (+c.monto || 0), 0) * 0.19)
+  const remIvaCompra = Math.round((p.compras || []).reduce((a, c) => a + (c.exento ? 0 : (+c.monto || 0)), 0) * 0.19)
   const remIva = remIvaVenta - remIvaCompra
   const [abierto, setAbierto] = useState(false)
   const [addEdp, setAddEdp] = useState(false)
