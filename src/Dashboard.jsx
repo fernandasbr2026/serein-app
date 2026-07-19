@@ -143,7 +143,7 @@ function ResumenModulos({ ots, proyectos }) {
   }
   const facturadoDe = p => (p.edps || []).reduce((a, e) => a + (e.venta || 0), 0)
   const proyList = proyectos || []
-  const saldoP = p => (p.presupuesto > 0) ? Math.max(0, p.presupuesto - facturadoDe(p)) : null
+  const saldoP = p => (p.venta_cotizada > 0) ? Math.max(0, p.venta_cotizada - facturadoDe(p)) : null
   const proyAbiertas = proyList.filter(p => { const s = saldoP(p); return (s !== null && s > 0) || (s === null && p.avance < 100) })
   const proyData = {
     abiertasN: proyAbiertas.length,
@@ -376,10 +376,10 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const meOT = o => (o.montoCotizado > 0 ? o.montoCotizado : (o.ventas || []).reduce((x, v) => x + (v.neta || 0), 0))
   const otEnCurso = (ots || []).filter(o => ['Cotizada', 'En ejecución', 'Terminada'].includes(o.estado)).reduce((a, o) => a + meOT(o), 0)
   const facturadoDeP = p => (p.edps || []).reduce((a, e) => a + (e.venta || 0), 0)
-  const proyPorFacturar = (proyectos || []).reduce((a, p) => a + ((p.presupuesto > 0) ? Math.max(0, p.presupuesto - facturadoDeP(p)) : 0), 0)
+  const proyPorFacturar = (proyectos || []).reduce((a, p) => a + ((p.venta_cotizada > 0) ? Math.max(0, p.venta_cotizada - facturadoDeP(p)) : 0), 0)
   const otEnCursoTotal = otEnCurso + proyPorFacturar
   // Caja = saldo inicial + cobros registrados − pagos registrados (desde Finanzas/Pagos)
-  const cobrosReg = (pp.cobros || []).filter(c => c.estado === 'Cobrado' || c.estado === 'Pagado').reduce((a, c) => a + (c.total || 0), 0)
+  const cobrosReg = (pp.cobros || []).filter(c => c.estado === 'Pagada').reduce((a, c) => a + (c.total || 0), 0)
   const pagosReg = (fin.gastos || []).filter(g => g.estado === 'Pagado').reduce((a, g) => a + ((g.neto || 0) + (g.iva || 0)), 0)
     + (fin.obligaciones || []).flatMap(o => o.cuotas || []).filter(c => c.estado === 'Pagada').reduce((a, c) => a + (c.total || 0), 0)
     + (pp.docs || []).flatMap(d => d.pagos || []).reduce((a, p) => a + (p.monto || 0), 0)

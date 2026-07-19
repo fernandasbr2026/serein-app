@@ -143,7 +143,15 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
   function duplicarMesSiguiente(g) {
     const d = new Date(g.vencimiento + 'T12:00:00')
     d.setMonth(d.getMonth() + 1)
-    setFin({ ...fin, gastos: [{ ...g, id: 'g' + Date.now(), vencimiento: d.toISOString().slice(0, 10), estado: 'Pendiente' }, ...fin.gastos] })
+    const nuevo = { ...g, id: 'g' + Date.now(), vencimiento: d.toISOString().slice(0, 10), estado: 'Pendiente' }
+    // Un gasto "Mensual" cuenta desde su vencimiento en adelante en todos los meses futuros (ver gastosMes).
+    // Si al duplicar se dejara la fila original también como "Mensual", ambas seguirían sumando el mismo
+    // gasto para siempre. Por eso la fila original se cierra a "Única" (solo cuenta su propio mes) y la
+    // nueva fila queda como la "Mensual" vigente hacia adelante.
+    setFin({
+      ...fin,
+      gastos: [nuevo, ...fin.gastos.map(x => x.id === g.id && x.frecuencia === 'Mensual' ? { ...x, frecuencia: 'Única' } : x)],
+    })
   }
 
   return (

@@ -185,7 +185,7 @@ function ListaAvances({ avances, setAvances, ots, esGerencia, usuario, mo }) {
 
   // Cruce con asistencia: trabajadores presentes por fecha+planta
   const presentes = (fecha, planta) => {
-    if (!mo) return null
+    if (!mo || !mo.asistencias) return null
     const del = mo.asistencias.filter(x => x.fecha === fecha && x.area === planta)
     if (del.length === 0) return null
     const ids = new Set(del.flatMap(x => x.trabajadorIds))
@@ -326,7 +326,7 @@ function Reportes({ avances, ots, mo }) {
   const otsSinMov = ots.filter(o => (planta === 'Ambas' || o.area === planta) && ['En ejecución'].includes(o.estado) && !otsTrabajadas.has(o.numero))
 
   const presentesPlanta = pl => {
-    if (!mo) return '—'
+    if (!mo || !mo.asistencias) return '—'
     const ids = new Set(mo.asistencias.filter(x => x.area === pl && x.fecha >= desde && x.fecha <= hasta).flatMap(x => x.trabajadorIds))
     return ids.size
   }

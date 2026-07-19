@@ -29,6 +29,9 @@ const VENDEDORES = ['General', 'Mario']
 const IVA = 0.19
 const ivaDe = n => Math.round((parseInt(String(n).replace(/\D/g, ''), 10) || 0) * IVA)
 const brutoDe = n => { const v = parseInt(String(n).replace(/\D/g, ''), 10) || 0; return v + Math.round(v * IVA) }
+// Versiones que respetan si la factura está marcada como exenta (sin IVA)
+const ivaFacturaDe = x => x.iva === 'exenta' ? 0 : ivaDe(x.neto)
+const montoFacturaDe = x => x.iva === 'exenta' ? (parseInt(String(x.neto).replace(/\D/g, ''), 10) || 0) : brutoDe(x.neto)
 
 export default function FacturasModule({ area, facturas, setFacturas, params = { factoring: [] }, comisionPct = 0, setComisionPct = () => {}, ppmPct = 2, setPpmPct = () => {}, clientesSugeridos = [], proyectos = [], ots = [] }) {
   const lista = (facturas && facturas[area]) || []
@@ -64,7 +67,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
     setF(nueva()); setCreando(false)
   }
   // Al cambiar el neto, recalcula el bruto automáticamente (IVA 19%)
-  const setNeto = (id, valor) => { const nt = num(valor); setLista(lista.map(x => x.id === id ? { ...x, neto: nt, monto: brutoDe(nt) } : x)) }
+  const setNeto = (id, valor) => { const nt = num(valor); setLista(lista.map(x => x.id === id ? { ...x, neto: nt, monto: montoFacturaDe({ ...x, neto: nt }) } : x)) }
   // Nombres para autocompletar el cliente: contactos + los ya usados en el área
   const sugerencias = [...new Set([...(clientesSugeridos || []), ...lista.map(x => x.cliente).filter(Boolean)])].sort((a, b) => a.localeCompare(b))
 
@@ -129,8 +132,8 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
     setLista([])
     setSel(new Set())
   }
-  const totalMonto = mostradas.reduce((a, x) => a + brutoDe(x.neto), 0)
-  const cobrado = mostradas.filter(x => x.estado === 'Pagado').reduce((a, x) => a + brutoDe(x.neto), 0)
+  const totalMonto = mostradas.reduce((a, x) => a + montoFacturaDe(x), 0)
+  const cobrado = mostradas.filter(x => x.estado === 'Pagado').reduce((a, x) => a + montoFacturaDe(x), 0)
   const totalComision = mostradas.reduce((a, x) => a + comisionDe(x), 0)
   const totalNeto = mostradas.reduce((a, x) => a + (x.neto || 0), 0)
   const totalPPM = Math.round(totalNeto * (ppmPct / 100))
@@ -243,7 +246,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
               {pg.items.map(x => {
                 const facs = params.factoring || []
                 const fSel = facs.find(ff => ff.id === x.factoringId) || facs[0]
-                const perd = x.estado === 'Factoring' ? calcularPerdidaFactoring(brutoDe(x.neto), x.dias || 30, x.diasMora || 0, fSel) : null
+                const perd = x.estado === 'Factoring' ? calcularPerdidaFactoring(montoFacturaDe(x), x.dias || 30, x.diasMora || 0, fSel) : null
                 return (
                 <React.Fragment key={x.id}>
                 <tr style={{ borderBottom: '1px solid #EEE9DF', opacity: x.estado === 'Anulada' ? 0.5 : 1 }}>
@@ -256,8 +259,8 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                   {esIstria && <td style={{ padding: '4px 6px' }}><input value={x.nv || ''} onChange={e => actualizar(x.id, 'nv', e.target.value)} placeholder="NV" style={{ ...inp, width: 90 }} /></td>}
                   <td style={{ padding: '4px 6px' }}><input type="date" value={x.fecha_emision} onChange={e => actualizar(x.id, 'fecha_emision', e.target.value)} style={{ ...inp, width: 130 }} /></td>
                   <td style={{ padding: '4px 6px', textAlign: 'right' }}><input value={x.neto} onChange={e => setNeto(x.id, e.target.value)} style={{ ...inp, width: 100, textAlign: 'right' }} /></td>
-                  <td style={{ padding: '4px 6px', textAlign: 'right', color: C.gris, whiteSpace: 'nowrap' }}>{clp(ivaDe(x.neto))}</td>
-                  <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }}>{clp(brutoDe(x.neto))}</td>
+                  <td style={{ padding: '4px 6px', textAlign: 'right', color: C.gris, whiteSpace: 'nowrap' }}>{clp(ivaFacturaDe(x))}</td>
+                  <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }}>{clp(montoFacturaDe(x))}</td>
                   <td style={{ padding: '4px 6px', textAlign: 'right', color: C.teal, whiteSpace: 'nowrap' }}>{clp(Math.round((x.neto || 0) * (ppmPct / 100)))}</td>
                   <td style={{ padding: '5px 6px' }}>
                     <select value={x.estado} onChange={e => actualizar(x.id, 'estado', e.target.value)} style={{ border: 'none', background: fondoEstado(x.estado), color: colorEstado(x.estado), padding: '3px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
@@ -291,7 +294,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                         </select>
                         <input placeholder="Días mora" value={x.diasMora || ''} onChange={e => actualizar(x.id, 'diasMora', num(e.target.value))} style={{ ...inp, width: 90 }} />
                         <span style={{ color: C.rojo, fontWeight: 600 }}>Descuento factoring: {clp(perd ? perd.total : 0)}</span>
-                        <span style={{ color: C.gris }}>(interés {clp(perd ? perd.interes : 0)} + costo op {clp(perd ? perd.costoOp : 0)}{perd && perd.mora ? ` + mora ${clp(perd.mora)}` : ''}) → Neto a recibir: <b style={{ color: C.carbon }}>{clp(brutoDe(x.neto) - (perd ? perd.total : 0))}</b></span>
+                        <span style={{ color: C.gris }}>(interés {clp(perd ? perd.interes : 0)} + costo op {clp(perd ? perd.costoOp : 0)}{perd && perd.mora ? ` + mora ${clp(perd.mora)}` : ''}) → Neto a recibir: <b style={{ color: C.carbon }}>{clp(montoFacturaDe(x) - (perd ? perd.total : 0))}</b></span>
                       </div>
                     </td>
                   </tr>

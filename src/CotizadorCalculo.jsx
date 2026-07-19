@@ -14,7 +14,9 @@ const precioMargen = (costoM2, pctMargen) => { const m = Math.min(Math.max(+pctM
 const milsProm = c => { const a = +c.mMin || 0; const b = (c.mMax === '' || c.mMax == null) ? a : (+c.mMax || 0); return b > 0 ? (a + b) / 2 : a }
 function nuevaCapa() { return { p: '', mMin: 2, mMax: 4, perdida: 2 } }
 function nuevoItem() { return { desc: '', ral: '', m2: 0, grado: 'SP-10 (near-white)', dif: 'A - Estandar', limpieza: 0, capas: [nuevaCapa()] } }
-function proximoNumero(cots) { let mx = 792; (cots || []).forEach(c => { const s = (c.numero || c.folio || '') + ''; const m = s.match(/(\d+)/); if (m) mx = Math.max(mx, +m[1]) }); return 'Cot-' + (mx + 1) }
+// Folio numérico plano, en la misma secuencia que usa CotizacionesModule (nuevaCot/maxFolio) — sin prefijo,
+// para que al aprobar una cotización 'OT-' + folio no quede 'OT-Cot-793'.
+function proximoNumero(cots) { let mx = 792; (cots || []).forEach(c => { const s = (c.numero || c.folio || '') + ''; const m = s.match(/(\d+)/); if (m) mx = Math.max(mx, +m[1]) }); return String(mx + 1) }
 
 function BuscadorProducto({ value, productos, onSelect, style }) {
   const [q, setQ] = useState(value || '')
