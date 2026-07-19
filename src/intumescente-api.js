@@ -40,6 +40,27 @@ export async function cargarParametros(overrides) {
   return globalsDesdeParametros(data || [], overrides)
 }
 
+// Trae globals + los valores por defecto de aplicador/otros costos (para
+// sembrar el estado inicial de una cotización nueva) en una sola consulta.
+export async function cargarParametrosCompletos() {
+  const { data, error } = await supabase.from('int_parametros').select('*')
+  if (error) throw error
+  const v = Object.fromEntries((data || []).map(p => [p.clave, Number(p.valor)]))
+  return {
+    globals: globalsDesdeParametros(data || []),
+    aplicador: {
+      modo: 'obra', montoObra: v.aplicador_monto_obra ?? 1800000,
+      valorM2: v.aplicador_valor_m2 ?? 3200, porCapas: true, valorKg: v.aplicador_valor_kg ?? 1500,
+      valorDia: v.aplicador_valor_dia ?? 140000, dias: 8, recargoPct: 0, nombre: '',
+    },
+    otros: {
+      certificacion: v.otros_certificacion ?? 450000, incCertificacion: true,
+      retoquesPct: v.otros_retoques_pct ?? 3,
+      equipos: v.otros_equipos ?? 300000, movilizacion: v.otros_movilizacion ?? 150000,
+    },
+  }
+}
+
 // Solo gerencia puede escribir catálogo/parámetros (RLS lo exige;
 // estas funciones simplemente devuelven el error de Postgres si el
 // usuario no tiene permiso).

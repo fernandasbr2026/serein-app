@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react'
-import { ChevronDown, ChevronUp, Target, Receipt, Hammer, ShoppingCart, Pencil, Plus, Trash2, X, AlertTriangle, LayoutGrid, Table2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Target, Receipt, Hammer, ShoppingCart, Pencil, Plus, Trash2, X, AlertTriangle, LayoutGrid, Table2, Flame } from 'lucide-react'
 import { PROYECTOS, CC_DEFS } from './proyectos-data.js'
 import { calcularPerdidaFactoring, perdidaFactoringFactura } from './ParametrosModule.jsx'
 import FacturasModule from './FacturasModule.jsx'
 import ProyParametros from './ProyParametros.jsx'
 import ProyCotizador from './ProyCotizador.jsx'
 import ProyComprasLibro from './ProyComprasLibro.jsx'
+import CotizadorIntumescenteModule from './CotizadorIntumescenteModule.jsx'
 import { supabase } from './supabase.js'
 import * as XLSX from 'xlsx'
 // Cotizador de Proyectos visible solo para estos correos (el resto ve la gestion normal de OT)
@@ -861,7 +862,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-        {[['tarjetas', 'Tarjetas', LayoutGrid], ...(verCotizadorProy ? [['cotizarProy', 'Cotización Proyecto', Receipt], ['cotizacionesProy', 'Cotizaciones', Receipt], ['comprasSII', 'Compras SII', ShoppingCart]] : []), ['consolidado', 'Consolidado', Table2], ['cerrados', 'Proyectos cerrados', LayoutGrid], ['facturas', 'Facturas', Receipt], ...(verCotizadorProy ? [['parametros', 'Parámetros Proyectos', Target]] : [])].map(([id, lbl, Icon]) => (
+        {[['tarjetas', 'Tarjetas', LayoutGrid], ...(verCotizadorProy ? [['cotizarProy', 'Cotización Proyecto', Receipt], ['cotizacionesProy', 'Cotizaciones', Receipt], ['cotizarIntumescente', 'Cotización Intumescente', Flame], ['comprasSII', 'Compras SII', ShoppingCart]] : []), ['consolidado', 'Consolidado', Table2], ['cerrados', 'Proyectos cerrados', LayoutGrid], ['facturas', 'Facturas', Receipt], ...(verCotizadorProy ? [['parametros', 'Parámetros Proyectos', Target]] : [])].map(([id, lbl, Icon]) => (
           <button key={id} onClick={() => setVista(id)} style={{ background: vista === id ? C.carbon : '#fff', color: vista === id ? '#fff' : C.carbon, border: '1px solid #CBD2D6', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Icon size={14} />{lbl}</button>
         ))}
         {!creando && vista === 'tarjetas' && (
@@ -875,6 +876,8 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
         <ProyCotizador clientes={clientesSugeridos} proyectos={proyectos} setProyectos={setProyectos} />
       ) : (vista === 'cotizacionesProy' && verCotizadorProy) ? (
         <ProyCotizacionesList setProyectos={setProyectos} />
+      ) : (vista === 'cotizarIntumescente' && verCotizadorProy) ? (
+        <CotizadorIntumescenteModule clientesSugeridos={clientesSugeridos} />
       ) : (vista === 'comprasSII' && verCotizadorProy) ? (
         <ProyComprasLibro proyectos={proyectos} setProyectos={setProyectos} />
       ) : vista === 'consolidado' ? (
