@@ -284,7 +284,8 @@ export default function OrganigramaModule({ esGerencia = false }) {
     if (!contenedorRef.current) return
     setExportando(true)
     try {
-      const dataUrl = await toPng(contenedorRef.current, { backgroundColor: '#ffffff', pixelRatio: 2 })
+      const el = contenedorRef.current
+      const dataUrl = await toPng(el, { backgroundColor: '#ffffff', pixelRatio: 2, width: el.scrollWidth, height: el.scrollHeight })
       if (tipo === 'png') {
         const a = document.createElement('a'); a.href = dataUrl; a.download = 'organigrama-serein.png'; a.click()
       } else {
@@ -323,7 +324,11 @@ export default function OrganigramaModule({ esGerencia = false }) {
 
       {msg && <div style={{ background: msg.startsWith('Error') ? '#F6E0DA' : '#E7F2EA', color: msg.startsWith('Error') ? C.rojo : C.verde, padding: '8px 12px', marginBottom: 14, fontSize: 12.5 }}>{msg}</div>}
 
-      <div ref={contenedorRef} style={{ background: '#fff', padding: 24, overflowX: 'auto' }}>
+      {/* El div exterior hace scroll horizontal en pantalla; el interior (sin overflow propio,
+          ancho natural = contenido completo) es el que se captura para exportar, para que
+          la descarga incluya el árbol completo y no solo la parte visible sin hacer scroll. */}
+      <div style={{ overflowX: 'auto' }}>
+      <div ref={contenedorRef} style={{ background: '#fff', padding: 24, display: 'inline-block', minWidth: '100%' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18, paddingBottom: 14, borderBottom: '3px solid ' + C.ambar }}>
           <img src="/logo-serein.jpg" alt="Serein" style={{ height: 40 }} />
           <div>
@@ -341,6 +346,7 @@ export default function OrganigramaModule({ esGerencia = false }) {
 
         {flujo.length > 0 && <BandaFlujo flujo={flujo} personas={personas} />}
         <Leyenda />
+      </div>
       </div>
 
       {editando && (
