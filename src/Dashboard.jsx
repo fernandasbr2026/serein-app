@@ -25,6 +25,7 @@ import LibroComprasModule from './LibroComprasModule.jsx'
 import LibroVentasModule from './LibroVentasModule.jsx'
 import AsesorModule from './AsesorModule.jsx'
 import ConsolidadoModule from './ConsolidadoModule.jsx'
+import OrganigramaModule from './OrganigramaModule.jsx'
 import ContactosModule, { CONTACTOS_SEED, nombresClientes } from './ContactosModule.jsx'
 import FacturasModule, { FACTURAS_SEED } from './FacturasModule.jsx'
 import { MO_SEED } from './ManoObraModule.jsx'
@@ -182,6 +183,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     : [...new Set([...areasUsuario.filter(a => ['Santa Rosa', 'Istria', 'Proyectos'].includes(a)), ...(areaPorEmail ? [areaPorEmail] : [])])]
   let tabs = esSupervisor ? [...(areasOTUsuario.length > 0 ? ['GESTION_OT'] : []), 'PRODUCCION', 'COMPRAS_OP', 'LIBRO_COMPRAS', 'ASISTENCIA'] : [
     ...(esGerencia ? ['TODAS'] : []),
+    'ORGANIGRAMA',
     ...(esGerencia ? ['ASESOR'] : []),
     ...areasUsuario.filter(a => a !== 'Proyectos'),
     ...(tieneProyectos ? ['GESTION_PROYECTOS'] : []),
@@ -201,12 +203,13 @@ export default function Dashboard({ perfil, email, onLogout }) {
     'INVENTARIO',
     ...(esGerencia ? ['PARAMETROS'] : []),
   ]
-  const ORDEN_MODULOS = ['TODAS', 'ASESOR', 'Santa Rosa', 'Istria', 'GESTION_PROYECTOS', 'FINANZAS', 'ORDENES_COMPRA', 'PAGOS', 'LIBRO_COMPRAS', 'LIBRO_VENTAS', 'TRAZABILIDAD', 'COTIZADOR', 'CLIENTES', 'CONTACTOS', 'COMPRAS_OP', 'PRODUCCION', 'GESTION_OT', 'ASISTENCIA', 'INVENTARIO', 'PARAMETROS']
+  const ORDEN_MODULOS = ['TODAS', 'ORGANIGRAMA', 'ASESOR', 'Santa Rosa', 'Istria', 'GESTION_PROYECTOS', 'FINANZAS', 'ORDENES_COMPRA', 'PAGOS', 'LIBRO_COMPRAS', 'LIBRO_VENTAS', 'TRAZABILIDAD', 'COTIZADOR', 'CLIENTES', 'CONTACTOS', 'COMPRAS_OP', 'PRODUCCION', 'GESTION_OT', 'ASISTENCIA', 'INVENTARIO', 'PARAMETROS']
   if (modulosPerfil) tabs = ORDEN_MODULOS.filter(c => c === 'INVENTARIO' || modulosPerfil.includes(c))
   const [areaSel, setAreaSel] = useState(tabs[0])
   const [sidebarColapsado, setSidebarColapsado] = useState(false)
 
   const esModuloProyectos = areaSel === 'GESTION_PROYECTOS'
+  const esModuloOrganigrama = areaSel === 'ORGANIGRAMA'
   const esModuloOT = areaSel === 'GESTION_OT'
   const esModuloMO = areaSel === 'ASISTENCIA'
   const esModuloFin = areaSel === 'FINANZAS'
@@ -423,7 +426,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     </div>
   )
 
-  const nombreTab = t => t === 'ASESOR' ? 'Asesor IA' : t === 'TODAS' ? 'Consolidado' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'ORDENES_COMPRA' ? '🧾 Órdenes de Compra' : t === 'TRAZABILIDAD' ? '🔗 Trazabilidad y Alertas' : t === 'INVENTARIO' ? '📦 Inventario' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Resumen ventas por cliente' : t === 'CONTACTOS' ? '📇 Clientes y Proveedores' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t === 'LIBRO_COMPRAS' ? 'Libro de Compras' : t === 'LIBRO_VENTAS' ? 'Libro de Ventas' : t
+  const nombreTab = t => t === 'ASESOR' ? 'Asesor IA' : t === 'TODAS' ? 'Consolidado' : t === 'ORGANIGRAMA' ? '🗂️ Organigrama' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'ORDENES_COMPRA' ? '🧾 Órdenes de Compra' : t === 'TRAZABILIDAD' ? '🔗 Trazabilidad y Alertas' : t === 'INVENTARIO' ? '📦 Inventario' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Resumen ventas por cliente' : t === 'CONTACTOS' ? '📇 Clientes y Proveedores' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t === 'LIBRO_COMPRAS' ? 'Libro de Compras' : t === 'LIBRO_VENTAS' ? 'Libro de Ventas' : t
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: THEME.bg, fontFamily: THEME.font }}>
@@ -433,7 +436,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
       <main style={{ flex: 1, minWidth: 0, height: '100vh', overflowY: 'auto' }}>
       <div style={{ padding: 20, maxWidth: 1200, margin: '0 auto' }}>
               <PageHeader titulo={nombreTab(areaSel)} perfil={perfil} email={email} />
-        {esModuloAsesor && puedeVer('ASESOR') ? (<AsesorModule fin={fin} pp={pp} proyectos={proyectos} ots={ots} params={params} onIr={setAreaSel} />) : esModuloLibroCompras ? (<LibroComprasModule esGerencia={esGerencia} ots={ots} factoringList={params.factoring || []} proyectos={proyectos} setProyectos={setProyectos} />) : esModuloLibroVentas ? (<LibroVentasModule ots={ots} proyectos={proyectos} facturas={facturas} setFacturas={setFacturas} params={params} />) : esModuloProyectos ? (
+        {esModuloOrganigrama ? (<OrganigramaModule esGerencia={esGerencia} />) : esModuloAsesor && puedeVer('ASESOR') ? (<AsesorModule fin={fin} pp={pp} proyectos={proyectos} ots={ots} params={params} onIr={setAreaSel} />) : esModuloLibroCompras ? (<LibroComprasModule esGerencia={esGerencia} ots={ots} factoringList={params.factoring || []} proyectos={proyectos} setProyectos={setProyectos} />) : esModuloLibroVentas ? (<LibroVentasModule ots={ots} proyectos={proyectos} facturas={facturas} setFacturas={setFacturas} params={params} />) : esModuloProyectos ? (
           <>
           {resumenFinancieroArea('Proyectos')}
           <ProyectosModule proyectos={proyectos} setProyectos={setProyectos} params={params} facturas={facturas} setFacturas={setFacturas} comisionPct={comisiones['Proyectos'] ?? 2} setComisionPct={v => setComisiones(c => ({ ...c, Proyectos: v }))} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={nombresClientes(contactos)} />
