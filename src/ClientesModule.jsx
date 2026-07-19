@@ -31,7 +31,7 @@ function otsDeCliente(nombre, proyectos, ots) {
   const desdeProy = (proyectos || []).filter(p => match(p.cliente)).map(p => ({
     origen: 'Proyecto', ot: p.ot || p.oc || '—', cliente: p.cliente,
     detalle: p.nombre, area: p.periodo || 'Proyectos',
-    venta: (p.venta_cotizada != null && p.venta_cotizada > 0) ? p.venta_cotizada : (p.edps || []).reduce((a, e) => a + e.venta, 0),
+    venta: (p.venta_cotizada != null && p.venta_cotizada > 0) ? p.venta_cotizada : (p.edps || []).reduce((a, e) => a + (e.venta || 0), 0),
   }))
   const desdeOT = (ots || []).filter(o => match(o.cliente)).map(o => ({
     origen: 'OT', ot: o.numero || '—', cliente: o.cliente,

@@ -2,12 +2,12 @@ import React from 'react'
 import { Hourglass, AlertCircle } from 'lucide-react'
 
 const C = { azul: '#061A40', teal: '#0B7285', ambar: '#FF6B00', rojo: '#D64545', verde: '#12805C', carbon: '#0F1A2E' }
-const clp = n => '$' + Math.round(n).toLocaleString('es-CL')
+const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 
-// Un proyecto está "en curso" si le falta por facturar contra presupuesto,
+// Un proyecto está "en curso" si le falta por facturar contra la venta cotizada,
 // o si su avance físico no llegó al 100%
-const facturadoDe = p => p.edps.reduce((a, e) => a + e.venta, 0)
-const porFacturarDe = p => (p.presupuesto && p.presupuesto > 0) ? Math.max(0, p.presupuesto - facturadoDe(p)) : null
+const facturadoDe = p => (p.edps || []).reduce((a, e) => a + (e.venta || 0), 0)
+const porFacturarDe = p => (p.venta_cotizada && p.venta_cotizada > 0) ? Math.max(0, p.venta_cotizada - facturadoDe(p)) : null
 
 export default function PipelineProyectos({ proyectos }) {
   const enCurso = proyectos.filter(p => {
@@ -17,7 +17,7 @@ export default function PipelineProyectos({ proyectos }) {
 
   const totPorFacturar = enCurso.reduce((a, p) => a + (porFacturarDe(p) ?? 0), 0)
   const sinPresupuesto = enCurso.filter(p => porFacturarDe(p) === null).length
-  const porCobrar = proyectos.reduce((a, p) => a + p.edps.filter(e => e.estado !== 'Pagado').reduce((x, e) => x + e.venta, 0), 0)
+  const porCobrar = proyectos.reduce((a, p) => a + (p.edps || []).filter(e => e.estado !== 'Pagado').reduce((x, e) => x + (e.venta || 0), 0), 0)
 
   return (
     <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `4px solid ${C.azul}`, marginBottom: 16 }}>
@@ -30,7 +30,7 @@ export default function PipelineProyectos({ proyectos }) {
 
       <div style={{ padding: '0 18px 8px', display: 'flex', gap: 24, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>Por facturar (saldo vs presupuesto)</div>
+          <div style={{ fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>Por facturar (saldo vs venta cotizada)</div>
           <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 26, fontWeight: 600, color: C.azul }}>{clp(totPorFacturar)}</div>
         </div>
         {porCobrar > 0 && (
@@ -72,7 +72,7 @@ export default function PipelineProyectos({ proyectos }) {
                     <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600 }}>
                       {saldo !== null
                         ? <span style={{ color: C.azul }}>{clp(saldo)}</span>
-                        : <span style={{ color: C.ambar, fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}><AlertCircle size={12} /> sin presupuesto</span>}
+                        : <span style={{ color: C.ambar, fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}><AlertCircle size={12} /> sin venta cotizada</span>}
                     </td>
                   </tr>
                 )
@@ -84,7 +84,7 @@ export default function PipelineProyectos({ proyectos }) {
 
       {sinPresupuesto > 0 && (
         <div style={{ background: '#F9E9DE', padding: '8px 18px', fontSize: 12, color: '#8C4519' }}>
-          {sinPresupuesto} proyecto{sinPresupuesto !== 1 ? 's' : ''} sin presupuesto definido — defínelo en Gestión Proyectos para que su saldo por facturar aparezca aquí.
+          {sinPresupuesto} proyecto{sinPresupuesto !== 1 ? 's' : ''} sin venta cotizada definida — defínela en Gestión Proyectos para que su saldo por facturar aparezca aquí.
         </div>
       )}
     </div>
