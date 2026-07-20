@@ -127,6 +127,26 @@ function FormVenta({ onAdd, onCancel }) {
   )
 }
 
+// Abono de cliente: pago anticipado sin factura asociada todavía, por eso
+// NO lleva IVA (a diferencia de una venta facturada).
+function FormAbono({ onAdd, onCancel }) {
+  const [f, setF] = useState({ fecha: '', monto: '', medio: '', obs: '' })
+  return (
+    <div style={{ background: '#F7F4EE', padding: 10, marginTop: 8 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input style={{ ...inp, width: 130 }} type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} />
+        <input style={{ ...inp, width: 140 }} placeholder="Monto abonado CLP" value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} />
+        <input style={{ ...inp, width: 140 }} placeholder="Medio de pago (opcional)" value={f.medio} onChange={e => setF({ ...f, medio: e.target.value })} />
+        <input style={{ ...inp, width: 180 }} placeholder="Observación (opcional)" value={f.obs} onChange={e => setF({ ...f, obs: e.target.value })} />
+        <button onClick={() => num(f.monto) > 0 && onAdd({ fecha: f.fecha || '—', monto: num(f.monto), medio: f.medio || '', obs: f.obs || '' })}
+          style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Agregar</button>
+        <button onClick={onCancel} style={{ ...btnMini, color: '#7A8288' }}><X size={16} /></button>
+      </div>
+      <div style={{ fontSize: 11.5, color: '#7A8288', marginTop: 6 }}>Los abonos son pagos anticipados del cliente, sin IVA — se descuentan del saldo cuando se emite la factura correspondiente.</div>
+    </div>
+  )
+}
+
 function FormCosto({ onAdd, onCancel }) {
   const [f, setF] = useState({ categoria: 'Materiales', detalle: '', monto: '' })
   return (
@@ -294,11 +314,13 @@ function TileOT({ ot, onOpen, onDragStart, onDropOn, verValores }) {
 function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = [], mo = null, otsAll = [], instrumentos = null, libroCompras = [], enModal = false }) {
   const [abierta, setAbierta] = useState(false)
   const [addVenta, setAddVenta] = useState(false)
+  const [addAbono, setAddAbono] = useState(false)
   const [addCosto, setAddCosto] = useState(false)
 
   const ventaTotal = ot.ventas.reduce((a, v) => a + v.neta, 0)
   const costoOC = costoOCdeOT(ordenesCompra, ot.numero)
   const costoMO = costoMOdeOT(mo, ot.numero)
+  const abonoTotal = (ot.abonos || []).reduce((a, x) => a + (x.monto || 0), 0)
   const costoTotal = ot.costos.reduce((a, c) => a + c.monto, 0) + costoOC + costoMO
   const utilidad = ventaTotal - costoTotal
   const margen = ventaTotal > 0 ? (utilidad / ventaTotal) * 100 : 0
@@ -531,6 +553,46 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
               )}
               {addVenta && <FormVenta onAdd={v => { onUpdate(ot.id, { ventas: [...ot.ventas, v] }); setAddVenta(false) }} onCancel={() => setAddVenta(false)} />}
 
+              {/* ABONOS DE CLIENTES (pagos anticipados, sin IVA) */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0 8px' }}>
+                <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: '#7A8288', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <CircleDollarSign size={13} /> Abonos de clientes
+                </span>
+                <button onClick={() => setAddAbono(true)} style={{ background: C.verde, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Plus size={13} /> Agregar abono
+                </button>
+              </div>
+              {(ot.abonos || []).length === 0 ? (
+                <div style={{ fontSize: 13, color: '#9AA0A6' }}>Sin abonos registrados.</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                      {['Fecha', 'Monto', 'Medio de pago', 'Observación', ''].map((h, i) => (
+                        <th key={i} style={{ textAlign: h === 'Monto' ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(ot.abonos || []).map((x, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                        <td style={{ padding: '7px 8px', color: '#7A8288' }}>{x.fecha}</td>
+                        <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 500 }}>{clp(x.monto)}</td>
+                        <td style={{ padding: '7px 8px' }}>{x.medio || '—'}</td>
+                        <td style={{ padding: '7px 8px', color: '#7A8288' }}>{x.obs || '—'}</td>
+                        <td style={{ padding: '7px 4px', textAlign: 'right' }}>
+                          <button onClick={() => window.confirm(`¿Eliminar abono de ${clp(x.monto)} del ${x.fecha}?`) && onUpdate(ot.id, { abonos: (ot.abonos || []).filter((_, j) => j !== i) })} style={btnMini}>
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    <tr><td colSpan={4} style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700 }}>Total abonado</td><td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700, color: C.verde }}>{clp(abonoTotal)}</td></tr>
+                  </tbody>
+                </table>
+              )}
+              {addAbono && <FormAbono onAdd={x => { onUpdate(ot.id, { abonos: [...(ot.abonos || []), x] }); setAddAbono(false) }} onCancel={() => setAddAbono(false)} />}
+
               {verValores && (libroCompras || []).some(l => l.ot_id === ot.numero) ? (() => { const cs = (libroCompras || []).filter(l => l.ot_id === ot.numero); const sub = cs.reduce((a, l) => a + (Number(l.neto) || 0), 0); return (<div style={{ marginTop: 14, border: '1px solid #D8DCE5', borderRadius: 6, padding: 10, background: '#F5F7FA' }}><div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#061A40', marginBottom: 6 }}>Compras del libro de compras (SII) asignadas</div><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}><tbody>{cs.map((l, i) => (<tr key={i} style={{ borderBottom: '1px solid #E7E4DC' }}><td style={{ padding: '4px 6px', color: '#7A8288', whiteSpace: 'nowrap' }}>{l.emission_date}</td><td style={{ padding: '4px 6px' }}>{l.provider_name}</td><td style={{ padding: '4px 6px', color: '#7A8288' }}>Folio {l.document_number}</td><td style={{ padding: '4px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>{clp(l.neto)}</td></tr>))}</tbody></table><div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}><span style={{ fontSize: 11, color: '#7A8288' }}>Subtotal neto (informativo, aun no sumado a la utilidad)</span><span style={{ fontWeight: 700, color: '#061A40' }}>{clp(sub)}</span></div></div>); })() : null}
 
           {/* COSTOS */}
@@ -587,6 +649,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
               <div style={{ marginTop: 16, padding: '12px 14px', background: '#F7F4EE', fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
                 <CircleDollarSign size={16} color={margen >= 30 ? C.verde : C.ambar} />
                 <span>Venta neta: <b>{clp(ventaTotal)}</b></span>
+                {abonoTotal > 0 && <span>Abonado: <b style={{ color: C.verde }}>{clp(abonoTotal)}</b></span>}
                 <span>Costos: <b>{clp(costoTotal)}</b></span>{costoMO > 0 && <span style={{ color: '#7A8288' }}>(incluye {clp(costoMO)} de mano de obra)</span>}
                 {costoOC > 0 && <span style={{ color: C.teal }}>(incluye {clp(costoOC)} de OC proveedores)</span>}
                 <span>Utilidad real: <b style={{ color: margen >= 30 ? C.verde : margen >= 15 ? C.ambar : C.rojo }}>{clp(utilidad)} ({margen.toFixed(1)}%)</b></span>
