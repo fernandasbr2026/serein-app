@@ -229,7 +229,7 @@ export function descargarOTDesdeOT(ot) { imprimir(htmlOTDoc(ot)) }
 // Cotización vacía nueva
 const hoy = () => new Date().toISOString().slice(0, 10)
 function nuevaCot(folio) {
-  return { id: 'cot' + Date.now(), folio: String(folio || ''), fecha: hoy(), vencimiento: hoy(), area: 'Santa Rosa', cliente: '', rut: '', giro: '', ciudad: '', comuna: '', direccion: '', condicionPago: 'CONTADO', vendedor: 'Mario Vidal', comentario: '', estado: 'Alta probabilidad de cierre', estadoOtro: '', proveedorPintura: '', items: [{ codigo: 'SPP', detalle: 'SERVICIO GRANALLADO Y PINTURA EN PLANTA', cant: '', unidad: 'UN', pUnitario: '', descuento: '', descDetallada: '', comentario: '' }] }
+  return { id: 'cot' + Date.now(), folio: String(folio || ''), fecha: hoy(), vencimiento: hoy(), area: 'Santa Rosa', cliente: '', rut: '', giro: '', ciudad: '', comuna: '', direccion: '', condicionPago: 'CONTADO', vendedor: 'Venta general', comentario: '', estado: 'Alta probabilidad de cierre', estadoOtro: '', proveedorPintura: '', items: [{ codigo: 'SPP', detalle: 'SERVICIO GRANALLADO Y PINTURA EN PLANTA', cant: '', unidad: 'UN', pUnitario: '', descuento: '', descDetallada: '', comentario: '' }] }
 }
 
 // Mini panel para añadir un cliente nuevo a la lista maestra
@@ -295,7 +295,12 @@ function FormCotizacion({ inicial, onGuardar, onCancelar, clientes = [], onAddCl
         <label style={lab}>Ciudad<input style={inp} value={f.ciudad} onChange={e => set('ciudad', e.target.value)} /></label>
         <label style={lab}>Comuna<input style={inp} value={f.comuna} onChange={e => set('comuna', e.target.value)} /></label>
         <label style={lab}>Condición de pago<input style={inp} value={f.condicionPago} onChange={e => set('condicionPago', e.target.value)} /></label>
-        <label style={lab}>Vendedor<input style={inp} value={f.vendedor} onChange={e => set('vendedor', e.target.value)} /></label>
+        <label style={lab}>Vendedor
+          <select style={inp} value={f.vendedor} onChange={e => set('vendedor', e.target.value)}>
+            <option value="Venta general">Venta general</option>
+            <option value="Mario Vidal">Mario Vidal</option>
+          </select>
+        </label>
         <label style={lab}>Fecha documento<input type="date" style={inp} value={f.fecha} onChange={e => set('fecha', e.target.value)} /></label>
         <label style={lab}>Fecha vencimiento<input type="date" style={inp} value={f.vencimiento} onChange={e => set('vencimiento', e.target.value)} /></label>
         <label style={{ ...lab, gridColumn: '1 / -1' }}>Proveedor de pintura (para la OC)<input list="dl-cot-provpint" style={inp} value={f.proveedorPintura || ''} onChange={e => set('proveedorPintura', e.target.value)} placeholder="Escribe o elige un proveedor de pintura" /><datalist id="dl-cot-provpint">{PROVEEDORES_FICHA.map(p => <option key={p.id || p.nombre} value={p.nombre} />)}</datalist></label>

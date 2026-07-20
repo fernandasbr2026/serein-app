@@ -99,6 +99,36 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
     setRows(rs => rs.map(r => mp[r.id] ? { ...r, tipo_compra: mp[r.id], clasificacion: CLASIF[mp[r.id]] || '' } : r))
     ;(async () => { const ids = Object.keys(mp); for (let i = 0; i < ids.length; i += 20) { await Promise.all(ids.slice(i, i + 20).map(id => supabase.from('libro_compras').update({ tipo_compra: mp[id], clasificacion: CLASIF[mp[id]] || '' }).eq('id', id).then(() => {}, () => {}))) } })()
   }, [rows, provTipo])
+  const [mostrarAgregar, setMostrarAgregar] = useState(false)
+  const facturaVacia = { emission_date: new Date().toISOString().slice(0, 10), document_number: '', provider_name: '', provider_rut: '', document_type: 'Factura', neto: '', iva: '', exenta: false, tipo_compra: '', centro_costo: '' }
+  const [nuevaFC, setNuevaFC] = useState(facturaVacia)
+  const setNuevaFCCampo = (campo, valor) => setNuevaFC(f => {
+    const nf = { ...f, [campo]: valor }
+    if (campo === 'neto' || campo === 'exenta') nf.iva = nf.exenta ? 0 : Math.round((Number(campo === 'neto' ? valor : nf.neto) || 0) * 0.19)
+    return nf
+  })
+  const agregarFactura = async () => {
+    const neto = Number(nuevaFC.neto) || 0
+    if (!nuevaFC.provider_name.trim() || neto <= 0) { window.alert('Ingresa al menos el proveedor y un neto mayor a 0.'); return }
+    const iva = nuevaFC.exenta ? 0 : Math.round(neto * 0.19)
+    const reg = {
+      emission_date: nuevaFC.emission_date || new Date().toISOString().slice(0, 10),
+      document_number: nuevaFC.document_number.trim(),
+      provider_name: nuevaFC.provider_name.trim(),
+      provider_rut: nuevaFC.provider_rut.trim(),
+      document_type: nuevaFC.document_type || 'Factura',
+      neto, iva, document_total: neto + iva, exenta: !!nuevaFC.exenta,
+      tipo_compra: nuevaFC.tipo_compra || null, clasificacion: clasifDe(nuevaFC.tipo_compra) || null,
+      centro_costo: nuevaFC.centro_costo || null, estado_pago: 'Pendiente', oculto: false,
+    }
+    try {
+      const { data, error } = await supabase.from('libro_compras').insert(reg).select().single()
+      if (error) throw error
+      setRows(rs => [data, ...rs])
+      setNuevaFC(facturaVacia); setMostrarAgregar(false)
+    } catch (e) { window.alert('No se pudo guardar la factura: ' + (e.message || e)) }
+  }
+
   const [loading, setLoading] = useState(true)
   const [errMsg, setErrMsg] = useState('')
   const [syncing, setSyncing] = useState(false)
@@ -329,12 +359,30 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.xls,.csv" style={{ display: 'none' }} onChange={e => { const f = e.target.files[0]; if (f) importarExcel(f); e.target.value = '' }} />
+          <button onClick={() => setMostrarAgregar(v => !v)} style={{ background: '#fff', color: C.navy, border: '1px solid ' + C.navy, padding: '9px 16px', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>{mostrarAgregar ? 'Cancelar' : '+ Agregar factura'}</button>
           <button onClick={() => fileRef.current && fileRef.current.click()} style={{ background: C.orange, color: '#fff', border: 'none', padding: '9px 16px', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Importar Excel</button>
           <button onClick={sincronizar} disabled={syncing} style={{ background: C.navy, color: '#fff', border: 'none', padding: '9px 16px', borderRadius: 6, cursor: syncing ? 'wait' : 'pointer', fontWeight: 600, fontSize: 13 }}>
             {syncing ? 'Sincronizando...' : 'Sincronizar con Defontana'}
           </button>
         </div>
       </div>
+
+      {mostrarAgregar && (
+        <div style={{ border: '1px solid ' + C.border, borderRadius: 8, padding: 14, marginBottom: 14, background: C.gray, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
+          <label style={{ fontSize: 11, color: C.mut }}>Fecha emisión<input type="date" value={nuevaFC.emission_date} onChange={e => setNuevaFCCampo('emission_date', e.target.value)} style={ip} /></label>
+          <label style={{ fontSize: 11, color: C.mut }}>Proveedor<input value={nuevaFC.provider_name} onChange={e => setNuevaFCCampo('provider_name', e.target.value)} placeholder="Razón social" style={ip} /></label>
+          <label style={{ fontSize: 11, color: C.mut }}>RUT proveedor<input value={nuevaFC.provider_rut} onChange={e => setNuevaFCCampo('provider_rut', e.target.value)} placeholder="12.345.678-9" style={ip} /></label>
+          <label style={{ fontSize: 11, color: C.mut }}>N° folio<input value={nuevaFC.document_number} onChange={e => setNuevaFCCampo('document_number', e.target.value)} style={ip} /></label>
+          <label style={{ fontSize: 11, color: C.mut }}>Tipo documento<input value={nuevaFC.document_type} onChange={e => setNuevaFCCampo('document_type', e.target.value)} style={ip} /></label>
+          <label style={{ fontSize: 11, color: C.mut }}>Tipo de gasto<select value={nuevaFC.tipo_compra} onChange={e => setNuevaFCCampo('tipo_compra', e.target.value)} style={ip}><option value="">- tipo -</option>{TIPOS.map(t => <option key={t} value={t}>{t}</option>)}{customTipos.map(c => <option key={c.tipo} value={c.tipo}>{c.tipo}</option>)}</select></label>
+          <label style={{ fontSize: 11, color: C.mut }}>Área<select value={nuevaFC.centro_costo} onChange={e => setNuevaFCCampo('centro_costo', e.target.value)} style={ip}><option value="">- área -</option>{AREAS.map(a => <option key={a} value={a}>{a}</option>)}</select></label>
+          <label style={{ fontSize: 11, color: C.mut }}>Neto<input type="number" value={nuevaFC.neto} onChange={e => setNuevaFCCampo('neto', e.target.value)} placeholder="0" style={ip} /></label>
+          <label style={{ fontSize: 11, color: C.mut, display: 'flex', alignItems: 'center', gap: 6, paddingBottom: 6 }}><input type="checkbox" checked={nuevaFC.exenta} onChange={e => setNuevaFCCampo('exenta', e.target.checked)} /> Exenta de IVA</label>
+          <label style={{ fontSize: 11, color: C.mut }}>IVA (19%)<input value={clp(nuevaFC.iva)} disabled style={{ ...ip, background: '#eee' }} /></label>
+          <label style={{ fontSize: 11, color: C.mut }}>Total<input value={clp((Number(nuevaFC.neto) || 0) + (Number(nuevaFC.iva) || 0))} disabled style={{ ...ip, background: '#eee', fontWeight: 700 }} /></label>
+          <button onClick={agregarFactura} style={{ padding: '9px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, border: 'none', background: C.navy, color: '#fff' }}>Guardar factura</button>
+        </div>
+      )}
 
       {syncMsg ? <div style={{ background: syncMsg.startsWith('Error') ? '#FDECEC' : '#EAF7EE', border: '1px solid ' + (syncMsg.startsWith('Error') ? C.red : C.green), color: syncMsg.startsWith('Error') ? C.red : '#15803D', padding: '8px 12px', borderRadius: 6, fontSize: 12.5, marginBottom: 12 }}>{syncMsg}</div> : null}
 
