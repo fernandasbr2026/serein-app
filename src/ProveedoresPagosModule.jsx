@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { Plus, Trash2, X, Truck, ReceiptText, CalendarClock, CalendarDays, TrendingUp, TrendingDown, FileText, BarChart3, Wallet, AlertTriangle, Search } from 'lucide-react'
 import { OC_SEED } from './ordenes-compra-data.js'
+import { ocTotal } from './OrdenesCompraModule.jsx'
 
 // ============================================================
 // MÓDULO: Proveedores, Pagos y Calendario de Flujo de Caja
@@ -25,8 +26,11 @@ const FORMAS_PAGO = ['Transferencia', 'Cheque', 'Tarjeta', 'Efectivo', 'Otro']
 const ESTADOS_OC = ['Pendiente', 'Parcialmente pagada', 'Pagada', 'Vencida', 'Anulada']
 const ESTADOS_PAGO_OC = ['Pendiente', 'Pagada', 'Cancelada', 'Vencida', 'Anulada']
 const ESTADOS_COBRO = ['Pendiente', 'Pagada', 'Vencida', 'Factoring', 'Anulada']
-// Una OC deja de estar por pagar cuando está Pagada, Cancelada o Anulada
-const ocPorPagar = o => !['Pagada', 'Cancelada', 'Anulada'].includes(o.estadoPago) && (o.monto || 0) > 0
+// Una OC deja de estar por pagar cuando está Pagada, Cancelada o Anulada.
+// ocTotal() (no o.monto) porque las OC creadas en OrdenesCompraModule vía
+// items/neto nunca setean `monto` — leer o.monto directo las dejaba afuera
+// del calendario de pagos y del flujo de caja sin ningún aviso.
+const ocPorPagar = o => !['Pagada', 'Cancelada', 'Anulada'].includes(o.estadoPago) && ocTotal(o) > 0
 const vencOC = o => o.vencimiento || (o.fecha ? sumarDias(o.fecha, parseInt(o.plazo, 10) || 0) : '')
 
 // Días según condición de pago (para calcular vencimientos y fecha esperada)
@@ -183,8 +187,8 @@ function SeccionOC({ pp, setPp }) {
     (!busca || (String(o.numero) + ' ' + (o.proveedor || '') + ' ' + (o.rut || '')).toLowerCase().includes(busca.toLowerCase())) &&
     (!fEst || o.estadoPago === fEst)
   )
-  const totalTodas = mostradas.reduce((a, o) => a + (o.monto || 0), 0)
-  const totalPend = mostradas.filter(ocPorPagar).reduce((a, o) => a + (o.monto || 0), 0)
+  const totalTodas = mostradas.reduce((a, o) => a + ocTotal(o), 0)
+  const totalPend = mostradas.filter(ocPorPagar).reduce((a, o) => a + ocTotal(o), 0)
 
   return (
     <div>
@@ -516,7 +520,7 @@ function SeccionCobros({ pp, setPp }) {
 export function calcularFlujo(pp, mes) {
   const salidas = [
     ...pp.docs.filter(d => !d.anulado && saldoDe(d) > 0 && mesDe(d.fecha_vencimiento) === mes).map(d => ({ fecha: d.fecha_vencimiento, monto: saldoDe(d) })),
-    ...(pp.ocs || []).filter(ocPorPagar).filter(o => mesDe(vencOC(o)) === mes).map(o => ({ fecha: vencOC(o), monto: o.monto || 0 })),
+    ...(pp.ocs || []).filter(ocPorPagar).filter(o => mesDe(vencOC(o)) === mes).map(o => ({ fecha: vencOC(o), monto: ocTotal(o) })),
   ]
   const entradas = pp.cobros.filter(c => c.estado !== 'Anulada' && c.estado !== 'Pagada' && mesDe(c.fecha_estimada) === mes)
     .map(c => ({ fecha: c.fecha_estimada, monto: c.total }))
@@ -640,7 +644,7 @@ export function calcularResumenPP(pp) {
   const docsAbiertos = pp.docs.filter(d => !d.anulado && saldoDe(d) > 0)
   const pagos = [
     ...docsAbiertos.map(d => ({ venc: d.fecha_vencimiento, monto: saldoDe(d) })),
-    ...(pp.ocs || []).filter(ocPorPagar).map(o => ({ venc: vencOC(o), monto: o.monto || 0 })),
+    ...(pp.ocs || []).filter(ocPorPagar).map(o => ({ venc: vencOC(o), monto: ocTotal(o) })),
   ]
   const cobrosAbiertos = pp.cobros.filter(c => c.estado === 'Pendiente' || c.estado === 'Factoring')
   const pagosHoy = pagos.filter(p => p.venc === h).reduce((a, p) => a + p.monto, 0)

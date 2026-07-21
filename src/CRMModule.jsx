@@ -185,7 +185,10 @@ function FichaCliente({ cliente, campanas, onClose, onActualizado }) {
   useEffect(() => { refrescar() }, [cliente.id])
 
   async function guardarCampos() {
-    try { await actualizarCliente(cliente.id, f); onActualizado({ ...cliente, ...f }); setMsg('Guardado.') }
+    // ultimaFactura/mesesSinFacturar son campos calculados en el cliente
+    // (cruce con libro_ventas), no columnas reales de `clientes` — no se envían.
+    const { ultimaFactura, mesesSinFacturar, ...cambios } = f
+    try { await actualizarCliente(cliente.id, cambios); onActualizado({ ...cliente, ...cambios }); setMsg('Guardado.') }
     catch (e) { setMsg('Error al guardar: ' + (e.message || e)) }
   }
 

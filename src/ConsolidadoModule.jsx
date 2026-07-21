@@ -417,10 +417,17 @@ export default function ConsolidadoModule(props) {
       for (const r of compras) { if (r.oculto) continue; const g = sgn(r); const base = r.exenta ? (num(r.document_total) || num(r.neto)) : num(r.neto); cNeto += g * base; cTotal += g * num(r.document_total); ivaCred += g * num(r.iva) }
       const fin = props.fin || {}
       let gastosOp = 0
-      for (const gx of (fin.gastos || [])) gastosOp += num(gx.neto) + num(gx.iva)
+      // Excluye Anulado, igual que calcularResumenFin/ListaGastos en
+      // FinanzasModule — si no, un gasto anulado seguía restando de
+      // "caja que deberías tener" aquí, pero no en el resto de la app.
+      for (const gx of (fin.gastos || [])) if (gx.estado !== 'Anulado') gastosOp += num(gx.neto) + num(gx.iva)
       const mesAct = new Date().toISOString().slice(0, 7)
       let cuotasMes = 0
-      for (const o of (fin.obligaciones || [])) for (const c of (o.cuotas || [])) { if ((c.vencimiento || '').slice(0, 7) === mesAct && c.estado !== 'Pagada') cuotasMes += num(c.total) }
+      // Excluye cuotas 'tercero_reembolsa' (las paga la empresa pero un
+      // tercero se las reembolsa) — flujoDe() en FinanzasModule ya las
+      // trata como 0 de salida real; aquí se sumaban igual, sobrestimando
+      // la salida de caja del mes.
+      for (const o of (fin.obligaciones || [])) for (const c of (o.cuotas || [])) { if ((c.vencimiento || '').slice(0, 7) === mesAct && c.estado !== 'Pagada' && c.aCargo !== 'tercero_reembolsa') cuotasMes += num(c.total) }
       let sinDoc = 0
       try { const rs = await supabase.from('compras_sin_doc').select('monto'); sinDoc = ((rs && rs.data) || []).reduce((a, x) => a + num(x.monto), 0) } catch (e) {}
       setLibroCons({ vNeta, vBruta, nV: lv.length, cNeto, cTotal, nC: compras.length, ivaDeb, ivaCred, gastosOp, cuotasMes, sinDoc })

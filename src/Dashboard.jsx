@@ -358,8 +358,12 @@ export default function Dashboard({ perfil, email, onLogout }) {
   // Órdenes de compra pendientes (no Pagadas/Canceladas/Anuladas) → cuentas por pagar y flujo
   const ocsPend = (pp.ocs || []).filter(o => !['Pagada', 'Anulada'].includes(o.estadoPago) && ocTotal(o) > 0).map(o => ({ venc: o.vencimiento || o.fecha, monto: ocTotal(o) }))
   const porPagarDocs = docsPend.concat(ocsPend)
-  const totalPagar = gastosPend.reduce((a, g) => a + (g.neto || 0), 0) + cuotasPend.reduce((a, c) => a + (c.total || 0), 0) + porPagarDocs.reduce((a, d) => a + d.monto, 0)
-  const pagar7 = gastosPend.filter(g => g.vencimiento >= _hoy && g.vencimiento <= _en7).reduce((a, g) => a + (g.neto || 0), 0) + cuotasPend.filter(c => c.vencimiento >= _hoy && c.vencimiento <= _en7).reduce((a, c) => a + (c.total || 0), 0) + porPagarDocs.filter(d => d.venc >= _hoy && d.venc <= _en7).reduce((a, d) => a + d.monto, 0)
+  // Bruto (neto+iva), igual que cxpTotal más abajo — antes sumaba solo
+  // g.neto acá pero neto+iva en cxpTotal, dos "total a pagar" con base
+  // distinta mostrados uno junto al otro en el Consolidado.
+  const gastoBruto = g => (g.neto || 0) + (g.iva || 0)
+  const totalPagar = gastosPend.reduce((a, g) => a + gastoBruto(g), 0) + cuotasPend.reduce((a, c) => a + (c.total || 0), 0) + porPagarDocs.reduce((a, d) => a + d.monto, 0)
+  const pagar7 = gastosPend.filter(g => g.vencimiento >= _hoy && g.vencimiento <= _en7).reduce((a, g) => a + gastoBruto(g), 0) + cuotasPend.filter(c => c.vencimiento >= _hoy && c.vencimiento <= _en7).reduce((a, c) => a + (c.total || 0), 0) + porPagarDocs.filter(d => d.venc >= _hoy && d.venc <= _en7).reduce((a, d) => a + d.monto, 0)
   const cobrosPend = (pp.cobros || []).filter(c => c.estado === 'Pendiente' || c.estado === 'Factoring')
   const factPend = ['Santa Rosa', 'Istria'].flatMap(a => (facturas[a] || [])).filter(f => f.estado !== 'Pagado' && f.estado !== 'Anulada')
   const proyPorCobrar = proyectos.flatMap(p => (p.edps || [])).filter(e => e.estado !== 'Pagado')
@@ -439,14 +443,14 @@ export default function Dashboard({ perfil, email, onLogout }) {
       <main style={{ flex: 1, minWidth: 0, height: '100vh', overflowY: 'auto' }}>
       <div style={{ padding: 20, maxWidth: 1200, margin: '0 auto' }}>
               <PageHeader titulo={nombreTab(areaSel)} perfil={perfil} email={email} />
-        {esModuloOrganigrama ? (<OrganigramaModule esGerencia={esGerencia} />) : esModuloCRM ? (<CRMModule />) : esModuloAsesor && puedeVer('ASESOR') ? (<AsesorModule fin={fin} pp={pp} proyectos={proyectos} ots={ots} params={params} onIr={setAreaSel} />) : esModuloLibroCompras ? (<LibroComprasModule esGerencia={esGerencia} ots={ots} factoringList={params.factoring || []} proyectos={proyectos} setProyectos={setProyectos} />) : esModuloLibroVentas ? (<LibroVentasModule ots={ots} proyectos={proyectos} facturas={facturas} setFacturas={setFacturas} params={params} />) : esModuloProyectos ? (
+        {esModuloOrganigrama ? (<OrganigramaModule esGerencia={esGerencia} />) : esModuloCRM ? (<CRMModule />) : esModuloAsesor && puedeVer('ASESOR') ? (<AsesorModule fin={fin} pp={pp} proyectos={proyectos} ots={ots} params={params} onIr={setAreaSel} />) : esModuloLibroCompras && puedeVer('LIBRO_COMPRAS') ? (<LibroComprasModule esGerencia={esGerencia} ots={ots} factoringList={params.factoring || []} proyectos={proyectos} setProyectos={setProyectos} />) : esModuloLibroVentas && puedeVer('LIBRO_VENTAS') ? (<LibroVentasModule ots={ots} proyectos={proyectos} facturas={facturas} setFacturas={setFacturas} params={params} />) : esModuloProyectos && puedeVer('GESTION_PROYECTOS') ? (
           <>
           {resumenFinancieroArea('Proyectos')}
           <ProyectosModule proyectos={proyectos} setProyectos={setProyectos} params={params} facturas={facturas} setFacturas={setFacturas} comisionPct={comisiones['Proyectos'] ?? 2} setComisionPct={v => setComisiones(c => ({ ...c, Proyectos: v }))} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={nombresClientes(contactos)} />
           </>
         ) : esModuloOT ? (
           <OTModule areasPermitidas={areasOTUsuario} ots={ots} setOts={setOts} verValores={verValoresOT} clientes={contactos.clientes || []} ordenesCompra={pp.ocs || []} mo={mo} instrumentos={params.instrumentos} />
-        ) : esModuloComprasOp ? (
+        ) : esModuloComprasOp && puedeVer('COMPRAS_OP') ? (
           <ComprasOperativasModule
             esGerencia={esGerencia}
             planta={esSupervisor ? areasUsuario[0] : null}
