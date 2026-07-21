@@ -45,6 +45,13 @@ export default function App() {
     })
     const { data: sub } = supabase.auth.onAuthStateChange((evento, s) => {
       if (evento === 'PASSWORD_RECOVERY') setRecovery(true)
+      // Supabase a veces dispara este evento con sesion nula al revisar el
+      // token justo al volver a la pestana (ej. despues de mirar WhatsApp),
+      // antes de reconfirmarla — si lo tomamos al pie de la letra, se
+      // desmonta el Dashboard y al volver a montar pierde la pestana en la
+      // que estaba (cae en la primera de su lista). Solo cerramos sesion
+      // de verdad ante un SIGNED_OUT explicito.
+      if (!s && evento !== 'SIGNED_OUT') return
       setSession(s)
     })
     return () => sub.subscription.unsubscribe()

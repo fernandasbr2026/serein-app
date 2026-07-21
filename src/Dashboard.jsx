@@ -207,7 +207,14 @@ export default function Dashboard({ perfil, email, onLogout }) {
   ]
   const ORDEN_MODULOS = ['TODAS', 'ORGANIGRAMA', 'CRM', 'ASESOR', 'Santa Rosa', 'Istria', 'GESTION_PROYECTOS', 'FINANZAS', 'ORDENES_COMPRA', 'PAGOS', 'LIBRO_COMPRAS', 'LIBRO_VENTAS', 'TRAZABILIDAD', 'COTIZADOR', 'CLIENTES', 'CONTACTOS', 'COMPRAS_OP', 'PRODUCCION', 'GESTION_OT', 'ASISTENCIA', 'INVENTARIO', 'PARAMETROS']
   if (modulosPerfil) tabs = ORDEN_MODULOS.filter(c => c === 'INVENTARIO' || modulosPerfil.includes(c))
-  const [areaSel, setAreaSel] = useState(tabs[0])
+  // Recuerda la ultima pestana usada para que, si el panel se remonta por
+  // algo ajeno (ej. un parpadeo de sesion al cambiar de pestana del navegador),
+  // no caiga siempre en la primera pestana de la lista (que puede ser Asesor IA).
+  const [areaSel, setAreaSel] = useState(() => {
+    try { const g = sessionStorage.getItem('serein_areaSel'); if (g && tabs.includes(g)) return g } catch (e) {}
+    return tabs[0]
+  })
+  useEffect(() => { try { sessionStorage.setItem('serein_areaSel', areaSel) } catch (e) {} }, [areaSel])
   const [sidebarColapsado, setSidebarColapsado] = useState(false)
 
   const esModuloProyectos = areaSel === 'GESTION_PROYECTOS'
