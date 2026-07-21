@@ -93,3 +93,26 @@ export async function eliminarCampana(id) {
   const { error } = await supabase.from('crm_campanas').delete().eq('id', id)
   if (error) throw error
 }
+
+// RUTs se escriben distinto en el CRM (carga manual) y en libro_ventas
+// (importado desde Excel), así que se normalizan antes de comparar.
+export const normalizarRut = rut => (rut || '').toUpperCase().replace(/[.\-\s]/g, '')
+
+// Mapa rut normalizado -> fecha de la última factura emitida (para
+// detectar clientes que llevan tiempo sin comprar). Trae solo las
+// columnas necesarias y reduce en el cliente: no hay agregación en
+// Supabase sin una función RPC, y el volumen de libro_ventas es bajo.
+export async function cargarUltimasFacturasPorRut() {
+  const { data, error } = await supabase
+    .from('libro_ventas')
+    .select('client_rut, emission_date')
+    .eq('oculto', false)
+  if (error) throw error
+  const m = {}
+  for (const f of (data || [])) {
+    const rut = normalizarRut(f.client_rut)
+    if (!rut || !f.emission_date) continue
+    if (!m[rut] || f.emission_date > m[rut]) m[rut] = f.emission_date
+  }
+  return m
+}
