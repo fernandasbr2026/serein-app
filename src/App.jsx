@@ -37,6 +37,28 @@ export default function App() {
   const [recovery, setRecovery] = useState(false)
   const [syncKey, setSyncKey] = useState(0)
   const [hayNovedades, setHayNovedades] = useState(false)
+  const [hayVersionNueva, setHayVersionNueva] = useState(false)
+
+  // Cuando se publica un arreglo, las pestanas ya abiertas siguen corriendo
+  // el codigo viejo hasta que alguien recarga a mano — asi que un bug ya
+  // corregido puede "seguir pasando" para quien no recargo. Este chequeo
+  // detecta si el HTML publicado cambio (nuevo build) y avisa para recargar.
+  useEffect(() => {
+    let html0 = null
+    const chequear = async () => {
+      try {
+        const r = await fetch('/', { cache: 'no-store' })
+        const t = await r.text()
+        if (html0 === null) { html0 = t; return }
+        if (t !== html0) setHayVersionNueva(true)
+      } catch (e) {}
+    }
+    chequear()
+    const id = setInterval(chequear, 5 * 60 * 1000)
+    const onVis = () => { if (document.visibilityState === 'visible') chequear() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVis) }
+  }, [])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -138,6 +160,15 @@ export default function App() {
           <button onClick={() => setHayNovedades(false)}
             style={{ background: 'transparent', color: '#8A97A3', border: 'none', cursor: 'pointer', fontSize: 13, padding: '7px 4px' }}>
             Ahora no
+          </button>
+        </div>
+      )}
+      {hayVersionNueva && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 10000, background: '#1E5C8A', color: '#fff', padding: '9px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, fontFamily: "'Inter',sans-serif", fontSize: 13, boxShadow: '0 2px 10px rgba(0,0,0,.3)' }}>
+          <span>Hay una versión nueva de la app — recarga para tener los últimos arreglos</span>
+          <button onClick={() => location.reload()}
+            style={{ background: '#fff', color: '#1E5C8A', border: 'none', borderRadius: 6, padding: '5px 14px', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
+            Recargar ahora
           </button>
         </div>
       )}
