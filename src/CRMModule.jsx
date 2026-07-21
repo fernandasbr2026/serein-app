@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Plus, X, Trash2, Phone, Mail, MessageCircle, Users as UsersIcon, Target, Clock, Megaphone } from 'lucide-react'
+import { Plus, X, Trash2, Phone, Mail, MessageCircle, Users as UsersIcon, Target, Clock, Megaphone, AlertTriangle } from 'lucide-react'
 import {
   cargarClientes, crearCliente, actualizarCliente,
   cargarPersonas, crearPersona, eliminarPersona,
   cargarInteracciones, crearInteraccion, eliminarInteraccion,
   cargarOportunidades, crearOportunidad, actualizarOportunidad, eliminarOportunidad,
   cargarCampanas, crearCampana, actualizarCampana, eliminarCampana,
+  cargarUltimasFacturasPorRut, normalizarRut,
 } from './crm-api.js'
 
 // ============================================================
@@ -297,9 +298,11 @@ export default function CRMModule() {
   const [error, setError] = useState('')
   const [clientes, setClientes] = useState([])
   const [campanas, setCampanas] = useState([])
+  const [ultimasFacturas, setUltimasFacturas] = useState({})
   const [vista, setVista] = useState('leads')
   const [q, setQ] = useState('')
   const [fEtapa, setFEtapa] = useState('')
+  const [soloInactivos, setSoloInactivos] = useState(false)
   const [addLead, setAddLead] = useState(false)
   const [seleccionado, setSeleccionado] = useState(null)
   const [addCampana, setAddCampana] = useState(false)
@@ -307,11 +310,26 @@ export default function CRMModule() {
 
   async function refrescar() {
     try {
-      const [c, camp] = await Promise.all([cargarClientes(), cargarCampanas()])
-      setClientes(c); setCampanas(camp)
+      const [c, camp, fact] = await Promise.all([cargarClientes(), cargarCampanas(), cargarUltimasFacturasPorRut()])
+      setClientes(c); setCampanas(camp); setUltimasFacturas(fact)
     } catch (e) { setError('No se pudo cargar el CRM: ' + (e.message || e)) }
   }
   useEffect(() => { refrescar().finally(() => setCargando(false)) }, [])
+
+  // Solo tiene sentido "hace cuánto no facturamos" para etapa=Cliente
+  // (un lead que nunca ha comprado no es un cliente "inactivo").
+  const MESES_INACTIVO = 6
+  const clientesConFactura = useMemo(() => clientes.map(c => {
+    if (c.etapa !== 'Cliente') return { ...c, ultimaFactura: null, mesesSinFacturar: null }
+    const ultimaFactura = ultimasFacturas[normalizarRut(c.rut)] || null
+    const meses = ultimaFactura ? Math.floor((Date.now() - new Date(ultimaFactura)) / (1000 * 60 * 60 * 24 * 30)) : null
+    return { ...c, ultimaFactura, mesesSinFacturar: c.rut ? meses : null }
+  }), [clientes, ultimasFacturas])
+
+  const inactivos = useMemo(() => clientesConFactura
+    .filter(c => c.etapa === 'Cliente' && (c.mesesSinFacturar === null || c.mesesSinFacturar >= MESES_INACTIVO))
+    .sort((a, b) => (b.mesesSinFacturar ?? 9999) - (a.mesesSinFacturar ?? 9999))
+  , [clientesConFactura])
 
   const statsCampanas = useMemo(() => campanas.map(camp => {
     const leads = clientes.filter(c => c.campana_id === camp.id)
@@ -326,11 +344,11 @@ export default function CRMModule() {
     }
   }), [campanas, clientes])
 
-  const filtrados = useMemo(() => clientes.filter(c => {
+  const filtrados = useMemo(() => (soloInactivos ? inactivos : clientesConFactura).filter(c => {
     if (fEtapa && c.etapa !== fEtapa) return false
     if (q) { const t = ((c.nombre || '') + ' ' + (c.rut || '') + ' ' + (c.telefono || '') + ' ' + (c.correo || '')).toLowerCase(); if (!t.includes(q.toLowerCase())) return false }
     return true
-  }), [clientes, q, fEtapa])
+  }), [clientesConFactura, inactivos, soloInactivos, q, fEtapa])
 
   const porEtapa = useMemo(() => {
     const m = {}; ETAPAS.forEach(e => { m[e] = 0 }); clientes.forEach(c => { m[c.etapa] = (m[c.etapa] || 0) + 1 }); return m
@@ -393,14 +411,24 @@ export default function CRMModule() {
         )})}
       </div>
 
-      <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar nombre, RUT, teléfono o correo…" style={{ ...inp, width: '100%', marginBottom: 12 }} />
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar nombre, RUT, teléfono o correo…" style={{ ...inp, flex: '1 1 260px' }} />
+        <button
+          onClick={() => setSoloInactivos(v => !v)}
+          title={`Clientes en etapa "Cliente" sin una factura en libro_ventas en los últimos ${MESES_INACTIVO} meses (o nunca facturados)`}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', cursor: 'pointer', fontSize: 12.5, fontWeight: 700,
+            border: '1px solid ' + (soloInactivos ? C.rojo : '#E2DED4'), background: soloInactivos ? '#F6E0DA' : '#fff', color: soloInactivos ? C.rojo : C.carbon, padding: '7px 12px',
+          }}
+        ><AlertTriangle size={14} /> Sin facturar +{MESES_INACTIVO}m ({inactivos.length})</button>
+      </div>
 
       {filtrados.length === 0 ? (
         <div style={{ color: C.gris, padding: 20, textAlign: 'center', border: '1px dashed #E2DED4' }}>Sin resultados.</div>
       ) : (
         <div style={{ overflowX: 'auto', border: '1px solid #E2DED4' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Nombre', 'RUT', 'Teléfono', 'Origen', 'Vendedor', 'Etapa'].map(h => <th key={h} style={{ textAlign: 'left', padding: '7px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+            <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Nombre', 'RUT', 'Teléfono', 'Origen', 'Vendedor', 'Etapa', 'Última factura'].map(h => <th key={h} style={{ textAlign: 'left', padding: '7px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
             <tbody>
               {filtrados.map(c => { const [cf, ct] = colorEtapa(c.etapa); return (
                 <tr key={c.id} onClick={() => setSeleccionado(c)} style={{ borderBottom: '1px solid #EEE9DF', cursor: 'pointer' }}>
@@ -410,6 +438,9 @@ export default function CRMModule() {
                   <td style={{ padding: '8px 10px', color: C.gris }}>{c.origen || '—'}</td>
                   <td style={{ padding: '8px 10px', color: C.gris }}>{c.vendedor || '—'}</td>
                   <td style={{ padding: '8px 10px' }}><span style={{ background: cf, color: ct, padding: '3px 9px', fontSize: 11, fontWeight: 700 }}>{c.etapa}</span></td>
+                  <td style={{ padding: '8px 10px', color: c.etapa === 'Cliente' && c.mesesSinFacturar >= MESES_INACTIVO ? C.rojo : C.gris, fontWeight: c.etapa === 'Cliente' && c.mesesSinFacturar >= MESES_INACTIVO ? 700 : 400 }}>
+                    {c.etapa !== 'Cliente' ? '—' : c.ultimaFactura ? new Date(c.ultimaFactura).toLocaleDateString('es-CL') : (c.rut ? 'Nunca' : 'Sin RUT')}
+                  </td>
                 </tr>
               )})}
             </tbody>
