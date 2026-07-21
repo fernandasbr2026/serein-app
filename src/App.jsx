@@ -35,6 +35,7 @@ export default function App() {
   const [errorPerfil, setErrorPerfil] = useState(null)
   const [sincronizado, setSincronizado] = useState(false)
   const [recovery, setRecovery] = useState(false)
+  const [syncKey, setSyncKey] = useState(0)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -68,9 +69,38 @@ export default function App() {
     let vivo = true
     pullState().then(res => { if (res.ok && res.n === 0) pushState() }).finally(() => { if (vivo) setSincronizado(true) })
     const id = setInterval(() => { pushState() }, 2000)
+
+    // Cada pestaña solo EMPUJA sus cambios — nunca vuelve a leer lo que
+    // cambió otro usuario, así que dos personas podían ver datos
+    // distintos hasta recargar la página a mano. Este re-pull periódico
+    // (y al volver a la pestaña) trae lo último de la nube y, si algo
+    // cambió de verdad, remonta el Dashboard (key=syncKey) para que
+    // vuelva a leer localStorage limpio en vez de mezclar estado a medias.
+    const snapshot = () => {
+      const s = {}
+      for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && /^(serein_|__serein_|cotizador_)/.test(k)) s[k] = localStorage.getItem(k) }
+      return s
+    }
+    const repull = async () => {
+      const antes = snapshot()
+      const res = await pullState()
+      if (!res.ok) return
+      const despues = snapshot()
+      const cambio = Object.keys(despues).some(k => despues[k] !== antes[k]) || Object.keys(antes).length !== Object.keys(despues).length
+      if (cambio) setSyncKey(k => k + 1)
+    }
+    const repullId = setInterval(repull, 20000)
+    const onVisible = () => { if (document.visibilityState === 'visible') repull(); else pushState() }
     const onHide = () => { pushState() }
-    window.addEventListener('beforeunload', onHide); document.addEventListener('visibilitychange', onHide)
-    return () => { vivo = false; clearInterval(id); window.removeEventListener('beforeunload', onHide); document.removeEventListener('visibilitychange', onHide) }
+    window.addEventListener('beforeunload', onHide)
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', repull)
+    return () => {
+      vivo = false; clearInterval(id); clearInterval(repullId)
+      window.removeEventListener('beforeunload', onHide)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', repull)
+    }
   }, [perfil])
 
   async function salir() {
@@ -86,7 +116,7 @@ export default function App() {
   if (errorPerfil) return <Pantalla msg={errorPerfil} accion={salir} accionTxt="Cerrar sesión" />
   if (!perfil) return <Pantalla msg="Verificando tu perfil…" />
   if (!sincronizado) return <Pantalla msg="Sincronizando datos con la nube..." />
-  return <ErrorBoundary><Dashboard perfil={perfil} email={session.user.email} onLogout={salir} /></ErrorBoundary>
+  return <ErrorBoundary><Dashboard key={syncKey} perfil={perfil} email={session.user.email} onLogout={salir} /></ErrorBoundary>
 }
 
 function Pantalla({ msg, accion, accionTxt }) {
