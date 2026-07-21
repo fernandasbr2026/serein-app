@@ -3,6 +3,7 @@ import { Plus, Trash2, FileText, Download, CheckCircle2, Search, X } from 'lucid
 import * as XLSX from 'xlsx'
 import Paginador, { paginar } from './Paginador.jsx'
 import { PROVEEDORES_FICHA } from './proveedores-data.js'
+import { pullState, pushState } from './sync.js'
 
 // ============================================================
 // MÓDULO: Cotizaciones (formato PDF descargable) + generación de OT
@@ -382,28 +383,66 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
   }
 
   const maxFolio = cotizaciones.reduce((m, c) => Math.max(m, parseInt(String(c.folio).replace(/\D/g, ''), 10) || 0), 792)
-  const guardar = cot => {
-    const existe = cotizaciones.some(c => c.id === cot.id)
-    setCotizaciones(existe ? cotizaciones.map(c => c.id === cot.id ? cot : c) : [cot, ...cotizaciones])
+
+  // Trae lo mas fresco de la nube antes de guardar/aprobar/eliminar una cotizacion:
+  // si dos personas cotizan al mismo tiempo con el estado local un poco atrasado
+  // (ej. Carolina desde su sesion y otra persona desde la suya), guardar solo con
+  // lo que cada pestana tenia en memoria puede pisar la cotizacion de la otra
+  // persona o repetir el mismo folio. Se lee lo ultimo de la nube justo antes de
+  // guardar y se sube de inmediato, para achicar al maximo esa ventana.
+  async function fresco() {
+    try { await pullState() } catch (e) {}
+    let cots = null, otsF = null
+    try { cots = JSON.parse(localStorage.getItem('serein_cotizaciones') || 'null') } catch (e) {}
+    try { otsF = JSON.parse(localStorage.getItem('serein_ots') || 'null') } catch (e) {}
+    return { cots: Array.isArray(cots) ? cots : cotizaciones, ots: Array.isArray(otsF) ? otsF : (ots || []) }
+  }
+
+  const guardar = async cot => {
+    const { cots: base } = await fresco()
+    const existe = base.some(c => c.id === cot.id)
+    let cotFinal = cot
+    if (!existe) {
+      const folioFresco = base.reduce((m, c) => Math.max(m, parseInt(String(c.folio).replace(/\D/g, ''), 10) || 0), 792) + 1
+      cotFinal = { ...cot, folio: String(folioFresco) }
+    }
+    const nuevo = existe ? base.map(c => c.id === cotFinal.id ? cotFinal : c) : [cotFinal, ...base]
+    try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
+    setCotizaciones(nuevo)
+    pushState()
     setCreando(false); setEditId(null)
   }
-  const eliminar = id => { if (window.confirm('¿Eliminar esta cotización?')) setCotizaciones(cotizaciones.filter(c => c.id !== id)) }
+  const eliminar = async id => {
+    if (!window.confirm('¿Eliminar esta cotización?')) return
+    const { cots: base } = await fresco()
+    const nuevo = base.filter(c => c.id !== id)
+    try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
+    setCotizaciones(nuevo)
+    pushState()
+  }
 
-  function aprobar(cot, fechaEntrega = '', responsable = '') {
-    if (cot.estado === 'Aprobada') { window.alert('Esta cotización ya fue aprobada y su OT ya existe.'); return }
-    const numeroOT = 'OT-' + cot.folio
-    if ((ots || []).some(o => o.numero === numeroOT)) { window.alert('Ya existe una OT creada para esta cotización (' + numeroOT + '). No se creó otra.') }
+  async function aprobar(cot, fechaEntrega = '', responsable = '') {
+    const { cots: baseCots, ots: baseOts } = await fresco()
+    const cotFresca = baseCots.find(c => c.id === cot.id) || cot
+    if (cotFresca.estado === 'Aprobada') { setCotizaciones(baseCots); window.alert('Esta cotización ya fue aprobada y su OT ya existe.'); return }
+    const numeroOT = 'OT-' + cotFresca.folio
+    let nuevasOts = baseOts
+    if (baseOts.some(o => o.numero === numeroOT)) { window.alert('Ya existe una OT creada para esta cotización (' + numeroOT + '). No se creó otra.') }
     else {
-      const t = totales(cot)
+      const t = totales(cotFresca)
       const nuevaOT = {
-        id: 'ot' + Date.now(), numero: numeroOT, area: cot.area || 'Santa Rosa', cliente: cot.cliente, fecha: cot.fecha,
-        cotizacion: 'COT ' + cot.folio, oc: '—', m2: (cot.items || []).filter(i => i.unidad === 'm²').reduce((a, i) => a + numDec(i.cant), 0), montoCotizado: t.afecto,
-        procesos: [], preparacion: '—', esquema: (cot.items || []).map(i => i.comentario).filter(Boolean).join(' · ') || '—',
-        estado: 'Cotizada', fechaEntrega, responsable, ventas: [], costos: [], itemsCot: cot.items, folioCot: cot.folio, pinturaCotizada: (() => { const m = {}; (cot.items || []).forEach(it => (it.comprasPintura || []).forEach(cp => { if (!m[cp.producto]) m[cp.producto] = { producto: cp.producto, litrosEnvase: cp.litrosEnvase, envases: 0, litros: 0 }; m[cp.producto].envases += cp.envases; m[cp.producto].litros += (cp.litrosComprados || 0) })); return Object.values(m) })(),
+        id: 'ot' + Date.now(), numero: numeroOT, area: cotFresca.area || 'Santa Rosa', cliente: cotFresca.cliente, fecha: cotFresca.fecha,
+        cotizacion: 'COT ' + cotFresca.folio, oc: '—', m2: (cotFresca.items || []).filter(i => i.unidad === 'm²').reduce((a, i) => a + numDec(i.cant), 0), montoCotizado: t.afecto,
+        procesos: [], preparacion: '—', esquema: (cotFresca.items || []).map(i => i.comentario).filter(Boolean).join(' · ') || '—',
+        estado: 'Cotizada', fechaEntrega, responsable, ventas: [], costos: [], itemsCot: cotFresca.items, folioCot: cotFresca.folio, pinturaCotizada: (() => { const m = {}; (cotFresca.items || []).forEach(it => (it.comprasPintura || []).forEach(cp => { if (!m[cp.producto]) m[cp.producto] = { producto: cp.producto, litrosEnvase: cp.litrosEnvase, envases: 0, litros: 0 }; m[cp.producto].envases += cp.envases; m[cp.producto].litros += (cp.litrosComprados || 0) })); return Object.values(m) })(),
       }
-      setOts([nuevaOT, ...(ots || [])])
+      nuevasOts = [nuevaOT, ...baseOts]
     }
-    setCotizaciones(cotizaciones.map(c => c.id === cot.id ? { ...c, estado: 'Aprobada' } : c))
+    const nuevasCots = baseCots.map(c => c.id === cotFresca.id ? { ...c, estado: 'Aprobada' } : c)
+    try { localStorage.setItem('serein_ots', JSON.stringify(nuevasOts)); localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevasCots)) } catch (e) {}
+    setOts(nuevasOts)
+    setCotizaciones(nuevasCots)
+    pushState()
     window.alert('Cotización aprobada. Se generó la ' + numeroOT + ' en el módulo Órdenes de Trabajo. Ya puedes descargar la OT (sin valores).')
   }
 
