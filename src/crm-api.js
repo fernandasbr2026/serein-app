@@ -116,3 +116,34 @@ export async function cargarUltimasFacturasPorRut() {
   }
   return m
 }
+
+export async function cargarVendedores() {
+  const { data, error } = await supabase.from('vendedores').select('*').order('nombre')
+  if (error) throw error
+  return data || []
+}
+export async function crearVendedor(nombre) {
+  const { data, error } = await supabase.from('vendedores').insert({ nombre }).select().single()
+  if (error) throw error
+  return data
+}
+export async function actualizarVendedor(id, cambios) {
+  const { error } = await supabase.from('vendedores').update(cambios).eq('id', id)
+  if (error) throw error
+}
+
+export async function cargarSeguimientosPendientes() {
+  const { data, error } = await supabase.from('v_seguimientos_pendientes').select('*').order('dias_vencido', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+export async function cargarClientesSinContacto() {
+  const { data, error } = await supabase.from('v_clientes_sin_contacto').select('*').order('dias_sin_contacto', { ascending: false, nullsFirst: false })
+  if (error) throw error
+  return data || []
+}
+export async function cargarVendedorStats() {
+  const { data, error } = await supabase.from('v_vendedor_stats').select('*').order('revenue_cerrado', { ascending: false })
+  if (error) throw error
+  return data || []
+}

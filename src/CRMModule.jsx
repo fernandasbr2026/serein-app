@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Plus, X, Trash2, Phone, Mail, MessageCircle, Users as UsersIcon, Target, Clock, Megaphone, AlertTriangle } from 'lucide-react'
+import { Plus, X, Trash2, Phone, Mail, MessageCircle, Users as UsersIcon, Target, Clock, Megaphone, AlertTriangle, Trophy, BellRing } from 'lucide-react'
 import {
   cargarClientes, crearCliente, actualizarCliente,
   cargarPersonas, crearPersona, eliminarPersona,
@@ -7,6 +7,8 @@ import {
   cargarOportunidades, crearOportunidad, actualizarOportunidad, eliminarOportunidad,
   cargarCampanas, crearCampana, actualizarCampana, eliminarCampana,
   cargarUltimasFacturasPorRut, normalizarRut,
+  cargarVendedores, crearVendedor, actualizarVendedor,
+  cargarSeguimientosPendientes, cargarVendedorStats,
 } from './crm-api.js'
 
 // ============================================================
@@ -34,8 +36,8 @@ const CANALES_CAMPANA = ['Meta Ads', 'Google Ads', 'Otro']
 const ESTADOS_CAMPANA = ['Activa', 'Pausada', 'Finalizada']
 const colorEstadoCampana = e => ({ 'Activa': ['#E7F2EA', C.verde], 'Pausada': ['#F9E9DE', C.ambar], 'Finalizada': ['#EEF1F4', '#5A6B77'] }[e] || ['#EEE', C.gris])
 
-function FormLead({ campanas, onGuardar, onCancelar }) {
-  const [f, setF] = useState({ nombre: '', telefono: '', whatsapp_id: '', correo: '', rut: '', origen: 'WhatsApp', vendedor: 'Venta general', campana_id: '' })
+function FormLead({ campanas, vendedores, onGuardar, onCancelar }) {
+  const [f, setF] = useState({ nombre: '', telefono: '', whatsapp_id: '', correo: '', rut: '', origen: 'WhatsApp', vendedor_id: '', campana_id: '' })
   return (
     <div onClick={onCancelar} style={{ position: 'fixed', inset: 0, background: 'rgba(15,26,46,.55)', zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#fff', width: '100%', maxWidth: 440, padding: 20, boxShadow: '0 20px 60px -12px rgba(0,0,0,.4)' }}>
@@ -59,12 +61,22 @@ function FormLead({ campanas, onGuardar, onCancelar }) {
             </select>
           </label>
           <label style={{ fontSize: 11, color: C.gris }}>Vendedor
-            <select value={f.vendedor} onChange={e => setF({ ...f, vendedor: e.target.value })} style={{ ...inp, width: '100%', marginTop: 3 }}><option value="Venta general">Venta general</option><option value="Mario Vidal">Mario Vidal</option></select>
+            <select value={f.vendedor_id} onChange={e => setF({ ...f, vendedor_id: e.target.value })} style={{ ...inp, width: '100%', marginTop: 3 }}>
+              <option value="">— Sin asignar —</option>
+              {vendedores.map(v => <option key={v.id} value={v.id}>{v.nombre}</option>)}
+            </select>
           </label>
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
           <button onClick={onCancelar} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '8px 14px', cursor: 'pointer', fontSize: 12.5 }}>Cancelar</button>
-          <button onClick={() => f.nombre.trim() && onGuardar({ ...f, nombre: f.nombre.trim(), whatsapp_id: f.whatsapp_id.trim() || null, campana_id: f.campana_id || null })} disabled={!f.nombre.trim()} style={{ background: C.verde, color: '#fff', border: 'none', padding: '8px 16px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, opacity: f.nombre.trim() ? 1 : 0.5 }}>Guardar</button>
+          <button
+            onClick={() => f.nombre.trim() && onGuardar({
+              ...f, nombre: f.nombre.trim(), whatsapp_id: f.whatsapp_id.trim() || null, campana_id: f.campana_id || null,
+              vendedor_id: f.vendedor_id || null, vendedor: (vendedores.find(v => v.id === f.vendedor_id) || {}).nombre || null,
+            })}
+            disabled={!f.nombre.trim()}
+            style={{ background: C.verde, color: '#fff', border: 'none', padding: '8px 16px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, opacity: f.nombre.trim() ? 1 : 0.5 }}
+          >Guardar</button>
         </div>
       </div>
     </div>
@@ -166,7 +178,7 @@ function FormPersonaContacto({ onGuardar, onCancelar }) {
   )
 }
 
-function FichaCliente({ cliente, campanas, onClose, onActualizado }) {
+function FichaCliente({ cliente, campanas, vendedores, onClose, onActualizado }) {
   const [f, setF] = useState(cliente)
   const [personas, setPersonas] = useState([])
   const [interacciones, setInteracciones] = useState([])
@@ -217,7 +229,10 @@ function FichaCliente({ cliente, campanas, onClose, onActualizado }) {
               <label style={{ fontSize: 11, color: C.gris }}>Dirección<input value={f.direccion || ''} onChange={e => setF({ ...f, direccion: e.target.value })} style={{ ...inp, width: '100%', marginTop: 3 }} /></label>
               <label style={{ fontSize: 11, color: C.gris }}>Comuna<input value={f.comuna || ''} onChange={e => setF({ ...f, comuna: e.target.value })} style={{ ...inp, width: '100%', marginTop: 3 }} /></label>
               <label style={{ fontSize: 11, color: C.gris }}>Vendedor
-                <select value={f.vendedor || 'Venta general'} onChange={e => setF({ ...f, vendedor: e.target.value })} style={{ ...inp, width: '100%', marginTop: 3 }}><option value="Venta general">Venta general</option><option value="Mario Vidal">Mario Vidal</option></select>
+                <select value={f.vendedor_id || ''} onChange={e => { const v = vendedores.find(x => x.id === e.target.value); setF({ ...f, vendedor_id: e.target.value || null, vendedor: v ? v.nombre : null }) }} style={{ ...inp, width: '100%', marginTop: 3 }}>
+                  <option value="">— Sin asignar —</option>
+                  {vendedores.map(v => <option key={v.id} value={v.id}>{v.nombre}</option>)}
+                </select>
               </label>
               <label style={{ fontSize: 11, color: C.gris }}>Etapa
                 <select value={f.etapa || 'Lead nuevo'} onChange={e => setF({ ...f, etapa: e.target.value })} style={{ ...inp, width: '100%', marginTop: 3 }}>{ETAPAS.map(e2 => <option key={e2} value={e2}>{e2}</option>)}</select>
@@ -302,6 +317,9 @@ export default function CRMModule() {
   const [clientes, setClientes] = useState([])
   const [campanas, setCampanas] = useState([])
   const [ultimasFacturas, setUltimasFacturas] = useState({})
+  const [vendedores, setVendedores] = useState([])
+  const [seguimientos, setSeguimientos] = useState([])
+  const [vendedorStats, setVendedorStats] = useState([])
   const [vista, setVista] = useState('leads')
   const [q, setQ] = useState('')
   const [fEtapa, setFEtapa] = useState('')
@@ -310,11 +328,16 @@ export default function CRMModule() {
   const [seleccionado, setSeleccionado] = useState(null)
   const [addCampana, setAddCampana] = useState(false)
   const [editCampana, setEditCampana] = useState(null)
+  const [addVendedor, setAddVendedor] = useState(false)
+  const [nombreVendedor, setNombreVendedor] = useState('')
 
   async function refrescar() {
     try {
-      const [c, camp, fact] = await Promise.all([cargarClientes(), cargarCampanas(), cargarUltimasFacturasPorRut()])
-      setClientes(c); setCampanas(camp); setUltimasFacturas(fact)
+      const [c, camp, fact, vend, seg, vstats] = await Promise.all([
+        cargarClientes(), cargarCampanas(), cargarUltimasFacturasPorRut(),
+        cargarVendedores(), cargarSeguimientosPendientes(), cargarVendedorStats(),
+      ])
+      setClientes(c); setCampanas(camp); setUltimasFacturas(fact); setVendedores(vend); setSeguimientos(seg); setVendedorStats(vstats)
     } catch (e) { setError('No se pudo cargar el CRM: ' + (e.message || e)) }
   }
   useEffect(() => { refrescar().finally(() => setCargando(false)) }, [])
@@ -369,15 +392,63 @@ export default function CRMModule() {
         </div>
         {vista === 'leads'
           ? <button onClick={() => setAddLead(true)} style={{ background: C.ambar, color: '#fff', border: 'none', padding: '9px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={14} /> Agregar lead</button>
-          : <button onClick={() => setAddCampana(true)} style={{ background: C.ambar, color: '#fff', border: 'none', padding: '9px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={14} /> Agregar campaña</button>}
+          : vista === 'campanas' ? <button onClick={() => setAddCampana(true)} style={{ background: C.ambar, color: '#fff', border: 'none', padding: '9px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={14} /> Agregar campaña</button>
+          : vista === 'vendedores' ? <button onClick={() => setAddVendedor(true)} style={{ background: C.ambar, color: '#fff', border: 'none', padding: '9px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={14} /> Agregar vendedor</button>
+          : null}
       </div>
 
-      <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid #E2DED4' }}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid #E2DED4', flexWrap: 'wrap' }}>
         <button onClick={() => setVista('leads')} style={{ background: 'none', border: 'none', borderBottom: '2px solid ' + (vista === 'leads' ? C.azul : 'transparent'), color: vista === 'leads' ? C.azul : C.gris, fontWeight: 700, fontSize: 12.5, textTransform: 'uppercase', padding: '8px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}><UsersIcon size={14} /> Leads y clientes</button>
         <button onClick={() => setVista('campanas')} style={{ background: 'none', border: 'none', borderBottom: '2px solid ' + (vista === 'campanas' ? C.azul : 'transparent'), color: vista === 'campanas' ? C.azul : C.gris, fontWeight: 700, fontSize: 12.5, textTransform: 'uppercase', padding: '8px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}><Megaphone size={14} /> Campañas</button>
+        <button onClick={() => setVista('vendedores')} style={{ background: 'none', border: 'none', borderBottom: '2px solid ' + (vista === 'vendedores' ? C.azul : 'transparent'), color: vista === 'vendedores' ? C.azul : C.gris, fontWeight: 700, fontSize: 12.5, textTransform: 'uppercase', padding: '8px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}><Trophy size={14} /> Vendedores</button>
+        <button onClick={() => setVista('seguimientos')} style={{ background: 'none', border: 'none', borderBottom: '2px solid ' + (vista === 'seguimientos' ? C.azul : 'transparent'), color: vista === 'seguimientos' ? C.azul : C.gris, fontWeight: 700, fontSize: 12.5, textTransform: 'uppercase', padding: '8px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}><BellRing size={14} /> Seguimientos{seguimientos.length > 0 ? ' (' + seguimientos.length + ')' : ''}</button>
       </div>
 
-      {vista === 'campanas' ? (
+      {vista === 'vendedores' ? (
+        vendedorStats.length === 0 ? (
+          <div style={{ color: C.gris, padding: 20, textAlign: 'center', border: '1px dashed #E2DED4' }}>Sin vendedores registrados.</div>
+        ) : (
+          <div style={{ overflowX: 'auto', border: '1px solid #E2DED4' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Vendedor', 'Leads asignados', 'Convertidos', 'Tasa conv.', 'Revenue cerrado', 'Interacciones'].map(h => <th key={h} style={{ textAlign: 'left', padding: '7px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+              <tbody>
+                {vendedorStats.map(v => (
+                  <tr key={v.vendedor_id} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                    <td style={{ padding: '8px 10px', fontWeight: 600 }}>{v.nombre}</td>
+                    <td style={{ padding: '8px 10px' }}>{v.leads_asignados}</td>
+                    <td style={{ padding: '8px 10px' }}>{v.convertidos}</td>
+                    <td style={{ padding: '8px 10px' }}>{v.tasa_conversion ?? 0}%</td>
+                    <td style={{ padding: '8px 10px', fontWeight: 600, color: C.verde }}>{clp(v.revenue_cerrado)}</td>
+                    <td style={{ padding: '8px 10px', color: C.gris }}>{v.interacciones_totales}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      ) : vista === 'seguimientos' ? (
+        seguimientos.length === 0 ? (
+          <div style={{ color: C.gris, padding: 20, textAlign: 'center', border: '1px dashed #E2DED4' }}>Sin seguimientos pendientes — todo al día.</div>
+        ) : (
+          <div style={{ overflowX: 'auto', border: '1px solid #E2DED4' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Cliente', 'Etapa', 'Vendedor', 'Próxima acción', 'Fecha', 'Días vencido'].map(h => <th key={h} style={{ textAlign: 'left', padding: '7px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+              <tbody>
+                {seguimientos.map(s => (
+                  <tr key={s.cliente_id} onClick={() => { const c = clientesConFactura.find(x => x.id === s.cliente_id); if (c) setSeleccionado(c) }} style={{ borderBottom: '1px solid #EEE9DF', cursor: 'pointer', background: s.dias_vencido > 0 ? '#FDF3F0' : 'transparent' }}>
+                    <td style={{ padding: '8px 10px', fontWeight: 600 }}>{s.nombre}</td>
+                    <td style={{ padding: '8px 10px' }}><span style={{ background: colorEtapa(s.etapa)[0], color: colorEtapa(s.etapa)[1], padding: '3px 9px', fontSize: 11, fontWeight: 700 }}>{s.etapa}</span></td>
+                    <td style={{ padding: '8px 10px', color: C.gris }}>{s.vendedor_nombre || '—'}</td>
+                    <td style={{ padding: '8px 10px' }}>{s.proxima_accion}</td>
+                    <td style={{ padding: '8px 10px', color: C.gris }}>{s.proxima_fecha}</td>
+                    <td style={{ padding: '8px 10px', fontWeight: 700, color: s.dias_vencido > 0 ? C.rojo : C.gris }}>{s.dias_vencido > 0 ? s.dias_vencido + ' días' : 'al día'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      ) : vista === 'campanas' ? (
         statsCampanas.length === 0 ? (
           <div style={{ color: C.gris, padding: 20, textAlign: 'center', border: '1px dashed #E2DED4' }}>Sin campañas registradas. Agrega una para empezar a medir Meta Ads / Google Ads.</div>
         ) : (
@@ -452,10 +523,29 @@ export default function CRMModule() {
       )}
       </>)}
 
-      {addLead && <FormLead campanas={campanas} onGuardar={async d => { try { await crearCliente(d); setAddLead(false); refrescar() } catch (e) { setError('Error al guardar: ' + (e.message || e)) } }} onCancelar={() => setAddLead(false)} />}
-      {seleccionado && <FichaCliente cliente={seleccionado} campanas={campanas} onClose={() => setSeleccionado(null)} onActualizado={c => { setSeleccionado(c); refrescar() }} />}
+      {addLead && <FormLead campanas={campanas} vendedores={vendedores} onGuardar={async d => { try { await crearCliente(d); setAddLead(false); refrescar() } catch (e) { setError('Error al guardar: ' + (e.message || e)) } }} onCancelar={() => setAddLead(false)} />}
+      {seleccionado && <FichaCliente cliente={seleccionado} campanas={campanas} vendedores={vendedores} onClose={() => setSeleccionado(null)} onActualizado={c => { setSeleccionado(c); refrescar() }} />}
       {addCampana && <FormCampana onGuardar={async d => { try { await crearCampana(d); setAddCampana(false); refrescar() } catch (e) { setError('Error al guardar: ' + (e.message || e)) } }} onCancelar={() => setAddCampana(false)} />}
       {editCampana && <FormCampana campana={editCampana} onGuardar={async d => { try { await actualizarCampana(editCampana.id, d); setEditCampana(null); refrescar() } catch (e) { setError('Error al guardar: ' + (e.message || e)) } }} onCancelar={() => setEditCampana(null)} />}
+      {addVendedor && (
+        <div onClick={() => setAddVendedor(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,26,46,.55)', zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', width: '100%', maxWidth: 360, padding: 20, boxShadow: '0 20px 60px -12px rgba(0,0,0,.4)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, textTransform: 'uppercase' }}>Agregar vendedor</span>
+              <button onClick={() => setAddVendedor(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+            </div>
+            <label style={{ fontSize: 11, color: C.gris }}>Nombre<input value={nombreVendedor} onChange={e => setNombreVendedor(e.target.value)} style={{ ...inp, width: '100%', marginTop: 3 }} /></label>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
+              <button onClick={() => setAddVendedor(false)} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '8px 14px', cursor: 'pointer', fontSize: 12.5 }}>Cancelar</button>
+              <button
+                onClick={async () => { if (!nombreVendedor.trim()) return; try { await crearVendedor(nombreVendedor.trim()); setNombreVendedor(''); setAddVendedor(false); refrescar() } catch (e) { setError('Error al guardar: ' + (e.message || e)) } }}
+                disabled={!nombreVendedor.trim()}
+                style={{ background: C.verde, color: '#fff', border: 'none', padding: '8px 16px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, opacity: nombreVendedor.trim() ? 1 : 0.5 }}
+              >Guardar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
