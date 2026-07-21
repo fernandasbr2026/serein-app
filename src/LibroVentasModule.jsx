@@ -55,7 +55,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
     try {
       const { data, error } = await supabase.functions.invoke('libro-ventas-sync')
       if (error) throw error
-      if (data && data.ok) { setSyncMsg('Sincronizado: ' + (data.saved ?? 0) + ' documentos.'); await cargar() }
+      if (data && data.ok) { setSyncMsg('Sincronizado: ' + (data.nuevas ?? 0) + ' nuevos, ' + (data.actualizadas ?? 0) + ' actualizados.'); await cargar() }
       else setSyncMsg('La funcion respondio: ' + JSON.stringify(data))
     } catch (e) { setSyncMsg('Error al sincronizar: ' + (e.message || String(e))) }
     setSyncing(false)
@@ -176,7 +176,8 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
     if (r.origen === 'xlsx') { guardarExtra((extra || []).map(x => x.id === r.id ? nueva : x)) }
     else {
       setRows(rs => rs.map(x => x.id === r.id ? nueva : x))
-      try { await supabase.from('libro_ventas').update({ [campo]: valor }).eq('id', r.id) } catch (e) {}
+      try { await supabase.from('libro_ventas').update({ [campo]: valor }).eq('id', r.id) }
+      catch (e) { setErrMsg('Error al guardar "' + campo + '": ' + (e.message || e) + ' — el cambio no quedó guardado, refresca la página.') }
     }
     sincronizarFicha(nueva)
   }
@@ -230,7 +231,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
     const idsDb = elegidas.filter(r => r.origen !== 'xlsx').map(r => r.id)
     if (idsDb.length) {
       setRows(rs => rs.map(x => idsDb.includes(x.id) ? { ...x, oculto: true } : x))
-      try { await supabase.from('libro_ventas').update({ oculto: true }).in('id', idsDb) } catch (e) {}
+      try { await supabase.from('libro_ventas').update({ oculto: true }).in('id', idsDb) } catch (e) { setErrMsg('Error al ocultar: ' + (e.message || e)) }
     }
     setSel(new Set())
   }
@@ -238,7 +239,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
     const ids = filtradas.filter(r => sel.has(r.id) && r.origen !== 'xlsx').map(r => r.id)
     if (!ids.length) return
     setRows(rs => rs.map(x => ids.includes(x.id) ? { ...x, oculto: false } : x))
-    try { await supabase.from('libro_ventas').update({ oculto: false }).in('id', ids) } catch (e) {}
+    try { await supabase.from('libro_ventas').update({ oculto: false }).in('id', ids) } catch (e) { setErrMsg('Error al restaurar: ' + (e.message || e)) }
     setSel(new Set())
   }
 

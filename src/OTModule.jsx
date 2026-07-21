@@ -257,8 +257,8 @@ function FotosOT({ ot, onUpdate }) {
 }
 
 function descargarOT(ot) {
-  const ventaTotal = ot.ventas.reduce((a, v) => a + v.neta, 0)
-  const costoTotal = ot.costos.reduce((a, c) => a + c.monto, 0)
+  const ventaTotal = (ot.ventas || []).reduce((a, v) => a + v.neta, 0)
+  const costoTotal = (ot.costos || []).reduce((a, c) => a + c.monto, 0)
   const wb = XLSX.utils.book_new()
   const ficha = [
     ['ORDEN DE TRABAJO', ot.numero], [],
@@ -275,11 +275,11 @@ function descargarOT(ot) {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ficha), 'Ficha')
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
     ['Folio', 'Fecha', 'Neta', 'IVA', 'Total', 'Estado de pago'],
-    ...ot.ventas.map(v => [v.folio, v.fecha, v.neta, Math.round(v.neta * 0.19), Math.round(v.neta * 1.19), v.estadoPago || v.estado_pago || '—']),
+    ...(ot.ventas || []).map(v => [v.folio, v.fecha, v.neta, Math.round(v.neta * 0.19), Math.round(v.neta * 1.19), v.estadoPago || v.estado_pago || '—']),
   ]), 'Ventas')
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
     ['Categoría', 'Detalle', 'Fecha', 'Monto'],
-    ...ot.costos.map(x => [x.categoria, x.detalle || '—', x.fecha || '—', x.monto]),
+    ...(ot.costos || []).map(x => [x.categoria, x.detalle || '—', x.fecha || '—', x.monto]),
   ]), 'Costos')
   XLSX.writeFile(wb, `${ot.numero}.xlsx`)
 }
@@ -317,17 +317,17 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
   const [addAbono, setAddAbono] = useState(false)
   const [addCosto, setAddCosto] = useState(false)
 
-  const ventaTotal = ot.ventas.reduce((a, v) => a + v.neta, 0)
+  const ventaTotal = (ot.ventas || []).reduce((a, v) => a + v.neta, 0)
   const costoOC = costoOCdeOT(ordenesCompra, ot.numero)
   const costoMO = costoMOdeOT(mo, ot.numero)
   const abonoTotal = (ot.abonos || []).reduce((a, x) => a + (x.monto || 0), 0)
-  const costoTotal = ot.costos.reduce((a, c) => a + c.monto, 0) + costoOC + costoMO
+  const costoTotal = (ot.costos || []).reduce((a, c) => a + c.monto, 0) + costoOC + costoMO
   const utilidad = ventaTotal - costoTotal
   const margen = ventaTotal > 0 ? (utilidad / ventaTotal) * 100 : 0
   const precioM2 = ot.m2 > 0 && ventaTotal > 0 ? ventaTotal / ot.m2 : null
   const costoM2 = ot.m2 > 0 && costoTotal > 0 ? costoTotal / ot.m2 : null
 
-  const porCat = CATEGORIAS_COSTO.map(cat => ({ cat, monto: ot.costos.filter(c => c.categoria === cat).reduce((a, c) => a + c.monto, 0) })).filter(x => x.monto > 0)
+  const porCat = CATEGORIAS_COSTO.map(cat => ({ cat, monto: (ot.costos || []).filter(c => c.categoria === cat).reduce((a, c) => a + c.monto, 0) })).filter(x => x.monto > 0)
 
   return (
     <div style={{ background: '#fff', border: '1px solid #E2DED4', marginBottom: 14 }}>
@@ -515,7 +515,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
                   <Plus size={13} /> Agregar venta
                 </button>
               </div>
-              {ot.ventas.length === 0 ? (
+              {(ot.ventas || []).length === 0 ? (
                 <div style={{ fontSize: 13, color: '#9AA0A6' }}>Aún sin facturar.</div>
               ) : (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -527,7 +527,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
                     </tr>
                   </thead>
                   <tbody>
-                    {ot.ventas.map((v, i) => (
+                    {(ot.ventas || []).map((v, i) => (
                       <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
                         <td style={{ padding: '7px 8px', fontWeight: 500 }}>{v.folio}</td>
                         <td style={{ padding: '7px 8px', color: '#7A8288' }}>{v.fecha}</td>
@@ -536,13 +536,13 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
                         <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 500 }}>{clp(v.neta * 1.19)}</td>
                         <td style={{ padding: '7px 8px' }}>
                           <select value={v.estadoPago}
-                            onChange={ev => onUpdate(ot.id, { ventas: ot.ventas.map((x, j) => j === i ? { ...x, estadoPago: ev.target.value } : x) })}
+                            onChange={ev => onUpdate(ot.id, { ventas: (ot.ventas || []).map((x, j) => j === i ? { ...x, estadoPago: ev.target.value } : x) })}
                             style={{ border: 'none', background: v.estadoPago === 'Pagado' ? '#E7F2EA' : v.estadoPago === 'Factoring' ? '#F9E9DE' : '#F6E0DA', color: v.estadoPago === 'Pagado' ? C.verde : v.estadoPago === 'Factoring' ? C.ambar : C.rojo, padding: '3px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                             <option>Pendiente</option><option>Pagado</option><option>Factoring</option>
                           </select>
                         </td>
                         <td style={{ padding: '7px 4px', textAlign: 'right' }}>
-                          <button onClick={() => window.confirm(`¿Eliminar factura ${v.folio} (${clp(v.neta)})?`) && onUpdate(ot.id, { ventas: ot.ventas.filter((_, j) => j !== i) })} style={btnMini}>
+                          <button onClick={() => window.confirm(`¿Eliminar factura ${v.folio} (${clp(v.neta)})?`) && onUpdate(ot.id, { ventas: (ot.ventas || []).filter((_, j) => j !== i) })} style={btnMini}>
                             <Trash2 size={14} />
                           </button>
                         </td>
@@ -551,7 +551,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
                   </tbody>
                 </table>
               )}
-              {addVenta && <FormVenta onAdd={v => { onUpdate(ot.id, { ventas: [...ot.ventas, v] }); setAddVenta(false) }} onCancel={() => setAddVenta(false)} />}
+              {addVenta && <FormVenta onAdd={v => { onUpdate(ot.id, { ventas: [...(ot.ventas || []), v] }); setAddVenta(false) }} onCancel={() => setAddVenta(false)} />}
 
               {/* ABONOS DE CLIENTES (pagos anticipados, sin IVA) */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0 8px' }}>
@@ -604,7 +604,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
                   <Plus size={13} /> Agregar costo
                 </button>
               </div>
-              {ot.costos.length === 0 ? (
+              {(ot.costos || []).length === 0 ? (
                 <div style={{ fontSize: 13, color: '#9AA0A6' }}>Sin costos registrados — la utilidad mostrada es bruta.</div>
               ) : (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -616,13 +616,13 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
                     </tr>
                   </thead>
                   <tbody>
-                    {ot.costos.map((c, i) => (
+                    {(ot.costos || []).map((c, i) => (
                       <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
                         <td style={{ padding: '7px 8px', fontWeight: 500 }}>{c.categoria}</td>
                         <td style={{ padding: '7px 8px', color: '#7A8288' }}>{c.detalle || '—'}</td>
                         <td style={{ padding: '7px 8px', textAlign: 'right' }}>{clp(c.monto)}</td>
                         <td style={{ padding: '7px 4px', textAlign: 'right' }}>
-                          <button onClick={() => window.confirm(`¿Eliminar costo ${c.categoria} (${clp(c.monto)})?`) && onUpdate(ot.id, { costos: ot.costos.filter((_, j) => j !== i) })} style={btnMini}>
+                          <button onClick={() => window.confirm(`¿Eliminar costo ${c.categoria} (${clp(c.monto)})?`) && onUpdate(ot.id, { costos: (ot.costos || []).filter((_, j) => j !== i) })} style={btnMini}>
                             <Trash2 size={14} />
                           </button>
                         </td>
@@ -631,7 +631,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
                   </tbody>
                 </table>
               )}
-              {addCosto && <FormCosto onAdd={c => { onUpdate(ot.id, { costos: [...ot.costos, c] }); setAddCosto(false) }} onCancel={() => setAddCosto(false)} />}
+              {addCosto && <FormCosto onAdd={c => { onUpdate(ot.id, { costos: [...(ot.costos || []), c] }); setAddCosto(false) }} onCancel={() => setAddCosto(false)} />}
 
               {porCat.length > 0 && (
                 <div style={{ marginTop: 14 }}>

@@ -94,7 +94,7 @@ function RegistroDiario({ mo, setMo, otsDisponibles, esGerencia, usuario, areas 
     const ots = [...f.ots, ...f.otManual.split(',').map(s => s.trim()).filter(Boolean)]
     const factor = f.jornada === 'Media' ? 0.5 : 1
     const detalle = f.trabajadorIds.map(tid => {
-      const t = mo.trabajadores.find(x => x.id === tid)
+      const t = (mo.trabajadores || []).find(x => x.id === tid)
       return { tId: tid, valor: Math.round(valorDiarioDe(t) * factor) }
     })
     const total = detalle.reduce((a, d) => a + d.valor, 0)
@@ -125,7 +125,7 @@ function RegistroDiario({ mo, setMo, otsDisponibles, esGerencia, usuario, areas 
 
       <div style={{ fontSize: 12, color: C.gris, marginBottom: 6 }}>Trabajadores presentes (cargo entre paréntesis)</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
-        {mo.trabajadores.map(t => {
+        {(mo.trabajadores || []).map(t => {
           const sel = f.trabajadorIds.includes(t.id)
           return (
             <button key={t.id} onClick={() => setF({ ...f, trabajadorIds: toggle(f.trabajadorIds, t.id) })}
@@ -176,7 +176,7 @@ function HorasExtras({ mo, setMo, otsDisponibles, esGerencia, usuario }) {
     const ot = f.otManual.trim() || f.ot
     const horas = parseFloat(f.horas)
     if (!ot || !horas || horas <= 0) return
-    const t = mo.trabajadores.find(x => x.id === f.trabajadorId)
+    const t = (mo.trabajadores || []).find(x => x.id === f.trabajadorId)
     const valorHex = valorHexDe(t)
     const reg = { id: 'h' + Date.now(), fecha: f.fecha, trabajadorId: f.trabajadorId, horas, ot, obs: f.obs, costo: { valorHex, total: Math.round(valorHex * horas) } }
     setMo({ ...mo, horasExtras: [reg, ...mo.horasExtras] })
@@ -192,7 +192,7 @@ function HorasExtras({ mo, setMo, otsDisponibles, esGerencia, usuario }) {
         </label>
         <label style={{ fontSize: 12, color: C.gris }}>Trabajador
           <select value={f.trabajadorId} onChange={e => setF({ ...f, trabajadorId: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }}>
-            {mo.trabajadores.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+            {(mo.trabajadores || []).map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
           </select>
         </label>
         <label style={{ fontSize: 12, color: C.gris }}>Horas extras
@@ -223,9 +223,9 @@ function HorasExtras({ mo, setMo, otsDisponibles, esGerencia, usuario }) {
 
 // ================= LISTA DE REGISTROS =================
 function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
-  const visibles = esGerencia ? mo.asistencias : mo.asistencias.filter(a => a.supervisor === usuario)
+  const visibles = esGerencia ? mo.asistencias : (mo.asistencias || []).filter(a => a.supervisor === usuario)
   const hexVisibles = mo.horasExtras
-  const nombreDe = id => mo.trabajadores.find(t => t.id === id)?.nombre || id
+  const nombreDe = id => (mo.trabajadores || []).find(t => t.id === id)?.nombre || id
 
   return (
     <div>
@@ -252,7 +252,7 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
                     {esGerencia && <td style={{ padding: '8px', fontWeight: 600 }}>{clp(a.costo.total)}</td>}
                     {esGerencia && <td style={{ padding: '8px', fontSize: 12 }}>{Object.entries(a.costo.porOT).map(([o, m]) => <div key={o}>{o}: {clp(m)}</div>)}</td>}
                     <td style={{ padding: '8px', textAlign: 'right' }}>
-                      {esGerencia && <button onClick={() => window.confirm('¿Eliminar este registro de asistencia?') && setMo({ ...mo, asistencias: mo.asistencias.filter(x => x.id !== a.id) })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
+                      {esGerencia && <button onClick={() => window.confirm('¿Eliminar este registro de asistencia?') && setMo({ ...mo, asistencias: (mo.asistencias || []).filter(x => x.id !== a.id) })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
                     </td>
                   </tr>
                 ))}
@@ -282,7 +282,7 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
                   <td style={{ padding: '8px', fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{h.ot}</td>
                   {esGerencia && <td style={{ padding: '8px', fontWeight: 600 }}>{clp(h.costo.total)}</td>}
                   <td style={{ padding: '8px', textAlign: 'right' }}>
-                    {esGerencia && <button onClick={() => window.confirm('¿Eliminar estas horas extras?') && setMo({ ...mo, horasExtras: mo.horasExtras.filter(x => x.id !== h.id) })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
+                    {esGerencia && <button onClick={() => window.confirm('¿Eliminar estas horas extras?') && setMo({ ...mo, horasExtras: (mo.horasExtras || []).filter(x => x.id !== h.id) })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
                   </td>
                 </tr>
               ))}
@@ -301,7 +301,7 @@ function TrabajadoresView({ mo }) {
       <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Trabajadores</div>
       <div style={{ fontSize: 12, color: C.gris, marginBottom: 12 }}>Listado del personal. Los valores de sueldo y asistencia solo son visibles para Gerencia.</div>
       {GRUPOS.map(g => {
-        const lista = mo.trabajadores.filter(t => t.grupo === g)
+        const lista = (mo.trabajadores || []).filter(t => t.grupo === g)
         if (lista.length === 0) return null
         return (
           <div key={g} style={{ marginBottom: 16 }}>
@@ -335,13 +335,13 @@ function TrabajadoresView({ mo }) {
 function CostosPorOT({ mo }) {
   const acumulado = useMemo(() => {
     const m = {}
-    mo.asistencias.forEach(a => Object.entries(a.costo.porOT).forEach(([ot, monto]) => {
+    (mo.asistencias || []).forEach(a => Object.entries(a.costo.porOT).forEach(([ot, monto]) => {
       m[ot] = m[ot] || { normal: 0, hex: 0, fechas: new Set(), trabajadores: new Set() }
       m[ot].normal += monto
       m[ot].fechas.add(a.fecha)
       a.trabajadorIds.forEach(t => m[ot].trabajadores.add(t))
     }))
-    mo.horasExtras.forEach(h => {
+    (mo.horasExtras || []).forEach(h => {
       m[h.ot] = m[h.ot] || { normal: 0, hex: 0, fechas: new Set(), trabajadores: new Set() }
       m[h.ot].hex += h.costo.total
       m[h.ot].fechas.add(h.fecha)
@@ -349,7 +349,7 @@ function CostosPorOT({ mo }) {
     })
     return m
   }, [mo])
-  const nombreDe = id => mo.trabajadores.find(t => t.id === id)?.nombre || id
+  const nombreDe = id => (mo.trabajadores || []).find(t => t.id === id)?.nombre || id
 
   return (
     <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}>
@@ -385,10 +385,10 @@ function CostosPorOT({ mo }) {
 
 // ================= NÓMINA / VALORES (GERENCIA) =================
 function NominaMO({ mo, setMo }) {
-  const setTrab = (id, campo, valor) => setMo({ ...mo, trabajadores: mo.trabajadores.map(t => t.id === id ? { ...t, [campo]: valor } : t) })
+  const setTrab = (id, campo, valor) => setMo({ ...mo, trabajadores: (mo.trabajadores || []).map(t => t.id === id ? { ...t, [campo]: valor } : t) })
   const setNum = (id, campo, valor) => setTrab(id, campo, num(valor))
   const addTrab = grupo => setMo({ ...mo, trabajadores: [...mo.trabajadores, { id: 't' + Date.now(), grupo, nombre: '', cargo: '', nacionalidad: 'Chilena', sueldo: 0, imposiciones: 0, sabado: 0, domingo: 0 }] })
-  const delTrab = id => window.confirm('¿Eliminar este trabajador?') && setMo({ ...mo, trabajadores: mo.trabajadores.filter(t => t.id !== id) })
+  const delTrab = id => window.confirm('¿Eliminar este trabajador?') && setMo({ ...mo, trabajadores: (mo.trabajadores || []).filter(t => t.id !== id) })
 
   const auto = { color: C.gris, background: '#F7F4EE', fontStyle: 'italic', whiteSpace: 'nowrap' }
   const th = t => <th style={{ textAlign: 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{t}</th>
@@ -400,7 +400,7 @@ function NominaMO({ mo, setMo }) {
         <b> día bruto = (sueldo + imposiciones) ÷ 30</b>, <b>día s/imp = sueldo ÷ 30</b>, <b>hora = día bruto ÷ 9</b>, <b>hora extra = hora × 1,5</b>. Sábado y Domingo se ingresan a mano.
       </div>
       {GRUPOS.map(g => {
-        const lista = mo.trabajadores.filter(t => t.grupo === g)
+        const lista = (mo.trabajadores || []).filter(t => t.grupo === g)
         return (
           <div key={g} style={{ background: '#fff', border: '1px solid #E2DED4', padding: 16, marginBottom: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -461,11 +461,11 @@ function PagoMensual({ mo }) {
   const [mes, setMes] = useState(hoy().slice(0, 7))
   const resumen = useMemo(() => {
     const habiles = diasHabilesDelMes(mes)
-    return mo.trabajadores.map(t => {
-      const asis = mo.asistencias.filter(a => a.fecha.startsWith(mes) && a.trabajadorIds.includes(t.id))
+    return (mo.trabajadores || []).map(t => {
+      const asis = (mo.asistencias || []).filter(a => a.fecha.startsWith(mes) && a.trabajadorIds.includes(t.id))
       const fechas = [...new Set(asis.map(a => a.fecha))]
       const pagoDias = asis.reduce((s, a) => s + (a.costo.detalle.find(d => d.tId === t.id)?.valor || 0), 0)
-      const hex = mo.horasExtras.filter(h => h.fecha.startsWith(mes) && h.trabajadorId === t.id)
+      const hex = (mo.horasExtras || []).filter(h => h.fecha.startsWith(mes) && h.trabajadorId === t.id)
       const horasHex = hex.reduce((s, h) => s + h.horas, 0)
       const pagoHex = hex.reduce((s, h) => s + h.costo.total, 0)
       return { nombre: t.nombre, cargo: cargoDe(t), diasTrabajados: fechas.length, inasistencias: Math.max(0, habiles - fechas.length), horasExtras: horasHex, pagoDias, pagoHex, total: pagoDias + pagoHex, fechas }
@@ -544,13 +544,13 @@ function Informes({ mo }) {
   const [sel, setSel] = useState([])
 
   const toggle = (arr, v, setter) => setter(arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v])
-  const trabsDeGrupos = mo.trabajadores.filter(t => grupos.includes(t.grupo))
+  const trabsDeGrupos = (mo.trabajadores || []).filter(t => grupos.includes(t.grupo))
   const trabsSel = todos ? trabsDeGrupos : trabsDeGrupos.filter(t => sel.includes(t.id))
   const { desde, hasta, etiqueta } = rangoPeriodo(tipo, mes, fecha)
 
   function construirDatos() {
     const idSet = new Set(trabsSel.map(t => t.id))
-    const nombreDe = id => mo.trabajadores.find(t => t.id === id)?.nombre || id
+    const nombreDe = id => (mo.trabajadores || []).find(t => t.id === id)?.nombre || id
 
     const nomina = trabsSel.map(t => {
       const c = calc(t)
@@ -563,7 +563,7 @@ function Informes({ mo }) {
       }
     })
 
-    const asis = mo.asistencias.filter(a => a.fecha >= desde && a.fecha <= hasta)
+    const asis = (mo.asistencias || []).filter(a => a.fecha >= desde && a.fecha <= hasta)
     const detalle = []
     asis.forEach(a => a.trabajadorIds.filter(id => idSet.has(id)).forEach(id => {
       detalle.push({
@@ -574,7 +574,7 @@ function Informes({ mo }) {
       })
     }))
 
-    const hexRows = mo.horasExtras.filter(h => h.fecha >= desde && h.fecha <= hasta && idSet.has(h.trabajadorId)).map(h => ({
+    const hexRows = (mo.horasExtras || []).filter(h => h.fecha >= desde && h.fecha <= hasta && idSet.has(h.trabajadorId)).map(h => ({
       Fecha: h.fecha, Trabajador: nombreDe(h.trabajadorId), Horas: h.horas, 'OT/OC': h.ot,
       'Valor hora extra': h.costo.valorHex, 'Costo total': h.costo.total, Observación: h.obs || '',
     }))
@@ -583,7 +583,7 @@ function Informes({ mo }) {
       const a = asis.filter(x => x.trabajadorIds.includes(t.id))
       const fechas = [...new Set(a.map(x => x.fecha))]
       const pagoDias = a.reduce((s, x) => s + (x.costo.detalle.find(d => d.tId === t.id)?.valor || 0), 0)
-      const hx = mo.horasExtras.filter(h => h.fecha >= desde && h.fecha <= hasta && h.trabajadorId === t.id)
+      const hx = (mo.horasExtras || []).filter(h => h.fecha >= desde && h.fecha <= hasta && h.trabajadorId === t.id)
       const pagoHex = hx.reduce((s, h) => s + h.costo.total, 0)
       return {
         Grupo: t.grupo, Trabajador: t.nombre, Cargo: cargoDe(t),

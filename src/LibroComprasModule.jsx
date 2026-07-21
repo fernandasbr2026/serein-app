@@ -62,7 +62,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
     setRows(rs => rs.map(r => ({ ...r, estado_pago: estado })))
     if (extra && extra.length) guardarExtra(extra.map(x => ({ ...x, estado_pago: estado })))
     const ids = (rows || []).map(r => r.id).filter(Boolean)
-    if (ids.length) { try { await supabase.from('libro_compras').update({ estado_pago: estado }).in('id', ids) } catch (e) {} }
+    if (ids.length) { try { await supabase.from('libro_compras').update({ estado_pago: estado }).in('id', ids) } catch (e) { setSyncMsg('Error al guardar el estado de pago: ' + (e.message || e)) } }
   }
   const marcarTodasPagadas = () => marcarTodasPago('Pagada')
   const marcarTodasPendientes = () => marcarTodasPago('Pendiente')
@@ -282,7 +282,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
     const idsDb = elegidas.filter(r => !idsXlsx.includes(r.id)).map(r => r.id)
     if (idsDb.length) {
       setRows(rs => rs.map(x => idsDb.includes(x.id) ? { ...x, oculto: true } : x))
-      try { await supabase.from('libro_compras').update({ oculto: true }).in('id', idsDb) } catch (e) {}
+      try { await supabase.from('libro_compras').update({ oculto: true }).in('id', idsDb) } catch (e) { setSyncMsg('Error al ocultar: ' + (e.message || e)) }
     }
     setSel(new Set())
   }
@@ -290,7 +290,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
     const ids = filtradas.filter(r => sel.has(r.id) && !(extra || []).some(x => x.id === r.id)).map(r => r.id)
     if (!ids.length) return
     setRows(rs => rs.map(x => ids.includes(x.id) ? { ...x, oculto: false } : x))
-    try { await supabase.from('libro_compras').update({ oculto: false }).in('id', ids) } catch (e) {}
+    try { await supabase.from('libro_compras').update({ oculto: false }).in('id', ids) } catch (e) { setSyncMsg('Error al restaurar: ' + (e.message || e)) }
     setSel(new Set())
   }
 
@@ -299,7 +299,8 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
   const setCampo = async (id, campo, valor) => {
     if ((extra || []).some(x => x.id === id)) { guardarExtra((extra || []).map(x => x.id === id ? { ...x, [campo]: valor } : x)); return }
     setRows(rs => rs.map(r => r.id === id ? { ...r, [campo]: valor } : r))
-    try { await supabase.from('libro_compras').update({ [campo]: valor }).eq('id', id) } catch (e) { /* columna puede no existir aun */ }
+    try { await supabase.from('libro_compras').update({ [campo]: valor }).eq('id', id) }
+    catch (e) { setSyncMsg('Error al guardar "' + campo + '": ' + (e.message || e) + ' — el cambio no quedó guardado, refresca la página.') }
   }
 
   const mesLabel = ym => { const [y, m] = ym.split('-'); return MESES[(+m) - 1] + ' ' + y }

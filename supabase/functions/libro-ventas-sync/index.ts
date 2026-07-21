@@ -146,20 +146,58 @@ Deno.serve(async (req) => {
       page++;
     }
 
-    // Reemplazo completo del libro (idempotente): solo si trajimos datos
+    // Upsert por (document_number, client_rut) — NUNCA se borra la tabla.
+    // El reemplazo-completo anterior (delete + insert) destruía en cada
+    // sincronización todos los campos que el equipo edita a mano en el
+    // libro (area, ot_id, cc_ot, estado_pago, fecha_pago, banco,
+    // factoring_id, dias, dias_mora, anula_folio, oculto), porque el
+    // insert solo trae las columnas que vienen de Defontana.
+    const key = (r: { document_number: unknown; client_rut: unknown }) =>
+      `${r.document_number ?? ""}|${r.client_rut ?? ""}`;
+
     let inserted = 0;
+    let updated = 0;
     if (collected.length) {
-      await supabase.from("libro_ventas").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-      for (let i = 0; i < collected.length; i += 500) {
-        const chunk = collected.slice(i, i + 500);
+      const { data: existentes, error: errSel } = await supabase
+        .from("libro_ventas")
+        .select("id, document_number, client_rut");
+      if (errSel) throw new Error("Leer libro_ventas: " + errSel.message);
+
+      const idPorClave = new Map<string, string>();
+      for (const r of existentes ?? []) idPorClave.set(key(r), r.id as string);
+
+      const aInsertar: typeof collected = [];
+      const aActualizar: { id: string; row: typeof collected[number] }[] = [];
+      for (const row of collected) {
+        const id = idPorClave.get(key(row));
+        if (id) aActualizar.push({ id, row });
+        else aInsertar.push(row);
+      }
+
+      for (let i = 0; i < aInsertar.length; i += 500) {
+        const chunk = aInsertar.slice(i, i + 500);
         const { error } = await supabase.from("libro_ventas").insert(chunk);
         if (error) throw new Error("Insert libro_ventas: " + error.message);
         inserted += chunk.length;
       }
+
+      // Solo se tocan las columnas que vienen de Defontana — el resto
+      // (area, estado_pago, oculto, etc.) queda intacto para filas ya
+      // existentes. Se actualiza en paralelo por lotes chicos.
+      for (let i = 0; i < aActualizar.length; i += 20) {
+        const chunk = aActualizar.slice(i, i + 20);
+        const resultados = await Promise.all(
+          chunk.map(({ id, row }) => supabase.from("libro_ventas").update(row).eq("id", id)),
+        );
+        for (const { error } of resultados) {
+          if (error) throw new Error("Update libro_ventas: " + error.message);
+        }
+        updated += chunk.length;
+      }
     }
 
     return new Response(
-      JSON.stringify({ ok: true, ventas: inserted, desde: fmt(from), hasta: fmt(to) }),
+      JSON.stringify({ ok: true, ventas: inserted + updated, nuevas: inserted, actualizadas: updated, desde: fmt(from), hasta: fmt(to) }),
       { headers: { ...CORS, "Content-Type": "application/json" } },
     );
   } catch (e) {
