@@ -21,7 +21,11 @@ export function pinturaM2(capas, prodPorNombre, cte, perdidaDef) { return (capas
 // igual hay que comprar la tineta completa. El costo del envase entero se carga al trabajo.
 export function litrosM2Capa(prod, mils, perdida, cte) { if (!prod) return 0; const r = rendimientoM2Gal(prod.s, mils, perdida, cte.constante); const L = +cte.litrosPorGalon || 3.785; return r > 0 ? L / r : 0 }
 // Envase del producto: si no tiene definido litros/precio por envase, se asume un galon.
-export function envaseDe(prod, cte) { const LG = +cte.litrosPorGalon || 3.785; const litros = +prod.le > 0 ? +prod.le : LG; const precio = +prod.pe > 0 ? +prod.pe : valorGalon(prod, LG); return { litros, precio } }
+// Si el envase tiene un tamaño real distinto al galon de referencia (le) pero no tiene
+// precio propio (pe), el precio de respaldo se escala al tamaño real del envase — si no,
+// un envase de 3L pagaba precio de galon completo y uno de 9L pagaba solo un galon,
+// haciendo que la compra real saliera mas barata que el calculo teorico (imposible).
+export function envaseDe(prod, cte) { const LG = +cte.litrosPorGalon || 3.785; const litros = +prod.le > 0 ? +prod.le : LG; const precio = +prod.pe > 0 ? +prod.pe : valorGalon(prod, LG) * (litros / LG); return { litros, precio } }
 export function comprasPintura(capas, prodPorNombre, cte, perdidaDef, m2) {
   const m = +m2 || 0
   const acc = {}
