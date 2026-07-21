@@ -13,7 +13,10 @@ export const COTIZADOR_SEED = {
 }
 
 export function rendimientoM2Gal(solidos, mils, perdida, K) { const k = K || 1.5; const m = +mils || 0; const p = +perdida || 2; return m > 0 && p > 0 ? (solidos * k) / m / p : 0 }
-export function valorGalon(prod, lpg) { const L = lpg || 3.785; return prod && prod.l ? prod.l * L : (prod ? (prod.g || 0) : 0) }
+// Usa el $/galon guardado tal cual (el que se edita en Parametros); solo si no esta
+// cargado se estima desde el $/litro. Antes era al reves y el $/galon editado en
+// Parametros nunca llegaba al cotizador porque casi todos los productos tienen litro cargado.
+export function valorGalon(prod, lpg) { const L = lpg || 3.785; if (!prod) return 0; if (prod.g) return prod.g; return prod.l ? prod.l * L : 0 }
 export function valorM2Capa(prod, mils, perdida, cte) { if (!prod) return 0; const r = rendimientoM2Gal(prod.s, mils, perdida, cte.constante); return r > 0 ? valorGalon(prod, cte.litrosPorGalon) / r : 0 }
 export function pinturaM2(capas, prodPorNombre, cte, perdidaDef) { return (capas || []).reduce((acc, c) => { const prod = prodPorNombre[c.p]; const perd = c.perdida != null ? c.perdida : perdidaDef; return acc + valorM2Capa(prod, c.m, perd, cte) }, 0) }
 // ---- Compra de pintura por envases completos (galon / tineta) ----
