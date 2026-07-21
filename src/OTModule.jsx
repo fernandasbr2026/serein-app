@@ -693,7 +693,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
 }
 
 // ---------- Formulario nueva OT ----------
-function FormOT({ area, siguienteNumero, onAdd, onCancel }) {
+function FormOT({ area, siguienteNumero, clientesActivos = [], onAdd, onCancel }) {
   const [f, setF] = useState({ cliente: '', cotizacion: '', oc: '', m2: '', montoCotizado: '', preparacion: PREPARACIONES[2], esquema: '', nombreEncargo: '', correo: '', telefono: '', nv: '' })
   return (
     <div style={{ background: '#fff', border: `2px solid ${C.azul}`, padding: 16, marginBottom: 14 }}>
@@ -701,7 +701,8 @@ function FormOT({ area, siguienteNumero, onAdd, onCancel }) {
         Nueva OT · {area} <span style={{ fontFamily: "'JetBrains Mono',monospace", background: C.carbon, color: '#fff', padding: '2px 8px', marginLeft: 8 }}>{siguienteNumero}</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
-        <input style={inp} placeholder="Cliente *" value={f.cliente} onChange={e => setF({ ...f, cliente: e.target.value })} />
+        <input style={inp} list="dl-ot-cliente" placeholder="Cliente *" value={f.cliente} onChange={e => setF({ ...f, cliente: e.target.value })} />
+        <datalist id="dl-ot-cliente">{clientesActivos.map(n => <option key={n} value={n} />)}</datalist>
         <input style={inp} placeholder="Nombre encargo" value={f.nombreEncargo} onChange={e => setF({ ...f, nombreEncargo: e.target.value })} />
         <input style={inp} placeholder="Correo" value={f.correo} onChange={e => setF({ ...f, correo: e.target.value })} />
         <input style={inp} placeholder="Telefono" value={f.telefono} onChange={e => setF({ ...f, telefono: e.target.value })} />
@@ -937,7 +938,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
           <Plus size={15} /> Nueva OT en {areaSel}
         </button>
       )}
-      {creando && <FormOT area={areaSel} siguienteNumero={siguiente} onAdd={o => { setOts(xs => [o, ...xs]); setCreando(false) }} onCancel={() => setCreando(false)} />}
+      {creando && <FormOT area={areaSel} siguienteNumero={siguiente} clientesActivos={clientesActivos} onAdd={o => { setOts(xs => [o, ...xs]); setCreando(false) }} onCancel={() => setCreando(false)} />}
 
       {visibles.length === 0 && <div style={{ color: '#9AA0A6', fontSize: 14, padding: 20, textAlign: 'center', background: '#fff', border: '1px dashed #CBD2D6' }}>Sin OTs en {areaSel}. Crea la primera.</div>}
       {(<>
