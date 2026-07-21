@@ -36,6 +36,7 @@ export default function App() {
   const [sincronizado, setSincronizado] = useState(false)
   const [recovery, setRecovery] = useState(false)
   const [syncKey, setSyncKey] = useState(0)
+  const [hayNovedades, setHayNovedades] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -73,9 +74,10 @@ export default function App() {
     // Cada pestaña solo EMPUJA sus cambios — nunca vuelve a leer lo que
     // cambió otro usuario, así que dos personas podían ver datos
     // distintos hasta recargar la página a mano. Este re-pull periódico
-    // (y al volver a la pestaña) trae lo último de la nube y, si algo
-    // cambió de verdad, remonta el Dashboard (key=syncKey) para que
-    // vuelva a leer localStorage limpio en vez de mezclar estado a medias.
+    // (y al volver a la pestaña) trae lo último de la nube. OJO: no
+    // remonta el Dashboard solo — eso resetea la pestaña/formulario en
+    // el que la persona está trabajando (le pasó a Joce). Solo avisa
+    // con un botón para que decida cuándo actualizar su pantalla.
     const snapshot = () => {
       const s = {}
       for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && /^(serein_|__serein_|cotizador_)/.test(k)) s[k] = localStorage.getItem(k) }
@@ -87,7 +89,7 @@ export default function App() {
       if (!res.ok) return
       const despues = snapshot()
       const cambio = Object.keys(despues).some(k => despues[k] !== antes[k]) || Object.keys(antes).length !== Object.keys(despues).length
-      if (cambio) setSyncKey(k => k + 1)
+      if (cambio) setHayNovedades(true)
     }
     const repullId = setInterval(repull, 20000)
     const onVisible = () => { if (document.visibilityState === 'visible') repull(); else pushState() }
@@ -116,7 +118,24 @@ export default function App() {
   if (errorPerfil) return <Pantalla msg={errorPerfil} accion={salir} accionTxt="Cerrar sesión" />
   if (!perfil) return <Pantalla msg="Verificando tu perfil…" />
   if (!sincronizado) return <Pantalla msg="Sincronizando datos con la nube..." />
-  return <ErrorBoundary><Dashboard key={syncKey} perfil={perfil} email={session.user.email} onLogout={salir} /></ErrorBoundary>
+  return (
+    <ErrorBoundary>
+      <Dashboard key={syncKey} perfil={perfil} email={session.user.email} onLogout={salir} />
+      {hayNovedades && (
+        <div style={{ position: 'fixed', bottom: 18, left: '50%', transform: 'translateX(-50%)', zIndex: 9999, background: '#1E2732', border: '1px solid #2E3945', borderRadius: 10, padding: '10px 12px 10px 16px', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 6px 20px rgba(0,0,0,.35)', fontFamily: "'Inter',sans-serif" }}>
+          <span style={{ color: '#DCE3E8', fontSize: 13 }}>Hay cambios nuevos de otros usuarios</span>
+          <button onClick={() => { setSyncKey(k => k + 1); setHayNovedades(false) }}
+            style={{ background: '#D2642F', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
+            Actualizar
+          </button>
+          <button onClick={() => setHayNovedades(false)}
+            style={{ background: 'transparent', color: '#8A97A3', border: 'none', cursor: 'pointer', fontSize: 13, padding: '7px 4px' }}>
+            Ahora no
+          </button>
+        </div>
+      )}
+    </ErrorBoundary>
+  )
 }
 
 function Pantalla({ msg, accion, accionTxt }) {
