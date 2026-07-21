@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Plus, X, Trash2, Phone, Mail, MessageCircle, Users as UsersIcon, Target, Clock } from 'lucide-react'
+import { Plus, X, Trash2, Phone, Mail, MessageCircle, Users as UsersIcon, Target, Clock, Megaphone } from 'lucide-react'
 import {
   cargarClientes, crearCliente, actualizarCliente,
   cargarPersonas, crearPersona, eliminarPersona,
   cargarInteracciones, crearInteraccion, eliminarInteraccion,
   cargarOportunidades, crearOportunidad, actualizarOportunidad, eliminarOportunidad,
+  cargarCampanas, crearCampana, actualizarCampana, eliminarCampana,
 } from './crm-api.js'
 
 // ============================================================
@@ -25,12 +26,15 @@ const colorEtapa = e => ({
   'Lead nuevo': ['#EEF1F4', '#5A6B77'], 'Contactado': ['#F9E9DE', C.ambar], 'Calificado': ['#E7EEF2', C.azul],
   'Cliente': ['#E7F2EA', C.verde], 'Descartado': ['#F6E0DA', C.rojo],
 }[e] || ['#EEE', C.gris])
-const ORIGENES = ['WhatsApp', 'Referido', 'Web', 'Llamada', 'Feria/Evento', 'Otro']
+const ORIGENES = ['WhatsApp', 'Referido', 'Web', 'Llamada', 'Meta Ads', 'Google Ads', 'Feria/Evento', 'Otro']
 const TIPOS_INT = [['whatsapp', 'WhatsApp', MessageCircle], ['llamada', 'Llamada', Phone], ['reunion', 'Reunión', UsersIcon], ['correo', 'Correo', Mail], ['nota', 'Nota', Clock], ['visita', 'Visita', UsersIcon]]
 const ETAPAS_OP = ['Alta probabilidad de cierre', 'Baja probabilidad de cierre', 'Aprobada', 'Rechazada', 'Otro']
+const CANALES_CAMPANA = ['Meta Ads', 'Google Ads', 'Otro']
+const ESTADOS_CAMPANA = ['Activa', 'Pausada', 'Finalizada']
+const colorEstadoCampana = e => ({ 'Activa': ['#E7F2EA', C.verde], 'Pausada': ['#F9E9DE', C.ambar], 'Finalizada': ['#EEF1F4', '#5A6B77'] }[e] || ['#EEE', C.gris])
 
-function FormLead({ onGuardar, onCancelar }) {
-  const [f, setF] = useState({ nombre: '', telefono: '', whatsapp_id: '', correo: '', rut: '', origen: 'WhatsApp', vendedor: 'Venta general' })
+function FormLead({ campanas, onGuardar, onCancelar }) {
+  const [f, setF] = useState({ nombre: '', telefono: '', whatsapp_id: '', correo: '', rut: '', origen: 'WhatsApp', vendedor: 'Venta general', campana_id: '' })
   return (
     <div onClick={onCancelar} style={{ position: 'fixed', inset: 0, background: 'rgba(15,26,46,.55)', zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#fff', width: '100%', maxWidth: 440, padding: 20, boxShadow: '0 20px 60px -12px rgba(0,0,0,.4)' }}>
@@ -47,13 +51,63 @@ function FormLead({ onGuardar, onCancelar }) {
           <label style={{ fontSize: 11, color: C.gris }}>Origen
             <select value={f.origen} onChange={e => setF({ ...f, origen: e.target.value })} style={{ ...inp, width: '100%', marginTop: 3 }}>{ORIGENES.map(o => <option key={o} value={o}>{o}</option>)}</select>
           </label>
+          <label style={{ fontSize: 11, color: C.gris }}>Campaña (opcional)
+            <select value={f.campana_id} onChange={e => setF({ ...f, campana_id: e.target.value })} style={{ ...inp, width: '100%', marginTop: 3 }}>
+              <option value="">— Sin campaña —</option>
+              {campanas.map(c => <option key={c.id} value={c.id}>{c.nombre} ({c.canal})</option>)}
+            </select>
+          </label>
           <label style={{ fontSize: 11, color: C.gris }}>Vendedor
             <select value={f.vendedor} onChange={e => setF({ ...f, vendedor: e.target.value })} style={{ ...inp, width: '100%', marginTop: 3 }}><option value="Venta general">Venta general</option><option value="Mario Vidal">Mario Vidal</option></select>
           </label>
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
           <button onClick={onCancelar} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '8px 14px', cursor: 'pointer', fontSize: 12.5 }}>Cancelar</button>
-          <button onClick={() => f.nombre.trim() && onGuardar({ ...f, nombre: f.nombre.trim(), whatsapp_id: f.whatsapp_id.trim() || null })} disabled={!f.nombre.trim()} style={{ background: C.verde, color: '#fff', border: 'none', padding: '8px 16px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, opacity: f.nombre.trim() ? 1 : 0.5 }}>Guardar</button>
+          <button onClick={() => f.nombre.trim() && onGuardar({ ...f, nombre: f.nombre.trim(), whatsapp_id: f.whatsapp_id.trim() || null, campana_id: f.campana_id || null })} disabled={!f.nombre.trim()} style={{ background: C.verde, color: '#fff', border: 'none', padding: '8px 16px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, opacity: f.nombre.trim() ? 1 : 0.5 }}>Guardar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function FormCampana({ campana, onGuardar, onCancelar }) {
+  const [f, setF] = useState(campana || { nombre: '', canal: 'Meta Ads', estado: 'Activa', fecha_inicio: '', fecha_fin: '', presupuesto: '', gasto_real: '', notas: '' })
+  return (
+    <div onClick={onCancelar} style={{ position: 'fixed', inset: 0, background: 'rgba(15,26,46,.55)', zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', width: '100%', maxWidth: 440, padding: 20, boxShadow: '0 20px 60px -12px rgba(0,0,0,.4)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, textTransform: 'uppercase' }}>{campana ? 'Editar campaña' : 'Agregar campaña'}</span>
+          <button onClick={onCancelar} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <label style={{ fontSize: 11, color: C.gris }}>Nombre de la campaña *<input value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} placeholder="Ej: Revestimientos industriales - julio" style={{ ...inp, width: '100%', marginTop: 3 }} /></label>
+          <label style={{ fontSize: 11, color: C.gris }}>Canal
+            <select value={f.canal} onChange={e => setF({ ...f, canal: e.target.value })} style={{ ...inp, width: '100%', marginTop: 3 }}>{CANALES_CAMPANA.map(c => <option key={c} value={c}>{c}</option>)}</select>
+          </label>
+          <label style={{ fontSize: 11, color: C.gris }}>Estado
+            <select value={f.estado} onChange={e => setF({ ...f, estado: e.target.value })} style={{ ...inp, width: '100%', marginTop: 3 }}>{ESTADOS_CAMPANA.map(e2 => <option key={e2} value={e2}>{e2}</option>)}</select>
+          </label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <label style={{ fontSize: 11, color: C.gris, flex: 1 }}>Fecha inicio<input type="date" value={f.fecha_inicio || ''} onChange={e => setF({ ...f, fecha_inicio: e.target.value })} style={{ ...inp, width: '100%', marginTop: 3 }} /></label>
+            <label style={{ fontSize: 11, color: C.gris, flex: 1 }}>Fecha fin<input type="date" value={f.fecha_fin || ''} onChange={e => setF({ ...f, fecha_fin: e.target.value })} style={{ ...inp, width: '100%', marginTop: 3 }} /></label>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <label style={{ fontSize: 11, color: C.gris, flex: 1 }}>Presupuesto CLP<input value={f.presupuesto || ''} onChange={e => setF({ ...f, presupuesto: e.target.value })} style={{ ...inp, width: '100%', marginTop: 3 }} /></label>
+            <label style={{ fontSize: 11, color: C.gris, flex: 1 }}>Gasto real CLP<input value={f.gasto_real || ''} onChange={e => setF({ ...f, gasto_real: e.target.value })} style={{ ...inp, width: '100%', marginTop: 3 }} /></label>
+          </div>
+          <label style={{ fontSize: 11, color: C.gris }}>Notas<textarea value={f.notas || ''} onChange={e => setF({ ...f, notas: e.target.value })} style={{ ...inp, width: '100%', marginTop: 3, minHeight: 50, resize: 'vertical' }} /></label>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
+          <button onClick={onCancelar} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '8px 14px', cursor: 'pointer', fontSize: 12.5 }}>Cancelar</button>
+          <button
+            onClick={() => f.nombre.trim() && onGuardar({
+              ...f, nombre: f.nombre.trim(),
+              fecha_inicio: f.fecha_inicio || null, fecha_fin: f.fecha_fin || null,
+              presupuesto: Number(f.presupuesto) || null, gasto_real: Number(f.gasto_real) || null,
+            })}
+            disabled={!f.nombre.trim()}
+            style={{ background: C.verde, color: '#fff', border: 'none', padding: '8px 16px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, opacity: f.nombre.trim() ? 1 : 0.5 }}
+          >Guardar</button>
         </div>
       </div>
     </div>
@@ -111,7 +165,7 @@ function FormPersonaContacto({ onGuardar, onCancelar }) {
   )
 }
 
-function FichaCliente({ cliente, onClose, onActualizado }) {
+function FichaCliente({ cliente, campanas, onClose, onActualizado }) {
   const [f, setF] = useState(cliente)
   const [personas, setPersonas] = useState([])
   const [interacciones, setInteracciones] = useState([])
@@ -163,6 +217,12 @@ function FichaCliente({ cliente, onClose, onActualizado }) {
               </label>
               <label style={{ fontSize: 11, color: C.gris }}>Etapa
                 <select value={f.etapa || 'Lead nuevo'} onChange={e => setF({ ...f, etapa: e.target.value })} style={{ ...inp, width: '100%', marginTop: 3 }}>{ETAPAS.map(e2 => <option key={e2} value={e2}>{e2}</option>)}</select>
+              </label>
+              <label style={{ fontSize: 11, color: C.gris }}>Campaña
+                <select value={f.campana_id || ''} onChange={e => setF({ ...f, campana_id: e.target.value || null })} style={{ ...inp, width: '100%', marginTop: 3 }}>
+                  <option value="">— Sin campaña —</option>
+                  {campanas.map(c => <option key={c.id} value={c.id}>{c.nombre} ({c.canal})</option>)}
+                </select>
               </label>
             </div>
             <button onClick={guardarCampos} style={{ marginTop: 10, background: C.azul, color: '#fff', border: 'none', padding: '7px 16px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>Guardar datos</button>
@@ -236,15 +296,35 @@ export default function CRMModule() {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
   const [clientes, setClientes] = useState([])
+  const [campanas, setCampanas] = useState([])
+  const [vista, setVista] = useState('leads')
   const [q, setQ] = useState('')
   const [fEtapa, setFEtapa] = useState('')
   const [addLead, setAddLead] = useState(false)
   const [seleccionado, setSeleccionado] = useState(null)
+  const [addCampana, setAddCampana] = useState(false)
+  const [editCampana, setEditCampana] = useState(null)
 
   async function refrescar() {
-    try { setClientes(await cargarClientes()) } catch (e) { setError('No se pudo cargar el CRM: ' + (e.message || e)) }
+    try {
+      const [c, camp] = await Promise.all([cargarClientes(), cargarCampanas()])
+      setClientes(c); setCampanas(camp)
+    } catch (e) { setError('No se pudo cargar el CRM: ' + (e.message || e)) }
   }
   useEffect(() => { refrescar().finally(() => setCargando(false)) }, [])
+
+  const statsCampanas = useMemo(() => campanas.map(camp => {
+    const leads = clientes.filter(c => c.campana_id === camp.id)
+    const convertidos = leads.filter(c => c.etapa === 'Cliente').length
+    const gasto = camp.gasto_real || 0
+    return {
+      ...camp,
+      leadsGenerados: leads.length,
+      convertidos,
+      tasaConversion: leads.length ? Math.round((convertidos / leads.length) * 100) : 0,
+      costoPorLead: leads.length ? Math.round(gasto / leads.length) : null,
+    }
+  }), [campanas, clientes])
 
   const filtrados = useMemo(() => clientes.filter(c => {
     if (fEtapa && c.etapa !== fEtapa) return false
@@ -266,9 +346,44 @@ export default function CRMModule() {
           <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 700, fontSize: 20, textTransform: 'uppercase', color: C.azul }}>CRM</div>
           <div style={{ fontSize: 12, color: C.gris }}>Leads, clientes y seguimiento comercial</div>
         </div>
-        <button onClick={() => setAddLead(true)} style={{ background: C.ambar, color: '#fff', border: 'none', padding: '9px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={14} /> Agregar lead</button>
+        {vista === 'leads'
+          ? <button onClick={() => setAddLead(true)} style={{ background: C.ambar, color: '#fff', border: 'none', padding: '9px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={14} /> Agregar lead</button>
+          : <button onClick={() => setAddCampana(true)} style={{ background: C.ambar, color: '#fff', border: 'none', padding: '9px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={14} /> Agregar campaña</button>}
       </div>
 
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid #E2DED4' }}>
+        <button onClick={() => setVista('leads')} style={{ background: 'none', border: 'none', borderBottom: '2px solid ' + (vista === 'leads' ? C.azul : 'transparent'), color: vista === 'leads' ? C.azul : C.gris, fontWeight: 700, fontSize: 12.5, textTransform: 'uppercase', padding: '8px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}><UsersIcon size={14} /> Leads y clientes</button>
+        <button onClick={() => setVista('campanas')} style={{ background: 'none', border: 'none', borderBottom: '2px solid ' + (vista === 'campanas' ? C.azul : 'transparent'), color: vista === 'campanas' ? C.azul : C.gris, fontWeight: 700, fontSize: 12.5, textTransform: 'uppercase', padding: '8px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}><Megaphone size={14} /> Campañas</button>
+      </div>
+
+      {vista === 'campanas' ? (
+        statsCampanas.length === 0 ? (
+          <div style={{ color: C.gris, padding: 20, textAlign: 'center', border: '1px dashed #E2DED4' }}>Sin campañas registradas. Agrega una para empezar a medir Meta Ads / Google Ads.</div>
+        ) : (
+          <div style={{ overflowX: 'auto', border: '1px solid #E2DED4' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Campaña', 'Canal', 'Estado', 'Leads', 'Convertidos', 'Tasa conv.', 'Gasto', 'Costo/lead', ''].map(h => <th key={h} style={{ textAlign: 'left', padding: '7px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+              <tbody>
+                {statsCampanas.map(c => { const [cf, ct] = colorEstadoCampana(c.estado); return (
+                  <tr key={c.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                    <td style={{ padding: '8px 10px', fontWeight: 600, cursor: 'pointer' }} onClick={() => setEditCampana(c)}>{c.nombre}</td>
+                    <td style={{ padding: '8px 10px', color: C.gris }}>{c.canal}</td>
+                    <td style={{ padding: '8px 10px' }}><span style={{ background: cf, color: ct, padding: '3px 9px', fontSize: 11, fontWeight: 700 }}>{c.estado}</span></td>
+                    <td style={{ padding: '8px 10px' }}>{c.leadsGenerados}</td>
+                    <td style={{ padding: '8px 10px' }}>{c.convertidos}</td>
+                    <td style={{ padding: '8px 10px' }}>{c.tasaConversion}%</td>
+                    <td style={{ padding: '8px 10px', color: C.gris }}>{c.gasto_real ? clp(c.gasto_real) : '—'}</td>
+                    <td style={{ padding: '8px 10px', color: C.gris }}>{c.costoPorLead != null ? clp(c.costoPorLead) : '—'}</td>
+                    <td style={{ padding: '8px 10px' }}>
+                      <button onClick={async () => { if (confirm('¿Eliminar la campaña "' + c.nombre + '"?')) { await eliminarCampana(c.id); refrescar() } }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
+                    </td>
+                  </tr>
+                )})}
+              </tbody>
+            </table>
+          </div>
+        )
+      ) : (<>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
         {ETAPAS.map(e => { const [cf, ct] = colorEtapa(e); return (
           <button key={e} onClick={() => setFEtapa(fEtapa === e ? '' : e)} style={{ flex: '1 1 130px', border: '1px solid ' + (fEtapa === e ? ct : '#E2DED4'), background: fEtapa === e ? cf : '#fff', padding: '10px 12px', cursor: 'pointer', textAlign: 'left' }}>
@@ -301,9 +416,12 @@ export default function CRMModule() {
           </table>
         </div>
       )}
+      </>)}
 
-      {addLead && <FormLead onGuardar={async d => { try { await crearCliente(d); setAddLead(false); refrescar() } catch (e) { setError('Error al guardar: ' + (e.message || e)) } }} onCancelar={() => setAddLead(false)} />}
-      {seleccionado && <FichaCliente cliente={seleccionado} onClose={() => setSeleccionado(null)} onActualizado={c => { setSeleccionado(c); refrescar() }} />}
+      {addLead && <FormLead campanas={campanas} onGuardar={async d => { try { await crearCliente(d); setAddLead(false); refrescar() } catch (e) { setError('Error al guardar: ' + (e.message || e)) } }} onCancelar={() => setAddLead(false)} />}
+      {seleccionado && <FichaCliente cliente={seleccionado} campanas={campanas} onClose={() => setSeleccionado(null)} onActualizado={c => { setSeleccionado(c); refrescar() }} />}
+      {addCampana && <FormCampana onGuardar={async d => { try { await crearCampana(d); setAddCampana(false); refrescar() } catch (e) { setError('Error al guardar: ' + (e.message || e)) } }} onCancelar={() => setAddCampana(false)} />}
+      {editCampana && <FormCampana campana={editCampana} onGuardar={async d => { try { await actualizarCampana(editCampana.id, d); setEditCampana(null); refrescar() } catch (e) { setError('Error al guardar: ' + (e.message || e)) } }} onCancelar={() => setEditCampana(null)} />}
     </div>
   )
 }

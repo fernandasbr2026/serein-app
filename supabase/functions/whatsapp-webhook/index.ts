@@ -20,11 +20,11 @@
 //      "Business", agregar el producto "WhatsApp", y conseguir:
 //        - el número de teléfono de WhatsApp Business (Phone Number ID)
 //        - un token de acceso permanente (System User token)
-//   3) Cargar los SECRETOS en este proyecto Supabase
-//      (Project Settings > Edge Functions > Secrets):
-//        WHATSAPP_VERIFY_TOKEN = una palabra clave que tú inventes
-//          (Meta la usa solo para verificar que este webhook es tuyo)
-//        SERVICE_ROLE_KEY = service_role key de este proyecto Supabase
+//   3) Cargar el secreto WHATSAPP_VERIFY_TOKEN en este proyecto Supabase
+//      (Edge Functions > Secrets) — una palabra clave que tú inventes,
+//      Meta la usa solo para verificar que este webhook es tuyo.
+//      (SUPABASE_SERVICE_ROLE_KEY ya está disponible automáticamente
+//      en toda Edge Function de este proyecto, no hace falta cargarla.)
 //   4) Desplegar:  supabase functions deploy whatsapp-webhook
 //   5) En Meta for Developers > tu app > WhatsApp > Configuration,
 //      pegar como "Callback URL" la URL de esta función
@@ -46,8 +46,8 @@ const CORS = {
 
 function supabaseAdmin() {
   const url = Deno.env.get("SUPABASE_URL") ?? "https://fyupirswsvojdswpzvjm.supabase.co";
-  const key = Deno.env.get("SERVICE_ROLE_KEY");
-  if (!key) throw new Error("Falta el secreto SERVICE_ROLE_KEY en este proyecto (Project Settings > Edge Functions > Secrets).");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!key) throw new Error("Falta SUPABASE_SERVICE_ROLE_KEY (Supabase la inyecta automáticamente en Edge Functions).");
   return createClient(url, key);
 }
 

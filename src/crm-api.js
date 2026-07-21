@@ -74,3 +74,22 @@ export async function eliminarOportunidad(id) {
   const { error } = await supabase.from('crm_oportunidades').delete().eq('id', id)
   if (error) throw error
 }
+
+export async function cargarCampanas() {
+  const { data, error } = await supabase.from('crm_campanas').select('*').order('created_at', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+export async function crearCampana(campana) {
+  const { data, error } = await supabase.from('crm_campanas').insert(campana).select().single()
+  if (error) throw error
+  return data
+}
+export async function actualizarCampana(id, cambios) {
+  const { error } = await supabase.from('crm_campanas').update({ ...cambios, updated_at: new Date().toISOString() }).eq('id', id)
+  if (error) throw error
+}
+export async function eliminarCampana(id) {
+  const { error } = await supabase.from('crm_campanas').delete().eq('id', id)
+  if (error) throw error
+}
