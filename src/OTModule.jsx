@@ -6,6 +6,7 @@ import { costoOCdeOT } from './OrdenesCompraModule.jsx'
 import { supabase } from './supabase.js'
 import { costoMOdeOT } from './ManoObraModule.jsx'
 import Paginador, { paginar } from './Paginador.jsx'
+import { pullState, pushState } from './sync.js'
 
 const C = { azul: '#061A40', teal: '#0B7285', ambar: '#FF6B00', rojo: '#D64545', verde: '#12805C', carbon: '#0F1A2E', gris: '#8A929E' }
 const clp = n => '$' + Math.round(n).toLocaleString('es-CL')
@@ -871,7 +872,24 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   }
 
   const actualizar = (id, cambios) => setOts(xs => xs.map(o => o.id === id ? { ...o, ...cambios } : o))
-  const eliminar = id => setOts(xs => xs.filter(o => o.id !== id))
+  // Un borrado normal (setOts local + el guardado/push general de 800ms)
+  // se podía "revivir": si otra pestaña con una copia más vieja de las OT
+  // hacía cualquier otro cambio mientras tanto, su push terminaba
+  // reemplazando la nube entera con su versión — que todavía traía la OT
+  // que se acababa de borrar acá. Por eso el borrado trae primero lo más
+  // fresco de la nube, borra sobre eso, y empuja de inmediato (sin
+  // esperar el debounce compartido) para dejar la ventana de choque lo
+  // más chica posible.
+  const eliminar = async id => {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_ots') || 'null') } catch (e) {}
+    const base = Array.isArray(fresco) ? fresco : otsAll
+    const nuevo = base.filter(o => o.id !== id)
+    try { localStorage.setItem('serein_ots', JSON.stringify(nuevo)) } catch (e) {}
+    setOts(nuevo)
+    pushState()
+  }
 
   const visibles = ots.filter(o => o.area === areaSel && (!fCliente || _norm(o.cliente) === _norm(fCliente)))
   const ventaTot = visibles.reduce((a, o) => a + (o.ventas || []).reduce((x, v) => x + (v.neta || 0), 0), 0)
