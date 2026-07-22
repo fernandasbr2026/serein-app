@@ -35,8 +35,6 @@ export default function App() {
   const [errorPerfil, setErrorPerfil] = useState(null)
   const [sincronizado, setSincronizado] = useState(false)
   const [recovery, setRecovery] = useState(false)
-  const [syncKey, setSyncKey] = useState(0)
-  const [hayNovedades, setHayNovedades] = useState(false)
   const [hayVersionNueva, setHayVersionNueva] = useState(false)
 
   // Cuando se publica un arreglo, las pestanas ya abiertas siguen corriendo
@@ -94,43 +92,23 @@ export default function App() {
       .catch(e => setErrorPerfil('Error de conexión al leer el perfil: ' + (e && e.message ? e.message : String(e))))
   }, [session])
 
+  // Trae lo inicial y sigue empujando los cambios locales cada 2s. Traer de
+  // vuelta lo que cambian OTROS usuarios (en vivo + respaldo periodico) ya
+  // no pasa aca — pasa dentro de Dashboard.jsx, pieza por pieza, para poder
+  // aplicarlo sin remontar nada ni interrumpir a nadie a mitad de una tarea.
   useEffect(() => {
     if (!perfil) return
     let vivo = true
     pullState().then(res => { if (res.ok && res.n === 0) pushState() }).finally(() => { if (vivo) setSincronizado(true) })
     const id = setInterval(() => { pushState() }, 2000)
-
-    // Cada pestaña solo EMPUJA sus cambios — nunca vuelve a leer lo que
-    // cambió otro usuario, así que dos personas podían ver datos
-    // distintos hasta recargar la página a mano. Este re-pull periódico
-    // (y al volver a la pestaña) trae lo último de la nube. OJO: no
-    // remonta el Dashboard solo — eso resetea la pestaña/formulario en
-    // el que la persona está trabajando (le pasó a Joce). Solo avisa
-    // con un botón para que decida cuándo actualizar su pantalla.
-    const snapshot = () => {
-      const s = {}
-      for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && /^(serein_|__serein_|cotizador_)/.test(k)) s[k] = localStorage.getItem(k) }
-      return s
-    }
-    const repull = async () => {
-      const antes = snapshot()
-      const res = await pullState()
-      if (!res.ok) return
-      const despues = snapshot()
-      const cambio = Object.keys(despues).some(k => despues[k] !== antes[k]) || Object.keys(antes).length !== Object.keys(despues).length
-      if (cambio) setHayNovedades(true)
-    }
-    const repullId = setInterval(repull, 20000)
-    const onVisible = () => { if (document.visibilityState === 'visible') repull(); else pushState() }
     const onHide = () => { pushState() }
+    const onVisible = () => { if (document.visibilityState !== 'visible') pushState() }
     window.addEventListener('beforeunload', onHide)
     document.addEventListener('visibilitychange', onVisible)
-    window.addEventListener('focus', repull)
     return () => {
-      vivo = false; clearInterval(id); clearInterval(repullId)
+      vivo = false; clearInterval(id)
       window.removeEventListener('beforeunload', onHide)
       document.removeEventListener('visibilitychange', onVisible)
-      window.removeEventListener('focus', repull)
     }
   }, [perfil])
 
@@ -149,20 +127,7 @@ export default function App() {
   if (!sincronizado) return <Pantalla msg="Sincronizando datos con la nube..." />
   return (
     <ErrorBoundary>
-      <Dashboard key={syncKey} perfil={perfil} email={session.user.email} onLogout={salir} />
-      {hayNovedades && (
-        <div style={{ position: 'fixed', bottom: 18, left: '50%', transform: 'translateX(-50%)', zIndex: 9999, background: '#1E2732', border: '1px solid #2E3945', borderRadius: 10, padding: '10px 12px 10px 16px', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 6px 20px rgba(0,0,0,.35)', fontFamily: "'Inter',sans-serif" }}>
-          <span style={{ color: '#DCE3E8', fontSize: 13 }}>Hay cambios nuevos de otros usuarios</span>
-          <button onClick={() => { setSyncKey(k => k + 1); setHayNovedades(false) }}
-            style={{ background: '#D2642F', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
-            Actualizar
-          </button>
-          <button onClick={() => setHayNovedades(false)}
-            style={{ background: 'transparent', color: '#8A97A3', border: 'none', cursor: 'pointer', fontSize: 13, padding: '7px 4px' }}>
-            Ahora no
-          </button>
-        </div>
-      )}
+      <Dashboard perfil={perfil} email={session.user.email} onLogout={salir} />
       {hayVersionNueva && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 10000, background: '#1E5C8A', color: '#fff', padding: '9px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, fontFamily: "'Inter',sans-serif", fontSize: 13, boxShadow: '0 2px 10px rgba(0,0,0,.3)' }}>
           <span>Hay una versión nueva de la app — recarga para tener los últimos arreglos</span>
