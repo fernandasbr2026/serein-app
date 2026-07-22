@@ -33,7 +33,7 @@ import { MO_SEED } from './ManoObraModule.jsx'
 import { PROYECTOS } from './proyectos-data.js'
 import InventarioModule from './InventarioModule.jsx'
 import { INVENTARIO_SEED } from './inventario-data.js'
-import { pushState } from './sync.js'
+import { pushState, pullState } from './sync.js'
 import { supabase } from './supabase.js'
 
 const C = { azul: '#1D1D1B', teal: '#A8501F', ambar: '#D2642F', rojo: '#B5432E', verde: '#3D7A4E', carbon: '#161616', niebla: '#F6F0EA' }
@@ -285,26 +285,44 @@ export default function Dashboard({ perfil, email, onLogout }) {
     guardarSerein({ avances, mo, comprasOp, configCompras, fin, pp, params, clientes, contactos, facturas, cotizaciones, comisiones, ppmPct, ots, proyectos, inventario, invMov }); try { clearTimeout(window.__sereinPushT); window.__sereinPushT = setTimeout(function () { pushState() }, 800) } catch (e) {}
   }, [avances, mo, comprasOp, configCompras, fin, pp, params, clientes, contactos, facturas, cotizaciones, comisiones, ppmPct, ots, proyectos, inventario, invMov])
 
-  // Sincronizacion en vivo: cuando otra persona guarda algo (en cualquier
-  // modulo), Supabase Realtime avisa al instante y se aplica directo al
-  // estado de esta pantalla — sin esperar el re-pull periodico ni un clic
-  // en "Actualizar". Antes cada pantalla solo se enteraba de lo que otros
-  // hicieron cada 20s (o nunca, si nadie hacia clic en el aviso).
+  // Sincronizacion con lo que hacen otros usuarios, en dos capas:
+  // 1) Tiempo real (Supabase Realtime): en cuanto alguien guarda algo en
+  //    cualquier modulo, esta pantalla lo recibe al instante.
+  // 2) Respaldo por sondeo cada 15s (y al volver a la pestana): por si el
+  //    tiempo real no esta activado en Supabase o se corta la conexion, esto
+  //    igual trae lo ultimo sin depender de que nadie haga clic en nada.
+  // En ambos casos se aplica pieza por pieza (un modulo a la vez) al estado
+  // ya montado — nunca se remonta el Dashboard, asi que no se pierde la
+  // pestana ni el formulario en el que la persona este trabajando.
   useEffect(() => {
     const setters = { avances: setAvances, mo: setMo, comprasOp: setComprasOp, configCompras: setConfigCompras, fin: setFin, pp: setPp, params: setParams, clientes: setClientes, contactos: setContactos, facturas: setFacturas, cotizaciones: setCotizaciones, comisiones: setComisiones, ppmPct: setPpmPct, ots: setOts, proyectos: setProyectos, inventario: setInventario, invMov: setInvMov }
+    const aplicar = (clave, valorStr) => {
+      const setter = setters[clave]
+      if (!setter || valorStr == null) return
+      const key = 'serein_' + clave
+      if (localStorage.getItem(key) === valorStr) return
+      try { localStorage.setItem(key, valorStr); setter(JSON.parse(valorStr)) } catch (e) {}
+    }
     const canal = supabase.channel('app_state_vivo').on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, payload => {
       const fila = payload.new
-      if (!fila || typeof fila.id !== 'string' || !fila.id.startsWith('serein_') || fila.value == null) return
-      const clave = fila.id.slice('serein_'.length)
-      const setter = setters[clave]
-      if (!setter) return
-      try {
-        if (localStorage.getItem(fila.id) === fila.value) return
-        localStorage.setItem(fila.id, fila.value)
-        setter(JSON.parse(fila.value))
-      } catch (e) {}
+      if (!fila || typeof fila.id !== 'string' || !fila.id.startsWith('serein_')) return
+      aplicar(fila.id.slice('serein_'.length), fila.value)
     }).subscribe()
-    return () => { try { supabase.removeChannel(canal) } catch (e) {} }
+    const refrescar = async () => {
+      const r = await pullState()
+      if (!r.ok) return
+      Object.keys(setters).forEach(clave => aplicar(clave, localStorage.getItem('serein_' + clave)))
+    }
+    const id = setInterval(refrescar, 15000)
+    const onVis = () => { if (document.visibilityState === 'visible') refrescar() }
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('focus', refrescar)
+    return () => {
+      try { supabase.removeChannel(canal) } catch (e) {}
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('focus', refrescar)
+    }
   }, [])
 
   // Trae la UF (valor del día) al cargar la app, desde mindicador.cl (Banco Central)
