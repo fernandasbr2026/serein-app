@@ -34,10 +34,15 @@ export function evaluarProducto(producto, tabla, { masividad, m2, merma = 0, tc 
   const lPorM2 = (um / (producto.sv * 10)) * (1 + merma / 100)
   const pl = precioLitro(producto, tc)
   const litros = lPorM2 * (Number(m2) || 0)
+  // capas/kg alimentan el Paso 2 (aplicador por m²×capas o por kg —
+  // sección 5 del documento); capaMaxUm/densidad son valores editables del
+  // catálogo, ver nota en intumescente-tablas-v2.js.
+  const capas = Math.max(1, Math.ceil(um / (Number(producto.capaMaxUm) || um)))
+  const kg = litros * (Number(producto.densidad) || 0)
   return {
     producto, um, lPorM2, costoM2: lPorM2 * pl, litros,
     galones: litros / GAL_L, envases: Math.ceil(litros / producto.litrosEnvase || 0),
-    costo: litros * pl,
+    costo: litros * pl, capas, kg,
   }
 }
 

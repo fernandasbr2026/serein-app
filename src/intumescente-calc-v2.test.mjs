@@ -4,6 +4,8 @@
 import assert from 'node:assert/strict'
 import { lookupEspesor, precioLitro, evaluarProducto, evaluarLinea } from './intumescente-calc-v2.js'
 import { buildTablas, PRODUCTOS_SEED } from './intumescente-tablas-v2.js'
+import { tablaSG864ParaTc, TC_MINIMA_F120 } from './intumescente-tc-avanzada.js'
+import PPG_TC from './ppg-sg864-tc-completas.json' with { type: 'json' }
 
 const tablas = buildTablas()
 const productos = PRODUCTOS_SEED
@@ -109,14 +111,22 @@ test('11a. F15 solo Stofire (resto no certificado)', () => {
   }
 })
 
-// 11b. F120 viga3 SG864: valores presentes a Tc 500 (baseline disponible).
-//      NOTA: el registro explícito de qué Tc respalda esta tabla (620°C
-//      según la sección 2.8) requiere ppg-sg864-tablas-completas.json, que
-//      todavía no se recibió — esta parte queda marcada como BLOQUEADA,
-//      no probada acá. Ver reporte de bloqueos.
-test('11b. F120 viga3 SG864 -> valores Tc500 presentes (registro de Tc 620 BLOQUEADO, falta archivo)', () => {
-  const { um } = lookupEspesor(tablas.sg864.viga3.F120, 150)
-  assert.ok(um > 0)
+// 11b. F120 viga3 SG864 usa Tc 620 (límite del certificado) y F120 viga4
+//      usa Tc 525 — confirmado con ppg-sg864-tablas-completas.json: para
+//      "F120|viga3" el certificado NO tiene datos por debajo de 620°C
+//      (temps empieza en 620), y para "F120|viga4" no hay datos por debajo
+//      de 525°C. El valor que trae la tabla base del especificador
+//      (Tc "500" nominal) para esas dos combinaciones es, en realidad, el
+//      valor a la Tc mínima certificada (620/525) — así queda registrado.
+test('11b. F120 viga3 SG864 usa Tc 620 (mínima certificada); F120 viga4 usa Tc 525', () => {
+  assert.equal(Math.min(...PPG_TC['F120|viga3'].temps), TC_MINIMA_F120.viga3)
+  assert.equal(Math.min(...PPG_TC['F120|viga4'].temps), TC_MINIMA_F120.viga4)
+  // La tabla base (Tc "500" nominal) para viga3/F120 coincide exactamente
+  // con la tabla a Tc 620 real — confirma que ya está usando la mínima
+  // certificada, tal como exige la sección 2.8.
+  const base = tablas.sg864.viga3.F120
+  const tc620 = tablaSG864ParaTc(620).viga3.F120
+  for (const m of Object.keys(base)) assert.equal(base[m], tc620[m], `masividad ${m}`)
 })
 
-console.log(`\n${n}/11 criterios de la sección 7.1-7.11 verificados (11b parcial, ver nota).`)
+console.log(`\n${n}/11 criterios de la sección 7.1-7.11 verificados.`)

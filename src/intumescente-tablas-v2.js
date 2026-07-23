@@ -12,14 +12,23 @@ export const GAL_L = 3.7854
 
 // Catálogo seed — precios NETOS, editables en la UI de Productos y precios.
 // Coincide con la sección 3 (Catálogo inicial) del documento de instrucción.
+//
+// capaMaxUm y densidad NO venían en especificador-intumescente.html (ese
+// modelo es litros/galones, no kg) pero sí los necesita el Paso 2 portado
+// de cotizador-pintura-intumescente.jsx: capaMaxUm para calcular N° de
+// capas (regla 5, default 250–300 µm si no se conoce el dato real del
+// producto) y densidad para el modo "aplicador por kg". Son valores
+// ESTIMADOS/editables, no vienen de un certificado — quedan marcados acá
+// para que el admin los corrija en "Productos y precios" con el dato real
+// de cada ficha técnica.
 export const PRODUCTOS_SEED = [
-  { id: 'stofire', marca: 'Renner', nombre: 'Stofire Acuoso (nacional)', sv: 65.5, moneda: 'CLP', precioEnvase: 95000, litrosEnvase: 18.93 },
-  { id: 'ct600', marca: 'Renner', nombre: 'C-Therm IC 600 WB (imp.)', sv: 70, moneda: 'CLP', precioEnvase: 215000, litrosEnvase: 20.06 },
-  { id: 'ctw900', marca: 'Renner', nombre: 'C-Therm W900 (imp.)', sv: 70, moneda: 'CLP', precioEnvase: 215000, litrosEnvase: 20.06 },
-  { id: 'ct990', marca: 'Renner', nombre: 'C-Therm 990 (imp.)', sv: 70, moneda: 'CLP', precioEnvase: 215000, litrosEnvase: 20.06 },
-  { id: 'ct910', marca: 'Renner', nombre: 'C-Therm 910 (imp.)', sv: 70, moneda: 'CLP', precioEnvase: 215000, litrosEnvase: 20.06 },
-  { id: 'ctw910', marca: 'Renner', nombre: 'C-Therm W910 (imp.)', sv: 70, moneda: 'CLP', precioEnvase: 215000, litrosEnvase: 20.06 },
-  { id: 'sg864', marca: 'PPG', nombre: 'Steelguard 864', sv: 75, moneda: 'USD', precioEnvase: 450, litrosEnvase: 20 },
+  { id: 'stofire', marca: 'Renner', nombre: 'Stofire Acuoso (nacional)', sv: 65.5, moneda: 'CLP', precioEnvase: 95000, litrosEnvase: 18.93, capaMaxUm: 300, densidad: 1.3 },
+  { id: 'ct600', marca: 'Renner', nombre: 'C-Therm IC 600 WB (imp.)', sv: 70, moneda: 'CLP', precioEnvase: 215000, litrosEnvase: 20.06, capaMaxUm: 300, densidad: 1.3 },
+  { id: 'ctw900', marca: 'Renner', nombre: 'C-Therm W900 (imp.)', sv: 70, moneda: 'CLP', precioEnvase: 215000, litrosEnvase: 20.06, capaMaxUm: 300, densidad: 1.3 },
+  { id: 'ct990', marca: 'Renner', nombre: 'C-Therm 990 (imp.)', sv: 70, moneda: 'CLP', precioEnvase: 215000, litrosEnvase: 20.06, capaMaxUm: 300, densidad: 1.3 },
+  { id: 'ct910', marca: 'Renner', nombre: 'C-Therm 910 (imp.)', sv: 70, moneda: 'CLP', precioEnvase: 215000, litrosEnvase: 20.06, capaMaxUm: 300, densidad: 1.3 },
+  { id: 'ctw910', marca: 'Renner', nombre: 'C-Therm W910 (imp.)', sv: 70, moneda: 'CLP', precioEnvase: 215000, litrosEnvase: 20.06, capaMaxUm: 300, densidad: 1.3 },
+  { id: 'sg864', marca: 'PPG', nombre: 'Steelguard 864', sv: 75, moneda: 'USD', precioEnvase: 450, litrosEnvase: 20, capaMaxUm: 250, densidad: 1.35 },
 ]
 
 // Convierte DATA (tal como viene del HTML) a la forma que usa el motor de
