@@ -961,12 +961,14 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
     pushState()
   }
 
+  // Escribe localStorage ANTES de pushState() de forma sincrónica (no
+  // adentro del updater funcional de setOts, que React corre después) —
+  // si no, pushState() podía alcanzar a leer localStorage todavía con el
+  // valor viejo y no detectar el cambio recién hecho.
   function escribir(mutar) {
-    setOts(xs => {
-      const nuevo = mutar(xs)
-      try { localStorage.setItem('serein_ots', JSON.stringify(nuevo)) } catch (e) {}
-      return nuevo
-    })
+    const nuevo = mutar(otsAll)
+    try { localStorage.setItem('serein_ots', JSON.stringify(nuevo)) } catch (e) {}
+    setOts(nuevo)
     pushState()
   }
 
