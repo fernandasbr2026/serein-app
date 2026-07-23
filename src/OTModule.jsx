@@ -595,63 +595,71 @@ function TarjetaOT({ ot, onUpdate, onDelete, onCambiarEstado, onAgregarVenta, on
           );
         })()}
 
+          {/* ÍTEMS COTIZADOS · AJUSTE DE VENTA POR M² REALES (solo OT que vienen de una cotización aprobada).
+              Fuera del gate de verValores a propósito: cargar el m² real medido en
+              terreno es una tarea de taller/supervisión, no un dato financiero — solo
+              las columnas $/m² y Monto (sí financieras) quedan condicionadas abajo. */}
+          {(ot.itemsCot || []).length > 0 && (() => {
+            const items = ot.itemsCot || []
+            const totalCotizadoOriginal = items.reduce((a, it) => a + Math.max(0, Math.round(numDec(it.cant) * num(it.pUnitario) - num(it.descuento))), 0)
+            const totalAjustado = montoTotalItemsReal(items)
+            const cambiarM2Real = (i, val) => {
+              const nuevosItems = items.map((it, j) => j === i ? { ...it, m2Real: val } : it)
+              onUpdate(ot.id, { itemsCot: nuevosItems, montoCotizado: montoTotalItemsReal(nuevosItems) })
+            }
+            const cols = verValores ? ['Ítem', 'm² cotizados', 'm² reales', '$/m²', 'Monto'] : ['Ítem', 'm² cotizados', 'm² reales']
+            return (
+              <div style={{ marginBottom: 18 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: '#9AA3AD', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <Ruler size={13} /> Ítems cotizados · ajuste de venta por m² reales
+                  </span>
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                      {cols.map((h, i) => (
+                        <th key={i} style={{ textAlign: i >= 1 ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((it, i) => {
+                      const cot = m2CotizadoItem(it)
+                      const real = m2RealItem(it)
+                      const sube = real > cot
+                      return (
+                        <tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>
+                          <td style={{ padding: '7px 8px' }}>{it.detalle || it.descripcion || `Ítem ${i + 1}`}</td>
+                          <td style={{ padding: '7px 8px', textAlign: 'right', color: '#9AA3AD' }}>{cot}</td>
+                          <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                            <input type="number" step="0.01" placeholder={String(cot)} value={it.m2Real ?? ''} onChange={e => cambiarM2Real(i, e.target.value)}
+                              style={{ ...inp, width: 90, textAlign: 'right', padding: '5px 7px', borderColor: sube ? '#C5453D' : '#DFE4EA', color: sube ? '#C5453D' : C.carbon }} />
+                          </td>
+                          {verValores && (<>
+                            <td style={{ padding: '7px 8px', textAlign: 'right', color: '#9AA3AD' }}>{clp(num(it.pUnitario))}</td>
+                            <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 500 }}>{clp(montoItemReal(it))}</td>
+                          </>)}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                  {verValores && (
+                    <tfoot>
+                      <tr>
+                        <td colSpan={4} style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700 }}>Venta según m² reales</td>
+                        <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700, color: totalAjustado !== totalCotizadoOriginal ? '#D9600A' : C.carbon }}>{clp(totalAjustado)}</td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+                {verValores && totalAjustado !== totalCotizadoOriginal && <div style={{ fontSize: 11.5, color: '#9AA3AD', marginTop: 4 }}>Cotizado originalmente: {clp(totalCotizadoOriginal)} · el monto cotizado de la OT ya quedó actualizado a {clp(totalAjustado)}.</div>}
+              </div>
+            )
+          })()}
+
           {verValores && (
             <>
-              {/* ÍTEMS COTIZADOS · AJUSTE DE VENTA POR M² REALES (solo OT que vienen de una cotización aprobada) */}
-              {(ot.itemsCot || []).length > 0 && (() => {
-                const items = ot.itemsCot || []
-                const totalCotizadoOriginal = items.reduce((a, it) => a + Math.max(0, Math.round(numDec(it.cant) * num(it.pUnitario) - num(it.descuento))), 0)
-                const totalAjustado = montoTotalItemsReal(items)
-                const cambiarM2Real = (i, val) => {
-                  const nuevosItems = items.map((it, j) => j === i ? { ...it, m2Real: val } : it)
-                  onUpdate(ot.id, { itemsCot: nuevosItems, montoCotizado: montoTotalItemsReal(nuevosItems) })
-                }
-                return (
-                  <div style={{ marginBottom: 18 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: '#9AA3AD', display: 'flex', alignItems: 'center', gap: 5 }}>
-                        <Ruler size={13} /> Ítems cotizados · ajuste de venta por m² reales
-                      </span>
-                    </div>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                      <thead>
-                        <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-                          {['Ítem', 'm² cotizados', 'm² reales', '$/m²', 'Monto'].map((h, i) => (
-                            <th key={i} style={{ textAlign: i >= 1 ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {items.map((it, i) => {
-                          const cot = m2CotizadoItem(it)
-                          const real = m2RealItem(it)
-                          const sube = real > cot
-                          return (
-                            <tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>
-                              <td style={{ padding: '7px 8px' }}>{it.detalle || it.descripcion || `Ítem ${i + 1}`}</td>
-                              <td style={{ padding: '7px 8px', textAlign: 'right', color: '#9AA3AD' }}>{cot}</td>
-                              <td style={{ padding: '5px 8px', textAlign: 'right' }}>
-                                <input type="number" step="0.01" placeholder={String(cot)} value={it.m2Real ?? ''} onChange={e => cambiarM2Real(i, e.target.value)}
-                                  style={{ ...inp, width: 90, textAlign: 'right', padding: '5px 7px', borderColor: sube ? '#C5453D' : '#DFE4EA', color: sube ? '#C5453D' : C.carbon }} />
-                              </td>
-                              <td style={{ padding: '7px 8px', textAlign: 'right', color: '#9AA3AD' }}>{clp(num(it.pUnitario))}</td>
-                              <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 500 }}>{clp(montoItemReal(it))}</td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                      <tfoot>
-                        <tr>
-                          <td colSpan={4} style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700 }}>Venta según m² reales</td>
-                          <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700, color: totalAjustado !== totalCotizadoOriginal ? '#D9600A' : C.carbon }}>{clp(totalAjustado)}</td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                    {totalAjustado !== totalCotizadoOriginal && <div style={{ fontSize: 11.5, color: '#9AA3AD', marginTop: 4 }}>Cotizado originalmente: {clp(totalCotizadoOriginal)} · el monto cotizado de la OT ya quedó actualizado a {clp(totalAjustado)}.</div>}
-                  </div>
-                )
-              })()}
-
               {/* VENTAS */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: '#9AA3AD', display: 'flex', alignItems: 'center', gap: 5 }}>
