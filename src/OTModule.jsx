@@ -939,11 +939,17 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   // que se acababa de borrar acá. Por eso el borrado trae primero lo más
   // fresco de la nube, borra sobre eso, y empuja de inmediato (sin
   // esperar el debounce compartido) para dejar la ventana de choque lo
-  // más chica posible. cambiarEstado/agregarVenta/eliminarVenta reusan el
-  // mismo patrón porque son escrituras poco frecuentes pero sensibles
-  // (cierre/reapertura/facturación) donde vale la pena pagar el costo del
-  // pull extra; actualizar() sigue usando el guardado general para no
-  // volver lenta la edición de campos de texto/tablas.
+  // más chica posible.
+  //
+  // cambiarEstado/agregarVenta/eliminarVenta NO usan este mismo patrón:
+  // se probó primero con el mismo "esperar la nube antes de escribir" y en
+  // la práctica, con conexión lenta o inestable en planta, ese await podía
+  // demorar mucho o no resolver nunca — el botón "Cerrar OT" quedaba sin
+  // efecto visible porque el cambio local nunca llegaba a aplicarse. Por
+  // eso aplican el cambio LOCAL de inmediato (como actualizar()) y solo
+  // después empujan a la nube sin bloquear la pantalla — igual de rápido
+  // para ver el resultado, y la sincronización entre usuarios sigue
+  // ocurriendo (push inmediato en vez del debounce de 800ms general).
   const eliminar = async id => {
     try { await pullState() } catch (e) {}
     let fresco = null
@@ -955,40 +961,31 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
     pushState()
   }
 
-  async function pullFresco() {
-    try { await pullState() } catch (e) {}
-    let fresco = null
-    try { fresco = JSON.parse(localStorage.getItem('serein_ots') || 'null') } catch (e) {}
-    return Array.isArray(fresco) ? fresco : otsAll
-  }
-  function guardarFresco(nuevo) {
-    try { localStorage.setItem('serein_ots', JSON.stringify(nuevo)) } catch (e) {}
-    setOts(nuevo)
+  function escribir(mutar) {
+    setOts(xs => {
+      const nuevo = mutar(xs)
+      try { localStorage.setItem('serein_ots', JSON.stringify(nuevo)) } catch (e) {}
+      return nuevo
+    })
     pushState()
   }
 
-  const cambiarEstado = async (id, nuevoEstado) => {
-    const base = await pullFresco()
-    const nuevo = base.map(o => o.id === id ? { ...o, estado: nuevoEstado, ...(nuevoEstado === 'Cerrada' ? { fechaCierre: hoy() } : {}) } : o)
-    guardarFresco(nuevo)
+  const cambiarEstado = (id, nuevoEstado) => {
+    escribir(xs => xs.map(o => o.id === id ? { ...o, estado: nuevoEstado, ...(nuevoEstado === 'Cerrada' ? { fechaCierre: hoy() } : {}) } : o))
   }
 
-  const agregarVenta = async (id, venta) => {
-    const base = await pullFresco()
+  const agregarVenta = (id, venta) => {
     const folio = (venta.folio || '').trim()
-    if (folio && folio !== 's/f' && base.some(o => (o.ventas || []).some(v => (v.folio || '').trim().toLowerCase() === folio.toLowerCase()))) {
+    if (folio && folio !== 's/f' && otsAll.some(o => (o.ventas || []).some(v => (v.folio || '').trim().toLowerCase() === folio.toLowerCase()))) {
       window.alert(`El N° de factura ${folio} ya está registrado en otra OT. Revisa antes de guardar.`)
       return false
     }
-    const nuevo = base.map(o => o.id === id ? { ...o, ventas: [...(o.ventas || []), venta] } : o)
-    guardarFresco(nuevo)
+    escribir(xs => xs.map(o => o.id === id ? { ...o, ventas: [...(o.ventas || []), venta] } : o))
     return true
   }
 
-  const eliminarVenta = async (id, index) => {
-    const base = await pullFresco()
-    const nuevo = base.map(o => o.id === id ? { ...o, ventas: (o.ventas || []).filter((_, j) => j !== index) } : o)
-    guardarFresco(nuevo)
+  const eliminarVenta = (id, index) => {
+    escribir(xs => xs.map(o => o.id === id ? { ...o, ventas: (o.ventas || []).filter((_, j) => j !== index) } : o))
   }
 
   const coincideBusqueda = o => {
