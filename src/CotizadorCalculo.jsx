@@ -240,13 +240,13 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
         <button onClick={() => setPct(25)} style={pill(pct == 25)}>25%</button>
         <button onClick={() => setPct(35)} style={pill(pct == 35)}>35%</button>
         <button onClick={() => setPct(45)} style={pill(pct == 45)}>45%</button>
-        <input type="number" value={pct} onChange={e => setPct(Math.min(95, Math.max(0, +e.target.value || 0)))} style={{ ...inp, width: 100 }} /><span style={{ fontSize: 13, color: T.textMute }}>% margen libre</span>
+        <input type="number" value={pct} onChange={e => setPct(e.target.value)} onBlur={() => setPct(v => Math.min(95, Math.max(0, +v || 0)))} style={{ ...inp, width: 100 }} /><span style={{ fontSize: 13, color: T.textMute }}>% margen libre</span>
       </div>
       <div style={{ fontSize: 11.5, color: T.textMute, marginBottom: 12, lineHeight: 1.4 }}>El precio se calcula como <b>costo &divide; (1 &minus; margen)</b>, de modo que el margen sobre la venta sea exactamente el indicado. Ej: 25% de margen sobre $10.000 de costo &rarr; $13.333/m&sup2; (costo/venta = 75%). Tope 95%.</div>
       <span style={lab}>Supuestos de costeo (se enlazaran a Gastos Fijos)</span>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <label style={{ fontSize: 12, color: T.textSoft }}>Sueldos granallado/mes<br /><input type="number" value={sg} onChange={e => setSg(+e.target.value || 0)} style={{ ...inp, width: 150 }} /></label>
-        <label style={{ fontSize: 12, color: T.textSoft }}>Sueldos pintura/mes<br /><input type="number" value={sp} onChange={e => setSp(+e.target.value || 0)} style={{ ...inp, width: 150 }} /></label>
+        <label style={{ fontSize: 12, color: T.textSoft }}>Sueldos granallado/mes<br /><input type="number" value={sg} onChange={e => setSg(e.target.value)} onBlur={() => setSg(v => +v || 0)} style={{ ...inp, width: 150 }} /></label>
+        <label style={{ fontSize: 12, color: T.textSoft }}>Sueldos pintura/mes<br /><input type="number" value={sp} onChange={e => setSp(e.target.value)} onBlur={() => setSp(v => +v || 0)} style={{ ...inp, width: 150 }} /></label>
         <label style={{ fontSize: 12, color: T.textSoft }}>Total fijos sede/mes<br /><input value={clp(totalFijos)} disabled style={{ ...inp, width: 150, background: '#F2F4F7' }} /></label>
       </div>
     </div>
