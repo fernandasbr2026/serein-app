@@ -401,7 +401,16 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
     const existe = base.some(c => c.id === cot.id)
     let cotFinal = cot
     if (!existe) {
-      const folioFresco = base.reduce((m, c) => Math.max(m, parseInt(String(c.folio).replace(/\D/g, ''), 10) || 0), 792) + 1
+      // Si dos personas crean una cotización casi al mismo tiempo, cada
+      // una puede calcular el "próximo folio" desde su propia copia
+      // (todavía sin la de la otra) y terminar con el MISMO número —
+      // aunque sean cotizaciones distintas. Antes de guardar, se revisa
+      // si el folio calculado ya está en uso en lo que este equipo tiene
+      // cargado y, si es así, se sigue subiendo hasta encontrar uno
+      // libre — para no dejar dos cotizaciones distintas con el mismo N°
+      // (una completa y otra vacía, fácil de abrir por error).
+      let folioFresco = base.reduce((m, c) => Math.max(m, parseInt(String(c.folio).replace(/\D/g, ''), 10) || 0), 792) + 1
+      while (base.some(c => String(c.folio) === String(folioFresco))) folioFresco++
       cotFinal = { ...cot, folio: String(folioFresco) }
     }
     const nuevo = existe ? base.map(c => c.id === cotFinal.id ? cotFinal : c) : [cotFinal, ...base]
