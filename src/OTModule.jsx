@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { ChevronDown, ChevronUp, Plus, Trash2, X, Ruler, Paintbrush, FileText, Receipt, ShoppingCart, CircleDollarSign, Download, Camera, Search, RotateCcw, Lock, Unlock, CalendarDays } from 'lucide-react'
+import { ChevronDown, ChevronUp, Plus, Trash2, X, Ruler, Paintbrush, FileText, Receipt, ShoppingCart, CircleDollarSign, Download, Camera, Search, RotateCcw, Lock, Unlock, CalendarDays, Save } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { descargarOTDesdeOT } from './CotizacionesModule.jsx'
 import { costoOCdeOT } from './OrdenesCompraModule.jsx'
@@ -402,6 +402,20 @@ function TarjetaOT({ ot, onUpdate, onDelete, onCambiarEstado, onAgregarVenta, on
   const [addVenta, setAddVenta] = useState(false)
   const [addAbono, setAddAbono] = useState(false)
   const [addCosto, setAddCosto] = useState(false)
+  const [guardando, setGuardando] = useState(false)
+  // Botón explícito de guardar, pedido directamente: todo lo que se edita
+  // en esta ficha (campos técnicos, partidas/recepción con fotos,
+  // despachos, protocolos) ya sube a la nube apenas se hace el cambio,
+  // pero acá se puede forzar y CONFIRMAR de verdad que llegó, en vez de
+  // solo confiar en que va a pasar solo.
+  const guardarYConfirmar = async () => {
+    setGuardando(true)
+    const r = await pushState()
+    setGuardando(false)
+    if (r.ok && r.n === 0) window.alert('Ya está todo guardado en la nube — no había cambios pendientes.')
+    else if (r.ok) window.alert('Guardado confirmado: los cambios de esta OT llegaron a Supabase.')
+    else window.alert('No se pudo guardar. Revisa tu conexión a internet e inténtalo de nuevo — no cierres esta ficha todavía.')
+  }
 
   const ventaTotal = (ot.ventas || []).reduce((a, v) => a + v.neta, 0)
   const costoOC = costoOCdeOT(ordenesCompra, ot.numero)
@@ -444,6 +458,12 @@ function TarjetaOT({ ot, onUpdate, onDelete, onCambiarEstado, onAgregarVenta, on
                 {clp(utilidad)} <span style={{ fontSize: 13 }}>({margen.toFixed(0)}%)</span>
               </div>
             </div>
+          )}
+          {enModal && (
+            <button onClick={guardarYConfirmar} disabled={guardando} title="Sube de inmediato cualquier cambio pendiente de esta OT y confirma que llegó a la nube"
+              style={{ background: guardando ? '#5A636E' : C.verde, color: '#fff', border: 'none', borderRadius: 6, padding: '9px 14px', cursor: guardando ? 'default' : 'pointer', fontWeight: 700, fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+              <Save size={14} /> {guardando ? 'Guardando…' : 'Guardar y confirmar'}
+            </button>
           )}
           {!enModal && (abierta ? <ChevronUp size={18} color="#9AA3AD" /> : <ChevronDown size={18} color="#9AA3AD" />)}
         </div>
@@ -1038,7 +1058,22 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
     XLSX.writeFile(wb, `Informe_OT_${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
 
-  const actualizar = (id, cambios) => setOts(xs => xs.map(o => o.id === id ? { ...o, ...cambios } : o))
+  // Antes actualizar() solo tocaba el estado de React y dependía del
+  // guardado general de Dashboard.jsx (localStorage + push recién 800ms
+  // después del último cambio, compartido con TODO el resto del ERP). Es
+  // la función que maneja los campos técnicos de la OT — esquema,
+  // observaciones, partidas/recepción de material CON FOTOS, despachos,
+  // protocolos — así que era la ruta de guardado más expuesta a perder
+  // una edición si la persona cerraba la pestaña, cambiaba de OT o se
+  // cortaba la conexión antes de que pasaran esos 800ms. Ahora usa el
+  // mismo patrón ya probado en cerrar/reabrir OT y agregar factura:
+  // localStorage sincrónico + pushState() inmediato.
+  const actualizar = (id, cambios) => {
+    const nuevo = otsAll.map(o => o.id === id ? { ...o, ...cambios } : o)
+    try { localStorage.setItem('serein_ots', JSON.stringify(nuevo)) } catch (e) {}
+    setOts(nuevo)
+    pushState()
+  }
   // Un borrado normal (setOts local + el guardado/push general de 800ms)
   // se podía "revivir": si otra pestaña con una copia más vieja de las OT
   // hacía cualquier otro cambio mientras tanto, su push terminaba
