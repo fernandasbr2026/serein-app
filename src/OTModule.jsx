@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { ChevronDown, ChevronUp, Plus, Trash2, X, Ruler, Paintbrush, FileText, Receipt, ShoppingCart, CircleDollarSign, Download, Camera } from 'lucide-react'
+import { ChevronDown, ChevronUp, Plus, Trash2, X, Ruler, Paintbrush, FileText, Receipt, ShoppingCart, CircleDollarSign, Download, Camera, Search, RotateCcw, Lock, Unlock, CalendarDays } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { descargarOTDesdeOT } from './CotizacionesModule.jsx'
 import { costoOCdeOT } from './OrdenesCompraModule.jsx'
@@ -8,6 +8,8 @@ import { costoMOdeOT } from './ManoObraModule.jsx'
 import Paginador, { paginar } from './Paginador.jsx'
 import { pullState, pushState } from './sync.js'
 import { SEREIN } from './theme-serein.js'
+import { KpiCard, Pill, Btn, TabsBar } from './ui.jsx'
+import { PILL_VARIANT } from './theme-serein.js'
 
 // Paleta reskineada a la identidad Serein 2026 — mismas claves de siempre,
 // solo cambian los valores hex. La logica de abajo no se toca.
@@ -20,6 +22,29 @@ const btnMini = { background: 'none', border: 'none', cursor: 'pointer', color: 
 const CATEGORIAS_COSTO = ['Materiales', 'Mano de obra', 'Gastos asociados', 'Arriendo equipos', 'Factoring', 'Transporte', 'Otros']
 const ESTADOS_OT = ['Cotizada', 'En ejecución', 'Terminada', 'Facturada', 'Cerrada']
 const PREPARACIONES = ['SSPC-SP1 Limpieza solvente', 'SSPC-SP2/SP3 Manual/Mecánica', 'SSPC-SP6 Comercial', 'SSPC-SP10 Casi blanco', 'SSPC-SP5 Metal blanco', 'Hidrolavado', 'Otra']
+const hoy = () => new Date().toISOString().slice(0, 10)
+
+// Fuente unica de "venta neta" de una OT — la usan la tarjeta, la ficha y
+// los indicadores de arriba, para que nunca muestren numeros distintos.
+// Prioriza las facturas reales (ot.ventas); si todavia no hay ninguna,
+// cae al monto cotizado (es el mismo criterio que ya usaba la tarjeta).
+export const ventaNetaDeOT = ot => (ot.ventas && ot.ventas.length)
+  ? ot.ventas.reduce((a, v) => a + (v.neta || 0), 0)
+  : (ot.montoCotizado || 0)
+// Una OT cerrada se considera "Facturada" si tiene al menos una factura
+// (folio) registrada — no se guarda en ot.estado, se calcula al vuelo, asi
+// que si se borra la unica factura vuelve sola a "Pendiente de facturacion".
+export const tieneFactura = ot => (ot.ventas || []).some(v => (v.folio || '').trim() && v.folio !== 's/f')
+// Etiqueta de presentacion para el estado — el valor guardado en ot.estado
+// no cambia, solo cambia como se muestra (para no afectar a ningun otro
+// modulo que ya depende de los strings reales).
+const etiquetaEstado = ot => {
+  if (ot.estado === 'Cerrada') return tieneFactura(ot) ? 'Facturada' : 'Pendiente de facturación'
+  if (ot.estado === 'Cotizada') return 'Pendiente'
+  if (ot.estado === 'En ejecución') return 'En producción'
+  if (ot.estado === 'Terminada') return 'Lista para cerrar'
+  return ot.estado
+}
 
 // ===== OTs DE EJEMPLO CON DATOS REALES DEL EXCEL (Viman, Santa Rosa) =====
 export const OTS_INICIALES = [
@@ -100,13 +125,17 @@ function Barra({ pct, color, alto = 8 }) {
   )
 }
 
-function ChipEstado({ estado }) {
+function ChipEstado({ ot }) {
+  const estado = ot.estado
+  // Para 'Cerrada' el color depende de si ya tiene factura o no (calculado,
+  // no cambia el valor real guardado en ot.estado).
   const map = {
     'Cotizada': [SEREIN.fog2, SEREIN.textSoft], 'En ejecución': [SEREIN.orangeSoft, C.ambar],
-    'Terminada': [SEREIN.blueSoft, SEREIN.blue], 'Facturada': [SEREIN.greenSoft, C.verde], 'Cerrada': ['#EDEBF7', '#5B4E8C'],
+    'Terminada': [SEREIN.blueSoft, SEREIN.blue], 'Facturada': [SEREIN.greenSoft, C.verde],
+    'Cerrada': tieneFactura(ot) ? [SEREIN.greenSoft, C.verde] : ['#EDEBF7', '#5B4E8C'],
   }
   const [bg, fg] = map[estado] || [SEREIN.fog2, SEREIN.textFaint]
-  return <span style={{ background: bg, color: fg, padding: '4px 11px', borderRadius: SEREIN.radiusPill, fontSize: 12, fontWeight: 600 }}>{estado}</span>
+  return <span style={{ background: bg, color: fg, padding: '4px 11px', borderRadius: SEREIN.radiusPill, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>{etiquetaEstado(ot)}</span>
 }
 
 // ---------- Formularios inline ----------
@@ -288,26 +317,46 @@ function descargarOT(ot) {
   XLSX.writeFile(wb, `${ot.numero}.xlsx`)
 }
 
+// Portada de cada OT — muestra sin necesidad de abrir la ficha: N° de OT,
+// N° de OC/NV, N° de cotizacion, cliente, fecha de ingreso, observaciones
+// (resumen), esquema, venta neta y estado. Todo lo demas del detalle actual
+// sigue disponible al abrir la ficha (TarjetaOT), esto no lo reemplaza.
 function TileOT({ ot, onOpen, onDragStart, onDropOn, verValores }) {
-  const monto = (ot.montoCotizado > 0 ? ot.montoCotizado : (ot.ventas || []).reduce((a, v) => a + (v.neta || 0), 0))
+  const monto = ventaNetaDeOT(ot)
+  const obs = (ot.servicios || '').trim()
+  const obsResumen = obs.length > 90 ? obs.slice(0, 87) + '…' : obs
+  const esquemaResumen = (ot.esquema && ot.esquema !== '—') ? (ot.esquema.length > 70 ? ot.esquema.slice(0, 67) + '…' : ot.esquema) : ''
+  const cerrada = ot.estado === 'Cerrada'
   return (
     <div onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); onDropOn() }} onClick={onOpen}
-      style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: '3px solid ' + (ot.area === 'Istria' ? '#1B1F23' : '#D9600A'), padding: 14, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+      style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: '3px solid ' + (ot.area === 'Istria' ? '#1B1F23' : '#D9600A'), padding: 14, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, borderRadius: SEREIN.radius }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-        <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 12, background: '#101315', color: '#fff', padding: '2px 7px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{ot.numero}</span>
-          {(ot.area === 'Santa Rosa' || ot.sede === 'Santa Rosa') && ot.oc && ot.oc !== '\u2014' ? <span title="Orden de compra del cliente" style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 11.5, background: '#F77716', color: '#fff', padding: '2px 7px', borderRadius: 3, whiteSpace: 'nowrap' }}>OC {ot.oc}</span> : null}
+          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 12, background: '#101315', color: '#fff', padding: '2px 7px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{ot.numero}</span>
+          {(ot.area === 'Santa Rosa' || ot.sede === 'Santa Rosa') && ot.oc && ot.oc !== '—' ? <span title="Orden de compra del cliente" style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 11.5, background: '#F77716', color: '#fff', padding: '2px 7px', borderRadius: 3, whiteSpace: 'nowrap' }}>OC {ot.oc}</span> : null}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <ChipEstado estado={ot.estado} />
+          <ChipEstado ot={ot} />
           <span draggable onDragStart={e => { e.stopPropagation(); onDragStart() }} onClick={e => e.stopPropagation()} title="Arrastrar para reordenar" style={{ cursor: 'grab', color: '#B9C0C6', fontSize: 15, userSelect: 'none', lineHeight: 1, letterSpacing: '-1px' }}>::</span>
         </div>
       </div>
-      {ot.nv && ot.nv !== '—' ? <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, fontWeight: 700, color: '#D9600A' }}>NV {ot.nv}</div> : null}<div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, color: '#101315', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ot.cliente}</div>
-      <div style={{ fontSize: 11.5, color: '#9AA3AD', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ot.area}{ot.m2 ? ' · ' + ot.m2 + ' m²' : ''}{ot.preparacion ? ' · ' + ot.preparacion : ''}</div>
+      {ot.nv && ot.nv !== '—' ? <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, fontWeight: 700, color: '#D9600A' }}>NV {ot.nv}</div> : null}
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, color: '#101315', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ot.cliente}</div>
+      <div style={{ fontSize: 11.5, color: '#9AA3AD', display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {ot.cotizacion && ot.cotizacion !== '—' && <span>Cotización: {ot.cotizacion}</span>}
+        <span>Fecha de ingreso: {ot.fecha || '—'}</span>
+        {obsResumen && <span title={obs}>Obs.: {obsResumen}</span>}
+        {esquemaResumen && <span title={ot.esquema}>{esquemaResumen}</span>}
+      </div>
+      {cerrada && (
+        <div style={{ fontSize: 11, color: tieneFactura(ot) ? C.verde : '#5B4E8C', fontWeight: 600 }}>
+          {tieneFactura(ot) ? `Factura(s): ${(ot.ventas || []).map(v => v.folio).join(', ')}` : 'Sin factura registrada'}
+          {ot.fechaCierre ? ` · Cerrada ${ot.fechaCierre}` : ''}
+        </div>
+      )}
       {verValores && monto > 0 && (
         <div style={{ marginTop: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <span style={{ fontSize: 10.5, color: '#9AA3AD', textTransform: 'uppercase' }}>Monto</span>
+          <span style={{ fontSize: 10.5, color: '#9AA3AD', textTransform: 'uppercase' }}>Venta neta</span>
           <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, color: '#101315' }}>{clp(monto)}</span>
         </div>
       )}
@@ -315,7 +364,7 @@ function TileOT({ ot, onOpen, onDragStart, onDropOn, verValores }) {
   )
 }
 
-function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = [], mo = null, otsAll = [], instrumentos = null, libroCompras = [], enModal = false }) {
+function TarjetaOT({ ot, onUpdate, onDelete, onCambiarEstado, onAgregarVenta, onEliminarVenta, verValores = true, ordenesCompra = [], mo = null, otsAll = [], instrumentos = null, libroCompras = [], enModal = false }) {
   const [abierta, setAbierta] = useState(false)
   const [addVenta, setAddVenta] = useState(false)
   const [addAbono, setAddAbono] = useState(false)
@@ -342,7 +391,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
             <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 14, background: '#F77716', color: '#fff', padding: '3px 10px', borderRadius: 4, letterSpacing: 0.4 }}>NV {ot.nv || '\u2014'}</span>
             <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 14, background: C.carbon, color: '#fff', padding: '3px 9px' }}>{ot.numero}</span>
             <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15 }}>{ot.cliente}</span>
-            <ChipEstado estado={ot.estado} />
+            <ChipEstado ot={ot} />
           </div>
           <div style={{ fontSize: 12, color: '#9AA3AD', marginTop: 5, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
             <span><FileText size={11} style={{ verticalAlign: -1 }} /> {ot.cotizacion}{ot.oc && ot.oc !== '—' ? ' · Aprob. cliente ' + ot.oc : ''}</span>
@@ -387,12 +436,13 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
           {/* Datos técnicos editables */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 18 }}>
             <label style={{ fontSize: 12, color: '#9AA3AD' }}>Estado OT
-              <select value={ot.estado} onChange={e => onUpdate(ot.id, { estado: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }}>
+              <select value={ot.estado} onChange={e => onCambiarEstado(ot.id, e.target.value)} style={{ ...inp, width: '100%', marginTop: 4 }}>
                 {ESTADOS_OT.map(s => <option key={s}>{s}</option>)}
               </select>
+              {ot.estado === 'Cerrada' && ot.fechaCierre && <div style={{ fontSize: 11, color: '#9AA3AD', marginTop: 3 }}>Cerrada el {ot.fechaCierre}</div>}
             </label>
-            <div style={{ display: 'flex', alignItems: 'flex-end' }}><button onClick={() => { if (window.confirm('Marcar esta OT como lista para facturar?')) onUpdate(ot.id, { estado: 'Terminada' }) }} style={{ background: '#F77716', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 12.5, width: '100%' }}>Lista para facturar</button></div>
-            <div style={{ display: 'flex', alignItems: 'flex-end' }}>{ot.estado === 'Cerrada' ? <button onClick={() => { if (window.confirm('Activar esta OT? Volvera a estado activo.')) onUpdate(ot.id, { estado: 'En ejecución' }) }} style={{ background: '#12805C', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 12.5, width: '100%' }}>Activar OT</button> : <button onClick={() => { if (window.confirm('Cerrar esta OT? Quedara en estado Cerrada.')) onUpdate(ot.id, { estado: 'Cerrada' }) }} style={{ background: '#191C20', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 12.5, width: '100%' }}>Cerrar OT</button>}</div>
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}><button onClick={() => { if (window.confirm('Marcar esta OT como lista para facturar?')) onCambiarEstado(ot.id, 'Terminada') }} style={{ background: '#F77716', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 12.5, width: '100%' }}>Lista para facturar</button></div>
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}>{ot.estado === 'Cerrada' ? <button onClick={() => { if (window.confirm('Reabrir esta OT? Volvera a estado activo (En ejecucion).')) onCambiarEstado(ot.id, 'En ejecución') }} style={{ background: '#12805C', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 12.5, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Unlock size={13} /> Reabrir OT</button> : <button onClick={() => { if (window.confirm('Cerrar esta OT? Pasara al listado de OT cerradas.')) onCambiarEstado(ot.id, 'Cerrada') }} style={{ background: '#191C20', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 12.5, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Lock size={13} /> Cerrar OT</button>}</div>
               <label style={{ fontSize: 12, color: '#9AA3AD' }}>Metros cuadrados
               <input type="number" value={ot.m2} onChange={e => onUpdate(ot.id, { m2: Math.max(0, +e.target.value) })} style={{ ...inp, width: '100%', marginTop: 4 }} />
             </label>
@@ -546,7 +596,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
                           </select>
                         </td>
                         <td style={{ padding: '7px 4px', textAlign: 'right' }}>
-                          <button onClick={() => window.confirm(`¿Eliminar factura ${v.folio} (${clp(v.neta)})?`) && onUpdate(ot.id, { ventas: (ot.ventas || []).filter((_, j) => j !== i) })} style={btnMini}>
+                          <button onClick={() => window.confirm(`¿Eliminar factura ${v.folio} (${clp(v.neta)})?`) && onEliminarVenta(ot.id, i)} style={btnMini}>
                             <Trash2 size={14} />
                           </button>
                         </td>
@@ -555,7 +605,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, verValores = true, ordenesCompra = 
                   </tbody>
                 </table>
               )}
-              {addVenta && <FormVenta onAdd={v => { onUpdate(ot.id, { ventas: [...(ot.ventas || []), v] }); setAddVenta(false) }} onCancel={() => setAddVenta(false)} />}
+              {addVenta && <FormVenta onAdd={async v => { const ok = await onAgregarVenta(ot.id, v); if (ok) setAddVenta(false) }} onCancel={() => setAddVenta(false)} />}
 
               {/* ABONOS DE CLIENTES (pagos anticipados, sin IVA) */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0 8px' }}>
@@ -852,9 +902,16 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   const [repDesde, setRepDesde] = useState('')
   const [repHasta, setRepHasta] = useState('')
   const [repCliente, setRepCliente] = useState('')
+  const [vista, setVista] = useState('activas')
+  const [busqueda, setBusqueda] = useState('')
+  const [fEstado, setFEstado] = useState('')
+  const [fFactura, setFFactura] = useState('')
+  const [fDesde, setFDesde] = useState('')
+  const [fHasta, setFHasta] = useState('')
   const _norm = s => (s || '').trim().toLowerCase()
   const otFecha = o => o.fecha || ((o.ventas || []).map(v => v.fecha).filter(f => f && f !== '—').sort()[0]) || ''
   const clientesActivos = [...new Set((clientes || []).filter(c => (c.estado || 'Activo') === 'Activo').map(c => (c.nombre || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  const limpiarFiltros = () => { setFCliente(''); setBusqueda(''); setFEstado(''); setFFactura(''); setFDesde(''); setFHasta('') }
 
   function generarInforme() {
     const enRango = o => { const f = otFecha(o); if (repDesde && (!f || f < repDesde)) return false; if (repHasta && (!f || f > repHasta)) return false; return true }
@@ -882,7 +939,11 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   // que se acababa de borrar acá. Por eso el borrado trae primero lo más
   // fresco de la nube, borra sobre eso, y empuja de inmediato (sin
   // esperar el debounce compartido) para dejar la ventana de choque lo
-  // más chica posible.
+  // más chica posible. cambiarEstado/agregarVenta/eliminarVenta reusan el
+  // mismo patrón porque son escrituras poco frecuentes pero sensibles
+  // (cierre/reapertura/facturación) donde vale la pena pagar el costo del
+  // pull extra; actualizar() sigue usando el guardado general para no
+  // volver lenta la edición de campos de texto/tablas.
   const eliminar = async id => {
     try { await pullState() } catch (e) {}
     let fresco = null
@@ -894,10 +955,62 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
     pushState()
   }
 
-  const visibles = ots.filter(o => o.area === areaSel && (!fCliente || _norm(o.cliente) === _norm(fCliente)))
-  const ventaTot = visibles.reduce((a, o) => a + (o.ventas || []).reduce((x, v) => x + (v.neta || 0), 0), 0)
-  const costoTot = visibles.reduce((a, o) => a + (o.costos || []).reduce((x, c) => x + (c.monto || 0), 0) + costoOCdeOT(ordenesCompra, o.numero) + costoMOdeOT(mo, o.numero), 0)
-  const utilTot = ventaTot - costoTot
+  async function pullFresco() {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_ots') || 'null') } catch (e) {}
+    return Array.isArray(fresco) ? fresco : otsAll
+  }
+  function guardarFresco(nuevo) {
+    try { localStorage.setItem('serein_ots', JSON.stringify(nuevo)) } catch (e) {}
+    setOts(nuevo)
+    pushState()
+  }
+
+  const cambiarEstado = async (id, nuevoEstado) => {
+    const base = await pullFresco()
+    const nuevo = base.map(o => o.id === id ? { ...o, estado: nuevoEstado, ...(nuevoEstado === 'Cerrada' ? { fechaCierre: hoy() } : {}) } : o)
+    guardarFresco(nuevo)
+  }
+
+  const agregarVenta = async (id, venta) => {
+    const base = await pullFresco()
+    const folio = (venta.folio || '').trim()
+    if (folio && folio !== 's/f' && base.some(o => (o.ventas || []).some(v => (v.folio || '').trim().toLowerCase() === folio.toLowerCase()))) {
+      window.alert(`El N° de factura ${folio} ya está registrado en otra OT. Revisa antes de guardar.`)
+      return false
+    }
+    const nuevo = base.map(o => o.id === id ? { ...o, ventas: [...(o.ventas || []), venta] } : o)
+    guardarFresco(nuevo)
+    return true
+  }
+
+  const eliminarVenta = async (id, index) => {
+    const base = await pullFresco()
+    const nuevo = base.map(o => o.id === id ? { ...o, ventas: (o.ventas || []).filter((_, j) => j !== index) } : o)
+    guardarFresco(nuevo)
+  }
+
+  const coincideBusqueda = o => {
+    if (!busqueda.trim()) return true
+    const q = _norm(busqueda)
+    return [o.numero, o.cliente, o.oc, o.cotizacion].some(v => _norm(v).includes(q))
+  }
+  const coincideFiltros = o => {
+    if (fEstado && o.estado !== fEstado) return false
+    if (fDesde && (!otFecha(o) || otFecha(o) < fDesde)) return false
+    if (fHasta && (!otFecha(o) || otFecha(o) > fHasta)) return false
+    if (vista === 'cerradas' && fFactura) {
+      const fact = tieneFactura(o) ? 'Facturada' : 'Pendiente'
+      if (fact !== fFactura) return false
+    }
+    return true
+  }
+
+  const delArea = ots.filter(o => o.area === areaSel && (!fCliente || _norm(o.cliente) === _norm(fCliente)))
+  const activasArea = delArea.filter(o => o.estado !== 'Cerrada')
+  const cerradasArea = delArea.filter(o => o.estado === 'Cerrada')
+  const visibles = (vista === 'cerradas' ? cerradasArea : activasArea).filter(o => coincideBusqueda(o) && coincideFiltros(o))
 
   // Solo se considera el correlativo de OTs con el formato propio de este módulo (OT-AAAA-NNN).
   // Las OT creadas al aprobar una cotización usan 'OT-<folio>' (sin año) y no deben mezclarse con esta secuencia.
@@ -905,9 +1018,12 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   const nums = ots.filter(o => /^OT-\d{4}-\d+$/.test(o.numero || '')).map(o => parseInt((o.numero.match(/(\d+)$/) || [0, 0])[1], 10))
   const siguiente = `OT-${anioActual}-${String(Math.max(100, ...nums) + 1).padStart(3, '0')}`
 
-  const kpis = verValores
-    ? [['OTs', visibles.length], ['Venta neta', clp(ventaTot)], ['Costos', clp(costoTot)], ['Utilidad real', clp(utilTot)]]
-    : [['OTs', visibles.length]]
+  const nOTs = { activas: activasArea.length }
+  const ventaEnProceso = activasArea.reduce((a, o) => a + ventaNetaDeOT(o), 0)
+  const cerradasSinFactura = cerradasArea.filter(o => !tieneFactura(o))
+  const cerradasConFactura = cerradasArea.filter(o => tieneFactura(o))
+  const cerradasPorFacturarMonto = cerradasSinFactura.reduce((a, o) => a + ventaNetaDeOT(o), 0)
+  const facturadasMonto = cerradasConFactura.reduce((a, o) => a + ventaNetaDeOT(o), 0)
 
   return (
     <div>
@@ -923,15 +1039,51 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
         </div>
       )}
 
-      {/* Filtro por cliente activo + informe Excel */}
+      {/* KPIs del área (fuente única: ventaNetaDeOT / tieneFactura) */}
+      {verValores ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 18 }}>
+          <KpiCard icon={FileText} iconBg={SEREIN.blueSoft} iconColor={SEREIN.blue} value={nOTs.activas} label="OT activas" />
+          <KpiCard icon={CircleDollarSign} iconBg={SEREIN.orangeSoft} iconColor={SEREIN.orangeDark} value={clp(ventaEnProceso)} label={`Venta en proceso · ${activasArea.length} OT`} />
+          <KpiCard icon={Receipt} iconBg={PILL_VARIANT.naranja.bg} iconColor={PILL_VARIANT.naranja.fg} value={clp(cerradasPorFacturarMonto)} label={`Cerradas por facturar · ${cerradasSinFactura.length} OT`} />
+          <KpiCard icon={ShoppingCart} iconBg={SEREIN.greenSoft} iconColor={SEREIN.green} value={clp(facturadasMonto)} label={`OT facturadas · ${cerradasConFactura.length} OT`} />
+        </div>
+      ) : (
+        <div style={{ marginBottom: 18 }}><KpiCard icon={FileText} value={nOTs.activas} label="OT activas" /></div>
+      )}
+
+      <TabsBar tabs={[{ key: 'activas', label: `OT activas (${activasArea.length})` }, { key: 'cerradas', label: `OT cerradas (${cerradasArea.length})` }]} active={vista} onChange={v => { setVista(v); setPage(1) }} />
+
+      {/* Buscador y filtros (aditivos, sobre lo ya existente) */}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+        <label style={{ fontSize: 12, color: '#9AA3AD', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Search size={14} />
+          <input value={busqueda} onChange={e => { setBusqueda(e.target.value); setPage(1) }} placeholder="Buscar por N° OT, cliente, OC/NV o cotización" style={{ ...inp, width: 240 }} />
+        </label>
         <label style={{ fontSize: 12, color: '#9AA3AD', display: 'flex', alignItems: 'center', gap: 6 }}>Cliente
-          <select value={fCliente} onChange={e => setFCliente(e.target.value)} style={inp}>
+          <select value={fCliente} onChange={e => { setFCliente(e.target.value); setPage(1) }} style={inp}>
             <option value="">Todos</option>
             {clientesActivos.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </label>
-        <button onClick={() => { setRep(v => !v); setRepCliente(fCliente) }} style={{ background: C.carbon, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}><Download size={14} /> Informe Excel</button>
+        <label style={{ fontSize: 12, color: '#9AA3AD', display: 'flex', alignItems: 'center', gap: 6 }}>Estado
+          <select value={fEstado} onChange={e => { setFEstado(e.target.value); setPage(1) }} style={inp}>
+            <option value="">Todos</option>
+            {(vista === 'cerradas' ? ['Cerrada'] : ['Cotizada', 'En ejecución', 'Terminada']).map(es => <option key={es} value={es}>{etiquetaEstado({ estado: es })}</option>)}
+          </select>
+        </label>
+        {vista === 'cerradas' && (
+          <label style={{ fontSize: 12, color: '#9AA3AD', display: 'flex', alignItems: 'center', gap: 6 }}>Facturación
+            <select value={fFactura} onChange={e => { setFFactura(e.target.value); setPage(1) }} style={inp}>
+              <option value="">Todas</option>
+              <option value="Pendiente">Pendiente de facturación</option>
+              <option value="Facturada">Facturada</option>
+            </select>
+          </label>
+        )}
+        <label style={{ fontSize: 11, color: '#9AA3AD' }}>Ingreso desde<input type="date" value={fDesde} onChange={e => { setFDesde(e.target.value); setPage(1) }} style={{ ...inp, display: 'block', marginTop: 3 }} /></label>
+        <label style={{ fontSize: 11, color: '#9AA3AD' }}>hasta<input type="date" value={fHasta} onChange={e => { setFHasta(e.target.value); setPage(1) }} style={{ ...inp, display: 'block', marginTop: 3 }} /></label>
+        <Btn variant="outline" icon={RotateCcw} onClick={() => { limpiarFiltros(); setPage(1) }}>Limpiar filtros</Btn>
+        <Btn variant="dark" icon={Download} onClick={() => { setRep(v => !v); setRepCliente(fCliente) }}>Informe Excel</Btn>
       </div>
       {rep && (
         <div style={{ background: '#FAF7F3', border: '1px solid #DFE4EA', padding: 12, marginBottom: 14, display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
@@ -943,16 +1095,6 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
         </div>
       )}
 
-      {/* KPIs del área */}
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-        {kpis.map(([l, v], i) => (
-          <div key={i} style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 14, flex: '1 1 150px' }}>
-            <div style={{ fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>{l}</div>
-            <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 22, fontWeight: 600, color: l === 'Utilidad real' ? C.verde : C.carbon }}>{v}</div>
-          </div>
-        ))}
-      </div>
-
       {!creando && (
         <button onClick={() => setCreando(true)}
           style={{ background: C.azul, color: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
@@ -961,7 +1103,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
       )}
       {creando && <FormOT area={areaSel} siguienteNumero={siguiente} clientesActivos={clientesActivos} onAdd={o => { setOts(xs => [o, ...xs]); setCreando(false) }} onCancel={() => setCreando(false)} />}
 
-      {visibles.length === 0 && <div style={{ color: '#9AA3AD', fontSize: 14, padding: 20, textAlign: 'center', background: '#fff', border: '1px dashed #DFE4EA' }}>Sin OTs en {areaSel}. Crea la primera.</div>}
+      {visibles.length === 0 && <div style={{ color: '#9AA3AD', fontSize: 14, padding: 20, textAlign: 'center', background: '#fff', border: '1px dashed #DFE4EA' }}>{vista === 'cerradas' ? `Sin OT cerradas en ${areaSel} con estos filtros.` : `Sin OT activas en ${areaSel} con estos filtros.`}</div>}
       {(<>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
           {paginar(visibles, page).items.map(o => <TileOT key={o.id} ot={o} verValores={verValores} onOpen={() => setSel(o.id)} onDragStart={() => { dragId.current = o.id }} onDropOn={() => { mover(dragId.current, o.id); dragId.current = null }} />)}
@@ -974,7 +1116,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
                 <button onClick={() => setSel(null)} style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><X size={15} /> Cerrar</button>
               </div>
               <div style={{ padding: 12 }}>
-                <TarjetaOT ot={so} onUpdate={actualizar} onDelete={id => { eliminar(id); setSel(null) }} verValores={verValores} ordenesCompra={ordenesCompra} mo={mo} otsAll={otsAll} instrumentos={instrumentos} libroCompras={libroCompras} enModal />
+                <TarjetaOT ot={so} onUpdate={actualizar} onDelete={id => { eliminar(id); setSel(null) }} onCambiarEstado={cambiarEstado} onAgregarVenta={agregarVenta} onEliminarVenta={eliminarVenta} verValores={verValores} ordenesCompra={ordenesCompra} mo={mo} otsAll={otsAll} instrumentos={instrumentos} libroCompras={libroCompras} enModal />
               </div>
             </div>
           </div>
