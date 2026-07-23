@@ -33,7 +33,7 @@ import { MO_SEED } from './ManoObraModule.jsx'
 import { PROYECTOS } from './proyectos-data.js'
 import InventarioModule from './InventarioModule.jsx'
 import { INVENTARIO_SEED } from './inventario-data.js'
-import { pushState, pullState } from './sync.js'
+import { pushState, pullState, aplicarSiSeguro } from './sync.js'
 import { supabase } from './supabase.js'
 
 import { SEREIN } from './theme-serein.js'
@@ -302,8 +302,15 @@ export default function Dashboard({ perfil, email, onLogout }) {
       const setter = setters[clave]
       if (!setter || valorStr == null) return
       const key = 'serein_' + clave
-      if (localStorage.getItem(key) === valorStr) return
-      try { localStorage.setItem(key, valorStr); setter(JSON.parse(valorStr)) } catch (e) {}
+      // aplicarSiSeguro() es la misma protección que usa pullState(): si
+      // esta sesión tiene un cambio local sin confirmar subido, no lo pisa
+      // con lo que llega de otro usuario (ni por el canal en tiempo real
+      // ni por el sondeo de respaldo) — antes esto SOLO se respetaba en el
+      // sondeo; el tiempo real pisaba directo, así que un cambio local sin
+      // guardar podía borrarse apenas cualquier otra persona guardara
+      // cualquier cosa, sin necesidad de refrescar ni esperar nada.
+      if (!aplicarSiSeguro(key, valorStr)) return
+      try { setter(JSON.parse(valorStr)) } catch (e) {}
     }
     const canal = supabase.channel('app_state_vivo').on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, payload => {
       const fila = payload.new
