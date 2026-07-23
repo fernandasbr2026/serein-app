@@ -16,6 +16,7 @@ import { PILL_VARIANT } from './theme-serein.js'
 const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
 const clp = n => '$' + Math.round(n).toLocaleString('es-CL')
 const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
+const numDec = s => { const v = parseFloat(String(s).replace(',', '.')); return isNaN(v) ? 0 : v }
 const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 const btnMini = { background: 'none', border: 'none', cursor: 'pointer', color: C.rojo, padding: 4 }
 
@@ -45,6 +46,16 @@ const etiquetaEstado = ot => {
   if (ot.estado === 'Terminada') return 'Lista para cerrar'
   return ot.estado
 }
+
+// Cuando una OT viene de una cotización aprobada, trae sus ítems
+// (ot.itemsCot: cant/pUnitario/descuento cotizados, mismo criterio que
+// itemTotal() en CotizacionesModule.jsx). En planta suelen salir más (o
+// menos) m² que los cotizados por ítem; m2Real guarda lo medido en planta,
+// y si no se ha cargado aún se usa el m² cotizado (cant) tal cual.
+const m2CotizadoItem = it => numDec(it.cant)
+const m2RealItem = it => (it.m2Real != null && it.m2Real !== '') ? numDec(it.m2Real) : m2CotizadoItem(it)
+const montoItemReal = it => Math.max(0, Math.round((m2RealItem(it) * num(it.pUnitario)) - num(it.descuento)))
+const montoTotalItemsReal = items => (items || []).reduce((a, it) => a + montoItemReal(it), 0)
 
 // ===== OTs DE EJEMPLO CON DATOS REALES DEL EXCEL (Viman, Santa Rosa) =====
 export const OTS_INICIALES = [
@@ -323,6 +334,8 @@ function descargarOT(ot) {
 // sigue disponible al abrir la ficha (TarjetaOT), esto no lo reemplaza.
 function TileOT({ ot, onOpen, onDragStart, onDropOn, verValores }) {
   const monto = ventaNetaDeOT(ot)
+  const abonoTot = (ot.abonos || []).reduce((a, x) => a + (x.monto || 0), 0)
+  const saldoPend = monto - abonoTot
   const obs = (ot.servicios || '').trim()
   const obsResumen = obs.length > 90 ? obs.slice(0, 87) + '…' : obs
   const esquemaResumen = (ot.esquema && ot.esquema !== '—') ? (ot.esquema.length > 70 ? ot.esquema.slice(0, 67) + '…' : ot.esquema) : ''
@@ -360,6 +373,12 @@ function TileOT({ ot, onOpen, onDragStart, onDropOn, verValores }) {
           <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, color: '#101315' }}>{clp(monto)}</span>
         </div>
       )}
+      {verValores && abonoTot > 0 && (
+        <div style={{ marginTop: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <span style={{ fontSize: 10.5, color: '#9AA3AD', textTransform: 'uppercase' }}>{saldoPend > 0 ? 'Saldo por facturar/percibir' : saldoPend < 0 ? 'Saldo a favor cliente' : 'Saldo'}</span>
+          <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, color: saldoPend > 0 ? C.ambar : saldoPend < 0 ? '#5B4E8C' : C.verde }}>{clp(Math.abs(saldoPend))}</span>
+        </div>
+      )}
     </div>
   )
 }
@@ -374,6 +393,10 @@ function TarjetaOT({ ot, onUpdate, onDelete, onCambiarEstado, onAgregarVenta, on
   const costoOC = costoOCdeOT(ordenesCompra, ot.numero)
   const costoMO = costoMOdeOT(mo, ot.numero)
   const abonoTotal = (ot.abonos || []).reduce((a, x) => a + (x.monto || 0), 0)
+  // Saldo real que falta por facturar o percibir: venta neta de la OT (misma
+  // fuente única que usan la tarjeta y los KPI) menos lo ya abonado. Si el
+  // abono supera la venta, el excedente queda a favor del cliente (negativo).
+  const saldoPendiente = ventaNetaDeOT(ot) - abonoTotal
   const costoTotal = (ot.costos || []).reduce((a, c) => a + c.monto, 0) + costoOC + costoMO
   const utilidad = ventaTotal - costoTotal
   const margen = ventaTotal > 0 ? (utilidad / ventaTotal) * 100 : 0
@@ -560,6 +583,61 @@ function TarjetaOT({ ot, onUpdate, onDelete, onCambiarEstado, onAgregarVenta, on
 
           {verValores && (
             <>
+              {/* ÍTEMS COTIZADOS · AJUSTE DE VENTA POR M² REALES (solo OT que vienen de una cotización aprobada) */}
+              {(ot.itemsCot || []).length > 0 && (() => {
+                const items = ot.itemsCot || []
+                const totalCotizadoOriginal = items.reduce((a, it) => a + Math.max(0, Math.round(numDec(it.cant) * num(it.pUnitario) - num(it.descuento))), 0)
+                const totalAjustado = montoTotalItemsReal(items)
+                const cambiarM2Real = (i, val) => {
+                  const nuevosItems = items.map((it, j) => j === i ? { ...it, m2Real: val } : it)
+                  onUpdate(ot.id, { itemsCot: nuevosItems, montoCotizado: montoTotalItemsReal(nuevosItems) })
+                }
+                return (
+                  <div style={{ marginBottom: 18 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: '#9AA3AD', display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <Ruler size={13} /> Ítems cotizados · ajuste de venta por m² reales
+                      </span>
+                    </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                          {['Ítem', 'm² cotizados', 'm² reales', '$/m²', 'Monto'].map((h, i) => (
+                            <th key={i} style={{ textAlign: i >= 1 ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {items.map((it, i) => {
+                          const cot = m2CotizadoItem(it)
+                          const real = m2RealItem(it)
+                          const sube = real > cot
+                          return (
+                            <tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>
+                              <td style={{ padding: '7px 8px' }}>{it.detalle || it.descripcion || `Ítem ${i + 1}`}</td>
+                              <td style={{ padding: '7px 8px', textAlign: 'right', color: '#9AA3AD' }}>{cot}</td>
+                              <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                                <input type="number" step="0.01" placeholder={String(cot)} value={it.m2Real ?? ''} onChange={e => cambiarM2Real(i, e.target.value)}
+                                  style={{ ...inp, width: 90, textAlign: 'right', padding: '5px 7px', borderColor: sube ? '#C5453D' : '#DFE4EA', color: sube ? '#C5453D' : C.carbon }} />
+                              </td>
+                              <td style={{ padding: '7px 8px', textAlign: 'right', color: '#9AA3AD' }}>{clp(num(it.pUnitario))}</td>
+                              <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 500 }}>{clp(montoItemReal(it))}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr>
+                          <td colSpan={4} style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700 }}>Venta según m² reales</td>
+                          <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700, color: totalAjustado !== totalCotizadoOriginal ? '#D9600A' : C.carbon }}>{clp(totalAjustado)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                    {totalAjustado !== totalCotizadoOriginal && <div style={{ fontSize: 11.5, color: '#9AA3AD', marginTop: 4 }}>Cotizado originalmente: {clp(totalCotizadoOriginal)} · el monto cotizado de la OT ya quedó actualizado a {clp(totalAjustado)}.</div>}
+                  </div>
+                )
+              })()}
+
               {/* VENTAS */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: '#9AA3AD', display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -704,6 +782,13 @@ function TarjetaOT({ ot, onUpdate, onDelete, onCambiarEstado, onAgregarVenta, on
                 <CircleDollarSign size={16} color={margen >= 30 ? C.verde : C.ambar} />
                 <span>Venta neta: <b>{clp(ventaTotal)}</b></span>
                 {abonoTotal > 0 && <span>Abonado: <b style={{ color: C.verde }}>{clp(abonoTotal)}</b></span>}
+                {abonoTotal > 0 && (
+                  saldoPendiente > 0
+                    ? <span>Saldo pendiente por facturar/percibir: <b style={{ color: C.ambar }}>{clp(saldoPendiente)}</b></span>
+                    : saldoPendiente < 0
+                      ? <span>Saldo a favor del cliente: <b style={{ color: '#5B4E8C' }}>{clp(-saldoPendiente)}</b></span>
+                      : <span>Saldo pendiente: <b style={{ color: C.verde }}>$0</b></span>
+                )}
                 <span>Costos: <b>{clp(costoTotal)}</b></span>{costoMO > 0 && <span style={{ color: '#9AA3AD' }}>(incluye {clp(costoMO)} de mano de obra)</span>}
                 {costoOC > 0 && <span style={{ color: C.teal }}>(incluye {clp(costoOC)} de OC proveedores)</span>}
                 <span>Utilidad real: <b style={{ color: margen >= 30 ? C.verde : margen >= 15 ? C.ambar : C.rojo }}>{clp(utilidad)} ({margen.toFixed(1)}%)</b></span>
