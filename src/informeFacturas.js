@@ -14,6 +14,14 @@ const fmtF = s => {
   return m ? `${m[3]}-${m[2]}-${m[1]}` : t
 }
 const ESTADOS_SIN_MORA = ['pagado', 'pagada', 'anulada']
+const ESTADO_COLOR = {
+  Pagado: [SEREIN.greenSoft, SEREIN.green],
+  Factoring: [SEREIN.orangeSoft, SEREIN.orangeDark],
+  Vencida: [SEREIN.redSoft, SEREIN.red],
+  Anulada: [SEREIN.fog2, SEREIN.textFaint],
+  Pendiente: [SEREIN.orangeSoft, SEREIN.orangeDark],
+}
+const colorEstado = e => ESTADO_COLOR[e] || [SEREIN.fog2, SEREIN.textSoft]
 
 function diasMoraDe(f) {
   if (!f.fechaVencimiento || ESTADOS_SIN_MORA.includes(String(f.estado || '').toLowerCase())) return null
@@ -24,18 +32,19 @@ function diasMoraDe(f) {
 }
 
 function estilosInforme() {
-  return `@page{size:A4;margin:16mm 14mm}body{font-family:Inter,Arial,Helvetica,sans-serif;color:${SEREIN.text};font-size:12px;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.head{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid ${SEREIN.ink};padding-bottom:10px}
+  return `@page{size:A4;margin:16mm 14mm}:root{color-scheme:light}body{font-family:Inter,Arial,Helvetica,sans-serif;color:${SEREIN.text};background:#fff;font-size:12px;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.head{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid ${SEREIN.orange};padding-bottom:10px}
 .emp b{color:${SEREIN.ink};font-size:15px}.emp div{color:${SEREIN.textSoft};line-height:1.45;font-size:10.5px}
-.doc{text-align:right}.doc .t{font-size:20px;font-weight:800;color:${SEREIN.ink}}.doc .f{font-size:11.5px;color:${SEREIN.textSoft};margin-top:2px}
+.doc{text-align:right}.doc .t{font-size:20px;font-weight:800;color:${SEREIN.orangeDark}}.doc .f{font-size:11.5px;color:${SEREIN.textSoft};margin-top:2px}
 table.items{width:100%;border-collapse:collapse;margin-top:14px}
-.items th{background:${SEREIN.ink};color:#fff;padding:7px 8px;font-size:9.5px;text-align:left;text-transform:uppercase;letter-spacing:.02em}
+.items th{background:${SEREIN.orange};color:#fff;padding:7px 8px;font-size:9.5px;text-align:left;text-transform:uppercase;letter-spacing:.02em}
 .items td{border:1px solid ${SEREIN.line};padding:6px 8px;font-size:11px;vertical-align:top}
 .items .r{text-align:right}
-.items tfoot td{font-weight:800;background:${SEREIN.fog};border-top:2px solid ${SEREIN.ink};color:${SEREIN.ink}}
+.items tfoot td{font-weight:800;background:${SEREIN.orangeSoft};border-top:2px solid ${SEREIN.orange};color:${SEREIN.orangeDark}}
 .mora{color:${SEREIN.red};font-weight:700}
+.pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap}
 .datos{margin-top:16px;border:1px solid ${SEREIN.line};padding:10px;font-size:11px;line-height:1.55;background:${SEREIN.fog}}
-.datos b{color:${SEREIN.ink}}`
+.datos b{color:${SEREIN.orangeDark}}`
 }
 
 function htmlInforme(items) {
@@ -47,6 +56,7 @@ function htmlInforme(items) {
   }), { neta: 0, iva: 0, total: 0 })
   const filasHtml = filas.map(f => {
     const mora = diasMoraDe(f)
+    const [bg, fg] = colorEstado(f.estado)
     return `<tr>
       <td>${fmtF(f.fechaEmision)}</td>
       <td>${f.folio || ''}</td>
@@ -54,6 +64,7 @@ function htmlInforme(items) {
       <td class="r">${clp(f.ventaNeta)}</td>
       <td class="r">${clp(f.iva)}</td>
       <td class="r">${clp(f.total)}</td>
+      <td><span class="pill" style="background:${bg};color:${fg}">${f.estado || '-'}</span></td>
       <td>${fmtF(f.fechaVencimiento)}</td>
       <td class="r${mora ? ' mora' : ''}">${mora == null ? '-' : mora}</td>
     </tr>`
@@ -70,10 +81,10 @@ function htmlInforme(items) {
       <div class="doc"><div class="t">Informe de facturas</div><div class="f">${filas.length} documento(s) · Emitido el ${fmtF(new Date().toISOString().slice(0, 10))}</div></div>
     </div>
     <table class="items"><thead><tr>
-      <th>Fecha emisión</th><th>Folio</th><th>Cliente</th><th class="r">Venta neta</th><th class="r">IVA</th><th class="r">Total</th><th>Vencimiento</th><th class="r">Días mora</th>
+      <th>Fecha emisión</th><th>Folio</th><th>Cliente</th><th class="r">Venta neta</th><th class="r">IVA</th><th class="r">Total</th><th>Estado</th><th>Vencimiento</th><th class="r">Días mora</th>
     </tr></thead>
     <tbody>${filasHtml}</tbody>
-    <tfoot><tr><td colspan="3">Totales</td><td class="r">${clp(tot.neta)}</td><td class="r">${clp(tot.iva)}</td><td class="r">${clp(tot.total)}</td><td></td><td></td></tr></tfoot>
+    <tfoot><tr><td colspan="3">Totales</td><td class="r">${clp(tot.neta)}</td><td class="r">${clp(tot.iva)}</td><td class="r">${clp(tot.total)}</td><td></td><td></td><td></td></tr></tfoot>
     </table>
     <div class="datos"><b>Datos de transferencia</b><br>
       SERVICIOS REVESTIMIENTOS INDUSTRIALES SpA · RUT 76.860.656-0<br>
