@@ -1,34 +1,60 @@
 import LogoSerein from './LogoSerein.jsx'
-import { LayoutGrid, Sparkles, Building2, Factory, Wrench, Wallet, ShoppingCart, FileText, Receipt, ShieldAlert, Landmark, Users, ClipboardList, Package, Settings, User, Search, Bell, Menu, ChevronsLeft, LogOut, Circle } from 'lucide-react'
+import { LayoutGrid, Sparkles, Building2, Factory, Wrench, Wallet, ShoppingCart, FileText, Receipt, ShieldAlert, Landmark, Users, ClipboardList, Package, Settings, User, Search, Bell, Menu, ChevronsLeft, LogOut, Circle, ChevronDown, Network, Handshake, Archive, ArrowUp, ArrowDown } from 'lucide-react'
+import { useState } from 'react'
+import { SEREIN, PILL_VARIANT } from './theme-serein.js'
 
+// THEME mantiene las mismas claves de siempre (los modulos que ya lo importan
+// no cambian una linea de codigo) — solo se actualizan los VALORES a la
+// identidad Serein 2026 (theme-serein.js). Es un cambio de forma, no de fondo.
 export const THEME = {
-  navy: '#061A40', navy2: '#0B2A5B', orange: '#FF6B00', orange2: '#FF8A33',
-  bg: '#F6F7F9', surface: '#FFFFFF', border: '#E6E8EE', borderSoft: '#EEF0F4',
-  text: '#141C2B', textSoft: '#5A6472', textMute: '#8A929E',
-  success: '#12805C', danger: '#D64545', warn: '#C9860B',
-  radius: 12, radiusSm: 8, radiusPill: 999,
-  shadow: '0 1px 2px rgba(16,24,40,.06)', shadowMd: '0 6px 18px rgba(16,24,40,.08)',
-  font: "'Inter', system-ui, -apple-system, sans-serif"
+  navy: SEREIN.ink, navy2: SEREIN.ink2, orange: SEREIN.orange, orange2: SEREIN.orangeLight,
+  bg: SEREIN.fog, surface: SEREIN.paper, border: SEREIN.line, borderSoft: SEREIN.fog2,
+  text: SEREIN.text, textSoft: SEREIN.textSoft, textMute: SEREIN.textFaint,
+  success: SEREIN.green, danger: SEREIN.red, warn: '#C9860B',
+  radius: SEREIN.radius, radiusSm: SEREIN.radiusSm, radiusPill: SEREIN.radiusPill,
+  shadow: SEREIN.shadow, shadowMd: SEREIN.shadowMd,
+  font: SEREIN.fontBody, fontDisplay: SEREIN.fontDisplay
 }
 
 const ICON = {
-  TODAS: LayoutGrid, ASESOR: Sparkles,
+  TODAS: LayoutGrid, ASESOR: Sparkles, ORGANIGRAMA: Network, CRM: Handshake,
   'Santa Rosa': Factory, 'Istria': Factory, 'Proyectos': Building2,
   GESTION_PROYECTOS: Building2, GESTION_OT: Wrench, PRODUCCION: Factory,
   COMPRAS_OP: Package, ASISTENCIA: Users, COTIZADOR: ClipboardList,
   CLIENTES: Users, CONTACTOS: User, FINANZAS: Landmark, PAGOS: Wallet,
   ORDENES_COMPRA: ShoppingCart, LIBRO_COMPRAS: FileText, LIBRO_VENTAS: Receipt,
-  TRAZABILIDAD: ShieldAlert, PARAMETROS: Settings
+  TRAZABILIDAD: ShieldAlert, PARAMETROS: Settings, INVENTARIO: Archive
 }
 const iconoTab = c => ICON[c] || Circle
 
-const CATS = [
-  { nombre: 'Principal', codes: ['TODAS', 'ASESOR', 'Santa Rosa', 'Istria', 'Proyectos', 'GESTION_PROYECTOS'] },
-  { nombre: 'Finanzas', codes: ['FINANZAS', 'ORDENES_COMPRA', 'PAGOS', 'LIBRO_COMPRAS', 'LIBRO_VENTAS', 'TRAZABILIDAD'] },
-  { nombre: 'Comercial', codes: ['COTIZADOR', 'CLIENTES', 'CONTACTOS', 'COMPRAS_OP'] },
-  { nombre: 'Producción', codes: ['PRODUCCION', 'GESTION_OT', 'ASISTENCIA'] },
-  { nombre: 'Configuración', codes: ['PARAMETROS'] }
+// Agrupacion en 6 secciones tipo acordeon (identidad Serein 2026), calcada
+// del mapa de navegacion del mockup panel-serein-v2.html — mismos 21 modulos
+// reales que ya calcula Dashboard.jsx, solo reorganizados visualmente.
+const SECCIONES_SEREIN = [
+  { nombre: 'General', codes: ['TODAS', 'ORGANIGRAMA', 'CRM', 'ASESOR', 'Santa Rosa', 'Istria', 'Proyectos'] },
+  { nombre: 'Proyectos', codes: ['GESTION_PROYECTOS'] },
+  { nombre: 'Finanzas', codes: ['FINANZAS', 'ORDENES_COMPRA', 'PAGOS', 'LIBRO_COMPRAS', 'LIBRO_VENTAS'] },
+  { nombre: 'Comercial', codes: ['TRAZABILIDAD', 'COTIZADOR', 'CLIENTES', 'CONTACTOS', 'COMPRAS_OP'] },
+  { nombre: 'Operaciones', codes: ['PRODUCCION', 'GESTION_OT', 'ASISTENCIA', 'INVENTARIO'] },
+  { nombre: 'Sistema', codes: ['PARAMETROS'] }
 ]
+// Vista previa de las pestañas internas de cada modulo (son estado interno
+// de cada componente, no rutas propias) — se muestran solo por fidelidad
+// visual con el mockup; al hacer clic en cualquiera se abre el modulo padre,
+// exactamente igual que hoy. No agrega ni quita ninguna pantalla real.
+const SUBITEMS_SEREIN = {
+  CRM: ['Leads y clientes', 'Campañas', 'Vendedores', 'Seguimientos'],
+  ASESOR: ['Dashboard Inteligente', 'Alertas', 'Analista Financiero', 'Analista Comercial', 'Analista Operacional', 'Recomendaciones', 'Chat'],
+  GESTION_PROYECTOS: ['Tarjetas', 'Cotización Proyecto', 'Cotizaciones', 'Cotización Intumescente', 'Compras SII', 'Consolidado de proyectos', 'Proyectos cerrados', 'Facturas', 'Parámetros Proyectos'],
+  FINANZAS: ['Resumen mensual', 'Gastos fijos', 'Gastos variables', 'Reglas de distribución', 'Créditos y Leasing'],
+  PAGOS: ['Resumen y flujo', 'Por pagar', 'Calendario de pagos', 'Cobros esperados', 'Flujo de caja', 'Reportes'],
+  COTIZADOR: ['Cotización rápida', 'Nueva por cálculo', 'Parámetros Cotizador'],
+  CONTACTOS: ['Clientes', 'Proveedores'],
+  COMPRAS_OP: ['Registrar compra', 'Mis compras / OT / OC'],
+  PRODUCCION: ['Registrar avance', 'Avance por OT'],
+  ASISTENCIA: ['Registro diario', 'Horas extras'],
+  PARAMETROS: ['Factoring', 'Valor UF', 'Instrumentos', 'Datos empresa']
+}
 
 function iniciales(txt) {
   const s = (txt || '?').toString().trim()
@@ -37,57 +63,133 @@ function iniciales(txt) {
 }
 
 export function Sidebar({ tabs, areaSel, setAreaSel, nombreTab, perfil, email, onLogout, colapsado, setColapsado, onReset }) {
-  const W = colapsado ? 72 : 250
-  const grupos = CATS.map(cat => ({ nombre: cat.nombre, items: cat.codes.filter(c => tabs.includes(c)) })).filter(g => g.items.length)
-  const restantes = tabs.filter(t => !CATS.some(c => c.codes.includes(t)))
-  if (restantes.length) grupos.push({ nombre: 'Otros', items: restantes })
+  const W = colapsado ? 76 : 272
+  const grupos = SECCIONES_SEREIN.map(cat => ({ nombre: cat.nombre, items: cat.codes.filter(c => tabs.includes(c)) })).filter(g => g.items.length)
+  const restantes = tabs.filter(t => !SECCIONES_SEREIN.some(c => c.codes.includes(t)))
+  if (restantes.length) grupos.push({ nombre: 'General', items: restantes })
   const nom = (perfil && perfil.nombre) || email || 'Usuario'
   const rol = (perfil && perfil.rol) || ''
-  return (<aside style={{ width: W, minWidth: W, maxWidth: W, overflowX: 'hidden', flexShrink: 0, background: THEME.surface, borderRight: '1px solid ' + THEME.border, display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh', transition: 'width .18s ease', fontFamily: THEME.font }}>
-    <div style={{ padding: colapsado ? '16px 0' : '16px 16px 12px', display: 'flex', alignItems: 'center', justifyContent: colapsado ? 'center' : 'space-between', borderBottom: '1px solid ' + THEME.borderSoft }}>
-      {!colapsado && <div><LogoSerein alto={26} /><div style={{ color: THEME.textMute, fontSize: 10, letterSpacing: 1.5, marginTop: 4, fontWeight: 600 }}>PANEL 2026</div></div>}
-      <button onClick={() => setColapsado(!colapsado)} title="Colapsar menú" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: THEME.textSoft, display: 'flex', padding: 6, borderRadius: 8 }}>
-        {colapsado ? <Menu size={18} /> : <ChevronsLeft size={18} />}
+  const [abiertos, setAbiertos] = useState(() => new Set([areaSel]))
+  const toggleAbierto = t => setAbiertos(prev => { const n = new Set(prev); n.has(t) ? n.delete(t) : n.add(t); return n })
+  return (<aside style={{ width: W, minWidth: W, maxWidth: W, overflowX: 'hidden', flexShrink: 0, background: SEREIN.ink, color: '#EDEFF1', borderRight: 'none', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh', transition: 'width .18s ease', fontFamily: THEME.font }}>
+    <div style={{ padding: colapsado ? '18px 0' : '18px 18px 14px', display: 'flex', alignItems: 'center', justifyContent: colapsado ? 'center' : 'space-between', borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+      {!colapsado && <div><LogoSerein alto={24} oscuro /><div style={{ color: '#8B939B', fontSize: 10, letterSpacing: 2, marginTop: 5, fontWeight: 700, textTransform: 'uppercase' }}>Panel de Gestión</div></div>}
+      <button onClick={() => setColapsado(!colapsado)} title="Colapsar menú" style={{ background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.1)', cursor: 'pointer', color: '#C6CBD1', display: 'flex', padding: 6, borderRadius: 6 }}>
+        {colapsado ? <Menu size={16} /> : <ChevronsLeft size={16} />}
       </button>
     </div>
-    <div style={{ padding: colapsado ? '10px 0' : '10px 14px', display: 'flex', alignItems: 'center', gap: 10, justifyContent: colapsado ? 'center' : 'flex-start', borderBottom: '1px solid ' + THEME.borderSoft }}>
-      <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,' + THEME.navy + ',' + THEME.navy2 + ')', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{iniciales(nom)}</div>
+    <div style={{ margin: colapsado ? '14px 0' : '16px 18px 10px', padding: colapsado ? 0 : '12px 14px', display: 'flex', alignItems: 'center', gap: 12, justifyContent: colapsado ? 'center' : 'flex-start', background: colapsado ? 'transparent' : 'rgba(255,255,255,.05)', border: colapsado ? 'none' : '1px solid rgba(255,255,255,.08)', borderRadius: 8 }}>
+      <div style={{ width: 34, height: 34, borderRadius: '50%', background: SEREIN.orange, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, fontFamily: THEME.fontDisplay, flexShrink: 0 }}>{iniciales(nom)}</div>
       {!colapsado && <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: THEME.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nom}</div>
-        <div style={{ fontSize: 11, color: THEME.textMute }}>{rol}</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nom}</div>
+        <div style={{ fontSize: 11, color: '#9AA2A9' }}>{rol}</div>
       </div>}
     </div>
-    <nav style={{ flex: 1, overflowY: 'auto', padding: '10px 10px' }}>
-      {grupos.map(g => (<div key={g.nombre} style={{ marginBottom: 10 }}>
-        {!colapsado && <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, color: THEME.textMute, textTransform: 'uppercase', padding: '4px 10px 6px' }}>{g.nombre}</div>}
+    <nav style={{ flex: 1, overflowY: 'auto', padding: '4px 12px 16px' }}>
+      {grupos.map(g => (<div key={g.nombre} style={{ marginBottom: 2 }}>
+        {!colapsado && <div style={{ fontFamily: THEME.fontDisplay, fontSize: 11, fontWeight: 700, letterSpacing: 2, color: '#6B737B', textTransform: 'uppercase', margin: '18px 4px 8px' }}>{g.nombre}</div>}
         {g.items.map(t => {
           const act = areaSel === t
           const Ico = iconoTab(t)
           const label = nombreTab(t).replace(/^[^A-Za-z0-9ÁÉÍÓÚÑáéíóúñ]+/, '').trim()
-          return (<button key={t} onClick={() => setAreaSel(t)} title={label} style={{ display: 'flex', alignItems: 'center', gap: 11, width: '100%', textAlign: 'left', cursor: 'pointer', border: 'none', marginBottom: 2, padding: colapsado ? '10px 0' : '9px 11px', justifyContent: colapsado ? 'center' : 'flex-start', borderRadius: THEME.radiusSm, position: 'relative', background: act ? 'linear-gradient(90deg, rgba(255,107,0,.14), rgba(255,107,0,.02))' : 'transparent', color: act ? THEME.navy : THEME.textSoft, fontWeight: act ? 600 : 500, fontSize: 13, fontFamily: THEME.font, transition: 'background .12s' }}
-            onMouseEnter={e => { if (!act) e.currentTarget.style.background = '#F3F4F6' }}
-            onMouseLeave={e => { if (!act) e.currentTarget.style.background = 'transparent' }}>
-            {act && <span style={{ position: 'absolute', left: 0, top: 6, bottom: 6, width: 3, borderRadius: 3, background: THEME.orange }} />}
-            <Ico size={17} color={act ? THEME.orange : THEME.textMute} style={{ flexShrink: 0 }} />
-            {!colapsado && <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>}
-          </button>)
+          const hijos = SUBITEMS_SEREIN[t]
+          const abierto = abiertos.has(t)
+          return (<div key={t}>
+            <button onClick={() => { setAreaSel(t); if (hijos) toggleAbierto(t) }} title={label}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', cursor: 'pointer', border: 'none', marginBottom: 1, padding: colapsado ? '10px 0' : '10px 12px', justifyContent: colapsado ? 'center' : 'flex-start', borderRadius: 6, position: 'relative', background: act ? 'rgba(247,119,22,.14)' : 'transparent', color: act ? '#fff' : '#D3D7DB', fontWeight: 500, fontSize: 13.5, fontFamily: THEME.font, transition: 'background .12s' }}
+              onMouseEnter={e => { if (!act) e.currentTarget.style.background = 'rgba(255,255,255,.06)' }}
+              onMouseLeave={e => { if (!act) e.currentTarget.style.background = 'transparent' }}>
+              <Ico size={17} color={act ? SEREIN.orange : '#9AA2A9'} style={{ flexShrink: 0 }} />
+              {!colapsado && <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>}
+              {!colapsado && hijos && <ChevronDown size={14} color="#6B737B" style={{ flexShrink: 0, transition: 'transform .2s ease', transform: abierto ? 'rotate(180deg)' : 'none' }} />}
+            </button>
+            {!colapsado && hijos && (
+              <ul style={{ maxHeight: abierto ? 900 : 0, overflow: 'hidden', transition: 'max-height .25s ease', listStyle: 'none', margin: 0, padding: 0 }}>
+                {hijos.map(h => (
+                  <li key={h}>
+                    <a onClick={() => setAreaSel(t)} title={label + ' · ' + h}
+                      style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 12px 7px 22px', fontSize: 12.5, color: '#9AA2A9', borderLeft: '2px solid rgba(255,255,255,.08)', marginLeft: 9, cursor: 'pointer' }}
+                      onMouseEnter={e => { e.currentTarget.style.color = '#fff' }}
+                      onMouseLeave={e => { e.currentTarget.style.color = '#9AA2A9' }}>
+                      <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'currentColor', flexShrink: 0 }} />
+                      {h}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>)
         })}
       </div>))}
     </nav>
-    <div style={{ borderTop: '1px solid ' + THEME.borderSoft, padding: colapsado ? '10px 0' : '10px 12px' }}>
-      <button onClick={onLogout} title="Salir" style={{ display: 'flex', alignItems: 'center', gap: 9, justifyContent: colapsado ? 'center' : 'flex-start', width: '100%', background: 'transparent', border: '1px solid ' + THEME.border, color: THEME.textSoft, padding: '8px 10px', borderRadius: THEME.radiusSm, cursor: 'pointer', fontSize: 12.5, fontFamily: THEME.font }}>
+    <div style={{ borderTop: '1px solid rgba(255,255,255,.08)', padding: colapsado ? '12px 0' : '12px 16px 16px' }}>
+      <button onClick={onLogout} title="Salir" style={{ display: 'flex', alignItems: 'center', gap: 9, justifyContent: colapsado ? 'center' : 'flex-start', width: '100%', background: 'transparent', border: 'none', color: '#D3D7DB', padding: '8px 4px', cursor: 'pointer', fontSize: 13 }}
+        onMouseEnter={e => { e.currentTarget.style.color = SEREIN.orange }}
+        onMouseLeave={e => { e.currentTarget.style.color = '#D3D7DB' }}>
         <LogOut size={15} />{!colapsado && 'Salir'}
       </button>
-      {!colapsado && <div style={{ marginTop: 8, fontSize: 10, color: THEME.textMute, textAlign: 'center', lineHeight: 1.6 }}>
-        SEREIN GROUP · Panel 2026
-        {onReset && <div style={{ marginTop: 2 }}><span onClick={() => { if (window.confirm('¿Borrar los datos guardados y volver a los valores base? Esta acción no se puede deshacer.')) onReset() }} style={{ color: THEME.textMute, textDecoration: 'underline', cursor: 'pointer' }}>Restablecer datos</span></div>}
+      {!colapsado && <div style={{ marginTop: 8, fontSize: 10.5, color: '#5C646C', lineHeight: 1.7 }}>
+        SEREIN GROUP · Panel de Gestión
+        {onReset && <div><span onClick={() => { if (window.confirm('¿Borrar los datos guardados y volver a los valores base? Esta acción no se puede deshacer.')) onReset() }} style={{ color: '#8B939B', textDecoration: 'underline', cursor: 'pointer' }}>Restablecer datos</span></div>}
       </div>}
     </div>
   </aside>)
 }
 
 export function GlobalStyles() {
-  return (<style>{'*{box-sizing:border-box}' + 'body{margin:0}' + '::selection{background:rgba(255,107,0,.18)}' + '::-webkit-scrollbar{width:10px;height:10px}' + '::-webkit-scrollbar-thumb{background:#CBD2DC;border-radius:8px;border:2px solid transparent;background-clip:content-box}' + '::-webkit-scrollbar-thumb:hover{background:#AAB3C0;background-clip:content-box}' + '::-webkit-scrollbar-track{background:transparent}' + 'table tbody tr{transition:background .12s ease}' + 'table tbody tr:hover{background:#F4F7FB}' + 'input:focus,select:focus,textarea:focus{outline:none;box-shadow:0 0 0 3px rgba(255,107,0,.15);border-color:#FF6B00 !important}' + 'button{transition:filter .12s ease,transform .06s ease,background .12s ease}' + 'button:not(:disabled):active{transform:translateY(1px)}'}</style>)
+  return (<style>{'*{box-sizing:border-box}' + 'body{margin:0}' + '::selection{background:rgba(247,119,22,.18)}' + '::-webkit-scrollbar{width:10px;height:10px}' + '::-webkit-scrollbar-thumb{background:#CBD2DC;border-radius:8px;border:2px solid transparent;background-clip:content-box}' + '::-webkit-scrollbar-thumb:hover{background:#AAB3C0;background-clip:content-box}' + '::-webkit-scrollbar-track{background:transparent}' + 'table tbody tr{transition:background .12s ease}' + 'table tbody tr:hover{background:#FAFBFB}' + 'input:focus,select:focus,textarea:focus{outline:none;box-shadow:0 0 0 3px rgba(247,119,22,.15);border-color:#F77716 !important}' + 'button{transition:filter .12s ease,transform .06s ease,background .12s ease}' + 'button:not(:disabled):active{transform:translateY(1px)}'}</style>)
+}
+
+// ---------------- Componentes de presentacion reutilizables (Serein 2026) ----------------
+// Envoltorios puramente visuales — no leen ni escriben ningun dato propio,
+// solo reciben props y las muestran. Cada modulo sigue siendo dueño de sus
+// datos/calculos; esto solo evita que cada archivo reinvente su propia
+// tarjeta/boton/badge con estilos sueltos.
+
+export function Panel({ children, style }) {
+  return <div style={{ background: SEREIN.paper, border: '1px solid ' + SEREIN.line, borderRadius: SEREIN.radius, overflow: 'hidden', ...style }}>{children}</div>
+}
+
+export function KpiCard({ icon: Icon, iconBg, iconColor, trend, trendUp, value, label }) {
+  return (<div style={{ background: SEREIN.paper, border: '1px solid ' + SEREIN.line, borderRadius: SEREIN.radius, padding: 20 }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+      {Icon && <div style={{ width: 38, height: 38, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: iconBg || SEREIN.orangeSoft, color: iconColor || SEREIN.orangeDark }}><Icon size={19} /></div>}
+      {trend != null && (<span style={{ fontSize: 12, fontWeight: 700, fontFamily: SEREIN.fontDisplay, display: 'inline-flex', alignItems: 'center', gap: 3, color: trendUp ? SEREIN.green : SEREIN.red }}>
+        {trendUp ? <ArrowUp size={12} /> : <ArrowDown size={12} />}{trend}
+      </span>)}
+    </div>
+    <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 800, fontSize: 30, color: SEREIN.text, lineHeight: 1 }}>{value}</div>
+    <div style={{ fontSize: 13, color: SEREIN.textSoft, marginTop: 6 }}>{label}</div>
+  </div>)
+}
+
+// variant: 'verde' | 'naranja' | 'gris' | 'azul' | 'rojo'
+export function Pill({ variant = 'gris', children }) {
+  const v = PILL_VARIANT[variant] || PILL_VARIANT.gris
+  return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 600, padding: '6px 12px', borderRadius: SEREIN.radiusPill, whiteSpace: 'nowrap', background: v.bg, color: v.fg }}>{children}</span>
+}
+
+// variant: 'primary' | 'dark' | 'outline' | 'green'
+export function Btn({ variant = 'primary', children, onClick, type = 'button', disabled, style, icon: Icon }) {
+  const base = { display: 'inline-flex', alignItems: 'center', gap: 8, fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 13, letterSpacing: 0.2, textTransform: 'uppercase', padding: '10px 18px', borderRadius: 6, border: '1.5px solid transparent', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.6 : 1 }
+  const variants = {
+    primary: { background: SEREIN.orange, color: '#fff' },
+    dark: { background: SEREIN.ink, color: '#fff' },
+    outline: { background: SEREIN.paper, color: SEREIN.text, borderColor: SEREIN.line },
+    green: { background: SEREIN.green, color: '#fff' },
+  }
+  return <button type={type} onClick={onClick} disabled={disabled} style={{ ...base, ...(variants[variant] || variants.primary), ...style }}>{Icon && <Icon size={15} />}{children}</button>
+}
+
+export function TabsBar({ tabs, active, onChange }) {
+  return (<div style={{ display: 'flex', gap: 28, borderBottom: '1px solid ' + SEREIN.line, marginBottom: 22, overflowX: 'auto' }}>
+    {tabs.map(t => {
+      const key = typeof t === 'string' ? t : t.key
+      const label = typeof t === 'string' ? t : t.label
+      const act = active === key
+      return (<button key={key} onClick={() => onChange(key)} style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 14, letterSpacing: 0.2, color: act ? SEREIN.text : SEREIN.textFaint, padding: '10px 2px 13px', border: 'none', borderBottom: '3px solid ' + (act ? SEREIN.orange : 'transparent'), background: 'none', whiteSpace: 'nowrap' }}>{label}</button>)
+    })}
+  </div>)
 }
 
 export function PageHeader({ titulo, perfil, email }) {
@@ -100,7 +202,7 @@ export function PageHeader({ titulo, perfil, email }) {
     <div style={{ minWidth: 0 }}>
       <div style={{ fontSize: 11.5, color: THEME.textMute, fontWeight: 500, marginBottom: 3 }}>SEREIN GROUP <span style={{ opacity: 0.5 }}>›</span> {titulo}</div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-        <h1 style={{ margin: 0, fontFamily: "'Oswald', sans-serif", fontSize: 23, fontWeight: 600, color: THEME.navy, textTransform: 'uppercase', letterSpacing: 0.3 }}>{titulo}</h1>
+        <h1 style={{ margin: 0, fontFamily: THEME.fontDisplay, fontSize: 22, fontWeight: 800, color: THEME.text, textTransform: 'none', letterSpacing: -0.3 }}>{titulo}</h1>
         <span style={{ fontSize: 12, color: THEME.textMute, textTransform: 'capitalize' }}>{fecha}</span>
       </div>
     </div>
@@ -113,7 +215,7 @@ export function PageHeader({ titulo, perfil, email }) {
         <Bell size={17} />
         <span style={{ position: 'absolute', top: 8, right: 9, width: 7, height: 7, borderRadius: '50%', background: THEME.orange, border: '1.5px solid #fff' }} />
       </button>
-      <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'linear-gradient(135deg,' + THEME.navy + ',' + THEME.navy2 + ')', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700 }}>{iniciales(nom)}</div>
+      <div style={{ width: 38, height: 38, borderRadius: '50%', background: THEME.orange, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, fontFamily: THEME.fontDisplay }}>{iniciales(nom)}</div>
     </div>
   </div>)
 }
