@@ -150,9 +150,11 @@ function ChipEstado({ ot }) {
 }
 
 // ---------- Formularios inline ----------
-function FormVenta({ onAdd, onCancel }) {
+function FormVenta({ onAdd, onCancel, abonoTotal = 0, ventaTotalActual = 0 }) {
   const [f, setF] = useState({ folio: '', fecha: '', neta: '', estadoPago: 'Pendiente' })
   const iva = Math.round(num(f.neta) * 0.19)
+  const ventaTrasFactura = ventaTotalActual + num(f.neta)
+  const saldoTrasFactura = ventaTrasFactura - abonoTotal
   return (
     <div style={{ background: '#F2F4F7', padding: 10, marginTop: 8 }}>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -167,6 +169,18 @@ function FormVenta({ onAdd, onCancel }) {
         <button onClick={onCancel} style={{ ...btnMini, color: '#9AA3AD' }}><X size={16} /></button>
       </div>
       {num(f.neta) > 0 && <div style={{ fontSize: 12, color: '#9AA3AD', marginTop: 6 }}>IVA 19%: {clp(iva)} · Total factura: {clp(num(f.neta) + iva)}</div>}
+      {abonoTotal > 0 && (
+        <div style={{ fontSize: 12, marginTop: 6, padding: '6px 8px', background: '#fff', border: '1px solid #DFE4EA' }}>
+          Cliente ya abonó <b style={{ color: C.verde }}>{clp(abonoTotal)}</b> en esta OT.{' '}
+          {num(f.neta) > 0
+            ? (saldoTrasFactura > 0
+              ? <>Con esta factura, el saldo pendiente por percibir quedaría en <b style={{ color: C.ambar }}>{clp(saldoTrasFactura)}</b>.</>
+              : saldoTrasFactura < 0
+                ? <>Con esta factura, quedaría un saldo a favor del cliente de <b style={{ color: '#5B4E8C' }}>{clp(-saldoTrasFactura)}</b>.</>
+                : <>Con esta factura, el abono cubriría exactamente la venta (saldo $0).</>)
+            : 'Ingresa el monto para ver el saldo pendiente resultante.'}
+        </div>
+      )}
     </div>
   )
 }
@@ -683,7 +697,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, onCambiarEstado, onAgregarVenta, on
                   </tbody>
                 </table>
               )}
-              {addVenta && <FormVenta onAdd={async v => { const ok = await onAgregarVenta(ot.id, v); if (ok) setAddVenta(false) }} onCancel={() => setAddVenta(false)} />}
+              {addVenta && <FormVenta onAdd={async v => { const ok = await onAgregarVenta(ot.id, v); if (ok) setAddVenta(false) }} onCancel={() => setAddVenta(false)} abonoTotal={abonoTotal} ventaTotalActual={ventaTotal} />}
 
               {/* ABONOS DE CLIENTES (pagos anticipados, sin IVA) */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0 8px' }}>
