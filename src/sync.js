@@ -111,10 +111,14 @@ export async function pushState() {
       const { error } = await supabase.from('app_state').upsert(rows, { onConflict: 'id' })
       if (error) {
         // Antes este error se descartaba en silencio — si algo bloqueaba la
-        // subida (permisos, RLS, etc.) no había forma de enterarse.
-        console.error('sync: pushState() falló al subir a la nube —', error.message || error, error)
-        emitirEstado({ fase: 'error', ultimoError: error.message || String(error) })
-        return { ok: false }
+        // subida (permisos, RLS, tamaño del payload, etc.) no había forma
+        // de enterarse sin abrir la consola del navegador. Ahora el texto
+        // real del error viaja en la respuesta para que la pantalla se lo
+        // pueda mostrar directo a la persona, sin depender de eso.
+        const msg = error.message || String(error)
+        console.error('sync: pushState() falló al subir a la nube —', msg, error)
+        emitirEstado({ fase: 'error', ultimoError: msg })
+        return { ok: false, error: msg }
       }
       rows.forEach(r => {
         lastPushed[r.id] = r.value
@@ -124,9 +128,10 @@ export async function pushState() {
     }
     return { ok: true, n: rows.length }
   } catch (e) {
+    const msg = (e && e.message) || String(e)
     console.error('sync: pushState() lanzó una excepción —', e)
-    emitirEstado({ fase: 'error', ultimoError: (e && e.message) || String(e) })
-    return { ok: false }
+    emitirEstado({ fase: 'error', ultimoError: msg })
+    return { ok: false, error: msg }
   } finally {
     ocupado = false
     if (pendiente) { pendiente = false; pushState() }
