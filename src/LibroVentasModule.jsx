@@ -4,6 +4,7 @@ import { supabase } from './supabase.js'
 import { pushState } from './sync.js'
 import { calcularPerdidaFactoring } from './ParametrosModule.jsx'
 import { descargarInformeFacturas } from './informeFacturas.js'
+import { leerFacturasOcultasLibro } from './facturasOcultas.js'
 
 import { SEREIN } from './theme-serein.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
@@ -195,12 +196,19 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
   // solo agrega las ventas nuevas (con area) y saca las que se ocultaron/anularon.
   useEffect(() => {
     if (loading || !todas.length) return
+    // Si alguien eliminó a propósito esta venta desde Facturas por área
+    // (ocultarFacturasDeLibro en FacturasModule.jsx), no se vuelve a crear
+    // aquí — antes esta sincronización la resucitaba sin excepción cada vez
+    // que se abría esta pantalla, aunque la persona la hubiera borrado un
+    // minuto antes.
+    const ocultas = leerFacturasOcultasLibro()
     const base = {}
     Object.keys(facturas || {}).forEach(a => { base[a] = [...(facturas[a] || [])] })
     const validos = new Set()
     todas.forEach(r => {
       if (!vaAFacturas(r)) return
       const libroId = 'LV' + r.id
+      if (ocultas.has(libroId)) return
       validos.add(libroId)
       const yaEsta = Object.keys(base).some(a => (base[a] || []).some(f => f.libroId === libroId))
       if (!yaEsta) base[r.area] = [...(base[r.area] || []), fichaDe(r)]
