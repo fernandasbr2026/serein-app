@@ -111,7 +111,7 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
     <datalist id="cot-productos">{P.productos.map((pp, kk) => <option key={kk} value={pp.n} label={pp.mc} />)}</datalist>
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
       <button onClick={onVolver} style={{ background: 'transparent', border: '1px solid ' + T.border, borderRadius: 8, padding: '7px 11px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: T.textSoft }}><ChevronLeft size={15} /> Volver</button>
-      <h3 style={{ margin: 0, fontFamily: "'Oswald',sans-serif", fontSize: 18, fontWeight: 600, color: T.navy, textTransform: 'uppercase' }}>Nueva cotizacion por calculo</h3>
+      <h3 style={{ margin: 0, fontFamily: T.fontDisplay, fontSize: 18, fontWeight: 600, color: T.navy, textTransform: 'uppercase' }}>Nueva cotizacion por calculo</h3>
     </div>
 
     <div style={card}>
@@ -125,7 +125,7 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
               <div style={{ fontSize: 11, color: T.textMute }}>{(c.rut || '') + (c.comuna ? ' - ' + c.comuna : '')}</div>
             </div>))}
           </div>)}
-          {cliSel && (<div style={{ marginTop: 8, display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: T.textSoft, background: '#F5F7FA', borderRadius: 8, padding: '8px 10px' }}>
+          {cliSel && (<div style={{ marginTop: 8, display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: T.textSoft, background: '#F2F4F7', borderRadius: 8, padding: '8px 10px' }}>
             <span><b>RUT:</b> {cliSel.rut || '-'}</span><span><b>Direccion:</b> {cliSel.direccion || '-'}</span><span><b>Giro:</b> {cliSel.giro || '-'}</span><span><b>Comuna:</b> {cliSel.comuna || '-'}</span>
           </div>)}
           {!cliSel && cliQuery.trim() && matches.length === 0 && (<div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}><span style={{ fontSize: 12, color: T.warn }}>No esta en el listado.</span><button onClick={() => { setNc({ nombre: cliQuery.trim(), rut: '', giro: '', direccion: '', comuna: '' }); setAddOpen(true) }} style={{ background: T.orange, color: '#fff', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>+ Agregar cliente</button></div>)}
@@ -159,14 +159,14 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
           <div><span style={lab}>Limpieza SP-1 /m2</span><input type="number" value={it.limpieza} onChange={e => updItem(i, x => x.limpieza = e.target.value)} style={{ ...inp, width: '100%' }} /></div>
         </div>
 
-        <div style={{ background: '#F5F7FA', border: '1px solid ' + T.border, borderLeft: '4px solid ' + T.orange, borderRadius: 8, padding: '10px 14px', marginBottom: 12, display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ background: '#F2F4F7', border: '1px solid ' + T.border, borderLeft: '4px solid ' + T.orange, borderRadius: 8, padding: '10px 14px', marginBottom: 12, display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ minWidth: 250 }}>
             <span style={lab}>Tipo de granallado (grado SSPC)</span>
             <select value={it.grado} onChange={e => updItem(i, x => x.grado = e.target.value)} style={{ ...inp, width: '100%' }}>{P.grados.map((g, k) => <option key={k} value={g.grado}>{g.grado} (x{g.factor})</option>)}</select>
           </div>
           <div>
             <div style={{ fontSize: 10.5, color: T.textMute, textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.4 }}>Granallado</div>
-            <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 22, fontWeight: 700, color: T.navy, lineHeight: 1.1 }}>{clp(d.granallado)}<span style={{ fontSize: 12, color: T.textMute, fontWeight: 400 }}> /m2</span></div>
+            <div style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 700, color: T.navy, lineHeight: 1.1 }}>{clp(d.granallado)}<span style={{ fontSize: 12, color: T.textMute, fontWeight: 400 }}> /m2</span></div>
           </div>
           {(+it.limpieza || 0) > 0 && <div><div style={{ fontSize: 10.5, color: T.textMute, textTransform: 'uppercase', fontWeight: 700 }}>Limpieza SP-1</div><div style={{ fontSize: 15, fontWeight: 600, color: T.textSoft }}>{clp(+it.limpieza || 0)} /m2</div></div>}
         </div>
@@ -246,12 +246,12 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <label style={{ fontSize: 12, color: T.textSoft }}>Sueldos granallado/mes<br /><input type="number" value={sg} onChange={e => setSg(+e.target.value || 0)} style={{ ...inp, width: 150 }} /></label>
         <label style={{ fontSize: 12, color: T.textSoft }}>Sueldos pintura/mes<br /><input type="number" value={sp} onChange={e => setSp(+e.target.value || 0)} style={{ ...inp, width: 150 }} /></label>
-        <label style={{ fontSize: 12, color: T.textSoft }}>Total fijos sede/mes<br /><input value={clp(totalFijos)} disabled style={{ ...inp, width: 150, background: '#F3F4F6' }} /></label>
+        <label style={{ fontSize: 12, color: T.textSoft }}>Total fijos sede/mes<br /><input value={clp(totalFijos)} disabled style={{ ...inp, width: 150, background: '#F2F4F7' }} /></label>
       </div>
     </div>
 
     <div style={{ ...card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, borderTop: '3px solid ' + T.orange }}>
-      <div><div style={{ fontSize: 12, color: T.textMute, textTransform: 'uppercase', fontWeight: 600 }}>Total cotizacion (neto)</div><div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 26, fontWeight: 700, color: T.navy }}>{clp(totalCot)}</div></div>
+      <div><div style={{ fontSize: 12, color: T.textMute, textTransform: 'uppercase', fontWeight: 600 }}>Total cotizacion (neto)</div><div style={{ fontFamily: T.fontDisplay, fontSize: 26, fontWeight: 700, color: T.navy }}>{clp(totalCot)}</div></div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         {guardado && <span style={{ color: T.success, fontSize: 13, fontWeight: 600 }}>{guardado}</span>}
         <button onClick={guardar} disabled={!cliQuery.trim()} style={{ ...btnP, opacity: cliQuery.trim() ? 1 : 0.5 }}>Guardar borrador</button>
@@ -259,7 +259,7 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
     </div>
     {addOpen && (<div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(6,26,64,.45)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ background: '#fff', borderRadius: 14, boxShadow: '0 20px 50px rgba(16,24,40,.25)', padding: 22, width: 440, maxWidth: '100%' }}>
-        <h3 style={{ margin: '0 0 14px', fontFamily: "'Oswald',sans-serif", fontSize: 16, color: T.navy, textTransform: 'uppercase' }}>Agregar cliente</h3>
+        <h3 style={{ margin: '0 0 14px', fontFamily: T.fontDisplay, fontSize: 16, color: T.navy, textTransform: 'uppercase' }}>Agregar cliente</h3>
         <div style={{ display: 'grid', gap: 10 }}>
           <div><span style={lab}>Nombre / Razon social</span><input value={nc.nombre} onChange={e => setNc({ ...nc, nombre: e.target.value })} style={{ ...inp, width: '100%' }} /></div>
           <div style={{ display: 'flex', gap: 10 }}>
