@@ -18,43 +18,50 @@ const PROT_DESDE_PREFIX = '__protdesde_'
 const PROTECCION_MAX_MS = 90 * 1000
 let lastPushed = {}
 
-// pullState() NO debe pisar una clave local que todavía no se confirmó
-// subida a la nube — si lo hiciera, un refresh o el sondeo periódico
-// podrían "revivir" datos viejos justo encima de un cambio recién hecho
-// (cerrar una OT, agregar una factura, etc.) que aún no llegó a Supabase.
-// Comparamos el valor local contra su última marca __pushok_; si difieren,
-// dejamos el local tal cual y probamos subirlo de nuevo en vez de traerlo
-// — pero solo mientras la protección sea reciente (ver PROTECCION_MAX_MS).
+// Única puerta de entrada para aplicar un valor que viene de la nube
+// (ya sea por sondeo/pullState() o por el canal en tiempo real de
+// Dashboard.jsx) sobre localStorage. Antes esta protección solo vivía
+// dentro de pullState() — el canal en tiempo real aplicaba lo que
+// llegaba de otros usuarios DIRECTO a localStorage, sin pasar por acá,
+// así que un cambio local sin subir podía borrarse al instante apenas
+// cualquier otra persona guardara cualquier cosa (no hacía falta
+// refrescar ni esperar el sondeo de 15s). Ahora ambos caminos pasan por
+// la misma protección.
+// Devuelve true si el valor quedó aplicado en localStorage, false si se
+// protegió el valor local (no se aplicó).
+export function aplicarSiSeguro(id, value) {
+  if (!id || value == null) return false
+  try {
+    const local = localStorage.getItem(id)
+    const confirmado = localStorage.getItem(OK_PREFIX + id)
+    if (local != null && confirmado != null && local !== confirmado) {
+      const protKey = PROT_DESDE_PREFIX + id
+      const ahora = Date.now()
+      let desde = Number(localStorage.getItem(protKey))
+      if (!desde) { desde = ahora; localStorage.setItem(protKey, String(ahora)) }
+      if (ahora - desde < PROTECCION_MAX_MS) {
+        pushState()
+        return false
+      }
+      console.warn(`sync: ${id} llevaba más de ${Math.round(PROTECCION_MAX_MS / 1000)}s sin poder subirse — se descarta la protección y se acepta la versión de la nube para no aislar esta sesión.`)
+    }
+    localStorage.removeItem(PROT_DESDE_PREFIX + id)
+    localStorage.setItem(id, value)
+    localStorage.setItem(OK_PREFIX + id, value)
+    lastPushed[id] = value
+    return true
+  } catch (e) { return false }
+}
+
 export async function pullState() {
   try {
     const { data, error } = await supabase.from('app_state').select('id, value')
     if (error || !data) return { ok: false, n: 0 }
     let n = 0
-    let huboProtegidas = false
-    const ahora = Date.now()
     data.forEach(row => {
       if (!row.id || row.value == null) return
-      try {
-        const local = localStorage.getItem(row.id)
-        const confirmado = localStorage.getItem(OK_PREFIX + row.id)
-        if (local != null && confirmado != null && local !== confirmado) {
-          const protKey = PROT_DESDE_PREFIX + row.id
-          let desde = Number(localStorage.getItem(protKey))
-          if (!desde) { desde = ahora; localStorage.setItem(protKey, String(ahora)) }
-          if (ahora - desde < PROTECCION_MAX_MS) {
-            huboProtegidas = true
-            return
-          }
-          console.warn(`sync: ${row.id} llevaba más de ${Math.round(PROTECCION_MAX_MS / 1000)}s sin poder subirse — se descarta la protección y se acepta la versión de la nube para no aislar esta sesión.`)
-        }
-        localStorage.removeItem(PROT_DESDE_PREFIX + row.id)
-        localStorage.setItem(row.id, row.value)
-        localStorage.setItem(OK_PREFIX + row.id, row.value)
-        lastPushed[row.id] = row.value
-        n++
-      } catch (e) {}
+      if (aplicarSiSeguro(row.id, row.value)) n++
     })
-    if (huboProtegidas) pushState()
     return { ok: true, n }
   } catch (e) { return { ok: false, n: 0 } }
 }
