@@ -11,8 +11,10 @@ import { cargarOrganigrama, cargarCostos, guardarCostoManual, crearPersona, actu
 // (reforzado por RLS, no solo por la UI).
 // ============================================================
 
-const C = { azul: '#061A40', teal: '#0B7285', ambar: '#FF6B00', rojo: '#D64545', verde: '#12805C', carbon: '#0F1A2E', gris: '#8A929E' }
-const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
+import { SEREIN } from './theme-serein.js'
+// Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
+const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
+const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 
 const NIVEL_COLOR = {
@@ -67,7 +69,7 @@ function Caja({ persona, costo, mostrarCostos, esGerencia, onEditar, onMover, es
       borderRadius: 4, border: externo ? '1.5px dashed #B9B4AE' : '1px solid transparent',
       position: 'relative', boxShadow: '0 1px 2px rgba(0,0,0,.08)',
     }}>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, lineHeight: 1.25 }}>{persona.nombre}</div>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, lineHeight: 1.25 }}>{persona.nombre}</div>
       <div style={{ fontSize: 10.5, opacity: 0.85, marginTop: 2 }}>{persona.cargo}</div>
       {persona.jefe_id_punteado && <div style={{ fontSize: 9, opacity: 0.75, marginTop: 3, fontStyle: 'italic' }}>· también reporta (punteado)</div>}
       {mostrarCostos && costo != null && <div style={{ fontSize: 10.5, marginTop: 4, fontWeight: 700 }}>{clp(costo)}/mes</div>}
@@ -84,7 +86,7 @@ function Caja({ persona, costo, mostrarCostos, esGerencia, onEditar, onMover, es
 
 function CajaGrupo({ etiqueta, n }) {
   const col = NIVEL_COLOR.planta
-  return <div style={{ background: col.bg, color: col.fg, minWidth: 148, padding: '8px 12px', borderRadius: 4, fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5 }}>{etiqueta} · {n}</div>
+  return <div style={{ background: col.bg, color: col.fg, minWidth: 148, padding: '8px 12px', borderRadius: 4, fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5 }}>{etiqueta} · {n}</div>
 }
 
 function Nodo({ persona, personas, costos, mostrarCostos, esGerencia, onEditar, onMover }) {
@@ -118,12 +120,12 @@ function Nodo({ persona, personas, costos, mostrarCostos, esGerencia, onEditar, 
 function PanelAsesores({ asesores }) {
   if (!asesores.length) return null
   return (
-    <div style={{ position: 'absolute', right: 0, top: 0, width: 170, border: '1.5px dashed #B9B4AE', borderRadius: 4, background: '#FAF7F4', padding: 10 }}>
+    <div style={{ position: 'absolute', right: 0, top: 0, width: 170, border: '1.5px dashed #B9B4AE', borderRadius: 4, background: '#F2F4F7', padding: 10 }}>
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: C.gris, marginBottom: 6, letterSpacing: '.04em' }}>Asesores externos</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {asesores.map(a => (
           <div key={a.id} style={{ background: '#fff', border: '1px dashed #B9B4AE', borderRadius: 3, padding: '5px 8px' }}>
-            <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 11.5 }}>{a.nombre}</div>
+            <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 11.5 }}>{a.nombre}</div>
             <div style={{ fontSize: 10, color: C.gris }}>{a.cargo}</div>
           </div>
         ))}
@@ -135,7 +137,7 @@ function PanelAsesores({ asesores }) {
 function BandaFlujo({ flujo, personas }) {
   const nombreDe = p => p.persona_id ? (personas.find(x => x.id === p.persona_id)?.nombre || '—') : (p.texto || '—')
   return (
-    <div style={{ background: '#FAF7F4', border: '1px solid #E2DED4', borderLeft: '4px solid ' + C.ambar, padding: 14, marginTop: 24 }}>
+    <div style={{ background: '#F2F4F7', border: '1px solid #DFE4EA', borderLeft: '4px solid ' + C.ambar, padding: 14, marginTop: 24 }}>
       <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', color: C.gris, marginBottom: 10, letterSpacing: '.04em' }}>Flujo de trabajo</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
         {flujo.map((p, i) => (
@@ -145,8 +147,8 @@ function BandaFlujo({ flujo, personas }) {
                 <div style={{ width: 28, height: 1, background: C.ambar }} />{p.etiqueta_flecha}<div style={{ width: 0, height: 0, borderTop: '4px solid transparent', borderBottom: '4px solid transparent', borderLeft: '6px solid ' + C.ambar }} />
               </div>
             )}
-            <div style={{ background: '#fff', border: '1px solid #E2DED4', borderRadius: 4, padding: '8px 14px', minWidth: 140, textAlign: 'center' }}>
-              <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5 }}>{nombreDe(p)}</div>
+            <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 4, padding: '8px 14px', minWidth: 140, textAlign: 'center' }}>
+              <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5 }}>{nombreDe(p)}</div>
               <div style={{ fontSize: 10.5, color: C.gris, marginTop: 2 }}>{p.subtexto}</div>
             </div>
           </React.Fragment>
@@ -158,7 +160,7 @@ function BandaFlujo({ flujo, personas }) {
 
 function Leyenda() {
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginTop: 20, paddingTop: 14, borderTop: '1px solid #E2DED4', fontSize: 11, alignItems: 'center' }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginTop: 20, paddingTop: 14, borderTop: '1px solid #DFE4EA', fontSize: 11, alignItems: 'center' }}>
       <span style={{ fontWeight: 700, textTransform: 'uppercase', color: C.gris, fontSize: 10 }}>Leyenda</span>
       {NIVELES.map(n => (
         <span key={n} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
@@ -178,7 +180,7 @@ function FormPersona({ personas, inicial, onGuardar, onCancelar, onEliminar }) {
     <div onClick={onCancelar} style={{ position: 'fixed', inset: 0, background: 'rgba(15,26,46,.55)', zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#fff', width: '100%', maxWidth: 480, padding: 20, boxShadow: '0 20px 60px -12px rgba(0,0,0,.4)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, textTransform: 'uppercase' }}>{inicial ? 'Editar persona' : 'Agregar persona'}</span>
+          <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, textTransform: 'uppercase' }}>{inicial ? 'Editar persona' : 'Agregar persona'}</span>
           <button onClick={onCancelar} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -219,9 +221,9 @@ function FormPersona({ personas, inicial, onGuardar, onCancelar, onEliminar }) {
           </label>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 18 }}>
-          {inicial ? <button onClick={() => onEliminar(inicial)} style={{ background: 'none', border: '1px solid #E2C9C2', color: C.rojo, padding: '8px 14px', cursor: 'pointer', fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Trash2 size={13} /> Eliminar</button> : <span />}
+          {inicial ? <button onClick={() => onEliminar(inicial)} style={{ background: 'none', border: '1px solid #DFE4EA', color: C.rojo, padding: '8px 14px', cursor: 'pointer', fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Trash2 size={13} /> Eliminar</button> : <span />}
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={onCancelar} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '8px 14px', cursor: 'pointer', fontSize: 12.5 }}>Cancelar</button>
+            <button onClick={onCancelar} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '8px 14px', cursor: 'pointer', fontSize: 12.5 }}>Cancelar</button>
             <button onClick={() => onGuardar(f)} disabled={!f.nombre.trim() || !f.cargo.trim()} style={{ background: C.verde, color: '#fff', border: 'none', padding: '8px 16px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, opacity: (!f.nombre.trim() || !f.cargo.trim()) ? 0.5 : 1 }}>Guardar</button>
           </div>
         </div>
@@ -307,7 +309,7 @@ export default function OrganigramaModule({ esGerencia = false }) {
   const totalPersonas = personas.filter(p => p.tipo !== 'asesor_externo' && p.tipo !== 'subcontrato').length
 
   if (cargando) return <div style={{ padding: 24, color: C.gris, fontSize: 13 }}>Cargando organigrama…</div>
-  if (error) return <div style={{ padding: 16, background: '#F6E0DA', color: C.rojo, fontSize: 13 }}>{error}</div>
+  if (error) return <div style={{ padding: 16, background: '#FCEBEA', color: C.rojo, fontSize: 13 }}>{error}</div>
 
   return (
     <div>
@@ -315,14 +317,14 @@ export default function OrganigramaModule({ esGerencia = false }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
         <div style={{ fontSize: 12.5, color: C.gris }}>{totalPersonas} colaboradores · {personas.filter(p => p.tipo === 'subcontrato').length} subcontratos · {asesores.length} asesores externos</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {esGerencia && <button onClick={toggleCostos} style={{ background: mostrarCostos ? C.carbon : '#fff', color: mostrarCostos ? '#fff' : C.carbon, border: '1px solid #CBD2D6', padding: '7px 12px', cursor: 'pointer', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}>{mostrarCostos ? <EyeOff size={13} /> : <Eye size={13} />} {mostrarCostos ? 'Ocultar costos' : 'Ver costos'}</button>}
+          {esGerencia && <button onClick={toggleCostos} style={{ background: mostrarCostos ? C.carbon : '#fff', color: mostrarCostos ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}>{mostrarCostos ? <EyeOff size={13} /> : <Eye size={13} />} {mostrarCostos ? 'Ocultar costos' : 'Ver costos'}</button>}
           {esGerencia && <button onClick={() => setEditando('nueva')} style={{ background: C.ambar, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Agregar persona</button>}
-          <button onClick={() => exportar('png')} disabled={exportando} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 12px', cursor: exportando ? 'default' : 'pointer', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}><ImageIcon size={13} /> PNG</button>
-          <button onClick={() => exportar('pdf')} disabled={exportando} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 12px', cursor: exportando ? 'default' : 'pointer', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Download size={13} /> PDF (A3)</button>
+          <button onClick={() => exportar('png')} disabled={exportando} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: exportando ? 'default' : 'pointer', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}><ImageIcon size={13} /> PNG</button>
+          <button onClick={() => exportar('pdf')} disabled={exportando} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: exportando ? 'default' : 'pointer', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Download size={13} /> PDF (A3)</button>
         </div>
       </div>
 
-      {msg && <div style={{ background: msg.startsWith('Error') ? '#F6E0DA' : '#E7F2EA', color: msg.startsWith('Error') ? C.rojo : C.verde, padding: '8px 12px', marginBottom: 14, fontSize: 12.5 }}>{msg}</div>}
+      {msg && <div style={{ background: msg.startsWith('Error') ? '#FCEBEA' : '#E6F7EE', color: msg.startsWith('Error') ? C.rojo : C.verde, padding: '8px 12px', marginBottom: 14, fontSize: 12.5 }}>{msg}</div>}
 
       {/* El div exterior hace scroll horizontal en pantalla; el interior (sin overflow propio,
           ancho natural = contenido completo) es el que se captura para exportar, para que
@@ -332,7 +334,7 @@ export default function OrganigramaModule({ esGerencia = false }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18, paddingBottom: 14, borderBottom: '3px solid ' + C.ambar }}>
           <img src="/logo-serein.jpg" alt="Serein" style={{ height: 40 }} />
           <div>
-            <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 700, fontSize: 20, textTransform: 'uppercase' }}>Organigrama</div>
+            <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 20, textTransform: 'uppercase' }}>Organigrama</div>
             <div style={{ fontSize: 11.5, color: C.gris }}>Estructura organizacional · Santa Rosa · Istria · Proyectos · {totalPersonas} colaboradores</div>
           </div>
         </div>

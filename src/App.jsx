@@ -4,6 +4,7 @@ import Login from './Login.jsx'
 import Dashboard from './Dashboard.jsx'
 import LogoSerein from './LogoSerein.jsx'
 import { pullState, pushState } from './sync.js'
+import { SEREIN } from './theme-serein.js'
 
 // Captura errores de render para que la app no se quede en blanco y muestre el detalle
 class ErrorBoundary extends React.Component {
@@ -14,11 +15,11 @@ class ErrorBoundary extends React.Component {
     if (this.state.error) {
       const msg = (this.state.error && this.state.error.message) || String(this.state.error)
       return (
-        <div style={{ minHeight: '100vh', background: '#161616', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 14, fontFamily: "'Inter',sans-serif", padding: 24, textAlign: 'center' }}>
-          <div style={{ color: '#E8836F', fontSize: 16, fontWeight: 600 }}>Se produjo un error al mostrar el panel</div>
-          <div style={{ color: '#B8C0C6', fontSize: 13, maxWidth: 620, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg}</div>
+        <div style={{ minHeight: '100vh', background: '#101315', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 14, fontFamily: "'Inter',sans-serif", padding: 24, textAlign: 'center' }}>
+          <div style={{ color: '#C5453D', fontSize: 16, fontWeight: 600 }}>Se produjo un error al mostrar el panel</div>
+          <div style={{ color: '#9AA3AD', fontSize: 13, maxWidth: 620, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg}</div>
           <button onClick={() => { try { Object.keys(localStorage).filter(k => k.startsWith('serein_')).forEach(k => localStorage.removeItem(k)) } catch (e) {} location.reload() }}
-            style={{ background: '#D2642F', color: '#fff', border: 'none', padding: '10px 20px', cursor: 'pointer', fontWeight: 600 }}>
+            style={{ background: '#F77716', color: '#fff', border: 'none', padding: '10px 20px', cursor: 'pointer', fontWeight: 600 }}>
             Reiniciar datos locales y recargar
           </button>
         </div>
@@ -129,10 +130,10 @@ export default function App() {
     <ErrorBoundary>
       <Dashboard perfil={perfil} email={session.user.email} onLogout={salir} />
       {hayVersionNueva && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 10000, background: '#1E5C8A', color: '#fff', padding: '9px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, fontFamily: "'Inter',sans-serif", fontSize: 13, boxShadow: '0 2px 10px rgba(0,0,0,.3)' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 10000, background: '#2A5FB0', color: '#fff', padding: '9px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, fontFamily: "'Inter',sans-serif", fontSize: 13, boxShadow: '0 2px 10px rgba(0,0,0,.3)' }}>
           <span>Hay una versión nueva de la app — recarga para tener los últimos arreglos</span>
           <button onClick={() => location.reload()}
-            style={{ background: '#fff', color: '#1E5C8A', border: 'none', borderRadius: 6, padding: '5px 14px', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
+            style={{ background: '#fff', color: '#2A5FB0', border: 'none', borderRadius: 6, padding: '5px 14px', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
             Recargar ahora
           </button>
         </div>
@@ -143,10 +144,10 @@ export default function App() {
 
 function Pantalla({ msg, accion, accionTxt }) {
   return (
-    <div style={{ minHeight: '100vh', background: '#161616', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16, fontFamily: "'Inter',sans-serif", padding: 20, textAlign: 'center' }}>
-      <div style={{ color: '#B8C0C6', fontSize: 15, maxWidth: 620, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg}</div>
+    <div style={{ minHeight: '100vh', background: '#101315', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16, fontFamily: "'Inter',sans-serif", padding: 20, textAlign: 'center' }}>
+      <div style={{ color: '#9AA3AD', fontSize: 15, maxWidth: 620, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg}</div>
       {accion && (
-        <button onClick={accion} style={{ background: '#D2642F', border: 'none', padding: '10px 20px', cursor: 'pointer', fontWeight: 600 }}>
+        <button onClick={accion} style={{ background: '#F77716', border: 'none', padding: '10px 20px', cursor: 'pointer', fontWeight: 600 }}>
           {accionTxt}
         </button>
       )}
@@ -165,7 +166,7 @@ function NuevaClave({ onListo }) {
 
   const inputBase = {
     width: '100%', boxSizing: 'border-box', padding: '11px 12px', margin: '6px 0 16px',
-    border: '1px solid #CBD2D6', borderRadius: 6, fontSize: 14, background: '#fff',
+    border: '1px solid #DFE4EA', borderRadius: 6, fontSize: 14, background: '#fff',
     outline: 'none', fontFamily: "'Inter',sans-serif",
   }
 
@@ -181,27 +182,27 @@ function NuevaClave({ onListo }) {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #F6F0EA 0%, #EFE6DC 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Inter',sans-serif", padding: 20 }}>
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #F2F4F7 0%, #F2F4F7 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Inter',sans-serif", padding: 20 }}>
       <div style={{ width: '100%', maxWidth: 400 }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 24 }}>
           <LogoSerein alto={54} />
         </div>
-        <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: '4px solid #D2642F', borderRadius: 4, padding: 30, boxShadow: '0 12px 40px -12px rgba(29,29,27,0.18)' }}>
+        <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: '4px solid #F77716', borderRadius: 4, padding: 30, boxShadow: '0 12px 40px -12px rgba(29,29,27,0.18)' }}>
           {ok ? (
             <>
-              <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 18, textTransform: 'uppercase', marginBottom: 8 }}>Contraseña actualizada</div>
-              <p style={{ fontSize: 13.5, color: '#5C5750', lineHeight: 1.5, marginBottom: 18 }}>Tu nueva contraseña quedó guardada. Ya puedes ingresar al panel.</p>
-              <button onClick={onListo} style={{ width: '100%', padding: 12, background: '#1D1D1B', color: '#fff', border: 'none', borderRadius: 6, fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, letterSpacing: 1, cursor: 'pointer', textTransform: 'uppercase' }}>Entrar al panel</button>
+              <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 18, textTransform: 'uppercase', marginBottom: 8 }}>Contraseña actualizada</div>
+              <p style={{ fontSize: 13.5, color: '#5A636E', lineHeight: 1.5, marginBottom: 18 }}>Tu nueva contraseña quedó guardada. Ya puedes ingresar al panel.</p>
+              <button onClick={onListo} style={{ width: '100%', padding: 12, background: '#101315', color: '#fff', border: 'none', borderRadius: 6, fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, letterSpacing: 1, cursor: 'pointer', textTransform: 'uppercase' }}>Entrar al panel</button>
             </>
           ) : (
             <>
-              <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 18, textTransform: 'uppercase', marginBottom: 14 }}>Crear nueva contraseña</div>
+              <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 18, textTransform: 'uppercase', marginBottom: 14 }}>Crear nueva contraseña</div>
               <label style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.5 }}>NUEVA CONTRASEÑA</label>
               <input type="password" value={p1} onChange={e => setP1(e.target.value)} placeholder="••••••••" style={inputBase} />
               <label style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.5 }}>REPETIR CONTRASEÑA</label>
               <input type="password" value={p2} onChange={e => setP2(e.target.value)} onKeyDown={e => e.key === 'Enter' && guardar()} placeholder="••••••••" style={inputBase} />
-              {err && <div style={{ color: '#B5432E', fontSize: 13, marginBottom: 12 }}>{err}</div>}
-              <button onClick={guardar} disabled={cargando} style={{ width: '100%', padding: 12, background: '#1D1D1B', color: '#fff', border: 'none', borderRadius: 6, fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, letterSpacing: 1, cursor: 'pointer', textTransform: 'uppercase', opacity: cargando ? 0.7 : 1 }}>{cargando ? 'Guardando…' : 'Guardar contraseña'}</button>
+              {err && <div style={{ color: '#C5453D', fontSize: 13, marginBottom: 12 }}>{err}</div>}
+              <button onClick={guardar} disabled={cargando} style={{ width: '100%', padding: 12, background: '#101315', color: '#fff', border: 'none', borderRadius: 6, fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, letterSpacing: 1, cursor: 'pointer', textTransform: 'uppercase', opacity: cargando ? 0.7 : 1 }}>{cargando ? 'Guardando…' : 'Guardar contraseña'}</button>
             </>
           )}
         </div>

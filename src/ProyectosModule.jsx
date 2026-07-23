@@ -16,10 +16,12 @@ const _toks = x => (String(x || '').match(/\d{3,}/g) || [])
 const otMatch = (p, f) => { const pt = new Set([..._toks(p.ot), ..._toks(p.oc)]); return [..._toks(f.ot), ..._toks(f.oc)].some(t => pt.has(t)) }
 const facturasDeOT = (facturasProy, p) => (facturasProy || []).filter(f => otMatch(p, f))
 
-const C = { azul: '#061A40', teal: '#0B7285', ambar: '#FF6B00', rojo: '#D64545', verde: '#12805C', carbon: '#0F1A2E', gris: '#8A929E' }
+import { SEREIN } from './theme-serein.js'
+// Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
+const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
-const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
+const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 const btnMini = { background: 'none', border: 'none', cursor: 'pointer', color: C.rojo, padding: 4 }
 const nombreDefault = id => (CC_DEFS.find(c => c.id === id)?.nombre) || id
 const nombreCC = (p, id) => (p.ccNombres && p.ccNombres[id]) || nombreDefault(id)
@@ -54,7 +56,7 @@ const colorUT = p => p >= 30 ? C.verde : p >= 15 ? C.ambar : C.rojo
 
 function Barra({ pct, color, alto = 8 }) {
   return (
-    <div style={{ height: alto, background: '#EEE9DF', width: '100%' }}>
+    <div style={{ height: alto, background: '#DFE4EA', width: '100%' }}>
       <div style={{ width: `${Math.min(100, Math.max(0, pct))}%`, height: '100%', background: color, transition: 'width .3s' }} />
     </div>
   )
@@ -76,7 +78,7 @@ function FormEdp({ params, onAdd, onCancel }) {
   }
 
   return (
-    <div style={{ background: '#F7F4EE', padding: 12, marginTop: 8 }}>
+    <div style={{ background: '#F2F4F7', padding: 12, marginTop: 8 }}>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
         <input style={{ ...inp, width: 110 }} placeholder="EDP / N° factura" value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} />
         <input style={{ ...inp, width: 130 }} type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} />
@@ -107,13 +109,13 @@ function FormEdp({ params, onAdd, onCancel }) {
       </div>
       <input style={{ ...inp, width: '100%', marginTop: 8 }} placeholder="Observación / comentario (opcional)" value={f.obs} onChange={e => setF({ ...f, obs: e.target.value })} />
       {f.metodo === 'Factoring' && num(f.venta) > 0 && (
-        <div style={{ fontSize: 12, color: '#8C4519', background: '#F9E9DE', padding: '8px 10px', marginTop: 8 }}>
+        <div style={{ fontSize: 12, color: '#D9600A', background: '#FDECDD', padding: '8px 10px', marginTop: 8 }}>
           Pérdida por factoring estimada: <b>{clp(perd.total)}</b> — interés {clp(perd.interes)} ({dias} días) + costo op. {clp(perd.costoOp)}{perd.mora > 0 ? ` + mora ${clp(perd.mora)}` : ''}. (Base total con IVA: {clp(baseTotal)})
         </div>
       )}
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
         <button onClick={guardar} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Agregar factura</button>
-        <button onClick={onCancel} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+        <button onClick={onCancel} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
       </div>
     </div>
   )
@@ -123,7 +125,7 @@ function FormEdp({ params, onAdd, onCancel }) {
 function FormCompra({ p, onAdd, onCancel }) {
   const [f, setF] = useState({ proveedor: '', detalle: '', fecha: '', monto: '', cc: CC_DEFS[0].id, folio: '', rut: '', exento: false })
   return (
-    <div style={{ background: '#F7F4EE', padding: 12, marginTop: 8 }}>
+    <div style={{ background: '#F2F4F7', padding: 12, marginTop: 8 }}>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
         <input style={{ ...inp, width: 130 }} placeholder="Proveedor" value={f.proveedor} onChange={e => setF({ ...f, proveedor: e.target.value })} />
         <input style={{ ...inp, width: 100 }} placeholder="N° doc / folio" value={f.folio} onChange={e => setF({ ...f, folio: e.target.value })} />
@@ -138,7 +140,7 @@ function FormCompra({ p, onAdd, onCancel }) {
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         <button onClick={() => f.proveedor && num(f.monto) > 0 && onAdd({ proveedor: f.proveedor, detalle: f.detalle, fecha: f.fecha || '—', monto: num(f.monto), cc: f.cc, folio: f.folio, rut: f.rut, exento: !!f.exento })}
           style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Agregar compra</button>
-        <button onClick={onCancel} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+        <button onClick={onCancel} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
       </div>
     </div>
   )
@@ -177,7 +179,7 @@ function BloqueCC({ p, onUpdate }) {
         {!editando && <button onClick={abrirEdicion} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.teal, display: 'flex', alignItems: 'center', gap: 3, fontSize: 12 }}><Pencil size={12} /> Editar CC</button>}
       </div>
       {editando ? (
-        <div onClick={e => e.stopPropagation()} style={{ background: '#FAF7F3', padding: 10 }}>
+        <div onClick={e => e.stopPropagation()} style={{ background: '#F2F4F7', padding: 10 }}>
           <div style={{ fontSize: 11, color: C.gris, marginBottom: 6 }}>Cambia el nombre, el neto y el IVA de cada centro de costo. Puedes agregar los que necesites (los nuevos llevan codigo editable).</div>
           {filas.map((f, i) => (
             <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -191,14 +193,14 @@ function BloqueCC({ p, onUpdate }) {
               {!f.fijo && <button onClick={() => delFila(i)} title="Quitar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
             </div>
           ))}
-          <button onClick={addFila} style={{ background: 'none', border: '1px dashed #CBD2D6', padding: '6px 12px', cursor: 'pointer', fontSize: 12, color: C.gris, marginTop: 2, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Agregar centro de costo</button>
+          <button onClick={addFila} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '6px 12px', cursor: 'pointer', fontSize: 12, color: C.gris, marginTop: 2, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Agregar centro de costo</button>
           <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
             <button onClick={guardar} style={{ background: C.azul, color: '#fff', border: 'none', padding: '6px 14px', cursor: 'pointer', fontSize: 12 }}>Guardar CC</button>
-            <button onClick={() => setEditando(false)} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}>Cancelar</button>
+            <button onClick={() => setEditando(false)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}>Cancelar</button>
           </div>
         </div>
       ) : activos.length === 0 ? (
-        <div style={{ fontSize: 12, color: C.ambar, background: '#F9E9DE', padding: '6px 10px' }}>Sin presupuesto por CC — usa "Editar CC".</div>
+        <div style={{ fontSize: 12, color: C.ambar, background: '#FDECDD', padding: '6px 10px' }}>Sin presupuesto por CC — usa "Editar CC".</div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
           {activos.map(cc => {
@@ -224,7 +226,7 @@ function StatHeader({ label, valor, color }) {
   return (
     <div style={{ textAlign: 'right' }}>
       <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{label}</div>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 16, color: color || C.carbon, whiteSpace: 'nowrap' }}>{valor}</div>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 16, color: color || C.carbon, whiteSpace: 'nowrap' }}>{valor}</div>
     </div>
   )
 }
@@ -238,7 +240,7 @@ function FichaEditor({ p, onUpdate, onClose }) {
     onClose()
   }
   return (
-    <div onClick={e => e.stopPropagation()} style={{ background: '#FAF7F3', border: '1px solid #E2DED4', padding: 12, margin: '0 18px 12px' }}>
+    <div onClick={e => e.stopPropagation()} style={{ background: '#F2F4F7', border: '1px solid #DFE4EA', padding: 12, margin: '0 18px 12px' }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: C.gris, textTransform: 'uppercase', marginBottom: 8 }}>Editar ficha del proyecto</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
         <label style={{ ...lab, gridColumn: '1 / -1' }}>Nombre del proyecto<input style={inp} value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} /></label>
@@ -251,7 +253,7 @@ function FichaEditor({ p, onUpdate, onClose }) {
       </div>
       <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
         <button onClick={guardar} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 16px', cursor: 'pointer', fontSize: 13 }}>Guardar ficha</button>
-        <button onClick={onClose} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+        <button onClick={onClose} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
       </div>
     </div>
   )
@@ -263,7 +265,7 @@ function AbonosOT({ p, facturasOT, onUpdate }) {
   const abonos = p.abonos || []
   // Total real de cada factura: usa el monto con IVA que ya viene calculado (exento => monto = neto)
   const totalDe = fac => Math.round(fac.monto || (fac.neto || 0) * 1.19)
-  const inpA = { border: '1px solid #E2DED4', borderRadius: 4, padding: '6px 8px', fontSize: 12 }
+  const inpA = { border: '1px solid #DFE4EA', borderRadius: 4, padding: '6px 8px', fontSize: 12 }
   // Facturas ordenadas de la mas antigua a la mas nueva (por fecha de emision)
   const facturasOrd = [...facturasOT].sort((a, b) => String(a.fecha_emision || '').localeCompare(String(b.fecha_emision || '')) || String(a.numero).localeCompare(String(b.numero)))
   // Reparto automatico: los abonos antiguos asignados a una factura (con .numero) se respetan;
@@ -288,7 +290,7 @@ function AbonosOT({ p, facturasOT, onUpdate }) {
   }
   const eliminar = id => onUpdate(p.id, { abonos: abonos.filter(a => a.id !== id) })
   return (
-    <div style={{ marginBottom: 16, border: '1px solid #E2DED4', borderRadius: 8, padding: 12, background: '#FCFBF9' }}>
+    <div style={{ marginBottom: 16, border: '1px solid #DFE4EA', borderRadius: 8, padding: 12, background: '#F2F4F7' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.teal }}>Pagos recibidos (abonos)</span>
         <button onClick={() => setAdd(v => !v)} style={{ background: C.azul, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}>+ Registrar pago</button>
@@ -301,12 +303,12 @@ function AbonosOT({ p, facturasOT, onUpdate }) {
               {facturasOrd.map((fac, i) => {
                 const tot = totalDe(fac); const ab = alloc[fac.numero] || 0; const saldo = tot - ab; const pagada = saldo <= 0
                 return (
-                  <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                  <tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>
                     <td style={{ padding: '5px 8px', fontWeight: 600 }}>{fac.numero}</td>
                     <td style={{ padding: '5px 8px', textAlign: 'right' }}>{clp(tot)}</td>
                     <td style={{ padding: '5px 8px', textAlign: 'right', color: C.verde }}>{clp(ab)}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600, color: pagada ? C.verde : '#B23A0E' }}>{clp(Math.max(0, saldo))}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right' }}><span style={{ background: pagada ? '#E7F2EA' : '#F6E0DA', color: pagada ? C.verde : '#B23A0E', padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>{pagada ? 'PAGADA' : 'Falta ' + clp(saldo)}</span></td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600, color: pagada ? C.verde : '#D9600A' }}>{clp(Math.max(0, saldo))}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right' }}><span style={{ background: pagada ? '#E6F7EE' : '#FCEBEA', color: pagada ? C.verde : '#D9600A', padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>{pagada ? 'PAGADA' : 'Falta ' + clp(saldo)}</span></td>
                   </tr>
                 )
               })}
@@ -314,18 +316,18 @@ function AbonosOT({ p, facturasOT, onUpdate }) {
           </table>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8, fontSize: 12, color: C.gris }}>
             <span>Recibido: <b style={{ color: C.verde }}>{clp(totRecibido)}</b></span>
-            <span>Pendiente por cobrar: <b style={{ color: totPendiente > 0 ? '#B23A0E' : C.verde }}>{clp(totPendiente)}</b></span>
+            <span>Pendiente por cobrar: <b style={{ color: totPendiente > 0 ? '#D9600A' : C.verde }}>{clp(totPendiente)}</b></span>
             {saldoFavor > 0 && <span>Saldo a favor del cliente: <b style={{ color: C.teal }}>{clp(saldoFavor)}</b></span>}
           </div>
         </div>
       )}
       {add && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end', marginTop: 10, paddingTop: 10, borderTop: '1px dashed #E2DED4' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end', marginTop: 10, paddingTop: 10, borderTop: '1px dashed #DFE4EA' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Monto pagado</label><input value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} placeholder="Total transferido" style={{ ...inpA, width: 140, textAlign: 'right' }} /></div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Fecha</label><input type="date" value={f.fecha && f.fecha !== '—' ? f.fecha : ''} onChange={e => setF({ ...f, fecha: e.target.value })} style={{ ...inpA, width: 140 }} /></div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Banco</label><input list="serein-bancos" value={f.banco} onChange={e => setF({ ...f, banco: e.target.value })} placeholder="Banco..." style={{ ...inpA, width: 130 }} /></div>
           <button onClick={guardar} style={{ background: C.verde, color: '#fff', border: 'none', borderRadius: 4, padding: '7px 14px', fontSize: 13, cursor: 'pointer' }}>Agregar</button>
-          <button onClick={() => setAdd(false)} style={{ background: 'none', border: '1px solid #CBD2D6', borderRadius: 4, padding: '7px 12px', fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+          <button onClick={() => setAdd(false)} style={{ background: 'none', border: '1px solid #DFE4EA', borderRadius: 4, padding: '7px 12px', fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
           <div style={{ flexBasis: '100%', fontSize: 11, color: C.gris }}>El pago se reparte solo: cubre primero la factura mas antigua y el sobrante pasa a la siguiente.</div>
         </div>
       )}
@@ -333,9 +335,9 @@ function AbonosOT({ p, facturasOT, onUpdate }) {
         <div style={{ marginTop: 10 }}>
           <div style={{ fontSize: 10, color: C.gris, textTransform: 'uppercase', marginBottom: 4 }}>Pagos registrados</div>
           {abonos.map(a => (
-            <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '3px 0', borderBottom: '1px solid #F0ECE3' }}>
+            <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '3px 0', borderBottom: '1px solid #F2F4F7' }}>
               <span style={{ color: C.gris }}>{a.numero ? 'Factura ' + a.numero + ' · ' : 'Pago · '}{a.fecha}{a.banco ? ' · ' + a.banco : ''}</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}><b>{clp(a.monto)}</b><button onClick={() => eliminar(a.id)} style={{ background: 'none', border: 'none', color: '#B23A0E', cursor: 'pointer', fontSize: 13 }}>x</button></span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}><b>{clp(a.monto)}</b><button onClick={() => eliminar(a.id)} style={{ background: 'none', border: 'none', color: '#D9600A', cursor: 'pointer', fontSize: 13 }}>x</button></span>
             </div>
           ))}
         </div>
@@ -400,10 +402,10 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
   }).filter(a => a.pc >= 80)
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', marginBottom: 14 }}>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', marginBottom: 14 }}>
       <div onClick={() => { if (!enModal) setAbierto(!abierto) }} style={{ padding: '16px 18px', cursor: enModal ? 'default' : 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, color: C.carbon }}>{p.nombre}</div>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, color: C.carbon }}>{p.nombre}</div>
           <div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>{p.cliente}{p.m2 ? ` · ${p.m2} m²` : ''}{p.periodo ? ` · ${p.periodo}` : ''}{facturasOT.length > 0 && <span style={{ color: C.teal }}> · 🧾 {facturasOT.length} factura{facturasOT.length > 1 ? 's' : ''} ({clp(factNetoOT)})</span>}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
@@ -411,8 +413,8 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
           <StatHeader label="Por facturar" valor={clp(porFacturar)} color={porFacturar > 0 ? C.ambar : C.verde} />
           <StatHeader label="UT est." valor={`${pctUtEst.toFixed(0)}%`} color={colorUT(pctUtEst)} />
           <StatHeader label="UT real" valor={hayCompras ? `${pctUtReal.toFixed(0)}%` : '—'} color={hayCompras ? colorUT(pctUtReal) : C.gris} />
-          <button onClick={e => { e.stopPropagation(); setEditFicha(v => !v) }} title="Editar ficha" style={{ background: 'none', border: '1px solid #CBD2D6', cursor: 'pointer', color: C.teal, padding: '5px 7px', display: 'flex', alignItems: 'center' }}><Pencil size={15} /></button>
-          <button onClick={e => { e.stopPropagation(); window.confirm(`¿Eliminar la OT "${p.nombre}" completa? Esta acción no se puede deshacer.`) && onDelete(p.id) }} title="Eliminar OT" style={{ background: 'none', border: '1px solid #E2C9C2', cursor: 'pointer', color: C.rojo, padding: '5px 7px', display: 'flex', alignItems: 'center' }}><Trash2 size={15} /></button>
+          <button onClick={e => { e.stopPropagation(); setEditFicha(v => !v) }} title="Editar ficha" style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', color: C.teal, padding: '5px 7px', display: 'flex', alignItems: 'center' }}><Pencil size={15} /></button>
+          <button onClick={e => { e.stopPropagation(); window.confirm(`¿Eliminar la OT "${p.nombre}" completa? Esta acción no se puede deshacer.`) && onDelete(p.id) }} title="Eliminar OT" style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', color: C.rojo, padding: '5px 7px', display: 'flex', alignItems: 'center' }}><Trash2 size={15} /></button>
           {!enModal && (abierto ? <ChevronUp size={18} color={C.gris} /> : <ChevronDown size={18} color={C.gris} />)}
         </div>
       </div>
@@ -422,7 +424,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
       {alertasCC.length > 0 && (
         <div style={{ margin: '0 18px 10px', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {alertasCC.map(a => (
-            <span key={a.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, fontWeight: 600, padding: '3px 8px', background: a.pc >= 100 ? '#F6E0DA' : '#F9E9DE', color: a.pc >= 100 ? C.rojo : '#8C4519' }}>
+            <span key={a.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, fontWeight: 600, padding: '3px 8px', background: a.pc >= 100 ? '#FCEBEA' : '#FDECDD', color: a.pc >= 100 ? C.rojo : '#D9600A' }}>
               <AlertTriangle size={12} /> {a.id} {a.nombre}: {a.pc.toFixed(0)}%{a.pc >= 100 ? ` · sobre tope ${clp(a.sobre)}` : ' · cerca del tope'}
             </span>
           ))}
@@ -457,9 +459,9 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
       </div>
 
       {(abierto || enModal) && (
-        <div style={{ borderTop: '1px solid #EEE9DF', padding: 18 }}>
-          <div style={{ background: remIva >= 0 ? '#FBF3E7' : '#E9F5EC', border: '1px solid ' + (remIva >= 0 ? '#E8C98A' : '#BFE3C8'), borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}><div><div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: C.gris, letterSpacing: '.03em' }}>Remanente de IVA del proyecto</div><div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>IVA ventas {clp(remIvaVenta)} - IVA compras {clp(remIvaCompra)}</div></div><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 700, fontSize: 22, color: remIva >= 0 ? '#B23A0E' : C.verde }}>{clp(remIva)}</div></div>
-          <div style={{ background: '#EEF3F8', border: '1px solid #D3E0EC', borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}><div><div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: C.gris, letterSpacing: '.03em' }}>Disponible del bruto (venta c/IVA − compras)</div><div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>Bruto {clp(Math.round(venta * 1.19))} − compras {clp(costoReal)}</div></div><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 700, fontSize: 22, color: (Math.round(venta * 1.19) - costoReal) >= 0 ? C.verde : C.rojo }}>{clp(Math.round(venta * 1.19) - costoReal)}</div></div>
+        <div style={{ borderTop: '1px solid #DFE4EA', padding: 18 }}>
+          <div style={{ background: remIva >= 0 ? '#F2F4F7' : '#E6F7EE', border: '1px solid ' + (remIva >= 0 ? '#FF9D5C' : '#1B9E5D'), borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}><div><div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: C.gris, letterSpacing: '.03em' }}>Remanente de IVA del proyecto</div><div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>IVA ventas {clp(remIvaVenta)} - IVA compras {clp(remIvaCompra)}</div></div><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 22, color: remIva >= 0 ? '#D9600A' : C.verde }}>{clp(remIva)}</div></div>
+          <div style={{ background: '#E7EFFB', border: '1px solid #E7EFFB', borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}><div><div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: C.gris, letterSpacing: '.03em' }}>Disponible del bruto (venta c/IVA − compras)</div><div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>Bruto {clp(Math.round(venta * 1.19))} − compras {clp(costoReal)}</div></div><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 22, color: (Math.round(venta * 1.19) - costoReal) >= 0 ? C.verde : C.rojo }}>{clp(Math.round(venta * 1.19) - costoReal)}</div></div>
           {facturasOT.length > 0 && (
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.teal, marginBottom: 6 }}>🧾 Facturas de esta OT · Estados de pago (EDP)</div>
@@ -469,21 +471,21 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
                   <tbody>
                     {facturasOT.map(fx => { const ov = (p.facEdp || {})[fx.numero] || {}; const est = ov.estado || fx.estado || 'Pendiente'; const esFact = /factor/i.test(est); const ppmF = Math.round((fx.neto || 0) * (ppmPct / 100)); const facs = (params && params.factoring) || []; const fcSel = facs.find(x => x.id === ov.factoringId) || facs.find(x => (fx.banco || '').toLowerCase().includes((x.nombre || '').toLowerCase().split(' ')[0])) || facs[0]; const baseF = fx.monto || Math.round((fx.neto || 0) * 1.19); const perdF = esFact && fcSel ? calcularPerdidaFactoring(baseF, ov.plazo != null ? ov.plazo : (fx.plazo || fx.dias || 30), ov.diasMora || fx.diasMora || 0, fcSel).total : 0; return (
                       <React.Fragment key={fx.id}>
-                      <tr style={{ borderBottom: esFact ? 'none' : '1px solid #EEE9DF' }}>
+                      <tr style={{ borderBottom: esFact ? 'none' : '1px solid #DFE4EA' }}>
                         <td style={{ padding: '4px 6px', fontWeight: 600 }}>{fx.numero}</td>
                         <td style={{ padding: '4px 6px', color: C.gris }}>{fx.fecha_emision || '—'}</td>
                         <td style={{ padding: '4px 6px' }}><input value={ov.edp || ''} onChange={ev => updFac(fx.numero, { edp: ev.target.value })} placeholder="EDP" style={{ ...inp, width: 90, padding: '4px 6px' }} /></td>
                         <td style={{ padding: '4px 6px', textAlign: 'right' }}>{clp(fx.neto)}</td>
                         <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600 }}>{clp(baseF)}</td>
                         <td style={{ padding: '4px 6px', textAlign: 'right', color: C.teal }}>{clp(ppmF)}</td>
-                        <td style={{ padding: '4px 6px' }}><select value={est} onChange={ev => updFac(fx.numero, { estado: ev.target.value })} style={{ border: 'none', background: est === 'Pagado' ? '#E7F2EA' : est === 'Factoring' ? '#F9E9DE' : '#F6E0DA', color: est === 'Pagado' ? C.verde : est === 'Factoring' ? C.ambar : '#B23A0E', padding: '3px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}><option>Pendiente</option><option>Pagado</option><option>Factoring</option></select></td>
+                        <td style={{ padding: '4px 6px' }}><select value={est} onChange={ev => updFac(fx.numero, { estado: ev.target.value })} style={{ border: 'none', background: est === 'Pagado' ? '#E6F7EE' : est === 'Factoring' ? '#FDECDD' : '#FCEBEA', color: est === 'Pagado' ? C.verde : est === 'Factoring' ? C.ambar : '#D9600A', padding: '3px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}><option>Pendiente</option><option>Pagado</option><option>Factoring</option></select></td>
                         <td style={{ padding: '4px 6px' }}><input type="date" value={ov.fechaPago && ov.fechaPago !== '—' ? ov.fechaPago : ''} onChange={ev => updFac(fx.numero, { fechaPago: ev.target.value || '' })} style={{ ...inp, width: 140, padding: '4px 6px' }} /></td>
                         <td style={{ padding: '4px 6px' }}><input list="serein-bancos" value={ov.banco || ''} onChange={ev => updFac(fx.numero, { banco: ev.target.value })} placeholder="Banco..." style={{ ...inp, width: 120, padding: '4px 6px' }} /></td>
                       </tr>
                       {esFact && (
-                      <tr style={{ borderBottom: '1px solid #EEE9DF', background: '#FBF3EE' }}>
+                      <tr style={{ borderBottom: '1px solid #DFE4EA', background: '#F2F4F7' }}>
                         <td colSpan={9} style={{ padding: '2px 8px 8px' }}>
-                          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', fontSize: 11.5, color: '#8C4519' }}>
+                          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', fontSize: 11.5, color: '#D9600A' }}>
                             <span style={{ fontWeight: 700 }}>Factoring:</span>
                             <select value={ov.factoringId || (fcSel ? fcSel.id : '')} onChange={ev => updFac(fx.numero, { factoringId: ev.target.value })} style={{ ...inp, padding: '3px 6px' }}>{facs.length === 0 && <option value="">(define en Parámetros)</option>}{facs.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}</select>
                             <span>Plazo <input value={ov.plazo != null ? ov.plazo : (fx.plazo || 30)} onChange={ev => updFac(fx.numero, { plazo: num(ev.target.value) })} style={{ ...inp, width: 54, padding: '3px 6px', textAlign: 'right' }} /> días</span>
@@ -517,7 +519,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
                 <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['CC', 'Proveedor', 'N° doc', 'Detalle', 'Fecha', 'Monto neto', ''].map((h, i) => <th key={i} style={{ textAlign: h === 'Monto neto' ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
                 <tbody>
                   {p.compras.map((c, i) => (
-                    <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                    <tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>
                       <td style={{ padding: '5px 8px' }}><select value={c.cc || CC_DEFS[0].id} onChange={ev => updCompra(i, { cc: ev.target.value })} style={{ ...inp, padding: '5px 7px' }}>{ccCodigos(p).map(id => <option key={id} value={id}>{id} · {nombreCC(p, id)}</option>)}</select></td>
                       <td style={{ padding: '5px 8px' }}><input value={c.proveedor} onChange={ev => updCompra(i, { proveedor: ev.target.value })} style={{ ...inp, width: 130, padding: '5px 7px' }} /></td>
                       <td style={{ padding: '5px 8px' }}><input value={c.folio || ''} onChange={ev => updCompra(i, { folio: ev.target.value })} placeholder="N° doc" style={{ ...inp, width: 90, padding: '5px 7px' }} /></td>
@@ -534,7 +536,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
           {addCompra && <FormCompra p={p} onAdd={c => { if (onAddCompra(p.id, c)) setAddCompra(false) }} onCancel={() => setAddCompra(false)} />}
 
           {/* Resumen */}
-          <div style={{ marginTop: 16, padding: '10px 14px', background: '#F7F4EE', fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+          <div style={{ marginTop: 16, padding: '10px 14px', background: '#F2F4F7', fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
             <span>Venta: <b>{clp(venta)}</b></span>
             <span>Facturado: <b>{clp(facturado)}</b></span>
             <span>Por facturar: <b style={{ color: porFacturar > 0 ? C.ambar : C.verde }}>{clp(porFacturar)}</b></span>
@@ -566,19 +568,19 @@ function TileProyecto({ p, facturasProy = [], onOpen, onDragStart, onDropOn }) {
   const activa = !p.cerrado
   return (
     <div onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); onDropOn() }} onClick={onOpen}
-      style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: '3px solid ' + C.azul, padding: 14, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+      style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: '3px solid ' + C.azul, padding: 14, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
         <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 12, background: C.carbon, color: '#fff', padding: '2px 7px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '60%' }}>{p.ot || 'OT'}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 10.5, fontWeight: 600, color: activa ? C.verde : C.gris, background: activa ? '#E7F2EA' : '#EEE9DF', padding: '2px 8px', borderRadius: 10 }}>{activa ? 'Activa' : 'Cerrada'}</span>
-          <span draggable onDragStart={e => { e.stopPropagation(); onDragStart() }} onClick={e => e.stopPropagation()} title="Arrastrar para reordenar" style={{ cursor: 'grab', color: '#B9C0C6', fontSize: 15, userSelect: 'none', lineHeight: 1, letterSpacing: '-1px' }}>::</span>
+          <span style={{ fontSize: 10.5, fontWeight: 600, color: activa ? C.verde : C.gris, background: activa ? '#E6F7EE' : '#DFE4EA', padding: '2px 8px', borderRadius: 10 }}>{activa ? 'Activa' : 'Cerrada'}</span>
+          <span draggable onDragStart={e => { e.stopPropagation(); onDragStart() }} onClick={e => e.stopPropagation()} title="Arrastrar para reordenar" style={{ cursor: 'grab', color: '#9AA3AD', fontSize: 15, userSelect: 'none', lineHeight: 1, letterSpacing: '-1px' }}>::</span>
         </div>
       </div>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, color: C.carbon, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</div>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, color: C.carbon, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</div>
       <div style={{ fontSize: 11.5, color: C.gris, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.cliente}</div>
       <div style={{ marginTop: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <span style={{ fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }}>Venta</span>
-        <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, color: C.carbon }}>{clp(venta)}</span>
+        <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, color: C.carbon }}>{clp(venta)}</span>
       </div>
       <Barra pct={venta > 0 ? (fact / venta) * 100 : 0} color={C.teal} alto={5} />
     </div>
@@ -592,7 +594,7 @@ function FormProyecto({ onAdd, onCancel }) {
   const [nomb, setNomb] = useState({})
   return (
     <div style={{ background: '#fff', border: `2px solid ${C.azul}`, padding: 16, marginBottom: 14 }}>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Nuevo proyecto por OT</div>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Nuevo proyecto por OT</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input style={{ ...inp, width: 140 }} placeholder="OT (N° cotización) *" value={f.ot} onChange={e => setF({ ...f, ot: e.target.value })} />
         <input style={{ ...inp, flex: '1 1 200px' }} placeholder="Cliente *" value={f.cliente} onChange={e => setF({ ...f, cliente: e.target.value })} />
@@ -615,7 +617,7 @@ function FormProyecto({ onAdd, onCancel }) {
           CC_DEFS.forEach(c => { const v = num(tope[c.id]); if (v > 0) cc[c.id] = v; const nm = (nomb[c.id] || '').trim(); if (nm && nm !== nombreDefault(c.id)) ccNombres[c.id] = nm })
           onAdd({ id: 'ot-' + Date.now(), ot: f.ot, periodo: f.periodo || 'T1', nombre: `OT ${f.ot} · ${f.cliente}`, cliente: f.cliente, m2: num(f.m2) || null, oc: f.ot, venta_cotizada: num(f.venta), avance: 0, cc, ccNombres, edps: [], compras: [] })
         }} style={{ background: C.verde, color: '#fff', border: 'none', padding: '8px 18px', cursor: 'pointer', fontSize: 13 }}>Crear OT</button>
-        <button onClick={onCancel} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '8px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+        <button onClick={onCancel} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '8px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
       </div>
     </div>
   )
@@ -654,7 +656,7 @@ function Consolidado({ proyectos, facturasProy = [], params = { factoring: [] } 
   }
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 12, overflowX: 'auto' }}>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 12, overflowX: 'auto' }}>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
         <div style={{ fontSize: 13 }}>Ventas del año {anioActual}: <b style={{ color: C.azul }}>{clp(ventasAnio)}</b></div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -678,7 +680,7 @@ function Consolidado({ proyectos, facturasProy = [], params = { factoring: [] } 
               sub.venta += venta; sub.fact += fact; sub.porFac += porFac; sub.costoEst += costoEst; sub.costoReal += costoReal; sub.perdFact += perdFact
               const ut = venta - costoEst, p2 = pct(ut, venta)
               return (
-                <tr key={p.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                <tr key={p.id} style={{ borderBottom: '1px solid #DFE4EA' }}>
                   {celda((p.ot || '—') + (p.cerrado ? ' · cerrado' : ''), false, true)}
                   {celda(p.cliente, false, false, C.gris)}
                   {celda(clp(venta))}
@@ -696,7 +698,7 @@ function Consolidado({ proyectos, facturasProy = [], params = { factoring: [] } 
             const utSub = sub.venta - sub.costoEst
             return (
               <React.Fragment key={per}>
-                <tr style={{ background: '#F7F4EE' }}><td colSpan={10 + CC_DEFS.length} style={{ padding: '5px 8px', fontWeight: 600, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', fontSize: 12 }}>{per}</td></tr>
+                <tr style={{ background: '#F2F4F7' }}><td colSpan={10 + CC_DEFS.length} style={{ padding: '5px 8px', fontWeight: 600, fontFamily: SEREIN.fontDisplay, textTransform: 'uppercase', fontSize: 12 }}>{per}</td></tr>
                 {filas}
                 <tr style={{ borderTop: `2px solid ${C.carbon}`, borderBottom: `2px solid ${C.carbon}` }}>
                   {celda('COT', false, true)}{celda('', false)}
@@ -721,7 +723,7 @@ function ProyCotizacionesList({ setProyectos }) {
   const [cots, setCots] = useState(cargar)
   const persist = a => { setCots(a); try { localStorage.setItem(LSKEY, JSON.stringify(a)) } catch (e) {} }
   const ESTADOS = ['Alta probabilidad de cierre', 'Mediana probabilidad de cierre', 'Rechazada', 'Aprobada']
-  const colorEstado = e => ({ 'Aprobada': ['#E7F2EA', C.verde], 'Rechazada': ['#F6E0DA', C.rojo], 'Alta probabilidad de cierre': ['#E7EEF2', C.azul], 'Mediana probabilidad de cierre': ['#F9E9DE', '#8C4519'] }[e] || ['#EEE', C.gris])
+  const colorEstado = e => ({ 'Aprobada': ['#E6F7EE', C.verde], 'Rechazada': ['#FCEBEA', C.rojo], 'Alta probabilidad de cierre': ['#E7EFFB', C.azul], 'Mediana probabilidad de cierre': ['#FDECDD', '#D9600A'] }[e] || ['#EEE', C.gris])
   const normEstado = e => { const t = String(e || '').toLowerCase(); if (t.includes('aprob')) return 'Aprobada'; if (t.includes('rechaz')) return 'Rechazada'; if (t.includes('median') || t.includes('baja')) return 'Mediana probabilidad de cierre'; if (t.includes('alta')) return 'Alta probabilidad de cierre'; return 'Alta probabilidad de cierre' }
   const crearOT = c => {
     const q = 'T' + (Math.floor(new Date().getMonth() / 3) + 1)
@@ -747,8 +749,8 @@ function ProyCotizacionesList({ setProyectos }) {
   }
   const borrar = id => { if (!window.confirm('¿Eliminar esta cotización de proyecto? (no elimina la OT si ya se creó)')) return; persist(cots.filter(x => x.id !== id)) }
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 12, overflowX: 'auto' }}>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Cotizaciones de proyecto</div>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 12, overflowX: 'auto' }}>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Cotizaciones de proyecto</div>
       {cots.length === 0 ? (
         <div style={{ fontSize: 13, color: C.gris }}>Aún no hay cotizaciones. Se agregan solas al guardar un borrador en la pestaña "Cotización Proyecto".</div>
       ) : (
@@ -756,7 +758,7 @@ function ProyCotizacionesList({ setProyectos }) {
           <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['N°', 'Cliente', 'Proyecto', 'Fecha', 'Costo neto', 'Venta neta', 'Margen s/venta', 'Estado', 'OT', ''].map((h, i) => <th key={i} style={{ textAlign: ['Costo neto', 'Venta neta', 'Margen s/venta'].includes(h) ? 'right' : 'left', padding: '6px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
           <tbody>
             {cots.map(c => { const est = normEstado(c.estado); const col = colorEstado(est); return (
-              <tr key={c.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
+              <tr key={c.id} style={{ borderBottom: '1px solid #DFE4EA' }}>
                 <td style={{ padding: '6px 8px', fontWeight: 600 }}>{c.numero}</td>
                 <td style={{ padding: '6px 8px' }}>{c.cliente}</td>
                 <td style={{ padding: '6px 8px', color: C.gris }}>{c.nombreProyecto || '—'}</td>
@@ -772,7 +774,7 @@ function ProyCotizacionesList({ setProyectos }) {
           </tbody>
         </table>
       )}
-      <div style={{ fontSize: 11.5, color: '#9AA0A6', marginTop: 8 }}>Cambia el estado según la probabilidad de cierre. Al marcar <b>Aprobada</b> se genera la ficha de OT (pestaña Tarjetas) con el presupuesto por centro de costo.</div>
+      <div style={{ fontSize: 11.5, color: '#9AA3AD', marginTop: 8 }}>Cambia el estado según la probabilidad de cierre. Al marcar <b>Aprobada</b> se genera la ficha de OT (pestaña Tarjetas) con el presupuesto por centro de costo.</div>
     </div>
   )
 }
@@ -815,39 +817,39 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
   const totSalidas = totCostoReal + totPerdidaFact + totPPM
   const cajaEsperada = totCobradoCli - totSalidas
   const kpi = (label, valor, color) => (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 14, flex: '1 1 140px' }}>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 14, flex: '1 1 140px' }}>
       <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{label}</div>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 21, fontWeight: 600, color: color || C.carbon, whiteSpace: 'nowrap' }}>{valor}</div>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 21, fontWeight: 600, color: color || C.carbon, whiteSpace: 'nowrap' }}>{valor}</div>
     </div>
   )
 
   return (
     <div>
-      <div style={{ background: '#FFF4EC', border: '1px solid #FFD3B0', borderLeft: '6px solid ' + C.ambar, padding: '14px 18px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14 }}>
+      <div style={{ background: '#FDECDD', border: '1px solid #FF9D5C', borderLeft: '6px solid ' + C.ambar, padding: '14px 18px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14 }}>
         <div>
-          <div style={{ fontSize: 11, color: '#8C4519', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.4 }}>Debería tener en caja</div>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 30, fontWeight: 700, lineHeight: 1.15, color: cajaEsperada >= 0 ? C.ambar : C.rojo }}>{clp(cajaEsperada)}</div>
+          <div style={{ fontSize: 11, color: '#D9600A', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.4 }}>Debería tener en caja</div>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 30, fontWeight: 700, lineHeight: 1.15, color: cajaEsperada >= 0 ? C.ambar : C.rojo }}>{clp(cajaEsperada)}</div>
           <div style={{ fontSize: 11.5, color: C.gris, marginTop: 2 }}>Pagado por los clientes menos compras, pérdida factoring y PPM</div>
         </div>
         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div>
             <div style={{ fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }}>Pagado por clientes</div>
-            <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: C.verde, whiteSpace: 'nowrap' }}>{clp(totCobradoCli)}</div>
+            <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 20, fontWeight: 600, color: C.verde, whiteSpace: 'nowrap' }}>{clp(totCobradoCli)}</div>
           </div>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 18, color: C.gris, paddingBottom: 2 }}>−</div>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 18, color: C.gris, paddingBottom: 2 }}>−</div>
           <div>
             <div style={{ fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }}>Compras</div>
-            <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: C.rojo, whiteSpace: 'nowrap' }}>{clp(totCostoReal)}</div>
+            <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 20, fontWeight: 600, color: C.rojo, whiteSpace: 'nowrap' }}>{clp(totCostoReal)}</div>
           </div>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 18, color: C.gris, paddingBottom: 2 }}>−</div>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 18, color: C.gris, paddingBottom: 2 }}>−</div>
           <div>
             <div style={{ fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }}>Pérdida factoring</div>
-            <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: C.rojo, whiteSpace: 'nowrap' }}>{clp(totPerdidaFact)}</div>
+            <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 20, fontWeight: 600, color: C.rojo, whiteSpace: 'nowrap' }}>{clp(totPerdidaFact)}</div>
           </div>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 18, color: C.gris, paddingBottom: 2 }}>−</div>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 18, color: C.gris, paddingBottom: 2 }}>−</div>
           <div>
             <div style={{ fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }}>PPM {ppmPct}%</div>
-            <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: C.rojo, whiteSpace: 'nowrap' }}>{clp(totPPM)}</div>
+            <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 20, fontWeight: 600, color: C.rojo, whiteSpace: 'nowrap' }}>{clp(totPPM)}</div>
           </div>
         </div>
       </div>
@@ -863,10 +865,10 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
         {[['tarjetas', 'Tarjetas', LayoutGrid], ...(verCotizadorProy ? [['cotizarProy', 'Cotización Proyecto', Receipt], ['cotizacionesProy', 'Cotizaciones', Receipt], ['cotizarIntumescente', 'Cotización Intumescente', Flame], ['comprasSII', 'Compras SII', ShoppingCart]] : []), ['consolidado', 'Consolidado', Table2], ['cerrados', 'Proyectos cerrados', LayoutGrid], ['facturas', 'Facturas', Receipt], ...(verCotizadorProy ? [['parametros', 'Parámetros Proyectos', Target]] : [])].map(([id, lbl, Icon]) => (
-          <button key={id} onClick={() => setVista(id)} style={{ background: vista === id ? C.carbon : '#fff', color: vista === id ? '#fff' : C.carbon, border: '1px solid #CBD2D6', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Icon size={14} />{lbl}</button>
+          <button key={id} onClick={() => setVista(id)} style={{ background: vista === id ? C.carbon : '#fff', color: vista === id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Icon size={14} />{lbl}</button>
         ))}
         {!creando && vista === 'tarjetas' && (
-          <button onClick={() => setCreando(true)} style={{ background: C.azul, color: '#fff', border: 'none', padding: '7px 16px', cursor: 'pointer', fontSize: 12.5, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}><Plus size={15} /> Nueva OT</button>
+          <button onClick={() => setCreando(true)} style={{ background: C.azul, color: '#fff', border: 'none', padding: '7px 16px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}><Plus size={15} /> Nueva OT</button>
         )}
       </div>
 
@@ -898,10 +900,10 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
       )}
       {(() => { const sp = proyectos.find(x => x.id === sel); return (sp && (vista === 'tarjetas' || vista === 'cerrados')) ? (
             <div onClick={() => setSel(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,26,46,.55)', zIndex: 70, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '28px 16px', overflowY: 'auto' }}>
-              <div onClick={e => e.stopPropagation()} style={{ background: '#F7F6F3', width: '100%', maxWidth: 1000, boxShadow: '0 20px 60px -12px rgba(0,0,0,.4)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #E2DED4', background: '#fff', position: 'sticky', top: 0, zIndex: 2 }}>
-                  <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, textTransform: 'uppercase' }}>{sp.nombre}{sp.cerrado ? ' · CERRADO' : ''}</span>
-                  <button onClick={() => setSel(null)} style={{ background: 'none', border: '1px solid #CBD2D6', cursor: 'pointer', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><X size={15} /> Cerrar</button>
+              <div onClick={e => e.stopPropagation()} style={{ background: '#F2F4F7', width: '100%', maxWidth: 1000, boxShadow: '0 20px 60px -12px rgba(0,0,0,.4)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #DFE4EA', background: '#fff', position: 'sticky', top: 0, zIndex: 2 }}>
+                  <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, textTransform: 'uppercase' }}>{sp.nombre}{sp.cerrado ? ' · CERRADO' : ''}</span>
+                  <button onClick={() => setSel(null)} style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><X size={15} /> Cerrar</button>
                 </div>
                 <div style={{ padding: 12 }}>
                   <TarjetaProyecto p={sp} onUpdate={actualizar} onDelete={id => { eliminar(id); setSel(null) }} onAddCompra={agregarCompra} params={params} facturasProy={facturasProy} ppmPct={ppmPct} enModal />
@@ -910,7 +912,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
             </div>
           ) : null })()}
 
-      <div style={{ fontSize: 12, color: '#9AA0A6', textAlign: 'center', marginTop: 8 }}>
+      <div style={{ fontSize: 12, color: '#9AA3AD', textAlign: 'center', marginTop: 8 }}>
         Los cambios se guardan automáticamente en la nube (Supabase) y quedan sincronizados en todos los dispositivos.
       </div>
     </div>

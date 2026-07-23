@@ -7,7 +7,9 @@ import { ocNeto, ocTotal, vencOC } from './OrdenesCompraModule.jsx'
 // Cadena: Cotización → OT → OC proveedor / Compras → Producción → Factura → Cobranza
 // ============================================================
 
-const C = { azul: '#061A40', teal: '#0B7285', ambar: '#FF6B00', rojo: '#D64545', verde: '#12805C', carbon: '#0F1A2E', gris: '#8A929E' }
+import { SEREIN } from './theme-serein.js'
+// Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
+const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const hoy = () => new Date().toISOString().slice(0, 10)
 
@@ -40,13 +42,13 @@ export default function TrazabilidadModule({ cotizaciones = [], ots = [], ordene
   return (
     <div>
       {/* ALERTAS */}
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, textTransform: 'uppercase', marginBottom: 10 }}>Alertas ({alertas.length})</div>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, textTransform: 'uppercase', marginBottom: 10 }}>Alertas ({alertas.length})</div>
       {alertas.length === 0 ? (
-        <div style={{ background: '#E7F2EA', color: C.verde, padding: '10px 14px', fontSize: 13, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}><CheckCircle2 size={16} /> Sin alertas pendientes.</div>
+        <div style={{ background: '#E6F7EE', color: C.verde, padding: '10px 14px', fontSize: 13, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}><CheckCircle2 size={16} /> Sin alertas pendientes.</div>
       ) : (
         <div style={{ marginBottom: 20 }}>
           {alertas.map((a, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', borderLeft: `4px solid ${a.col}`, border: '1px solid #E2DED4', padding: '9px 14px', marginBottom: 6, fontSize: 13 }}>
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', borderLeft: `4px solid ${a.col}`, border: '1px solid #DFE4EA', padding: '9px 14px', marginBottom: 6, fontSize: 13 }}>
               <AlertTriangle size={15} color={a.col} /> <span>{a.txt}</span>
             </div>
           ))}
@@ -54,14 +56,14 @@ export default function TrazabilidadModule({ cotizaciones = [], ots = [], ordene
       )}
 
       {/* TRAZABILIDAD */}
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, textTransform: 'uppercase', marginBottom: 10 }}>Trazabilidad · Cotización → OT → OC → Producción → Factura → Cobranza</div>
-      {cotizaciones.length === 0 && ots.length === 0 && <div style={{ color: '#9AA0A6', fontSize: 13 }}>Aún no hay cotizaciones ni OT.</div>}
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, textTransform: 'uppercase', marginBottom: 10 }}>Trazabilidad · Cotización → OT → OC → Producción → Factura → Cobranza</div>
+      {cotizaciones.length === 0 && ots.length === 0 && <div style={{ color: '#9AA3AD', fontSize: 13 }}>Aún no hay cotizaciones ni OT.</div>}
       {ots.map(o => {
         const cot = cotizaciones.find(c => 'OT-' + c.folio === o.numero)
         const ocs = ocsDeOT(ordenesCompra, o.numero)
         const ocTot = ocs.reduce((a, x) => a + ocNeto(x), 0)
         return (
-          <div key={o.id} style={{ background: '#fff', border: '1px solid #E2DED4', padding: '12px 16px', marginBottom: 10, display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div key={o.id} style={{ background: '#fff', border: '1px solid #DFE4EA', padding: '12px 16px', marginBottom: 10, display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
             {paso('Cotización', cot ? ('N° ' + cot.folio) : '—', C.teal)}
             <ArrowRight size={14} color={C.gris} />
             {paso('OT', o.numero + ' · ' + o.estado, C.azul)}

@@ -53,7 +53,7 @@ export default function CotizadorParametros({ onVolver }) {
   return (<div>
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
       <button onClick={onVolver} style={{ background: 'transparent', border: '1px solid ' + T.border, borderRadius: 8, padding: '7px 11px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: T.textSoft }}><ChevronLeft size={15} /> Volver a cotizaciones</button>
-      <h3 style={{ margin: 0, fontFamily: "'Oswald',sans-serif", fontSize: 18, fontWeight: 600, color: T.navy, textTransform: 'uppercase' }}>Parametros del Cotizador</h3>
+      <h3 style={{ margin: 0, fontFamily: T.fontDisplay, fontSize: 18, fontWeight: 600, color: T.navy, textTransform: 'uppercase' }}>Parametros del Cotizador</h3>
     </div>
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
       {secs.map(([k, lab]) => (<button key={k} onClick={() => setSec(k)} style={{ background: sec === k ? T.navy : '#fff', color: sec === k ? '#fff' : T.textSoft, border: '1px solid ' + (sec === k ? T.navy : T.border), borderRadius: 8, padding: '7px 13px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>{lab}</button>))}
@@ -110,7 +110,7 @@ export default function CotizadorParametros({ onVolver }) {
             const _man = es.usa_manual && es.valor_manual != null
             return (<div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
               <span style={{ fontSize: 11, color: '#7A8288' }}>Valor $/m2:</span>
-              <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14 }}>{_clp(_man ? es.valor_manual : _vc)}</span>
+              <span style={{ fontFamily: T.fontDisplay, fontWeight: 600, fontSize: 14 }}>{_clp(_man ? es.valor_manual : _vc)}</span>
               {_man ? <span style={{ fontSize: 10, fontWeight: 600, color: '#8C4519', background: '#F9E9DE', padding: '1px 6px', borderRadius: 8 }}>manual</span> : <span style={{ fontSize: 10, color: '#9AA0A6' }}>auto ({_clp(_vc)})</span>}
               <input type="number" placeholder={String(_vc)} value={es.valor_manual != null ? es.valor_manual : ''} onChange={ev => upd(n => { const v = ev.target.value; n.esquemas[i].valor_manual = v === '' ? null : +v; n.esquemas[i].usa_manual = v !== '' })} style={{ width: 90, padding: '4px 6px', border: '1px solid #CBD2D6', fontSize: 12, textAlign: 'right' }} title="Valor manual (override)" />
               {_man && <button onClick={() => upd(n => { n.esquemas[i].usa_manual = false; n.esquemas[i].valor_manual = null })} style={{ background: 'none', border: '1px solid #CBD2D6', fontSize: 11, padding: '3px 7px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Volver al calculado</button>}

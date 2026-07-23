@@ -22,8 +22,10 @@ import {
 // vez de tocar la anterior (la BD lo refuerza con un trigger).
 // ============================================================
 
-const C = { azul: '#061A40', teal: '#0B7285', ambar: '#FF6B00', rojo: '#D64545', verde: '#12805C', carbon: '#0F1A2E', gris: '#8A929E' }
-const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
+import { SEREIN } from './theme-serein.js'
+// Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
+const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
+const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const num2 = n => (n || 0).toLocaleString('es-CL', { maximumFractionDigits: 2 })
 const num1 = n => (n || 0).toLocaleString('es-CL', { maximumFractionDigits: 1 })
@@ -35,8 +37,8 @@ const MOTIVOS = [
   { v: 'proyecto_postergado', l: 'Proyecto postergado' }, { v: 'sin_respuesta', l: 'Sin respuesta' },
 ]
 const colorEstado = e => ({
-  Borrador: ['#EEE', C.gris], Enviada: ['#E7EEF2', C.azul], 'En seguimiento': ['#F9E9DE', '#8C4519'],
-  Aprobada: ['#E7F2EA', C.verde], Rechazada: ['#F6E0DA', C.rojo], Vencida: ['#F6E0DA', C.rojo], Cerrada: ['#EEE', C.gris],
+  Borrador: ['#EEE', C.gris], Enviada: ['#E7EFFB', C.azul], 'En seguimiento': ['#FDECDD', '#D9600A'],
+  Aprobada: ['#E6F7EE', C.verde], Rechazada: ['#FCEBEA', C.rojo], Vencida: ['#FCEBEA', C.rojo], Cerrada: ['#EEE', C.gris],
 }[e] || ['#EEE', C.gris])
 
 const nuevaPartida = productId => ({
@@ -223,36 +225,36 @@ export default function CotizadorIntumescenteModule({ proyectoInicial = null, cl
   }
 
   if (cargando) return <div style={{ padding: 24, color: C.gris, fontSize: 13 }}>Cargando catálogo de cotización intumescente…</div>
-  if (error) return <div style={{ padding: 16, background: '#F6E0DA', color: C.rojo, fontSize: 13 }}>{error}</div>
+  if (error) return <div style={{ padding: 16, background: '#FCEBEA', color: C.rojo, fontSize: 13 }}>{error}</div>
   if (!catalogo || !calc) return null
 
-  const card = { background: '#fff', border: '1px solid #E2DED4', padding: 16, marginBottom: 16 }
-  const h = { fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 8 }
+  const card = { background: '#fff', border: '1px solid #DFE4EA', padding: 16, marginBottom: 16 }
+  const h = { fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 8 }
   const [colFondo, colTexto] = colorEstado(estado)
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, textTransform: 'uppercase' }}>{folio || 'Cotización intumescente nueva'}</span>
+          <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, textTransform: 'uppercase' }}>{folio || 'Cotización intumescente nueva'}</span>
           {folio && <span style={{ background: colFondo, color: colTexto, fontSize: 11, fontWeight: 700, padding: '3px 9px', textTransform: 'uppercase' }}>{estado}{revisionActual > 1 ? ' · Rev ' + revisionActual : ''}</span>}
         </div>
-        <button onClick={nuevaCotizacionEnBlanco} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '6px 12px', cursor: 'pointer', fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Plus size={14} /> Nueva</button>
+        <button onClick={nuevaCotizacionEnBlanco} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '6px 12px', cursor: 'pointer', fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Plus size={14} /> Nueva</button>
       </div>
 
       {estado !== 'Borrador' && cotizacionId && (
-        <div style={{ background: '#F1F5F9', border: '1px solid ' + C.azul, padding: '8px 14px', marginBottom: 14, fontSize: 12.5, color: C.azul }}>
+        <div style={{ background: '#E7EFFB', border: '1px solid ' + C.azul, padding: '8px 14px', marginBottom: 14, fontSize: 12.5, color: C.azul }}>
           Esta cotización ya fue emitida (estado: {estado}). Los cambios que hagas y guardes crearán una <b>revisión nueva</b> — la revisión {revisionActual} actual queda intacta.
         </div>
       )}
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
         {[['cotizacion', 'Cotización'], ['aplicador', 'Aplicador'], ['catalogo', 'Catálogo'], ['oferta', 'Oferta / Guardar']].map(([id, lbl]) => (
-          <button key={id} onClick={() => setTab(id)} style={{ background: tab === id ? C.carbon : '#fff', color: tab === id ? '#fff' : C.carbon, border: '1px solid #CBD2D6', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase' }}>{lbl}</button>
+          <button key={id} onClick={() => setTab(id)} style={{ background: tab === id ? C.carbon : '#fff', color: tab === id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase' }}>{lbl}</button>
         ))}
       </div>
 
-      {msg && <div style={{ background: msg.startsWith('Error') ? '#F6E0DA' : '#E7F2EA', color: msg.startsWith('Error') ? C.rojo : C.verde, padding: '8px 12px', marginBottom: 14, fontSize: 12.5 }}>{msg}</div>}
+      {msg && <div style={{ background: msg.startsWith('Error') ? '#FCEBEA' : '#E6F7EE', color: msg.startsWith('Error') ? C.rojo : C.verde, padding: '8px 12px', marginBottom: 14, fontSize: 12.5 }}>{msg}</div>}
 
       {tab === 'cotizacion' && (
         <div>
@@ -288,8 +290,8 @@ export default function CotizadorIntumescenteModule({ proyectoInicial = null, cl
                   </Field>
                   <label style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 5, paddingBottom: 7 }}><input type="checkbox" checked={it.topcoat} onChange={e => setItem(it.id, { topcoat: e.target.checked })} /> Terminación</label>
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, paddingBottom: 2 }}>
-                    <button onClick={() => dupItem(it.id)} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '5px 9px', cursor: 'pointer', fontSize: 11.5 }}>Duplicar</button>
-                    <button onClick={() => delItem(it.id)} style={{ background: 'none', border: '1px solid #E2C9C2', color: C.rojo, padding: '5px 9px', cursor: 'pointer', fontSize: 11.5 }}><Trash2 size={13} /></button>
+                    <button onClick={() => dupItem(it.id)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '5px 9px', cursor: 'pointer', fontSize: 11.5 }}>Duplicar</button>
+                    <button onClick={() => delItem(it.id)} style={{ background: 'none', border: '1px solid #DFE4EA', color: C.rojo, padding: '5px 9px', cursor: 'pointer', fontSize: 11.5 }}><Trash2 size={13} /></button>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 10 }}>
@@ -308,17 +310,17 @@ export default function CotizadorIntumescenteModule({ proyectoInicial = null, cl
                     <Field label="Superficie (m²)" w="130px"><NumInput value={it.m2} step={0.1} onChange={v => setItem(it.id, { m2: v })} /></Field>
                   )}
                   <Field label={it.masividadAuto && it.modo === 'perfil' ? 'Hp/A (auto)' : 'Hp/A (m⁻¹)'} w="100px">
-                    {it.masividadAuto && it.modo === 'perfil' ? <div style={{ ...inp, background: '#F1EDE6', textAlign: 'right', fontWeight: 600 }}>{r?.masividad ? num1(r.masividad) : '—'}</div> : <NumInput value={it.masividad} onChange={v => setItem(it.id, { masividad: v })} />}
+                    {it.masividadAuto && it.modo === 'perfil' ? <div style={{ ...inp, background: '#E2E7EC', textAlign: 'right', fontWeight: 600 }}>{r?.masividad ? num1(r.masividad) : '—'}</div> : <NumInput value={it.masividad} onChange={v => setItem(it.id, { masividad: v })} />}
                   </Field>
                   {it.modo === 'perfil' && <label style={{ fontSize: 11.5, color: C.gris, display: 'flex', alignItems: 'center', gap: 4, paddingBottom: 7 }}><input type="checkbox" checked={it.masividadAuto} onChange={e => setItem(it.id, { masividadAuto: e.target.checked })} /> auto</label>}
                 </div>
                 {r && r.disponible ? (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'stretch', borderTop: '1px solid #EEE9DF' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'stretch', borderTop: '1px solid #DFE4EA' }}>
                     <div style={{ display: 'flex', gap: 16, padding: '10px 12px', background: C.carbon, color: '#fff' }}>
-                      <div><div style={{ fontSize: 9.5, color: '#9AA6B0' }}>Hp/A</div><div style={{ fontWeight: 600 }}>{num1(r.masividad)}</div></div>
-                      <div><div style={{ fontSize: 9.5, color: '#9AA6B0' }}>DFT</div><div style={{ fontWeight: 600, color: C.ambar }}>{r.um} µm</div></div>
-                      <div><div style={{ fontSize: 9.5, color: '#9AA6B0' }}>CAPAS</div><div style={{ fontWeight: 600 }}>{r.capas}</div></div>
-                      <div><div style={{ fontSize: 9.5, color: '#9AA6B0' }}>PINTURA</div><div style={{ fontWeight: 600 }}>{num1(r.kg)} kg</div></div>
+                      <div><div style={{ fontSize: 9.5, color: '#9AA3AD' }}>Hp/A</div><div style={{ fontWeight: 600 }}>{num1(r.masividad)}</div></div>
+                      <div><div style={{ fontSize: 9.5, color: '#9AA3AD' }}>DFT</div><div style={{ fontWeight: 600, color: C.ambar }}>{r.um} µm</div></div>
+                      <div><div style={{ fontSize: 9.5, color: '#9AA3AD' }}>CAPAS</div><div style={{ fontWeight: 600 }}>{r.capas}</div></div>
+                      <div><div style={{ fontSize: 9.5, color: '#9AA3AD' }}>PINTURA</div><div style={{ fontWeight: 600 }}>{num1(r.kg)} kg</div></div>
                     </div>
                     <div style={{ marginLeft: 'auto', padding: '10px 12px', textAlign: 'right' }}>
                       <div style={{ fontSize: 10, color: C.gris, textTransform: 'uppercase' }}>Materiales + prep.</div>
@@ -326,14 +328,14 @@ export default function CotizadorIntumescenteModule({ proyectoInicial = null, cl
                     </div>
                   </div>
                 ) : (
-                  <div style={{ padding: '8px 10px', background: '#FBE9E0', color: '#8A3413', fontSize: 12.5 }}>
+                  <div style={{ padding: '8px 10px', background: '#FDECDD', color: '#D9600A', fontSize: 12.5 }}>
                     {!r?.masividad ? 'Falta la masividad: complete perímetro y sección, o ingrésela manualmente.' : `El producto no tiene espesor certificado para ${F_LABEL[it.f]} en sección ${it.seccionTipo} a esta masividad. Elija otro sistema o ajuste la tabla en Catálogo.`}
                   </div>
                 )}
               </div>
             )
           })}
-          <button onClick={addItem} style={{ background: C.ambar, color: '#fff', border: 'none', padding: '9px 16px', cursor: 'pointer', fontSize: 12.5, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', marginBottom: 16 }}><Plus size={14} style={{ verticalAlign: -2 }} /> Agregar partida</button>
+          <button onClick={addItem} style={{ background: C.ambar, color: '#fff', border: 'none', padding: '9px 16px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', marginBottom: 16 }}><Plus size={14} style={{ verticalAlign: -2 }} /> Agregar partida</button>
 
           <div style={card}>
             <div style={h}>Otros costos de obra</div>
@@ -356,7 +358,7 @@ export default function CotizadorIntumescenteModule({ proyectoInicial = null, cl
             <Field label="Aplicador / subcontratista" w="280px"><input value={aplicador.nombre} onChange={e => setAplicador({ ...aplicador, nombre: e.target.value })} style={inp} /></Field>
             <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap' }}>
               {[['obra', 'Monto por obra'], ['m2', 'Por m²'], ['kg', 'Por kg'], ['dia', 'Por día']].map(([k, l]) => (
-                <button key={k} onClick={() => setAplicador({ ...aplicador, modo: k })} style={{ background: aplicador.modo === k ? C.carbon : '#fff', color: aplicador.modo === k ? C.ambar : C.gris, border: '1px solid #CBD2D6', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>{l}</button>
+                <button key={k} onClick={() => setAplicador({ ...aplicador, modo: k })} style={{ background: aplicador.modo === k ? C.carbon : '#fff', color: aplicador.modo === k ? C.ambar : C.gris, border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>{l}</button>
               ))}
             </div>
           </div>
@@ -373,7 +375,7 @@ export default function CotizadorIntumescenteModule({ proyectoInicial = null, cl
             </>)}
             <Field label="Recargo administración (%)" w="170px"><NumInput value={aplicador.recargoPct} step={1} onChange={v => setAplicador({ ...aplicador, recargoPct: v })} /></Field>
           </div>
-          <div style={{ display: 'flex', gap: 24, marginTop: 14, paddingTop: 12, borderTop: '1px solid #EEE9DF', fontSize: 13 }}>
+          <div style={{ display: 'flex', gap: 24, marginTop: 14, paddingTop: 12, borderTop: '1px solid #DFE4EA', fontSize: 13 }}>
             <div>Subcontrato: <b>{money(calc.aplicadorBase)}</b></div>
             <div>Recargo: <b>{money(calc.aplicadorRecargo)}</b></div>
             <div>Total aplicador: <b style={{ color: C.ambar }}>{money(calc.aplicadorTotal)}</b></div>
@@ -412,9 +414,9 @@ export default function CotizadorIntumescenteModule({ proyectoInicial = null, cl
           </div>
 
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16 }}>
-            <button onClick={guardar} disabled={guardando} style={{ background: C.verde, color: '#fff', border: 'none', padding: '10px 18px', cursor: guardando ? 'default' : 'pointer', opacity: guardando ? 0.6 : 1, fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 6 }}><Save size={15} /> {estado === 'Borrador' || !cotizacionId ? 'Guardar borrador' : 'Guardar como nueva revisión'}</button>
+            <button onClick={guardar} disabled={guardando} style={{ background: C.verde, color: '#fff', border: 'none', padding: '10px 18px', cursor: guardando ? 'default' : 'pointer', opacity: guardando ? 0.6 : 1, fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 6 }}><Save size={15} /> {estado === 'Borrador' || !cotizacionId ? 'Guardar borrador' : 'Guardar como nueva revisión'}</button>
             {cotizacionId && estado === 'Borrador' && (
-              <button onClick={emitirActual} style={{ background: C.azul, color: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 6 }}><Send size={15} /> Emitir</button>
+              <button onClick={emitirActual} style={{ background: C.azul, color: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 6 }}><Send size={15} /> Emitir</button>
             )}
           </div>
         </div>
@@ -423,15 +425,15 @@ export default function CotizadorIntumescenteModule({ proyectoInicial = null, cl
       <div style={{ ...card, marginTop: 8 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <div style={h}>Cotizaciones intumescentes</div>
-          <button onClick={refrescarListado} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '5px 10px', cursor: 'pointer', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}><RefreshCw size={13} /> Refrescar</button>
+          <button onClick={refrescarListado} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}><RefreshCw size={13} /> Refrescar</button>
         </div>
         {pendienteMotivo && (
-          <div style={{ background: '#F6E0DA', border: '1px solid ' + C.rojo, padding: 12, marginBottom: 12 }}>
+          <div style={{ background: '#FCEBEA', border: '1px solid ' + C.rojo, padding: 12, marginBottom: 12 }}>
             <div style={{ fontSize: 12.5, marginBottom: 8 }}>Motivo de no adjudicación para <b>{pendienteMotivo.cotizacion.numero}</b> (obligatorio al marcar {pendienteMotivo.nuevoEstado}):</div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               <select value={motivoSel} onChange={e => setMotivoSel(e.target.value)} style={inp}><option value="">Elegir…</option>{MOTIVOS.map(m => <option key={m.v} value={m.v}>{m.l}</option>)}</select>
               <button disabled={!motivoSel} onClick={() => aplicarCambioEstado(pendienteMotivo.cotizacion, pendienteMotivo.nuevoEstado, motivoSel)} style={{ background: C.rojo, color: '#fff', border: 'none', padding: '7px 14px', cursor: motivoSel ? 'pointer' : 'default', opacity: motivoSel ? 1 : 0.5, fontSize: 12.5 }}>Confirmar</button>
-              <button onClick={() => setPendienteMotivo(null)} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>Cancelar</button>
+              <button onClick={() => setPendienteMotivo(null)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>Cancelar</button>
             </div>
           </div>
         )}
@@ -443,7 +445,7 @@ export default function CotizadorIntumescenteModule({ proyectoInicial = null, cl
               <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Folio', 'Cliente', 'Obra', 'Fecha', 'Vencimiento', 'Total', 'Estado', ''].map(h2 => <th key={h2} style={{ textAlign: h2 === 'Total' ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h2}</th>)}</tr></thead>
               <tbody>
                 {listado.map(cot => { const [cf, ct] = colorEstado(cot.estado); return (
-                  <tr key={cot.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                  <tr key={cot.id} style={{ borderBottom: '1px solid #DFE4EA' }}>
                     <td style={{ padding: '6px 8px', fontWeight: 600 }}>{cot.numero}</td>
                     <td style={{ padding: '6px 8px' }}>{cot.cliente}</td>
                     <td style={{ padding: '6px 8px', color: C.gris }}>{cot.observaciones || '—'}</td>
@@ -451,7 +453,7 @@ export default function CotizadorIntumescenteModule({ proyectoInicial = null, cl
                     <td style={{ padding: '6px 8px', color: C.gris, whiteSpace: 'nowrap' }}>{cot.fecha_vencimiento || '—'}</td>
                     <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{clp(cot.monto_total)}</td>
                     <td style={{ padding: '6px 8px' }}><select value={cot.estado} onChange={e => pedirCambioEstado(cot, e.target.value)} style={{ border: 'none', background: cf, color: ct, padding: '4px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{ESTADOS_COT.map(e2 => <option key={e2} value={e2}>{e2}</option>)}</select></td>
-                    <td style={{ padding: '6px 8px', textAlign: 'right' }}><button onClick={() => abrir(cot)} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '4px 10px', cursor: 'pointer', fontSize: 11.5 }}>Abrir</button></td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right' }}><button onClick={() => abrir(cot)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '4px 10px', cursor: 'pointer', fontSize: 11.5 }}>Abrir</button></td>
                   </tr>
                 )})}
               </tbody>
@@ -464,11 +466,11 @@ export default function CotizadorIntumescenteModule({ proyectoInicial = null, cl
 }
 
 function CatalogoTab({ catalogo, globals, setGlobals, onRecargar, onMsg }) {
-  const card = { background: '#fff', border: '1px solid #E2DED4', padding: 16, marginBottom: 16 }
-  const h = { fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 8 }
+  const card = { background: '#fff', border: '1px solid #DFE4EA', padding: 16, marginBottom: 16 }
+  const h = { fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 8 }
   return (
     <div>
-      <div style={{ background: '#FFF4EC', border: '1px solid #FFD3B0', padding: '10px 14px', marginBottom: 14, fontSize: 12.5, color: '#8C4519' }}>
+      <div style={{ background: '#FDECDD', border: '1px solid #FF9D5C', padding: '10px 14px', marginBottom: 14, fontSize: 12.5, color: '#D9600A' }}>
         Las tablas de espesores precargadas son <b>referenciales</b>, no certificadas. Márcalas como certificadas solo cuando reemplaces la tabla en Supabase (<code>int_espesores</code>) por la del certificado IDIEM/DICTUC correspondiente. Editar aquí <b>nunca</b> altera cotizaciones ya guardadas — cada una queda congelada en su propia revisión.
       </div>
       {catalogo.products.map(p => <ProductoCard key={p.id} p={p} onSaved={onRecargar} onMsg={onMsg} />)}
@@ -483,7 +485,7 @@ function ProductoCard({ p, onSaved, onMsg }) {
   const [form, setForm] = useState(inicial)
   const [guardando, setGuardando] = useState(false)
   const cambiado = JSON.stringify(form) !== JSON.stringify(inicial)
-  const card = { background: '#fff', border: '1px solid #E2DED4', padding: 16, marginBottom: 16 }
+  const card = { background: '#fff', border: '1px solid #DFE4EA', padding: 16, marginBottom: 16 }
 
   async function guardar() {
     setGuardando(true)
@@ -514,7 +516,7 @@ function ProductoCard({ p, onSaved, onMsg }) {
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginTop: 10 }}>
         <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><input type="checkbox" checked={form.certificada} onChange={e => setForm({ ...form, certificada: e.target.checked })} /> {form.certificada ? <b style={{ color: C.verde }}>Tabla certificada</b> : 'Marcar como certificada'}</label>
         {form.certificada && <Field label="N° certificado / fecha" w="260px"><input value={form.fuente} onChange={e => setForm({ ...form, fuente: e.target.value })} placeholder="Ej: IDIEM 12345, 03-2026" style={inp} /></Field>}
-        <button onClick={guardar} disabled={!cambiado || guardando} style={{ marginLeft: 'auto', background: cambiado ? C.verde : '#CBD2D6', color: '#fff', border: 'none', padding: '7px 16px', cursor: cambiado && !guardando ? 'pointer' : 'default', fontSize: 12.5, fontWeight: 600, textTransform: 'uppercase' }}>{guardando ? 'Guardando…' : 'Guardar'}</button>
+        <button onClick={guardar} disabled={!cambiado || guardando} style={{ marginLeft: 'auto', background: cambiado ? C.verde : '#DFE4EA', color: '#fff', border: 'none', padding: '7px 16px', cursor: cambiado && !guardando ? 'pointer' : 'default', fontSize: 12.5, fontWeight: 600, textTransform: 'uppercase' }}>{guardando ? 'Guardando…' : 'Guardar'}</button>
       </div>
     </div>
   )
@@ -522,8 +524,8 @@ function ProductoCard({ p, onSaved, onMsg }) {
 
 function ParametrosGlobalesCard({ globals, setGlobals, onMsg }) {
   const [guardando, setGuardando] = useState(false)
-  const card = { background: '#fff', border: '1px solid #E2DED4', padding: 16, marginBottom: 16 }
-  const h = { fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 8 }
+  const card = { background: '#fff', border: '1px solid #DFE4EA', padding: 16, marginBottom: 16 }
+  const h = { fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 8 }
 
   async function guardarComoDefecto() {
     setGuardando(true)

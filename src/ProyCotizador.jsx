@@ -10,8 +10,10 @@ import { cargarProyParams } from './ProyParametros.jsx'
 // (se sincroniza con la nube). No toca los datos de los proyectos-OT.
 // ============================================================
 
-const C = { azul: '#061A40', teal: '#0B7285', ambar: '#FF6B00', rojo: '#D64545', verde: '#12805C', carbon: '#0F1A2E', gris: '#8A929E' }
-const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
+import { SEREIN } from './theme-serein.js'
+// Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
+const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
+const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 const clp = n => '$' + Math.round(+n || 0).toLocaleString('es-CL')
 const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
 const LS_KEY = 'serein_proyCotizaciones'
@@ -95,8 +97,8 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
     setTimeout(() => setMsg(''), 4500)
   }
 
-  const card = { background: '#fff', border: '1px solid #E2DED4', padding: 16, marginBottom: 16 }
-  const h = { fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }
+  const card = { background: '#fff', border: '1px solid #DFE4EA', padding: 16, marginBottom: 16 }
+  const h = { fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }
   const lab = { fontSize: 11, color: C.gris, display: 'flex', flexDirection: 'column', gap: 3 }
   const nombresCli = [...new Set((clientes || []).map(c => (c && c.nombre) ? c.nombre : (typeof c === 'string' ? c : '')).filter(Boolean))]
 
@@ -113,7 +115,7 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
             <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej: Correas transportadoras" style={inp} />
           </label>
           <label style={lab}>N° (automatico)
-            <input value={siguienteNumero} readOnly style={{ ...inp, background: '#F1EDE6', fontWeight: 600 }} />
+            <input value={siguienteNumero} readOnly style={{ ...inp, background: '#E2E7EC', fontWeight: 600 }} />
           </label>
         </div>
       </div>
@@ -126,7 +128,7 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
               <option value="">+ Desde catalogo...</option>
               {catalogo.map(cc => <option key={cc.codigo} value={cc.codigo}>{cc.codigo} · {cc.nombre}</option>)}
             </select>
-            <button onClick={addCentroVacio} style={{ background: 'none', border: '1px dashed #CBD2D6', padding: '6px 12px', cursor: 'pointer', fontSize: 12.5, color: C.gris, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Nuevo centro</button>
+            <button onClick={addCentroVacio} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '6px 12px', cursor: 'pointer', fontSize: 12.5, color: C.gris, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Nuevo centro</button>
           </div>
         </div>
         <div style={{ overflowX: 'auto' }}>
@@ -134,7 +136,7 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
             <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Codigo', 'Nombre', 'Neto', 'Condicion', 'Bruto', ''].map((t, i) => <th key={i} style={{ textAlign: ['Neto', 'Bruto'].includes(t) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{t}</th>)}</tr></thead>
             <tbody>
               {centros.map((c, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                <tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>
                   <td style={{ padding: '4px 8px' }}><input value={c.codigo} onChange={e => setCentro(i, 'codigo', e.target.value)} placeholder="A1" style={{ ...inp, width: 60 }} /></td>
                   <td style={{ padding: '4px 8px' }}><input value={c.nombre} onChange={e => setCentro(i, 'nombre', e.target.value)} placeholder="PINTURA, MONTAJE, COMETA..." style={{ ...inp, width: 220 }} /></td>
                   <td style={{ padding: '4px 8px', textAlign: 'right' }}><input value={c.neto} onChange={e => setCentro(i, 'neto', e.target.value)} placeholder="0" style={{ ...inp, width: 120, textAlign: 'right' }} /></td>
@@ -148,7 +150,7 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
                   <td style={{ padding: '4px 4px', textAlign: 'right' }}><button onClick={() => delCentro(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={15} /></button></td>
                 </tr>
               ))}
-              {centros.length === 0 && <tr><td colSpan={6} style={{ padding: 12, textAlign: 'center', color: '#9AA0A6' }}>Agrega centros de costo desde el catalogo o crea nuevos.</td></tr>}
+              {centros.length === 0 && <tr><td colSpan={6} style={{ padding: 12, textAlign: 'center', color: '#9AA3AD' }}>Agrega centros de costo desde el catalogo o crea nuevos.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -161,8 +163,8 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
       <div style={card}>
         <div style={h}>Margen y venta</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
-          <button onClick={() => setModo('pct')} style={{ background: modo === 'pct' ? C.azul : '#fff', color: modo === 'pct' ? '#fff' : C.carbon, border: '1px solid ' + (modo === 'pct' ? C.azul : '#CBD2D6'), padding: '7px 12px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>Modo A: % de margen sobre la venta</button>
-          <button onClick={() => setModo('ventaFija')} style={{ background: modo === 'ventaFija' ? C.azul : '#fff', color: modo === 'ventaFija' ? '#fff' : C.carbon, border: '1px solid ' + (modo === 'ventaFija' ? C.azul : '#CBD2D6'), padding: '7px 12px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>Modo B: fijar la venta</button>
+          <button onClick={() => setModo('pct')} style={{ background: modo === 'pct' ? C.azul : '#fff', color: modo === 'pct' ? '#fff' : C.carbon, border: '1px solid ' + (modo === 'pct' ? C.azul : '#DFE4EA'), padding: '7px 12px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>Modo A: % de margen sobre la venta</button>
+          <button onClick={() => setModo('ventaFija')} style={{ background: modo === 'ventaFija' ? C.azul : '#fff', color: modo === 'ventaFija' ? '#fff' : C.carbon, border: '1px solid ' + (modo === 'ventaFija' ? C.azul : '#DFE4EA'), padding: '7px 12px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>Modo B: fijar la venta</button>
         </div>
         {modo === 'pct' ? (
           <label style={{ fontSize: 12, color: C.gris }}>Margen sobre la venta (%)
@@ -174,7 +176,7 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
             <input value={ventaFija} onChange={e => setVentaFija(e.target.value)} placeholder="0" style={{ ...inp, width: 150, marginLeft: 8, textAlign: 'right' }} />
           </label>
         )}
-        <div style={{ marginTop: 12, padding: '12px 14px', background: '#F7F4EE', display: 'flex', gap: 26, flexWrap: 'wrap', fontSize: 13 }}>
+        <div style={{ marginTop: 12, padding: '12px 14px', background: '#F2F4F7', display: 'flex', gap: 26, flexWrap: 'wrap', fontSize: 13 }}>
           <span>Venta neta: <b style={{ color: C.azul }}>{clp(ventaNeta)}</b></span>
           <span>Venta bruta (IVA 19%): <b>{clp(ventaBruta)}</b></span>
           <span>Utilidad: <b style={{ color: utilidad >= 0 ? C.verde : C.rojo }}>{clp(utilidad)}</b></span>
@@ -182,7 +184,7 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
           <span>Margen sobre venta: <b>{margenSobreVenta.toFixed(1)}%</b></span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14 }}>
-          <button onClick={guardar} style={{ background: C.verde, color: '#fff', border: 'none', padding: '9px 18px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase' }}>Guardar borrador</button>
+          <button onClick={guardar} style={{ background: C.verde, color: '#fff', border: 'none', padding: '9px 18px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase' }}>Guardar borrador</button>
           {msg && <span style={{ color: msg.startsWith('Borrador') ? C.verde : C.rojo, fontSize: 13, fontWeight: 600 }}>{msg}</span>}
         </div>
       </div>
@@ -190,13 +192,13 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
       <div style={card}>
         <div style={h}>Cotizaciones de proyecto (borradores)</div>
         {aprobando && (() => { const c = cots.find(x => x.id === aprobando); if (!c) return null; return (
-          <div style={{ background: '#F1F5F9', border: '1px solid ' + C.azul, borderRadius: 6, padding: 12, marginBottom: 12 }}>
+          <div style={{ background: '#E7EFFB', border: '1px solid ' + C.azul, borderRadius: 6, padding: 12, marginBottom: 12 }}>
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Aprobar {c.numero} — se congela el presupuesto por centro de costo y se genera la OT de proyecto.</div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
               <label style={{ fontSize: 11, color: C.gris, display: 'flex', flexDirection: 'column', gap: 3 }}>Fecha de entrega<input type="date" value={fEntrega} onChange={e => setFEntrega(e.target.value)} style={inp} /></label>
               <label style={{ fontSize: 11, color: C.gris, display: 'flex', flexDirection: 'column', gap: 3 }}>Responsable<input value={fResp} onChange={e => setFResp(e.target.value)} placeholder="Nombre" style={inp} /></label>
               <button onClick={() => aprobar(c)} style={{ background: C.verde, color: '#fff', border: 'none', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Confirmar aprobacion y crear OT</button>
-              <button onClick={() => setAprobando(null)} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '8px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+              <button onClick={() => setAprobando(null)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '8px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
             </div>
           </div>
         ) })()}
@@ -208,7 +210,7 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
               <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['N°', 'Cliente', 'Proyecto', 'Costo neto', 'Venta neta', 'Margen s/venta', 'Estado', ''].map((t, i) => <th key={i} style={{ textAlign: ['Costo neto', 'Venta neta', 'Margen s/venta'].includes(t) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{t}</th>)}</tr></thead>
               <tbody>
                 {cots.map(c => (
-                  <tr key={c.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                  <tr key={c.id} style={{ borderBottom: '1px solid #DFE4EA' }}>
                     <td style={{ padding: '6px 8px', fontWeight: 600 }}>{c.numero}</td>
                     <td style={{ padding: '6px 8px' }}>{c.cliente}</td>
                     <td style={{ padding: '6px 8px', color: C.gris }}>{c.nombreProyecto || '—'}</td>
@@ -226,7 +228,7 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
             </table>
           </div>
         )}
-        <div style={{ fontSize: 11.5, color: '#9AA0A6', marginTop: 8 }}>Al aprobar, la OT de proyecto aparece en la pestana Tarjetas con su presupuesto por centro de costo (congelado). Las compras se imputan alli.</div>
+        <div style={{ fontSize: 11.5, color: '#9AA3AD', marginTop: 8 }}>Al aprobar, la OT de proyecto aparece en la pestana Tarjetas con su presupuesto por centro de costo (congelado). Las compras se imputan alli.</div>
       </div>
     </div>
   )

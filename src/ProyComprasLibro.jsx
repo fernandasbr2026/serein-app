@@ -13,9 +13,11 @@ import { CC_DEFS } from './proyectos-data.js'
 // selector nunca quede bloqueado.
 // ============================================================
 
-const C = { azul: '#061A40', teal: '#0B7285', ambar: '#FF6B00', rojo: '#D64545', verde: '#12805C', carbon: '#0F1A2E', gris: '#8A929E' }
-const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
-const sel = { padding: '5px 7px', border: '1px solid #CBD2D6', fontSize: 12.5, background: '#fff' }
+import { SEREIN } from './theme-serein.js'
+// Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
+const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
+const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
+const sel = { padding: '5px 7px', border: '1px solid #DFE4EA', fontSize: 12.5, background: '#fff' }
 const clp = n => '$' + Math.round(+n || 0).toLocaleString('es-CL')
 const nombreDefCC = code => { const c = (CC_DEFS || []).find(x => x.id === code); return (c && c.nombre) || code }
 
@@ -73,8 +75,8 @@ export default function ProyComprasLibro({ proyectos = [], setProyectos = null }
     setProyectos(prev => prev.map(p => ({ ...p, compras: (p.compras || []).filter(c => String(c.libroId) !== String(libroId)) })))
   }
 
-  const card = { background: '#fff', border: '1px solid #E2DED4', padding: 16, marginBottom: 16 }
-  const h = { fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }
+  const card = { background: '#fff', border: '1px solid #DFE4EA', padding: 16, marginBottom: 16 }
+  const h = { fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }
 
   return (
     <div>
@@ -94,7 +96,7 @@ export default function ProyComprasLibro({ proyectos = [], setProyectos = null }
             <div style={{ fontSize: 12, color: C.gris, maxWidth: 620 }}>Centros de costo de esta OT: <b>{ccList.map(cc => cc + ' ' + nombreCC(proy, cc)).join(' · ')}</b></div>
           )}
         </div>
-        {!proy && <div style={{ fontSize: 12, color: C.ambar, background: '#F9E9DE', padding: '6px 10px', marginTop: 10 }}>Elige primero la OT para poder imputar los centros de costo.</div>}
+        {!proy && <div style={{ fontSize: 12, color: C.ambar, background: '#FDECDD', padding: '6px 10px', marginTop: 10 }}>Elige primero la OT para poder imputar los centros de costo.</div>}
       </div>
 
       <div style={card}>
@@ -103,7 +105,7 @@ export default function ProyComprasLibro({ proyectos = [], setProyectos = null }
           {msg && <span style={{ color: msg.includes('imputada') ? C.verde : C.rojo, fontSize: 13, fontWeight: 600 }}>{msg}</span>}
         </div>
         {loading ? <div style={{ color: C.gris, padding: 16 }}>Cargando Libro de Compras...</div>
-          : err ? <div style={{ background: '#F6E0DA', border: '1px solid ' + C.rojo, color: C.rojo, padding: '10px 12px', fontSize: 13 }}>{err}</div>
+          : err ? <div style={{ background: '#FCEBEA', border: '1px solid ' + C.rojo, color: C.rojo, padding: '10px 12px', fontSize: 13 }}>{err}</div>
             : filtradas.length === 0 ? <div style={{ color: C.gris, padding: 16, textAlign: 'center' }}>Sin facturas en el Libro de Compras. Sincroniza el Libro de Compras primero.</div>
               : (
                 <div style={{ overflowX: 'auto' }}>
@@ -117,7 +119,7 @@ export default function ProyComprasLibro({ proyectos = [], setProyectos = null }
                       {filtradas.slice(0, 300).map(r => {
                         const imp = impSet.has(String(r.id))
                         return (
-                          <tr key={r.id} style={{ borderBottom: '1px solid #EEE9DF', background: imp ? '#F3F7F4' : 'transparent' }}>
+                          <tr key={r.id} style={{ borderBottom: '1px solid #DFE4EA', background: imp ? '#F3F7F4' : 'transparent' }}>
                             <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{r.emission_date || '-'}</td>
                             <td style={{ padding: '6px 8px' }}><div style={{ fontWeight: 600 }}>{r.provider_name || '-'}</div><div style={{ color: C.gris, fontSize: 11 }}>{r.provider_rut}</div></td>
                             <td style={{ padding: '6px 8px' }}>{r.document_number}</td>
@@ -132,8 +134,8 @@ export default function ProyComprasLibro({ proyectos = [], setProyectos = null }
                               )}
                             </td>
                             <td style={{ padding: '6px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                              {imp ? <button onClick={() => quitar(r.id)} style={{ background: 'none', border: '1px solid #CBD2D6', color: C.rojo, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>Quitar</button>
-                                : <button onClick={() => imputar(r)} disabled={!proy || !ccSel[r.id]} style={{ background: (proy && ccSel[r.id]) ? C.verde : '#B9C2C7', color: '#fff', border: 'none', padding: '5px 12px', cursor: (proy && ccSel[r.id]) ? 'pointer' : 'default', fontSize: 12, fontWeight: 600 }}>Imputar</button>}
+                              {imp ? <button onClick={() => quitar(r.id)} style={{ background: 'none', border: '1px solid #DFE4EA', color: C.rojo, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>Quitar</button>
+                                : <button onClick={() => imputar(r)} disabled={!proy || !ccSel[r.id]} style={{ background: (proy && ccSel[r.id]) ? C.verde : '#9AA3AD', color: '#fff', border: 'none', padding: '5px 12px', cursor: (proy && ccSel[r.id]) ? 'pointer' : 'default', fontSize: 12, fontWeight: 600 }}>Imputar</button>}
                             </td>
                           </tr>
                         )

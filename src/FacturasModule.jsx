@@ -15,15 +15,17 @@ const norm = s => (s || '').toString().toLowerCase()
 // desde Defontana / SII en la fase de sincronización.
 // ============================================================
 
-const C = { azul: '#061A40', teal: '#0B7285', ambar: '#FF6B00', rojo: '#D64545', verde: '#12805C', carbon: '#0F1A2E', gris: '#8A929E' }
+import { SEREIN } from './theme-serein.js'
+// Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
+const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
-const inp = { padding: '6px 8px', border: '1px solid #CBD2D6', fontSize: 12.5, boxSizing: 'border-box' }
+const inp = { padding: '6px 8px', border: '1px solid #DFE4EA', fontSize: 12.5, boxSizing: 'border-box' }
 const ESTADOS = ['Pendiente', 'Pagado', 'Factoring', 'Vencida', 'Anulada']
 const BANCOS = ['', 'Banco de Chile', 'BCI', 'Santander', 'Estado', 'Scotiabank', 'Itaú', 'Security', 'BICE', 'Otro']
 
-const fondoEstado = e => ({ Pagado: '#E7F2EA', Factoring: '#F9E9DE', Vencida: '#F6E0DA', Anulada: '#EEE', Pendiente: '#F9E9DE' }[e] || '#EEE')
-const colorEstado = e => ({ Pagado: C.verde, Factoring: C.ambar, Vencida: C.rojo, Anulada: C.gris, Pendiente: '#8C4519' }[e] || C.gris)
+const fondoEstado = e => ({ Pagado: '#E6F7EE', Factoring: '#FDECDD', Vencida: '#FCEBEA', Anulada: '#EEE', Pendiente: '#FDECDD' }[e] || '#EEE')
+const colorEstado = e => ({ Pagado: C.verde, Factoring: C.ambar, Vencida: C.rojo, Anulada: C.gris, Pendiente: '#D9600A' }[e] || C.gris)
 
 const VENDEDORES = ['General', 'Mario']
 const IVA = 0.19
@@ -144,9 +146,9 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
 
   return (
     <div style={{ marginTop: 16 }}>
-      <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `3px solid ${C.teal}` }}>
-        <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, borderBottom: '1px solid #EEE9DF' }}>
-          <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Receipt size={15} /> Facturas · {area}</span>
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: `3px solid ${C.teal}` }}>
+        <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, borderBottom: '1px solid #DFE4EA' }}>
+          <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Receipt size={15} /> Facturas · {area}</span>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 12, color: C.gris, flexWrap: 'wrap' }}>
             <span>{hayFiltro ? `${mostradas.length} de ${lista.length}` : lista.length} facturas</span>
             <span>Total: <b style={{ color: C.carbon }}>{clp(totalMonto)}</b></span>
@@ -159,7 +161,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
               <input value={ppmPct} onChange={e => setPpmPct(parseFloat(String(e.target.value).replace(',', '.')) || 0)} style={{ ...inp, width: 46, textAlign: 'right' }} />%
               <b style={{ color: C.teal }}>= {clp(totalPPM)}</b>
             </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, border: '1px solid #CBD2D6', padding: '2px 6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, border: '1px solid #DFE4EA', padding: '2px 6px' }}>
               <Search size={13} color={C.gris} />
               <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar N°/cliente/OT…" style={{ border: 'none', outline: 'none', fontSize: 12.5, width: 130 }} />
             </div>
@@ -167,40 +169,40 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
             <select value={fEst} onChange={e => setFEst(e.target.value)} style={inp}><option value="">Todos los estados</option>{ESTADOS.map(s => <option key={s} value={s}>{s}</option>)}</select>
             <input type="month" value={fMes} onChange={e => setFMes(e.target.value)} style={inp} title="Filtrar por mes de emisión" />
             {esIstria && <select value={fProy} onChange={e => setFProy(e.target.value)} style={inp} title="Filtrar por proyecto"><option value="">Todos los proyectos</option>{proyectosUnicos.map(p => <option key={p} value={p}>{p}</option>)}</select>}
-            {hayFiltro && <button onClick={() => { setBusca(''); setFCli(''); setFEst(''); setFMes(''); setFProy('') }} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '5px 8px', cursor: 'pointer', fontSize: 12 }}>Limpiar</button>}
+            {hayFiltro && <button onClick={() => { setBusca(''); setFCli(''); setFEst(''); setFMes(''); setFProy('') }} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '5px 8px', cursor: 'pointer', fontSize: 12 }}>Limpiar</button>}
             <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.xls" style={{ display: 'none' }} onChange={e => { const file = e.target.files[0]; if (file) importarExcel(file); e.target.value = '' }} />
             <button onClick={() => fileRef.current && fileRef.current.click()} style={{ background: C.carbon, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Upload size={13} /> Importar Excel</button>
             {!creando && <button onClick={() => setCreando(true)} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Nueva factura</button>}
           </div>
         </div>
 
-        <div style={{ padding: '10px 16px', display: 'flex', gap: 26, flexWrap: 'wrap', borderBottom: '1px solid #EEE9DF', background: '#FAF7F3' }}>
+        <div style={{ padding: '10px 16px', display: 'flex', gap: 26, flexWrap: 'wrap', borderBottom: '1px solid #DFE4EA', background: '#F2F4F7' }}>
           <div>
             <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>Ventas Mario (neto)</div>
-            <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: C.carbon }}>{clp(ventasMario)}</div>
+            <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 20, fontWeight: 600, color: C.carbon }}>{clp(ventasMario)}</div>
           </div>
           <div>
             <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>Comisión Mario ({comisionPct}%)</div>
-            <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: totalComision > 0 ? C.rojo : C.gris }}>{clp(totalComision)}</div>
+            <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 20, fontWeight: 600, color: totalComision > 0 ? C.rojo : C.gris }}>{clp(totalComision)}</div>
           </div>
           <div>
             <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>Pérdida factoring</div>
-            <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: totalPerdFact > 0 ? C.rojo : C.gris }}>{clp(totalPerdFact)}</div>
+            <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 20, fontWeight: 600, color: totalPerdFact > 0 ? C.rojo : C.gris }}>{clp(totalPerdFact)}</div>
           </div>
           <div>
             <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>PPM ({ppmPct}%)</div>
-            <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: C.teal }}>{clp(totalPPM)}</div>
+            <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 20, fontWeight: 600, color: C.teal }}>{clp(totalPPM)}</div>
           </div>
         </div>
 
         {esIstria && ventasPorProyecto.length > 0 && (
-          <div style={{ padding: '10px 16px', borderBottom: '1px solid #EEE9DF', background: '#FBF6F0' }}>
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid #DFE4EA', background: '#F2F4F7' }}>
             <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>Ventas por Proyecto / NV (neto) — trabajos facturados en Santa Rosa</div>
             <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
               {ventasPorProyecto.map(([p, v]) => (
                 <div key={p} style={{ borderLeft: `3px solid ${C.teal}`, paddingLeft: 8 }}>
                   <div style={{ fontSize: 12, color: C.carbon, fontWeight: 600 }}>{p}</div>
-                  <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 18, fontWeight: 600, color: C.teal }}>{clp(v)}</div>
+                  <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 18, fontWeight: 600, color: C.teal }}>{clp(v)}</div>
                 </div>
               ))}
             </div>
@@ -208,7 +210,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
         )}
 
         {creando && (
-          <div style={{ background: '#FAF7F3', padding: 12, borderBottom: '1px solid #EEE9DF' }}>
+          <div style={{ background: '#F2F4F7', padding: 12, borderBottom: '1px solid #DFE4EA' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8 }}>
               <input style={inp} placeholder="N° factura *" value={f.numero} onChange={e => setF({ ...f, numero: e.target.value })} />
               <input style={inp} placeholder="Cliente" list={dlId} value={f.cliente} onChange={e => setF({ ...f, cliente: e.target.value })} />
@@ -218,20 +220,20 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
               {esIstria && <input style={inp} placeholder="NV (codigo)" value={f.nv} onChange={e => setF({ ...f, nv: e.target.value })} />}
               <label style={{ fontSize: 11, color: C.gris }}>Emisión<input type="date" style={{ ...inp, width: '100%' }} value={f.fecha_emision} onChange={e => setF({ ...f, fecha_emision: e.target.value })} /></label>
               <input style={inp} placeholder="Neto CLP *" value={f.neto} onChange={e => setF({ ...f, neto: e.target.value })} /><select style={inp} value={f.iva} onChange={e => setF({ ...f, iva: e.target.value })}><option value="afecta">Afecta (con IVA)</option><option value="exenta">Exenta (sin IVA)</option></select>
-              <div style={{ ...inp, background: '#F1EDE6', color: C.gris, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>IVA {clp(f.iva === 'exenta' ? 0 : ivaDe(f.neto))} · Total <b style={{ color: C.carbon, marginLeft: 4 }}>{clp(f.iva === 'exenta' ? num(f.neto) : brutoDe(f.neto))}</b></div>
+              <div style={{ ...inp, background: '#E2E7EC', color: C.gris, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>IVA {clp(f.iva === 'exenta' ? 0 : ivaDe(f.neto))} · Total <b style={{ color: C.carbon, marginLeft: 4 }}>{clp(f.iva === 'exenta' ? num(f.neto) : brutoDe(f.neto))}</b></div>
               <select style={inp} value={f.vendedor} onChange={e => setF({ ...f, vendedor: e.target.value })}>{VENDEDORES.map(v => <option key={v} value={v}>Vendedor: {v}</option>)}</select>
             </div>
             <input style={{ ...inp, width: '100%', marginTop: 8 }} placeholder="Observación / comentario (opcional)" value={f.comentarios} onChange={e => setF({ ...f, comentarios: e.target.value })} />
             <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
               <button onClick={agregar} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Agregar</button>
-              <button onClick={() => { setF(nueva()); setCreando(false) }} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+              <button onClick={() => { setF(nueva()); setCreando(false) }} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
             </div>
           </div>
         )}
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '0 12px 10px' }}>
           <span style={{ fontSize: 12.5, color: C.gris }}>{sel.size} seleccionada(s)</span>
-          <button onClick={eliminarSel} disabled={!sel.size} style={{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5, background: sel.size ? C.rojo : '#E6E8EE', color: sel.size ? '#fff' : C.gris, cursor: sel.size ? 'pointer' : 'default' }}>Eliminar seleccionadas</button>
+          <button onClick={eliminarSel} disabled={!sel.size} style={{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5, background: sel.size ? C.rojo : '#DFE4EA', color: sel.size ? '#fff' : C.gris, cursor: sel.size ? 'pointer' : 'default' }}>Eliminar seleccionadas</button>
           <button onClick={vaciarArea} disabled={!lista.length} style={{ background: 'transparent', border: '1px solid ' + C.rojo, color: C.rojo, padding: '7px 12px', borderRadius: 6, fontSize: 12.5, fontWeight: 700, cursor: lista.length ? 'pointer' : 'default' }}>Vaciar area {area}</button>
         </div>
         <div style={{ overflowX: 'auto', padding: 12 }}>
@@ -249,7 +251,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                 const perd = x.estado === 'Factoring' ? calcularPerdidaFactoring(montoFacturaDe(x), x.dias || 30, x.diasMora || 0, fSel) : null
                 return (
                 <React.Fragment key={x.id}>
-                <tr style={{ borderBottom: '1px solid #EEE9DF', opacity: x.estado === 'Anulada' ? 0.5 : 1 }}>
+                <tr style={{ borderBottom: '1px solid #DFE4EA', opacity: x.estado === 'Anulada' ? 0.5 : 1 }}>
                   <td style={{ padding: '5px 4px' }}><input type="checkbox" checked={sel.has(x.id)} onChange={() => toggleSel(x.id)} /></td>
                   <td style={{ padding: '4px 6px' }}><input value={x.numero} onChange={e => actualizar(x.id, 'numero', e.target.value)} style={{ ...inp, width: 80, fontWeight: 600 }} /></td>
                   <td style={{ padding: '4px 6px' }}><input value={x.cliente} list={dlId} onChange={e => actualizar(x.id, 'cliente', e.target.value)} style={{ ...inp, width: 150 }} /></td>
@@ -281,7 +283,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                   <td style={{ padding: '5px 4px', textAlign: 'right' }}><button onClick={() => window.confirm(`¿Eliminar factura ${x.numero}?`) && setLista(lista.filter(y => y.id !== x.id))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button></td>
                 </tr>
                 {x.estado === 'Factoring' && (
-                  <tr style={{ background: '#FBF3EE' }}>
+                  <tr style={{ background: '#FDECDD' }}>
                     <td colSpan={esIstria ? 19 : 17} style={{ padding: '8px 10px' }}>
                       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12 }}>
                         <span style={{ color: C.gris, fontWeight: 600 }}>Factoring:</span>
@@ -301,7 +303,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                 )}
                 </React.Fragment>
               ) })}
-              {mostradas.length === 0 && <tr><td colSpan={esIstria ? 19 : 17} style={{ padding: 14, textAlign: 'center', color: '#9AA0A6' }}>{busca ? 'Sin resultados para la búsqueda.' : 'Sin facturas en esta área.'}</td></tr>}
+              {mostradas.length === 0 && <tr><td colSpan={esIstria ? 19 : 17} style={{ padding: 14, textAlign: 'center', color: '#9AA3AD' }}>{busca ? 'Sin resultados para la búsqueda.' : 'Sin facturas en esta área.'}</td></tr>}
             </tbody>
           </table>
           <Paginador page={pg.page} paginas={pg.paginas} total={pg.total} setPage={setPage} />
@@ -309,7 +311,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
         <datalist id={dlId}>{sugerencias.map(s => <option key={s} value={s} />)}</datalist>
         <datalist id={dlOtId}>{otsActivas.map(o => <option key={o.etq} value={o.n}>{o.etq}</option>)}</datalist>
       </div>
-      <div style={{ fontSize: 11, color: '#9AA0A6', marginTop: 6 }}>
+      <div style={{ fontSize: 11, color: '#9AA3AD', marginTop: 6 }}>
         Estas facturas se llenarán automáticamente desde Defontana/SII cuando activemos la sincronización. Por ahora puedes cargarlas y editarlas a mano.
       </div>
     </div>
