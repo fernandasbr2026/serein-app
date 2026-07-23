@@ -3,6 +3,7 @@ import { Plus, Trash2, Receipt, Upload, Search } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { calcularPerdidaFactoring, perdidaFactoringFactura } from './ParametrosModule.jsx'
 import Paginador, { paginar } from './Paginador.jsx'
+import { pullState, pushState } from './sync.js'
 export { FACTURAS_SEED } from './facturas-data.js'
 const CONDICIONES_DIAS = [{ label: '30 días', dias: 30 }, { label: '45 días', dias: 45 }, { label: '60 días', dias: 60 }, { label: '90 días', dias: 90 }]
 const norm = s => (s || '').toString().toLowerCase()
@@ -60,7 +61,32 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
   const fileRef = useRef(null)
   const [page, setPage] = useState(1)
 
-  const setLista = nuevaLista => setFacturas({ ...(facturas || {}), [area]: nuevaLista })
+  // Antes esta función solo tocaba el estado de React y dependía del
+  // guardado general (localStorage + push recién 800ms después del
+  // último cambio de CUALQUIER parte del ERP) — si la persona refrescaba
+  // o cambiaba de pantalla antes de esos 800ms, la edición (o el borrado)
+  // podía quedar sin subir, y al volver a cargar la nube "revivía" la
+  // versión vieja, con la factura eliminada de vuelta. Ahora guarda en
+  // localStorage y sube a la nube de inmediato en cada cambio, igual que
+  // el resto de los módulos que ya se corrigieron.
+  const setLista = nuevaLista => {
+    const nuevo = { ...(facturas || {}), [area]: nuevaLista }
+    try { localStorage.setItem('serein_facturas', JSON.stringify(nuevo)) } catch (e) {}
+    setFacturas(nuevo)
+    pushState()
+  }
+  // Para borrar (una, varias o todas) se usa además el mismo patrón ya
+  // probado en Órdenes de Trabajo: traer lo más fresco de la nube justo
+  // antes de borrar, para no partir de una copia vieja si alguien más
+  // cargó/editó facturas de esta área mientras tanto.
+  const eliminarFresco = async filtrar => {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_facturas') || 'null') } catch (e) {}
+    const baseFacturas = fresco && typeof fresco === 'object' ? fresco : (facturas || {})
+    const baseLista = baseFacturas[area] || []
+    setLista(filtrar(baseLista))
+  }
   const actualizar = (id, campo, valor) => setLista(lista.map(x => x.id === id ? { ...x, [campo]: valor } : x))
   function agregar() {
     const nt = num(f.neto)
@@ -124,14 +150,14 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
   const eliminarSel = () => {
     if (!sel.size) return
     if (!window.confirm('Se eliminaran ' + sel.size + ' factura(s) del area ' + area + '. Esta accion no se puede deshacer. Continuar?')) return
-    setLista(lista.filter(x => !sel.has(x.id)))
+    eliminarFresco(baseLista => baseLista.filter(x => !sel.has(x.id)))
     setSel(new Set())
   }
   const vaciarArea = () => {
     if (!lista.length) return
     if (!window.confirm('Se eliminaran TODAS las facturas del area ' + area + ' (' + lista.length + '). Esta accion no se puede deshacer. Continuar?')) return
     if (!window.confirm('Confirmacion final: vaciar por completo las facturas de ' + area + '?')) return
-    setLista([])
+    eliminarFresco(() => [])
     setSel(new Set())
   }
   const totalMonto = mostradas.reduce((a, x) => a + montoFacturaDe(x), 0)
@@ -280,7 +306,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                     </select>
                   </td>
                   <td style={{ padding: '5px 6px', textAlign: 'right', color: comisionDe(x) > 0 ? C.rojo : C.gris, whiteSpace: 'nowrap' }}>{comisionDe(x) > 0 ? clp(comisionDe(x)) : '—'}</td>
-                  <td style={{ padding: '5px 4px', textAlign: 'right' }}><button onClick={() => window.confirm(`¿Eliminar factura ${x.numero}?`) && setLista(lista.filter(y => y.id !== x.id))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button></td>
+                  <td style={{ padding: '5px 4px', textAlign: 'right' }}><button onClick={() => window.confirm(`¿Eliminar factura ${x.numero}?`) && eliminarFresco(baseLista => baseLista.filter(y => y.id !== x.id))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button></td>
                 </tr>
                 {x.estado === 'Factoring' && (
                   <tr style={{ background: '#FDECDD' }}>
