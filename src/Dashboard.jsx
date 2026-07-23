@@ -36,8 +36,10 @@ import { INVENTARIO_SEED } from './inventario-data.js'
 import { pushState, pullState } from './sync.js'
 import { supabase } from './supabase.js'
 
-const C = { azul: '#1D1D1B', teal: '#A8501F', ambar: '#D2642F', rojo: '#B5432E', verde: '#3D7A4E', carbon: '#161616', niebla: '#F6F0EA' }
-const AREA_COLOR = { 'Santa Rosa': '#A8501F', 'Proyectos': '#D2642F', 'Istria': '#1D1D1B' }
+import { SEREIN } from './theme-serein.js'
+// Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
+const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, niebla: SEREIN.fog }
+const AREA_COLOR = { 'Santa Rosa': '#D9600A', 'Proyectos': '#F77716', 'Istria': '#101315' }
 const clp = n => '$' + Math.round(n).toLocaleString('es-CL')
 const clpM = n => '$' + Math.round(n / 1000000).toLocaleString('es-CL') + 'M'
 
@@ -63,22 +65,22 @@ export function borrarDatosLocales() {
 
 function Kpi({ label, valor, sub, color, icon: Icon }) {
   return (
-    <div style={{ background: '#fff', border: '1px solid #EEF0F4', borderRadius: 14, boxShadow: '0 1px 3px rgba(16,24,40,.06), 0 1px 2px rgba(16,24,40,.04)', padding: '16px 18px', flex: '1 1 180px', minWidth: 0 }}>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 14, boxShadow: '0 1px 3px rgba(16,24,40,.06), 0 1px 2px rgba(16,24,40,.04)', padding: '16px 18px', flex: '1 1 180px', minWidth: 0 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: 11, color: '#7A8288', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>{label}</span>
+        <span style={{ fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>{label}</span>
         <Icon size={16} color={color} />
       </div>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 23, fontWeight: 600, color: C.carbon, marginTop: 8, whiteSpace: 'nowrap' }}>{valor}</div>
-      {sub && <div style={{ fontSize: 12, color: '#7A8288', marginTop: 3 }}>{sub}</div>}
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 23, fontWeight: 600, color: C.carbon, marginTop: 8, whiteSpace: 'nowrap' }}>{valor}</div>
+      {sub && <div style={{ fontSize: 12, color: '#9AA3AD', marginTop: 3 }}>{sub}</div>}
     </div>
   )
 }
 
 function Panel({ title, children, right }) {
   return (
-    <div style={{ background: '#fff', border: '1px solid #EEF0F4', borderRadius: 14, boxShadow: '0 1px 3px rgba(16,24,40,.06)', padding: 18, minWidth: 0 }}>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 14, boxShadow: '0 1px 3px rgba(16,24,40,.06)', padding: 18, minWidth: 0 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
-        <h3 style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, letterSpacing: 0.5, textTransform: 'uppercase', margin: 0 }}>{title}</h3>
+        <h3 style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, letterSpacing: 0.5, textTransform: 'uppercase', margin: 0 }}>{title}</h3>
         {right}
       </div>
       {children}
@@ -92,22 +94,22 @@ function ResumenFinancieroCard({ fin, onIr }) {
   const r = calcularResumenFin(fin, mes)
   const item = (label, valor, color) => (
     <div>
-      <div style={{ fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>{label}</div>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 22, fontWeight: 600, color: color || '#161616', whiteSpace: 'nowrap' }}>{valor}</div>
+      <div style={{ fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>{label}</div>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 22, fontWeight: 600, color: color || '#101315', whiteSpace: 'nowrap' }}>{valor}</div>
     </div>
   )
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: '4px solid #161616', marginBottom: 16 }}>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: '4px solid #101315', marginBottom: 16 }}>
       <div style={{ padding: '14px 18px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-        <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>💰 Resumen financiero del mes</span>
-        <button onClick={onIr} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '5px 12px', cursor: 'pointer', fontSize: 12 }}>Ver módulo Finanzas →</button>
+        <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>💰 Resumen financiero del mes</span>
+        <button onClick={onIr} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '5px 12px', cursor: 'pointer', fontSize: 12 }}>Ver módulo Finanzas →</button>
       </div>
       <div style={{ padding: '0 18px 16px', display: 'flex', gap: 28, flexWrap: 'wrap' }}>
         {item('Gastos fijos + variables', clp(r.fijos + r.variables))}
-        {item('Cuotas créditos/leasing', clp(r.totalCuotasMes), '#D2642F')}
-        {item('Salida de caja proyectada', clp(r.salidaCaja), '#B5432E')}
+        {item('Cuotas créditos/leasing', clp(r.totalCuotasMes), '#F77716')}
+        {item('Salida de caja proyectada', clp(r.salidaCaja), '#C5453D')}
         {item('Deuda vigente', clp(r.deudaVigente))}
-        {item('Cuotas vencidas', r.cuotasVencidas.length, r.cuotasVencidas.length > 0 ? '#B5432E' : '#3D7A4E')}
+        {item('Cuotas vencidas', r.cuotasVencidas.length, r.cuotasVencidas.length > 0 ? '#C5453D' : '#1B9E5D')}
       </div>
     </div>
   )
@@ -116,16 +118,16 @@ function ResumenFinancieroCard({ fin, onIr }) {
 function CardModulo({ titulo, color, abiertasN, abiertasMonto, porFacturar, facturadoPorCobrar }) {
   const it = (label, val, col) => (
     <div style={{ marginBottom: 8 }}>
-      <div style={{ fontSize: 10.5, color: '#7A8288', textTransform: 'uppercase' }}>{label}</div>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 18, fontWeight: 600, color: col || '#161616', whiteSpace: 'nowrap' }}>{val}</div>
+      <div style={{ fontSize: 10.5, color: '#9AA3AD', textTransform: 'uppercase' }}>{label}</div>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 18, fontWeight: 600, color: col || '#101315', whiteSpace: 'nowrap' }}>{val}</div>
     </div>
   )
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `4px solid ${color}`, padding: '14px 16px' }}>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 12 }}>{titulo}</div>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: `4px solid ${color}`, padding: '14px 16px' }}>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 12 }}>{titulo}</div>
       {it(`Abiertas · ${abiertasN} en curso`, clp(abiertasMonto) + ' por facturar', color)}
-      {it('Cerradas por facturar', clp(porFacturar), '#D2642F')}
-      {it('Facturado, aún por cobrar', clp(facturadoPorCobrar), '#B5432E')}
+      {it('Cerradas por facturar', clp(porFacturar), '#F77716')}
+      {it('Facturado, aún por cobrar', clp(facturadoPorCobrar), '#C5453D')}
     </div>
   )
 }
@@ -156,11 +158,11 @@ function ResumenModulos({ ots, proyectos }) {
   }
   return (
     <div style={{ marginBottom: 16 }}>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>OT y proyectos por módulo</div>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>OT y proyectos por módulo</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
-        <CardModulo titulo="Santa Rosa" color="#A8501F" {...areaData('Santa Rosa')} />
-        <CardModulo titulo="Istria" color="#1D1D1B" {...areaData('Istria')} />
-        <CardModulo titulo="Proyectos" color="#D2642F" {...proyData} />
+        <CardModulo titulo="Santa Rosa" color="#D9600A" {...areaData('Santa Rosa')} />
+        <CardModulo titulo="Istria" color="#101315" {...areaData('Istria')} />
+        <CardModulo titulo="Proyectos" color="#F77716" {...proyData} />
       </div>
     </div>
   )
@@ -459,10 +461,10 @@ export default function Dashboard({ perfil, email, onLogout }) {
     const venta = facNeto(a), ventaBruta = facBrutoArea(a, esPagada) + facBrutoArea(a, noPagada), cobradoNeto = facCobN(a), cobradoA = facBrutoArea(a, esPagada), porPagarA = pagarArea(a)
     const pendienteNeto = Math.max(0, venta - cobradoNeto), pendienteBruto = Math.max(0, ventaBruta - cobradoA)
     const _sinResultado = true
-    const it = (l, v, c, sub) => (<div><div style={{ fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>{l}</div><div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, color: c || C.carbon, whiteSpace: 'nowrap' }}>{clp(v)}</div>{sub !== undefined && <div style={{ fontSize: 11, color: '#7A8288', whiteSpace: 'nowrap' }}>Bruto {clp(sub)}</div>}</div>)
+    const it = (l, v, c, sub) => (<div><div style={{ fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>{l}</div><div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 20, fontWeight: 600, color: c || C.carbon, whiteSpace: 'nowrap' }}>{clp(v)}</div>{sub !== undefined && <div style={{ fontSize: 11, color: '#9AA3AD', whiteSpace: 'nowrap' }}>Bruto {clp(sub)}</div>}</div>)
     return (
-      <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `4px solid ${AREA_COLOR[a] || C.teal}`, marginBottom: 16 }}>
-        <div style={{ padding: '14px 18px 6px', fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Resumen financiero · {a}</div>
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: `4px solid ${AREA_COLOR[a] || C.teal}`, marginBottom: 16 }}>
+        <div style={{ padding: '14px 18px 6px', fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Resumen financiero · {a}</div>
         <div style={{ padding: '0 18px 16px', display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           {it('Venta neta', venta, C.azul, ventaBruta)}
           {it('Cobrado', cobradoNeto, C.verde, cobradoA)}
@@ -476,8 +478,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
 
   const flujoItem = (label, valor, color) => (
     <div>
-      <div style={{ fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>{label}</div>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 22, fontWeight: 600, color: color || '#161616', whiteSpace: 'nowrap' }}>{valor}</div>
+      <div style={{ fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>{label}</div>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 22, fontWeight: 600, color: color || '#101315', whiteSpace: 'nowrap' }}>{valor}</div>
     </div>
   )
 
@@ -555,24 +557,24 @@ export default function Dashboard({ perfil, email, onLogout }) {
           <Kpi label="Cobrado" valor={clp(kCobrado)} sub={`Bruto ${clp(kCobradoBruto)} · ${((kCobrado / ((kCobrado + kPend) || 1)) * 100).toFixed(0)}% cartera`} color={C.verde} icon={Wallet} />
           <Kpi label="Por Cobrar" valor={clp(kPend)} sub={`Bruto ${clp(kPendBruto)} · pendiente`} color={C.rojo} icon={AlertTriangle} />
           <Kpi label="Pérdida Factoring" valor={clp(kPerd)} sub={kVenta > 0 ? `${((kPerd / kVenta) * 100).toFixed(2)}% s/ venta` : '—'} color={C.ambar} icon={Landmark} />
-          {esGerencia && <Kpi label="Carga financiera" valor={clp(calcularResumenFin(fin, new Date().toISOString().slice(0, 7)).deudaVigente)} sub="deuda total propia" color="#061A40" icon={Landmark} />}
+          {esGerencia && <Kpi label="Carga financiera" valor={clp(calcularResumenFin(fin, new Date().toISOString().slice(0, 7)).deudaVigente)} sub="deuda total propia" color="#101315" icon={Landmark} />}
             {esTODAS && <Kpi label="% Factorizado" valor={`${pctFactorizado.toFixed(1)}%`} sub={`${clp(netoFactTotal)} de ${clp(netoTotalFact)}`} color={C.teal} icon={Landmark} />}
         </div>
 
         {esGerencia && areaSel === 'TODAS' && (<ConsolidadoModule cc={{ caja, cxcTotal, cxpTotal, otEnCursoTotal, posicionFin, totalPagar, pagar7, totalEntrar, saldoProy, netoFactTotal, netoTotalFact, pctFactorizado, kVenta, kCobrado, kPend, kPerd, rentab, utilidad: vista.utilidad }} facturas={facturas} ots={ots} proyectos={proyectos} cotizaciones={cotizaciones} clientes={clientes} params={params} fin={fin} pp={pp} ppmPct={ppmPct} onIr={setAreaSel} />)}
             {false && esGerencia && areaSel === 'TODAS' && (
           <>
-            <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `4px solid ${C.verde}`, marginBottom: 16 }}>
+            <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: `4px solid ${C.verde}`, marginBottom: 16 }}>
               <div style={{ padding: '14px 18px 6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-                <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>📊 Resumen financiero total</span>
-                <span style={{ fontSize: 11, color: '#7A8288' }}>caja + por cobrar − por pagar + OT en curso · montos con IVA</span>
+                <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>📊 Resumen financiero total</span>
+                <span style={{ fontSize: 11, color: '#9AA3AD' }}>caja + por cobrar − por pagar + OT en curso · montos con IVA</span>
               </div>
               <div style={{ padding: '0 18px 16px', display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 {flujoItem('Caja', clp(caja), caja >= 0 ? C.verde : C.rojo)}
                 {flujoItem('Cuentas por cobrar', clp(cxcTotal), C.azul)}
                 {flujoItem('Cuentas por pagar', clp(cxpTotal), C.rojo)}
                 {flujoItem('OT en curso (por facturar)', clp(otEnCursoTotal), C.ambar)}
-                <div style={{ borderLeft: '2px solid #E2DED4', paddingLeft: 20 }}>
+                <div style={{ borderLeft: '2px solid #DFE4EA', paddingLeft: 20 }}>
                   {flujoItem('Posición financiera', clp(posicionFin), posicionFin >= 0 ? C.verde : C.rojo)}
                 </div>
               </div>
@@ -581,10 +583,10 @@ export default function Dashboard({ perfil, email, onLogout }) {
             <ResumenModulos ots={ots} proyectos={proyectos} />
 
             <ResumenFinancieroCard fin={fin} onIr={() => setAreaSel('FINANZAS')} />
-            <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `4px solid ${C.verde}`, marginBottom: 16 }}>
+            <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: `4px solid ${C.verde}`, marginBottom: 16 }}>
               <div style={{ padding: '14px 18px 6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-                <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>💵 Flujo de caja proyectado · todas las áreas</span>
-                <span style={{ fontSize: 11, color: '#7A8288' }}>pagos: gastos + cuotas + proveedores · ingresos: cobros + facturas por cobrar</span>
+                <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>💵 Flujo de caja proyectado · todas las áreas</span>
+                <span style={{ fontSize: 11, color: '#9AA3AD' }}>pagos: gastos + cuotas + proveedores · ingresos: cobros + facturas por cobrar</span>
               </div>
               <div style={{ padding: '0 18px 16px', display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 {flujoItem('Total a pagar', clp(totalPagar), C.rojo)}
@@ -603,9 +605,9 @@ export default function Dashboard({ perfil, email, onLogout }) {
             <Panel title={`Venta neta por mes · ${areaSel === 'TODAS' ? 'consolidado' : areaSel}`}>
               <ResponsiveContainer width="100%" height={240}>
                 <LineChart data={mesesVista} margin={{ left: 4, right: 8 }}>
-                  <CartesianGrid stroke="#EEE9DF" vertical={false} />
-                  <XAxis dataKey="mes" tick={{ fontSize: 12, fill: '#7A8288' }} />
-                  <YAxis tickFormatter={v => `${Math.round(v / 1e6)}M`} tick={{ fontSize: 11, fill: '#7A8288' }} />
+                  <CartesianGrid stroke="#DFE4EA" vertical={false} />
+                  <XAxis dataKey="mes" tick={{ fontSize: 12, fill: '#9AA3AD' }} />
+                  <YAxis tickFormatter={v => `${Math.round(v / 1e6)}M`} tick={{ fontSize: 11, fill: '#9AA3AD' }} />
                   <Tooltip formatter={v => clp(v)} />
                   <Line type="monotone" dataKey="total" name="Venta neta" stroke={areaSel === 'TODAS' ? C.azul : AREA_COLOR[areaSel]} strokeWidth={3} dot={{ r: 4 }} />
                 </LineChart>
@@ -616,19 +618,19 @@ export default function Dashboard({ perfil, email, onLogout }) {
           <Panel title="Estado facturas">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 4 }}>
               {estados.map(([est, n]) => {
-                const col = est === 'Pagado' ? C.verde : est === 'Pendiente' ? C.rojo : est === 'Factoring' ? C.ambar : '#9AA0A6'
+                const col = est === 'Pagado' ? C.verde : est === 'Pendiente' ? C.rojo : est === 'Factoring' ? C.ambar : '#9AA3AD'
                 return (
                   <div key={est}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
                       <span>{est}</span><span style={{ fontWeight: 600, color: col }}>{n}</span>
                     </div>
-                    <div style={{ height: 8, background: '#EEE9DF' }}>
+                    <div style={{ height: 8, background: '#DFE4EA' }}>
                       <div style={{ width: `${(n / totalEst) * 100}%`, height: '100%', background: col }} />
                     </div>
                   </div>
                 )
               })}
-              <div style={{ borderTop: '1px solid #EEE9DF', paddingTop: 10, marginTop: 4, fontSize: 13, color: '#7A8288' }}>
+              <div style={{ borderTop: '1px solid #DFE4EA', paddingTop: 10, marginTop: 4, fontSize: 13, color: '#9AA3AD' }}>
                 Rentabilidad estimada: <b style={{ color: C.carbon }}>{rentab.toFixed(1)}%</b>
               </div>
             </div>
@@ -640,9 +642,9 @@ export default function Dashboard({ perfil, email, onLogout }) {
             <Panel title="Venta por área (facturas)">
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={ventaAreaLive} margin={{ left: 4 }}>
-                  <CartesianGrid stroke="#EEE9DF" vertical={false} />
-                  <XAxis dataKey="area" tick={{ fontSize: 11, fill: '#7A8288' }} />
-                  <YAxis tickFormatter={v => `${Math.round(v / 1e6)}M`} tick={{ fontSize: 11, fill: '#7A8288' }} />
+                  <CartesianGrid stroke="#DFE4EA" vertical={false} />
+                  <XAxis dataKey="area" tick={{ fontSize: 11, fill: '#9AA3AD' }} />
+                  <YAxis tickFormatter={v => `${Math.round(v / 1e6)}M`} tick={{ fontSize: 11, fill: '#9AA3AD' }} />
                   <Tooltip formatter={v => clp(v)} />
                   <Bar dataKey="venta" name="Venta neta">
                     {ventaAreaLive.map(d => <Cell key={d.area} fill={AREA_COLOR[d.area]} />)}
@@ -664,9 +666,9 @@ export default function Dashboard({ perfil, email, onLogout }) {
                       <div key={i}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 3 }}>
                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '62%' }}>{c.cliente}</span>
-                          <span style={{ color: '#7A8288' }}>{clpM(c.venta)}</span>
+                          <span style={{ color: '#9AA3AD' }}>{clpM(c.venta)}</span>
                         </div>
-                        <div style={{ height: 6, background: '#EEE9DF' }}>
+                        <div style={{ height: 6, background: '#DFE4EA' }}>
                           <div style={{ width: `${(c.venta / max) * 100}%`, height: '100%', background: AREA_COLOR[areaSel] }} />
                         </div>
                       </div>
@@ -684,18 +686,18 @@ export default function Dashboard({ perfil, email, onLogout }) {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                       <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-                        <th style={{ textAlign: 'left', padding: '6px 8px', fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>Cliente</th>
-                        <th style={{ textAlign: 'right', padding: '6px 8px', fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>Pendiente</th>
-                        <th style={{ textAlign: 'right', padding: '6px 8px', fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>Días</th>
+                        <th style={{ textAlign: 'left', padding: '6px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>Cliente</th>
+                        <th style={{ textAlign: 'right', padding: '6px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>Pendiente</th>
+                        <th style={{ textAlign: 'right', padding: '6px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>Días</th>
                       </tr>
                     </thead>
                     <tbody>
                       {vista.atrasadas.map((r, i) => (
-                        <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                        <tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>
                           <td style={{ padding: 8 }}>{r.cliente}</td>
                           <td style={{ padding: 8, textAlign: 'right' }}>{clp(r.pendiente)}</td>
                           <td style={{ padding: 8, textAlign: 'right' }}>
-                            <span style={{ background: r.dias > 30 ? '#F6E0DA' : '#F9E9DE', color: r.dias > 30 ? C.rojo : C.ambar, padding: '2px 8px', fontWeight: 600 }}>{r.dias}d</span>
+                            <span style={{ background: r.dias > 30 ? '#FCEBEA' : '#FDECDD', color: r.dias > 30 ? C.rojo : C.ambar, padding: '2px 8px', fontWeight: 600 }}>{r.dias}d</span>
                           </td>
                         </tr>
                       ))}
@@ -712,7 +714,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
         </>
         )}
 
-        <div style={{ textAlign: 'center', color: '#9AA0A6', fontSize: 11, marginTop: 20 }}>
+        <div style={{ textAlign: 'center', color: '#9AA3AD', fontSize: 11, marginTop: 20 }}>
           SEREIN SpA · Datos: VENTAS_SEREIN_SPA_2026
         </div>
       </div>

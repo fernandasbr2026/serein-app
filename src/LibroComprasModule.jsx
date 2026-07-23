@@ -4,7 +4,9 @@ import { supabase } from './supabase.js'
 import { pushState } from './sync.js'
 import { calcularPerdidaFactoring } from './ParametrosModule.jsx'
 
-const C = { navy: '#061A40', orange: '#FF6B00', gray: '#F5F7FA', border: '#D8DCE5', text: '#101828', green: '#16A34A', red: '#DC2626', mut: '#7A8288' }
+import { SEREIN } from './theme-serein.js'
+// Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
+const C = { navy: SEREIN.ink, orange: SEREIN.orange, gray: SEREIN.fog, border: SEREIN.line, text: SEREIN.text, green: SEREIN.green, red: SEREIN.red, mut: SEREIN.textFaint }
 const clp = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-CL')
 const ip = { padding: '6px 8px', border: '1px solid ' + C.border, fontSize: 12.5, boxSizing: 'border-box', borderRadius: 4 }
 const sel = { padding: '4px 6px', border: '1px solid ' + C.border, fontSize: 12, borderRadius: 4, background: '#fff' }
@@ -13,7 +15,7 @@ const fmtF = v => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || '')); 
 const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 const AREAS = ['Santa Rosa', 'Istria', 'Proyectos']
 const ESTADOS_PAGO = ['Pendiente', 'Pagada', 'Credito', 'Factoring']
-const colorPago = e => e === 'Pagada' ? C.green : e === 'Factoring' ? C.orange : e === 'Credito' ? '#2563EB' : C.mut
+const colorPago = e => e === 'Pagada' ? C.green : e === 'Factoring' ? C.orange : e === 'Credito' ? '#2A5FB0' : C.mut
 const DIAS_OPC = [30, 45, 60, 90]
 const LS_XLSX = 'serein_libroComprasXlsx'
 const TIPOS = ['Pintura','Diluyente','Materiales','EPP','Diesel','Combustible','Herramientas','Repuestos','Fletes','Insumos','Viaticos','Peajes','Mantencion','Granalla','Servicios','Telefonia','Internet','Arriendo','Seguros','Leasing','Banco','Tag','Cafeteria','Honorarios','Software','Servicios basicos','Impuestos','Factoring','Credito','Intereses','Comisiones','Remuneraciones','Electricidad','Agua','Gas','Publicidad','Capacitacion','Notaria','Aduana','Courier','Suscripciones','Patentes','Contribuciones','Otros']
@@ -337,7 +339,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
                       <td style={{ padding: '6px 9px', whiteSpace: 'nowrap' }}>{x.fecha}</td>
                       <td style={{ padding: '6px 9px' }}>{x.glosa}</td>
                       <td style={{ padding: '6px 9px', whiteSpace: 'nowrap' }}>{x.categoria || '-'}</td>
-                      <td style={{ padding: '6px 9px', whiteSpace: 'nowrap', color: x.clasificacion === 'Fijo' ? '#2563EB' : x.clasificacion === 'Variable' ? C.orange : C.mut }}>{x.clasificacion || '-'}</td>
+                      <td style={{ padding: '6px 9px', whiteSpace: 'nowrap', color: x.clasificacion === 'Fijo' ? '#2A5FB0' : x.clasificacion === 'Variable' ? C.orange : C.mut }}>{x.clasificacion || '-'}</td>
                       <td style={{ padding: '6px 9px', whiteSpace: 'nowrap' }}>{x.area || '-'}</td>
                       <td style={{ padding: '6px 9px', whiteSpace: 'nowrap' }}>{x.ot || '-'}</td>
                       <td style={{ padding: '6px 9px', whiteSpace: 'nowrap' }}>{x.centro_costo || '-'}</td>
@@ -355,7 +357,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
       {sub === 'doc' && (<>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
         <div>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 700, fontSize: 20, textTransform: 'uppercase', color: C.navy }}>Libro de Compras</div>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 20, textTransform: 'uppercase', color: C.navy }}>Libro de Compras</div>
           <div style={{ fontSize: 12, color: C.mut }}>Facturas de compra recibidas (SII) · sincronizado desde Defontana</div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -385,7 +387,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
         </div>
       )}
 
-      {syncMsg ? <div style={{ background: syncMsg.startsWith('Error') ? '#FDECEC' : '#EAF7EE', border: '1px solid ' + (syncMsg.startsWith('Error') ? C.red : C.green), color: syncMsg.startsWith('Error') ? C.red : '#15803D', padding: '8px 12px', borderRadius: 6, fontSize: 12.5, marginBottom: 12 }}>{syncMsg}</div> : null}
+      {syncMsg ? <div style={{ background: syncMsg.startsWith('Error') ? '#FCEBEA' : '#E6F7EE', border: '1px solid ' + (syncMsg.startsWith('Error') ? C.red : C.green), color: syncMsg.startsWith('Error') ? C.red : '#1B9E5D', padding: '8px 12px', borderRadius: 6, fontSize: 12.5, marginBottom: 12 }}>{syncMsg}</div> : null}
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
         {[['Documentos', filtradas.length, C.navy], ['Neto', clp(tot.neto), C.navy], ['IVA', clp(tot.iva), C.orange], ['Total', clp(tot.total), C.navy]].map(([k, v, col], i) => (
@@ -414,8 +416,8 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
         <span style={{ fontSize: 12.5, color: C.mut }}>{sel.size} seleccionado(s)</span>
-        {!verOcultas && <button onClick={eliminarSel} disabled={!sel.size} style={{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5, background: sel.size ? C.red : '#E6E8EE', color: sel.size ? '#fff' : C.mut, cursor: sel.size ? 'pointer' : 'default' }}>Eliminar seleccionados</button>}
-        {verOcultas && <button onClick={restaurarSel} disabled={!sel.size} style={{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5, background: sel.size ? C.green : '#E6E8EE', color: sel.size ? '#fff' : C.mut, cursor: sel.size ? 'pointer' : 'default' }}>Restaurar seleccionados</button>}
+        {!verOcultas && <button onClick={eliminarSel} disabled={!sel.size} style={{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5, background: sel.size ? C.red : '#DFE4EA', color: sel.size ? '#fff' : C.mut, cursor: sel.size ? 'pointer' : 'default' }}>Eliminar seleccionados</button>}
+        {verOcultas && <button onClick={restaurarSel} disabled={!sel.size} style={{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5, background: sel.size ? C.green : '#DFE4EA', color: sel.size ? '#fff' : C.mut, cursor: sel.size ? 'pointer' : 'default' }}>Restaurar seleccionados</button>}
         <button onClick={() => { setVerOcultas(v => !v); setSel(new Set()) }} style={{ background: 'transparent', border: '1px solid ' + C.border, padding: '7px 12px', borderRadius: 6, fontSize: 12.5, cursor: 'pointer', color: C.navy }}>{verOcultas ? 'Volver al libro' : 'Ver ocultos'}</button>
       </div>
 
@@ -459,7 +461,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
             {verConsol ? (
               <div style={{ marginTop: 12 }}>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
-                  {card('Gastos fijos', fv.Fijo, '#2563EB')}
+                  {card('Gastos fijos', fv.Fijo, '#2A5FB0')}
                   {card('Gastos variables', fv.Variable, C.orange)}
                   {card('Total neto', total, C.navy)}
                 </div>
@@ -489,7 +491,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
         )
       })() : null}
 
-      {loading ? <div style={{ color: C.mut, padding: 20 }}>Cargando...</div> : errMsg ? <div style={{ background: '#FDECEC', border: '1px solid ' + C.red, color: C.red, padding: '10px 14px', borderRadius: 6, fontSize: 13 }}>{errMsg}</div> : filtradas.length === 0 ? (
+      {loading ? <div style={{ color: C.mut, padding: 20 }}>Cargando...</div> : errMsg ? <div style={{ background: '#FCEBEA', border: '1px solid ' + C.red, color: C.red, padding: '10px 14px', borderRadius: 6, fontSize: 13 }}>{errMsg}</div> : filtradas.length === 0 ? (
         <div style={{ color: C.mut, padding: 20, textAlign: 'center', border: '1px dashed ' + C.border, borderRadius: 8 }}>
           Sin documentos. Presiona <b>Sincronizar con Defontana</b> para traer el libro de compras del ano.
         </div>
@@ -506,7 +508,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
             </thead>
             <tbody>
               {filtradas.map(r => (
-                <tr key={r.id} style={{ borderBottom: '1px solid #EEECE4' }}>
+                <tr key={r.id} style={{ borderBottom: '1px solid #E2E7EC' }}>
                   <td style={{ padding: '7px 10px' }}><input type="checkbox" checked={sel.has(r.id)} onChange={() => toggleSel(r.id)} /></td>
                   <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{fmtF(r.emission_date)}</td>
                   <td style={{ padding: '7px 10px' }}><div style={{ fontWeight: 600 }}>{r.provider_name || '-'}</div><div style={{ color: C.mut, fontSize: 11 }}>{r.provider_rut}</div></td>
@@ -520,7 +522,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
                       {r.tipo_compra && !TIPOS.includes(r.tipo_compra) && !customTipos.some(c => c.tipo === r.tipo_compra) ? <option value={r.tipo_compra}>{r.tipo_compra}</option> : null}
                       <option value="__add__">➕ Agregar tipo nuevo…</option>
                     </select>
-                    {(() => { const tv = r.tipo_compra || tipoAuto(r); const cl = clasifDe(tv) || (r.clasificacion || ''); return cl ? <div style={{ fontSize: 10, fontWeight: 700, marginTop: 3, color: cl === 'Fijo' ? '#2563EB' : C.orange }}>{cl}</div> : null })()}
+                    {(() => { const tv = r.tipo_compra || tipoAuto(r); const cl = clasifDe(tv) || (r.clasificacion || ''); return cl ? <div style={{ fontSize: 10, fontWeight: 700, marginTop: 3, color: cl === 'Fijo' ? '#2A5FB0' : C.orange }}>{cl}</div> : null })()}
                   </td>
                   <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>{clp(r.exenta ? (r.document_total || r.neto) : r.neto)}</td>
                   <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', color: C.orange }}>{clp(r.exenta ? 0 : r.iva)}</td>
@@ -563,7 +565,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
                       </div>
                     ) : null}
                   </td>
-                  <td style={{ padding: '7px 10px' }}><div style={{ display: 'flex', gap: 3, alignItems: 'center', flexWrap: 'wrap' }}>{[['Santa Rosa', 'SR'], ['Istria', 'IST'], ['Proyectos', 'PROY']].map(a => { const on = (asig[r.id] || []).includes(a[0]); return <button key={a[0]} onClick={() => toggleArea(r.id, a[0])} title={a[0]} style={{ border: '1px solid ' + (on ? C.navy : '#CBD2D6'), background: on ? C.navy : '#fff', color: on ? '#fff' : C.mut, fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4, cursor: 'pointer' }}>{a[1]}</button> })}<button onClick={() => setGeneral(r.id)} title="General: 1/3 a cada area" style={{ border: '1px dashed #CBD2D6', background: '#fff', color: C.mut, fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4, cursor: 'pointer' }}>Gen</button></div></td>
+                  <td style={{ padding: '7px 10px' }}><div style={{ display: 'flex', gap: 3, alignItems: 'center', flexWrap: 'wrap' }}>{[['Santa Rosa', 'SR'], ['Istria', 'IST'], ['Proyectos', 'PROY']].map(a => { const on = (asig[r.id] || []).includes(a[0]); return <button key={a[0]} onClick={() => toggleArea(r.id, a[0])} title={a[0]} style={{ border: '1px solid ' + (on ? C.navy : '#DFE4EA'), background: on ? C.navy : '#fff', color: on ? '#fff' : C.mut, fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4, cursor: 'pointer' }}>{a[1]}</button> })}<button onClick={() => setGeneral(r.id)} title="General: 1/3 a cada area" style={{ border: '1px dashed #DFE4EA', background: '#fff', color: C.mut, fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4, cursor: 'pointer' }}>Gen</button></div></td>
                 </tr>
               ))}
             </tbody>

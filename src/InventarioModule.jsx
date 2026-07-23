@@ -3,10 +3,12 @@ import * as XLSX from 'xlsx'
 import { Plus, Minus, Trash2, Pencil, Download, Upload, History } from 'lucide-react'
 import { INVENTARIO_SEED } from './inventario-data.js'
 
-const C = { navy: '#061A40', carbon: '#0F1A2E', naranja: '#FF6B00', verde: '#12805C', rojo: '#D64545', gris: '#8A929E', teal: '#0B7285' }
+import { SEREIN } from './theme-serein.js'
+// Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
+const C = { navy: SEREIN.ink, carbon: SEREIN.text, naranja: SEREIN.orange, verde: SEREIN.green, rojo: SEREIN.red, gris: SEREIN.textFaint, teal: '#0E7A8F' }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const num = s => { const v = parseFloat(String(s).replace(',', '.').replace(/[^\d.\-]/g, '')); return isNaN(v) ? 0 : v }
-const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
+const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 const hoy = () => new Date().toISOString().slice(0, 10)
 const uid = () => 'm' + Date.now() + Math.floor(Math.random() * 9999)
 const SEDES = ['Santa Rosa', 'Istria']
@@ -17,13 +19,13 @@ function MovForm({ tipo, prod, onSave, onCancel }) {
   const cant = num(f.cantidad)
   const err = tipo === 'salida' && cant > (prod.saldo || 0)
   return (
-    <div style={{ background: '#F7F4EE', padding: 10, marginTop: 6 }}>
+    <div style={{ background: '#F2F4F7', padding: 10, marginTop: 6 }}>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
         <input style={{ ...inp, width: 90 }} placeholder="Cantidad" value={f.cantidad} onChange={e => setF({ ...f, cantidad: e.target.value })} />
         <input style={{ ...inp, width: 190 }} placeholder="Motivo" value={f.motivo} onChange={e => setF({ ...f, motivo: e.target.value })} />
         <input style={{ ...inp, width: 140 }} placeholder="OT / proyecto (opcional)" value={f.ot} onChange={e => setF({ ...f, ot: e.target.value })} />
-        <button disabled={cant <= 0 || err} onClick={() => onSave({ cantidad: cant, motivo: f.motivo, ot: f.ot })} style={{ background: cant > 0 && !err ? (tipo === 'entrada' ? C.verde : C.naranja) : '#CBD2D6', color: '#fff', border: 'none', padding: '7px 12px', cursor: cant > 0 && !err ? 'pointer' : 'default', fontSize: 12.5 }}>{tipo === 'entrada' ? 'Ingresar' : 'Usar'}</button>
-        <button onClick={onCancel} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 10px', cursor: 'pointer', fontSize: 12.5 }}>Cancelar</button>
+        <button disabled={cant <= 0 || err} onClick={() => onSave({ cantidad: cant, motivo: f.motivo, ot: f.ot })} style={{ background: cant > 0 && !err ? (tipo === 'entrada' ? C.verde : C.naranja) : '#DFE4EA', color: '#fff', border: 'none', padding: '7px 12px', cursor: cant > 0 && !err ? 'pointer' : 'default', fontSize: 12.5 }}>{tipo === 'entrada' ? 'Ingresar' : 'Usar'}</button>
+        <button onClick={onCancel} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 10px', cursor: 'pointer', fontSize: 12.5 }}>Cancelar</button>
       </div>
       {err && <div style={{ color: C.rojo, fontSize: 12, marginTop: 6 }}>La salida ({cant}) supera el saldo disponible ({prod.saldo}).</div>}
     </div>
@@ -34,7 +36,7 @@ function ProdForm({ prod, onSave, onCancel }) {
   const [f, setF] = useState({ codigo: (prod && prod.codigo) || '', nombre: (prod && prod.nombre) || '', color: (prod && prod.color) || '', proveedor: (prod && prod.proveedor) || '', unidad: (prod && prod.unidad) || 'GALON', catalizador: (prod && prod.catalizador) || '', costo: (prod && prod.costo) || '', saldo: prod ? prod.saldo : '', sede: (prod && prod.sede) || 'Santa Rosa', estado: (prod && prod.estado) || 'usable' })
   const lab = { fontSize: 11, color: C.gris, display: 'flex', flexDirection: 'column', gap: 3 }
   return (
-    <div style={{ background: '#FAF7F3', border: '1px solid #E2DED4', padding: 12, marginTop: 8 }}>
+    <div style={{ background: '#F2F4F7', border: '1px solid #DFE4EA', padding: 12, marginTop: 8 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8 }}>
         <label style={lab}>Codigo<input style={inp} value={f.codigo} onChange={e => setF({ ...f, codigo: e.target.value })} /></label>
         <label style={lab}>Nombre<input style={inp} value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} /></label>
@@ -49,7 +51,7 @@ function ProdForm({ prod, onSave, onCancel }) {
       </div>
       <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
         <button onClick={() => f.nombre && onSave({ ...f, costo: num(f.costo), saldo: num(f.saldo) })} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Guardar</button>
-        <button onClick={onCancel} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+        <button onClick={onCancel} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
       </div>
     </div>
   )
@@ -127,7 +129,7 @@ export default function InventarioModule({ inventario = [], setInventario = () =
     setImportPrev(null)
   }
 
-  const kpi = (l, v) => (<div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 14, flex: '1 1 140px' }}><div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{l}</div><div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600 }}>{v}</div></div>)
+  const kpi = (l, v) => (<div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 14, flex: '1 1 140px' }}><div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{l}</div><div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 20, fontWeight: 600 }}>{v}</div></div>)
 
   return (
     <div>
@@ -141,7 +143,7 @@ export default function InventarioModule({ inventario = [], setInventario = () =
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         {['Santa Rosa', 'Istria', 'Todas'].map(s => (
-          <button key={s} onClick={() => setSede(s)} style={{ background: sede === s ? C.carbon : '#fff', color: sede === s ? '#fff' : C.carbon, border: '1px solid #CBD2D6', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase' }}>{s}</button>
+          <button key={s} onClick={() => setSede(s)} style={{ background: sede === s ? C.carbon : '#fff', color: sede === s ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase' }}>{s}</button>
         ))}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <button onClick={() => setCreando(true)} style={{ background: C.navy, color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Plus size={14} /> Nuevo producto</button>
@@ -160,22 +162,22 @@ export default function InventarioModule({ inventario = [], setInventario = () =
       {creando && <ProdForm onSave={crearProducto} onCancel={() => setCreando(false)} />}
 
       {importPrev && (
-        <div style={{ background: '#F9E9DE', border: '1px solid ' + C.naranja, padding: 12, marginBottom: 12 }}>
+        <div style={{ background: '#FDECDD', border: '1px solid ' + C.naranja, padding: 12, marginBottom: 12 }}>
           <div style={{ fontWeight: 600, marginBottom: 6 }}>Importar {importPrev.prods.length} productos a {importPrev.sede}. Confirmar?</div>
           <div style={{ fontSize: 12, color: C.gris, maxHeight: 120, overflowY: 'auto', marginBottom: 8 }}>{importPrev.prods.slice(0, 8).map((p, i) => <div key={i}>{p.nombre} - {p.color} - {p.proveedor} - saldo {p.saldo}</div>)}{importPrev.prods.length > 8 && <div>...y {importPrev.prods.length - 8} mas</div>}</div>
           <button onClick={confirmarImport} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13, marginRight: 6 }}>Confirmar importacion</button>
-          <button onClick={() => setImportPrev(null)} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+          <button onClick={() => setImportPrev(null)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
         </div>
       )}
 
-      <div style={{ background: '#fff', border: '1px solid #E2DED4', overflowX: 'auto' }}>
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 820 }}>
           <thead><tr style={{ background: C.navy, color: '#fff' }}>{['Producto', 'Color', 'Proveedor', 'Sede', 'Saldo', 'Unid.', 'Costo', 'Estado', ''].map((h, i) => <th key={i} style={{ textAlign: h === 'Saldo' || h === 'Costo' ? 'right' : 'left', padding: '9px 10px', fontSize: 11, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
           <tbody>
             {filtrados.length === 0 && <tr><td colSpan={9} style={{ padding: 16, textAlign: 'center', color: C.gris }}>Sin productos con esos filtros.</td></tr>}
             {filtrados.map(p => (
               <React.Fragment key={p.id}>
-                <tr style={{ borderBottom: '1px solid #EEE9DF' }}>
+                <tr style={{ borderBottom: '1px solid #DFE4EA' }}>
                   <td style={{ padding: '7px 10px' }}><div style={{ fontWeight: 600 }}>{p.nombre}</div><div style={{ color: C.gris, fontSize: 11 }}>{p.codigo}{p.catalizador ? ' - cat: ' + p.catalizador : ''}</div></td>
                   <td style={{ padding: '7px 10px' }}>{p.color}</td>
                   <td style={{ padding: '7px 10px' }}>{p.proveedor || '-'}</td>
@@ -183,22 +185,22 @@ export default function InventarioModule({ inventario = [], setInventario = () =
                   <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, color: p.saldo > 0 ? C.verde : C.rojo }}>{p.saldo}</td>
                   <td style={{ padding: '7px 10px' }}>{p.unidad}</td>
                   <td style={{ padding: '7px 10px', textAlign: 'right' }}>{p.costo ? clp(p.costo) : '-'}</td>
-                  <td style={{ padding: '7px 10px' }}><span style={{ fontSize: 11, fontWeight: 600, padding: '2px 7px', borderRadius: 10, background: p.estado === 'usable' ? '#E7F2EA' : '#F6E0DA', color: p.estado === 'usable' ? C.verde : C.rojo }}>{p.estado}</span></td>
+                  <td style={{ padding: '7px 10px' }}><span style={{ fontSize: 11, fontWeight: 600, padding: '2px 7px', borderRadius: 10, background: p.estado === 'usable' ? '#E6F7EE' : '#FCEBEA', color: p.estado === 'usable' ? C.verde : C.rojo }}>{p.estado}</span></td>
                   <td style={{ padding: '7px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                     <button onClick={() => setMovFor({ id: p.id, tipo: 'entrada' })} title="Ingresar" style={{ background: 'none', border: '1px solid ' + C.verde, color: C.verde, cursor: 'pointer', padding: '3px 6px', marginRight: 3 }}><Plus size={13} /></button>
                     <button onClick={() => setMovFor({ id: p.id, tipo: 'salida' })} title="Usar" style={{ background: 'none', border: '1px solid ' + C.naranja, color: C.naranja, cursor: 'pointer', padding: '3px 6px', marginRight: 3 }}><Minus size={13} /></button>
-                    <button onClick={() => setHistId(histId === p.id ? null : p.id)} title="Historial" style={{ background: 'none', border: '1px solid #CBD2D6', color: C.gris, cursor: 'pointer', padding: '3px 6px', marginRight: 3 }}><History size={13} /></button>
-                    <button onClick={() => setEditId(editId === p.id ? null : p.id)} title="Editar" style={{ background: 'none', border: '1px solid #CBD2D6', color: C.teal, cursor: 'pointer', padding: '3px 6px', marginRight: 3 }}><Pencil size={13} /></button>
-                    <button onClick={() => eliminar(p.id)} title="Eliminar" style={{ background: 'none', border: '1px solid #E2C9C2', color: C.rojo, cursor: 'pointer', padding: '3px 6px' }}><Trash2 size={13} /></button>
+                    <button onClick={() => setHistId(histId === p.id ? null : p.id)} title="Historial" style={{ background: 'none', border: '1px solid #DFE4EA', color: C.gris, cursor: 'pointer', padding: '3px 6px', marginRight: 3 }}><History size={13} /></button>
+                    <button onClick={() => setEditId(editId === p.id ? null : p.id)} title="Editar" style={{ background: 'none', border: '1px solid #DFE4EA', color: C.teal, cursor: 'pointer', padding: '3px 6px', marginRight: 3 }}><Pencil size={13} /></button>
+                    <button onClick={() => eliminar(p.id)} title="Eliminar" style={{ background: 'none', border: '1px solid #DFE4EA', color: C.rojo, cursor: 'pointer', padding: '3px 6px' }}><Trash2 size={13} /></button>
                   </td>
                 </tr>
                 {movFor && movFor.id === p.id && <tr><td colSpan={9} style={{ padding: '0 10px 8px' }}><MovForm tipo={movFor.tipo} prod={p} onSave={d => agregarMov(p, movFor.tipo, d)} onCancel={() => setMovFor(null)} /></td></tr>}
                 {editId === p.id && <tr><td colSpan={9} style={{ padding: '0 10px 8px' }}><ProdForm prod={p} onSave={d => { actualizar(p.id, { ...d, costo: num(d.costo), saldo: num(d.saldo), descripcion: d.color + (d.proveedor ? ' (' + d.proveedor + ')' : '') }); setEditId(null) }} onCancel={() => setEditId(null)} /></td></tr>}
-                {histId === p.id && <tr><td colSpan={9} style={{ padding: '0 10px 10px', background: '#FAF7F3' }}>
+                {histId === p.id && <tr><td colSpan={9} style={{ padding: '0 10px 10px', background: '#F2F4F7' }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: C.gris, textTransform: 'uppercase', margin: '8px 0 6px' }}>Historial de movimientos</div>
                   {movimientos.filter(m => m.productoId === p.id).length === 0 ? <div style={{ fontSize: 12, color: C.gris, paddingBottom: 8 }}>Sin movimientos.</div> : (
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}><thead><tr style={{ borderBottom: '1px solid ' + C.carbon }}>{['Fecha', 'Tipo', 'Cant.', 'Motivo', 'OT', 'Usuario', 'Saldo'].map((h, i) => <th key={i} style={{ textAlign: i === 2 || i === 6 ? 'right' : 'left', padding: '4px 8px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
-                      <tbody>{movimientos.filter(m => m.productoId === p.id).map(m => <tr key={m.id} style={{ borderBottom: '1px solid #EEE9DF' }}><td style={{ padding: '4px 8px' }}>{m.fecha}</td><td style={{ padding: '4px 8px', color: m.tipo === 'entrada' ? C.verde : C.naranja, fontWeight: 600 }}>{m.tipo}</td><td style={{ padding: '4px 8px', textAlign: 'right' }}>{m.cantidad}</td><td style={{ padding: '4px 8px' }}>{m.motivo}</td><td style={{ padding: '4px 8px' }}>{m.ot || '-'}</td><td style={{ padding: '4px 8px' }}>{m.usuario || '-'}</td><td style={{ padding: '4px 8px', textAlign: 'right' }}>{m.saldoResultante}</td></tr>)}</tbody></table>
+                      <tbody>{movimientos.filter(m => m.productoId === p.id).map(m => <tr key={m.id} style={{ borderBottom: '1px solid #DFE4EA' }}><td style={{ padding: '4px 8px' }}>{m.fecha}</td><td style={{ padding: '4px 8px', color: m.tipo === 'entrada' ? C.verde : C.naranja, fontWeight: 600 }}>{m.tipo}</td><td style={{ padding: '4px 8px', textAlign: 'right' }}>{m.cantidad}</td><td style={{ padding: '4px 8px' }}>{m.motivo}</td><td style={{ padding: '4px 8px' }}>{m.ot || '-'}</td><td style={{ padding: '4px 8px' }}>{m.usuario || '-'}</td><td style={{ padding: '4px 8px', textAlign: 'right' }}>{m.saldoResultante}</td></tr>)}</tbody></table>
                   )}
                 </td></tr>}
               </React.Fragment>

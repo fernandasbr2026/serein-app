@@ -16,7 +16,9 @@ import { derivarContexto } from './permisos.js'
 import { responder, saludo } from './motor.js'
 import { crearConversacion, guardarMensaje, registrarAuditoria } from './historial.js'
 
-const C = { carbon: '#161616', ambar: '#D2642F', borde: '#E2DED4', gris: '#7A8288', niebla: '#F6F0EA' }
+import { SEREIN } from '../theme-serein.js'
+// Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
+const C = { carbon: SEREIN.ink, ambar: SEREIN.orange, borde: SEREIN.line, gris: SEREIN.textFaint, niebla: SEREIN.fog }
 
 // Etiqueta amable para el enlace de una fuente.
 function etiquetaFuente(f) {
@@ -108,7 +110,7 @@ function Widget({ perfil = {}, email = '', areaSel, onNavegar, datos = {} }) {
         <button aria-label="Abrir Serein AI" onClick={() => setAbierto(true)}
           style={{ position: 'fixed', right: 20, bottom: 20, zIndex: 2147483000, width: 58, height: 58, borderRadius: '50%', border: 'none', cursor: 'pointer', background: C.carbon, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 20px rgba(16,24,40,.28)', animation: 'sereinPulse 2.6s infinite' }}>
           <Bot size={26} color={C.ambar} />
-          {noLeido && <span style={{ position: 'absolute', top: 6, right: 6, width: 12, height: 12, borderRadius: '50%', background: '#3D7A4E', border: '2px solid #fff' }} />}
+          {noLeido && <span style={{ position: 'absolute', top: 6, right: 6, width: 12, height: 12, borderRadius: '50%', background: '#1B9E5D', border: '2px solid #fff' }} />}
         </button>
       </>
     )
@@ -122,12 +124,12 @@ function Widget({ perfil = {}, email = '', areaSel, onNavegar, datos = {} }) {
     <div style={{ position: 'fixed', right: 12, bottom: 12, zIndex: 2147483000, width: ancho, height: alto, display: 'flex', flexDirection: 'column', background: '#fff', border: `1px solid ${C.borde}`, borderRadius: 12, boxShadow: '0 12px 40px rgba(16,24,40,.32)', overflow: 'hidden', fontFamily: "'Inter',sans-serif" }}>
       {/* Encabezado */}
       <div style={{ background: C.carbon, color: '#fff', padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#22201E', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#101315', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Bot size={18} color={C.ambar} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, letterSpacing: .3 }}>Serein AI</div>
-          <div style={{ fontSize: 10.5, color: '#B8C0C6', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ctx.nombre} · {ctx.rol}</div>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, letterSpacing: .3 }}>Serein AI</div>
+          <div style={{ fontSize: 10.5, color: '#9AA3AD', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ctx.nombre} · {ctx.rol}</div>
         </div>
         <button title="Nueva conversacion" onClick={nuevaConversacion} style={iconBtn}><Plus size={17} /></button>
         <button title={full ? 'Reducir' : 'Pantalla completa'} onClick={() => setFull(f => !f)} style={iconBtn}>{full ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>
@@ -135,12 +137,12 @@ function Widget({ perfil = {}, email = '', areaSel, onNavegar, datos = {} }) {
       </div>
 
       {/* Aviso Fase 1 */}
-      <div style={{ background: '#FBF3EC', borderBottom: `1px solid ${C.borde}`, padding: '6px 12px', fontSize: 10.5, color: '#7A5A3A' }}>
+      <div style={{ background: '#FDECDD', borderBottom: `1px solid ${C.borde}`, padding: '6px 12px', fontSize: 10.5, color: '#D9600A' }}>
         Solo consulta · responde con tus datos reales y respeta tus permisos. No crea ni modifica registros.
       </div>
 
       {/* Mensajes */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 10, background: '#FCFBF9' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 10, background: '#F2F4F7' }}>
         {mensajes.map((m, i) => (
           <div key={i} style={{ alignSelf: m.rol === 'user' ? 'flex-end' : 'flex-start', maxWidth: '88%' }}>
             <div style={{ background: m.rol === 'user' ? C.carbon : '#fff', color: m.rol === 'user' ? '#fff' : C.carbon, padding: '9px 12px', fontSize: 13, lineHeight: 1.5, borderRadius: 10, border: m.rol === 'user' ? 'none' : `1px solid ${C.borde}`, whiteSpace: 'pre-wrap' }}>{m.texto}</div>
@@ -170,7 +172,7 @@ function Widget({ perfil = {}, email = '', areaSel, onNavegar, datos = {} }) {
         <input ref={inputRef} value={texto} onChange={e => setTexto(e.target.value)} placeholder="Escribe tu pregunta…"
           style={{ flex: 1, border: 'none', padding: '12px 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter',sans-serif" }} />
         <button type="submit" disabled={pensando || !texto.trim()} aria-label="Enviar"
-          style={{ background: (pensando || !texto.trim()) ? '#CBD2D6' : C.ambar, color: '#fff', border: 'none', padding: '0 16px', cursor: (pensando || !texto.trim()) ? 'default' : 'pointer', display: 'flex', alignItems: 'center' }}>
+          style={{ background: (pensando || !texto.trim()) ? '#DFE4EA' : C.ambar, color: '#fff', border: 'none', padding: '0 16px', cursor: (pensando || !texto.trim()) ? 'default' : 'pointer', display: 'flex', alignItems: 'center' }}>
           <Send size={17} />
         </button>
       </form>

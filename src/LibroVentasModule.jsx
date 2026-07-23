@@ -4,7 +4,9 @@ import { supabase } from './supabase.js'
 import { pushState } from './sync.js'
 import { calcularPerdidaFactoring } from './ParametrosModule.jsx'
 
-const C = { navy: '#061A40', orange: '#FF6B00', gray: '#F5F7FA', border: '#D8DCE5', green: '#16A34A', red: '#DC2626', mut: '#7A8288' }
+import { SEREIN } from './theme-serein.js'
+// Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
+const C = { navy: SEREIN.ink, orange: SEREIN.orange, gray: SEREIN.fog, border: SEREIN.line, green: SEREIN.green, red: SEREIN.red, mut: SEREIN.textFaint }
 const clp = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-CL')
 const ip = { padding: '6px 8px', border: '1px solid ' + C.border, fontSize: 12.5, boxSizing: 'border-box', borderRadius: 4 }
 const sel = { padding: '4px 6px', border: '1px solid ' + C.border, fontSize: 12, borderRadius: 4, background: '#fff' }
@@ -285,7 +287,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
         <div>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 700, fontSize: 20, textTransform: 'uppercase', color: C.navy }}>Libro de Ventas</div>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 20, textTransform: 'uppercase', color: C.navy }}>Libro de Ventas</div>
           <div style={{ fontSize: 12, color: C.mut }}>Facturas de venta emitidas - desde Defontana o importadas desde Excel</div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -311,7 +313,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
         </div>
       )}
 
-      {syncMsg ? <div style={{ background: syncMsg.startsWith('Error') ? '#FDECEC' : '#EAF7EE', border: '1px solid ' + (syncMsg.startsWith('Error') ? C.red : C.green), color: syncMsg.startsWith('Error') ? C.red : '#15803D', padding: '8px 12px', borderRadius: 6, fontSize: 12.5, marginBottom: 12 }}>{syncMsg}</div> : null}
+      {syncMsg ? <div style={{ background: syncMsg.startsWith('Error') ? '#FCEBEA' : '#E6F7EE', border: '1px solid ' + (syncMsg.startsWith('Error') ? C.red : C.green), color: syncMsg.startsWith('Error') ? C.red : '#1B9E5D', padding: '8px 12px', borderRadius: 6, fontSize: 12.5, marginBottom: 12 }}>{syncMsg}</div> : null}
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
         {[['Documentos', filtradas.length, C.navy], ['Neto', clp(tot.neto), C.navy], ['IVA', clp(tot.iva), C.orange], ['Total', clp(tot.total), C.navy], ['Perdida factoring', clp(tot.fact), C.red]].map(([k, v, col], i) => (
@@ -331,12 +333,12 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
           <span style={{ fontSize: 12.5, color: C.mut }}>{sel.size} seleccionado(s)</span>
-          {!verOcultas && <button onClick={eliminarSel} disabled={!sel.size} style={{ ...{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5 }, background: sel.size ? C.red : '#E6E8EE', color: sel.size ? '#fff' : C.mut, cursor: sel.size ? 'pointer' : 'default' }}>Eliminar seleccionados</button>}
-          {verOcultas && <button onClick={restaurarSel} disabled={!sel.size} style={{ ...{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5 }, background: sel.size ? C.green : '#E6E8EE', color: sel.size ? '#fff' : C.mut, cursor: sel.size ? 'pointer' : 'default' }}>Restaurar seleccionados</button>}
+          {!verOcultas && <button onClick={eliminarSel} disabled={!sel.size} style={{ ...{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5 }, background: sel.size ? C.red : '#DFE4EA', color: sel.size ? '#fff' : C.mut, cursor: sel.size ? 'pointer' : 'default' }}>Eliminar seleccionados</button>}
+          {verOcultas && <button onClick={restaurarSel} disabled={!sel.size} style={{ ...{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5 }, background: sel.size ? C.green : '#DFE4EA', color: sel.size ? '#fff' : C.mut, cursor: sel.size ? 'pointer' : 'default' }}>Restaurar seleccionados</button>}
           <button onClick={() => { setVerOcultas(v => !v); setSel(new Set()) }} style={{ background: 'transparent', border: '1px solid ' + C.border, padding: '7px 12px', borderRadius: 6, fontSize: 12.5, cursor: 'pointer', color: C.navy }}>{verOcultas ? 'Volver al libro' : 'Ver ocultos'}</button>
         </div>
 
-      {loading ? <div style={{ color: C.mut, padding: 20 }}>Cargando...</div> : errMsg ? <div style={{ background: '#FDECEC', border: '1px solid ' + C.red, color: C.red, padding: '10px 14px', borderRadius: 6, fontSize: 13 }}>{errMsg}</div> : filtradas.length === 0 ? (
+      {loading ? <div style={{ color: C.mut, padding: 20 }}>Cargando...</div> : errMsg ? <div style={{ background: '#FCEBEA', border: '1px solid ' + C.red, color: C.red, padding: '10px 14px', borderRadius: 6, fontSize: 13 }}>{errMsg}</div> : filtradas.length === 0 ? (
         <div style={{ color: C.mut, padding: 20, textAlign: 'center', border: '1px dashed ' + C.border, borderRadius: 8 }}>Sin documentos. Usa <b>Importar Excel</b> o <b>Sincronizar con Defontana</b>.</div>
       ) : (
         <div style={{ overflowX: 'auto', border: '1px solid ' + C.border, borderRadius: 8 }}>
@@ -354,7 +356,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
                 const perd = perdidaDe(r)
                 return (
                 <React.Fragment key={r.id}>
-                <tr style={{ borderBottom: perd ? 'none' : '1px solid #EEECE4' }}>
+                <tr style={{ borderBottom: perd ? 'none' : '1px solid #E2E7EC' }}>
                   <td style={{ padding: '7px 10px' }}><input type="checkbox" checked={sel.has(r.id)} onChange={() => toggleSel(r.id)} /></td>
                   <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{fmtF(r.emission_date)}</td>
                   <td style={{ padding: '7px 10px' }}><div style={{ fontWeight: 600 }}>{r.client_name || r.client_rut || '-'}</div><div style={{ color: C.mut, fontSize: 11 }}>{r.client_rut}{r.origen === 'xlsx' ? ' - Excel' : ''}</div></td>
@@ -389,7 +391,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
                   <td style={{ padding: '7px 10px' }}><input type="date" style={{ ...sel }} value={r.fecha_pago || ''} onChange={e => setCampo(r, 'fecha_pago', e.target.value)} /></td>
                 </tr>
                 {esNC(r) && (
-                  <tr style={{ background: '#FDECEC', borderBottom: '1px solid #EEECE4' }}>
+                  <tr style={{ background: '#FCEBEA', borderBottom: '1px solid #E2E7EC' }}>
                     <td colSpan={13} style={{ padding: '8px 12px' }}>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5 }}>
                         <b style={{ color: C.red }}>Nota de credito</b>
@@ -404,7 +406,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
                   </tr>
                 )}
                 {perd ? (
-                  <tr style={{ background: '#FBF3EE', borderBottom: '1px solid #EEECE4' }}>
+                  <tr style={{ background: '#FDECDD', borderBottom: '1px solid #E2E7EC' }}>
                     <td colSpan={13} style={{ padding: '8px 12px' }}>
                       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12 }}>
                         <span style={{ color: C.mut, fontWeight: 700 }}>FACTORING:</span>

@@ -10,12 +10,14 @@ import { ocTotal } from './OrdenesCompraModule.jsx'
 // La persistencia real en Supabase queda para una fase siguiente.
 // ============================================================
 
-const C = { naranja: '#FF6B00', carbon: '#0F1A2E', verde: '#12805C', rojo: '#D64545', gris: '#8A929E', azul: '#061A40' }
+import { SEREIN } from './theme-serein.js'
+// Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
+const C = { naranja: SEREIN.orange, carbon: SEREIN.text, verde: SEREIN.green, rojo: SEREIN.red, gris: SEREIN.textFaint, azul: SEREIN.ink }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
 const hoy = () => new Date().toISOString().slice(0, 10)
 const mesDe = f => (f || '').slice(0, 7)
-const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
+const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 
 const TIPOS_PROVEEDOR = ['Pintura', 'Granalla', 'EPP', 'Ferretería', 'Transporte', 'Arriendo de equipos', 'Mantención', 'Servicios externos', 'Combustible', 'Financiero', 'Otro']
 const CONDICIONES_PAGO = ['Contado', '7 días', '15 días', '30 días', '45 días', '60 días', 'Otro']
@@ -49,8 +51,8 @@ function estadoDoc(d) {
   if (d.fecha_vencimiento && d.fecha_vencimiento < hoy()) return 'Vencido'
   return 'Pendiente'
 }
-const colorEstado = e => ({ Pagado: C.verde, Parcial: C.naranja, Vencido: C.rojo, Pendiente: '#8C4519', Anulado: C.gris, Anulada: C.gris, Factoring: C.naranja, Pagada: C.verde, Cancelada: C.verde, Vencida: C.rojo }[e] || C.gris)
-const fondoEstado = e => ({ Pagado: '#E7F2EA', Parcial: '#F9E9DE', Vencido: '#F6E0DA', Pendiente: '#F9E9DE', Anulado: '#EEE', Anulada: '#EEE', Factoring: '#F9E9DE', Pagada: '#E7F2EA', Cancelada: '#E7F2EA', Vencida: '#F6E0DA' }[e] || '#EEE')
+const colorEstado = e => ({ Pagado: C.verde, Parcial: C.naranja, Vencido: C.rojo, Pendiente: '#D9600A', Anulado: C.gris, Anulada: C.gris, Factoring: C.naranja, Pagada: C.verde, Cancelada: C.verde, Vencida: C.rojo }[e] || C.gris)
+const fondoEstado = e => ({ Pagado: '#E6F7EE', Parcial: '#FDECDD', Vencido: '#FCEBEA', Pendiente: '#FDECDD', Anulado: '#EEE', Anulada: '#EEE', Factoring: '#FDECDD', Pagada: '#E6F7EE', Cancelada: '#E6F7EE', Vencida: '#FCEBEA' }[e] || '#EEE')
 
 // ============================================================
 // DATOS DE PRUEBA (los que entregó Gerencia)
@@ -81,19 +83,19 @@ export const PP_SEED = {
 // ============================================================
 function Kpi({ label, valor, color, sub }) {
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 14, flex: '1 1 165px', minWidth: 0 }}>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 14, flex: '1 1 165px', minWidth: 0 }}>
       <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 600 }}>{label}</div>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 21, fontWeight: 600, color: color || C.carbon, whiteSpace: 'nowrap', marginTop: 4 }}>{valor}</div>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 21, fontWeight: 600, color: color || C.carbon, whiteSpace: 'nowrap', marginTop: 4 }}>{valor}</div>
       {sub && <div style={{ fontSize: 11.5, color: C.gris, marginTop: 2 }}>{sub}</div>}
     </div>
   )
 }
 function Caja({ children }) {
-  return <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18, overflowX: 'auto' }}>{children}</div>
+  return <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18, overflowX: 'auto' }}>{children}</div>
 }
 function BotonNuevo({ children, onClick }) {
   return (
-    <button onClick={onClick} style={{ background: C.naranja, color: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+    <button onClick={onClick} style={{ background: C.naranja, color: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
       <Plus size={15} /> {children}
     </button>
   )
@@ -121,7 +123,7 @@ function SeccionProveedores({ pp, setPp }) {
       {!creando && <BotonNuevo onClick={() => setCreando(true)}>Nuevo proveedor</BotonNuevo>}
       {creando && (
         <div style={{ background: '#fff', border: `2px solid ${C.naranja}`, padding: 16, marginBottom: 14 }}>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Nuevo proveedor</div>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Nuevo proveedor</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
             <input style={inp} placeholder="Nombre proveedor *" value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} />
             <input style={inp} placeholder="RUT" value={f.rut} onChange={e => setF({ ...f, rut: e.target.value })} />
@@ -136,8 +138,8 @@ function SeccionProveedores({ pp, setPp }) {
           </div>
           <input style={{ ...inp, width: '100%', marginTop: 8 }} placeholder="Observaciones" value={f.obs} onChange={e => setF({ ...f, obs: e.target.value })} />
           <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-            <button onClick={guardar} disabled={!f.nombre} style={{ background: f.nombre ? C.verde : '#CBD2D6', color: '#fff', border: 'none', padding: '9px 18px', cursor: f.nombre ? 'pointer' : 'not-allowed', fontSize: 13 }}>Guardar proveedor</button>
-            <button onClick={() => { setF(nuevo()); setCreando(false) }} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+            <button onClick={guardar} disabled={!f.nombre} style={{ background: f.nombre ? C.verde : '#DFE4EA', color: '#fff', border: 'none', padding: '9px 18px', cursor: f.nombre ? 'pointer' : 'not-allowed', fontSize: 13 }}>Guardar proveedor</button>
+            <button onClick={() => { setF(nuevo()); setCreando(false) }} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
           </div>
         </div>
       )}
@@ -148,17 +150,17 @@ function SeccionProveedores({ pp, setPp }) {
           </tr></thead>
           <tbody>
             {pp.proveedores.map(p => (
-              <tr key={p.id} style={{ borderBottom: '1px solid #EEE9DF', opacity: p.estado === 'Inactivo' ? 0.5 : 1 }}>
+              <tr key={p.id} style={{ borderBottom: '1px solid #DFE4EA', opacity: p.estado === 'Inactivo' ? 0.5 : 1 }}>
                 <td style={{ padding: 8, fontWeight: 500 }}>{p.nombre}{p.rut && <div style={{ fontSize: 11, color: C.gris }}>{p.rut}</div>}</td>
                 <td style={{ padding: 8, color: C.gris }}>{p.tipo}</td>
                 <td style={{ padding: 8 }}>{p.condicion}</td>
                 <td style={{ padding: 8, color: C.gris }}>{p.contacto || '—'}</td>
                 <td style={{ padding: 8, color: C.gris }}>{p.telefono || '—'}</td>
-                <td style={{ padding: 8 }}><span style={{ background: p.estado === 'Activo' ? '#E7F2EA' : '#EEE', color: p.estado === 'Activo' ? C.verde : C.gris, padding: '2px 8px', fontSize: 12, fontWeight: 600 }}>{p.estado}</span></td>
+                <td style={{ padding: 8 }}><span style={{ background: p.estado === 'Activo' ? '#E6F7EE' : '#EEE', color: p.estado === 'Activo' ? C.verde : C.gris, padding: '2px 8px', fontSize: 12, fontWeight: 600 }}>{p.estado}</span></td>
                 <td style={{ padding: 8 }}><button onClick={() => eliminar(p.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button></td>
               </tr>
             ))}
-            {pp.proveedores.length === 0 && <tr><td colSpan={7} style={{ padding: 16, textAlign: 'center', color: '#9AA0A6' }}>Sin proveedores.</td></tr>}
+            {pp.proveedores.length === 0 && <tr><td colSpan={7} style={{ padding: 16, textAlign: 'center', color: '#9AA3AD' }}>Sin proveedores.</td></tr>}
           </tbody>
         </table>
       </Caja>
@@ -192,12 +194,12 @@ function SeccionOC({ pp, setPp }) {
 
   return (
     <div>
-      <div style={{ fontSize: 12, color: '#8C4519', background: '#F9E9DE', padding: '8px 12px', marginBottom: 12 }}>
+      <div style={{ fontSize: 12, color: '#D9600A', background: '#FDECDD', padding: '8px 12px', marginBottom: 12 }}>
         Órdenes de compra a proveedores (importadas de Defontana). Todo es editable: fecha, monto, <b>plazo de crédito</b> (días) y <b>vencimiento</b> (se calcula solo = fecha + plazo). Las OC pendientes se suman al flujo de caja y a las cuentas por pagar del Consolidado.
       </div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
-        <button onClick={agregar} style={{ background: C.naranja, color: '#fff', border: 'none', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Agregar OC</button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, border: '1px solid #CBD2D6', padding: '2px 6px' }}>
+        <button onClick={agregar} style={{ background: C.naranja, color: '#fff', border: 'none', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Agregar OC</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, border: '1px solid #DFE4EA', padding: '2px 6px' }}>
           <Search size={13} color={C.gris} />
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar N°/proveedor/RUT…" style={{ border: 'none', outline: 'none', fontSize: 12.5, width: 160 }} />
         </div>
@@ -213,7 +215,7 @@ function SeccionOC({ pp, setPp }) {
             {mostradas.map(o => {
               const v = vencOC(o), vencido = ocPorPagar(o) && v && v < hoy()
               return (
-                <tr key={o.id} style={{ borderBottom: '1px solid #EEE9DF', background: vencido ? '#FDF3F0' : 'transparent' }}>
+                <tr key={o.id} style={{ borderBottom: '1px solid #DFE4EA', background: vencido ? '#FDECDD' : 'transparent' }}>
                   <td style={{ padding: '4px 6px' }}><input value={o.numero} onChange={e => upd(o.id, { numero: e.target.value })} style={{ ...inp, width: 70, padding: '5px 7px', fontWeight: 600 }} /></td>
                   <td style={{ padding: '4px 6px' }}><input value={o.proveedor} onChange={e => upd(o.id, { proveedor: e.target.value })} style={{ ...inp, width: 200, padding: '5px 7px' }} /></td>
                   <td style={{ padding: '4px 6px' }}><input value={o.rut || ''} onChange={e => upd(o.id, { rut: e.target.value })} style={{ ...inp, width: 110, padding: '5px 7px' }} /></td>
@@ -230,7 +232,7 @@ function SeccionOC({ pp, setPp }) {
                 </tr>
               )
             })}
-            {mostradas.length === 0 && <tr><td colSpan={9} style={{ padding: 16, textAlign: 'center', color: '#9AA0A6' }}>Sin órdenes de compra.</td></tr>}
+            {mostradas.length === 0 && <tr><td colSpan={9} style={{ padding: 16, textAlign: 'center', color: '#9AA3AD' }}>Sin órdenes de compra.</td></tr>}
           </tbody>
         </table>
       </Caja>
@@ -261,7 +263,7 @@ function SeccionPorPagar({ pp, setPp }) {
       {!creando && <BotonNuevo onClick={() => setCreando(true)}>Nuevo documento por pagar</BotonNuevo>}
       {creando && (
         <div style={{ background: '#fff', border: `2px solid ${C.naranja}`, padding: 16, marginBottom: 14 }}>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Nuevo documento por pagar</div>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Nuevo documento por pagar</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
             <select style={inp} value={f.tipo_doc} onChange={e => setF({ ...f, tipo_doc: e.target.value })}>{TIPOS_DOC.map(x => <option key={x}>{x}</option>)}</select>
             <input style={inp} placeholder="Nº documento *" value={f.numero} onChange={e => setF({ ...f, numero: e.target.value })} />
@@ -279,8 +281,8 @@ function SeccionPorPagar({ pp, setPp }) {
           <input style={{ ...inp, width: '100%', marginTop: 8 }} placeholder="Observaciones" value={f.obs} onChange={e => setF({ ...f, obs: e.target.value })} />
           {num(f.neto) > 0 && <div style={{ fontSize: 12, color: C.gris, marginTop: 6 }}>Total: {clp(num(f.neto) * (f.conIva ? 1.19 : 1))}</div>}
           <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-            <button onClick={guardar} disabled={!f.numero || num(f.neto) <= 0 || !f.fecha_vencimiento} style={{ background: (f.numero && num(f.neto) > 0 && f.fecha_vencimiento) ? C.verde : '#CBD2D6', color: '#fff', border: 'none', padding: '9px 18px', cursor: 'pointer', fontSize: 13 }}>Guardar documento</button>
-            <button onClick={() => { setF(nuevo()); setCreando(false) }} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+            <button onClick={guardar} disabled={!f.numero || num(f.neto) <= 0 || !f.fecha_vencimiento} style={{ background: (f.numero && num(f.neto) > 0 && f.fecha_vencimiento) ? C.verde : '#DFE4EA', color: '#fff', border: 'none', padding: '9px 18px', cursor: 'pointer', fontSize: 13 }}>Guardar documento</button>
+            <button onClick={() => { setF(nuevo()); setCreando(false) }} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
           </div>
         </div>
       )}
@@ -295,7 +297,7 @@ function SeccionPorPagar({ pp, setPp }) {
               const vencido = est === 'Vencido'
               return (
                 <React.Fragment key={d.id}>
-                  <tr style={{ borderBottom: '1px solid #EEE9DF', background: vencido ? '#FDF3F0' : 'transparent', opacity: d.anulado ? 0.45 : 1 }}>
+                  <tr style={{ borderBottom: '1px solid #DFE4EA', background: vencido ? '#FDECDD' : 'transparent', opacity: d.anulado ? 0.45 : 1 }}>
                     <td style={{ padding: 8, fontWeight: 500 }}>{d.tipo_doc} {d.numero}{d.ref_ot && <div style={{ fontSize: 11, color: C.naranja }}>{d.ref_ot}</div>}<div style={{ fontSize: 11, color: C.gris }}>{d.area}</div></td>
                     <td style={{ padding: 8 }}>{d.proveedor}</td>
                     <td style={{ padding: 8, color: vencido ? C.rojo : C.gris, whiteSpace: 'nowrap' }}>{d.fecha_vencimiento}</td>
@@ -304,7 +306,7 @@ function SeccionPorPagar({ pp, setPp }) {
                     <td style={{ padding: 8, textAlign: 'right', fontWeight: 600, color: saldo > 0 ? C.naranja : C.verde }}>{clp(saldo)}</td>
                     <td style={{ padding: 8 }}><span style={{ background: fondoEstado(est), color: colorEstado(est), padding: '2px 8px', fontSize: 12, fontWeight: 600 }}>{est}</span></td>
                     <td style={{ padding: 8, whiteSpace: 'nowrap' }}>
-                      <button onClick={() => setAbierto(abierto === d.id ? null : d.id)} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '4px 8px', cursor: 'pointer', fontSize: 12, marginRight: 4 }}>Pagos</button>
+                      <button onClick={() => setAbierto(abierto === d.id ? null : d.id)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '4px 8px', cursor: 'pointer', fontSize: 12, marginRight: 4 }}>Pagos</button>
                       <button title={d.anulado ? 'Reactivar' : 'Anular'} onClick={() => actualizar(d.id, { anulado: !d.anulado })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><X size={15} /></button>
                       <button title="Eliminar" onClick={() => window.confirm('¿Eliminar documento?') && setPp({ ...pp, docs: pp.docs.filter(x => x.id !== d.id) })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
                     </td>
@@ -313,7 +315,7 @@ function SeccionPorPagar({ pp, setPp }) {
                 </React.Fragment>
               )
             })}
-            {pp.docs.length === 0 && <tr><td colSpan={8} style={{ padding: 16, textAlign: 'center', color: '#9AA0A6' }}>Sin documentos por pagar.</td></tr>}
+            {pp.docs.length === 0 && <tr><td colSpan={8} style={{ padding: 16, textAlign: 'center', color: '#9AA3AD' }}>Sin documentos por pagar.</td></tr>}
           </tbody>
         </table>
       </Caja>
@@ -337,7 +339,7 @@ function PagosDoc({ doc, actualizar }) {
   }
 
   return (
-    <div style={{ background: '#FAF7F3', padding: 16, borderBottom: '1px solid #EEE9DF' }}>
+    <div style={{ background: '#F2F4F7', padding: 16, borderBottom: '1px solid #DFE4EA' }}>
       <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', marginBottom: 10 }}>
         <span style={{ fontSize: 12 }}>Total: <b>{clp(doc.total)}</b></span>
         <span style={{ fontSize: 12 }}>Pagado: <b style={{ color: C.verde }}>{clp(pagadoDe(doc))}</b></span>
@@ -345,10 +347,10 @@ function PagosDoc({ doc, actualizar }) {
       </div>
       {(doc.pagos || []).length > 0 && (
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginBottom: 10 }}>
-          <thead><tr style={{ borderBottom: '1px solid #CBD2D6' }}>{['Fecha', 'Monto', 'Forma', ''].map(h => <th key={h} style={{ textAlign: h === 'Monto' ? 'right' : 'left', padding: '4px 6px', fontSize: 11, color: C.gris }}>{h}</th>)}</tr></thead>
+          <thead><tr style={{ borderBottom: '1px solid #DFE4EA' }}>{['Fecha', 'Monto', 'Forma', ''].map(h => <th key={h} style={{ textAlign: h === 'Monto' ? 'right' : 'left', padding: '4px 6px', fontSize: 11, color: C.gris }}>{h}</th>)}</tr></thead>
           <tbody>
             {doc.pagos.map(p => (
-              <tr key={p.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
+              <tr key={p.id} style={{ borderBottom: '1px solid #DFE4EA' }}>
                 <td style={{ padding: '4px 6px' }}>{p.fecha}</td>
                 <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600 }}>{clp(p.monto)}</td>
                 <td style={{ padding: '4px 6px', color: C.gris }}>{p.forma}</td>
@@ -363,8 +365,8 @@ function PagosDoc({ doc, actualizar }) {
           <input type="date" style={inp} value={fecha} onChange={e => setFecha(e.target.value)} />
           <input style={{ ...inp, width: 140 }} placeholder="Monto del pago" value={monto} onChange={e => setMonto(e.target.value)} />
           <select style={inp} value={forma} onChange={e => setForma(e.target.value)}>{FORMAS_PAGO.map(x => <option key={x}>{x}</option>)}</select>
-          <button onClick={registrar} disabled={num(monto) <= 0} style={{ background: num(monto) > 0 ? C.verde : '#CBD2D6', color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5 }}>Registrar pago</button>
-          <button onClick={() => { setMonto(String(saldo)) }} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>Pagar saldo completo</button>
+          <button onClick={registrar} disabled={num(monto) <= 0} style={{ background: num(monto) > 0 ? C.verde : '#DFE4EA', color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5 }}>Registrar pago</button>
+          <button onClick={() => { setMonto(String(saldo)) }} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>Pagar saldo completo</button>
         </div>
       )}
       {saldo <= 0 && <div style={{ color: C.verde, fontSize: 13 }}>✓ Documento pagado completamente.</div>}
@@ -401,7 +403,7 @@ function SeccionCalendarioPagos({ pp }) {
   }, [items])
 
   const totalRango = items.reduce((a, d) => a + saldoDe(d), 0)
-  const btn = (id, lbl) => <button key={id} onClick={() => setRango(id)} style={{ background: rango === id ? C.carbon : '#fff', color: rango === id ? '#fff' : C.carbon, border: '1px solid #CBD2D6', padding: '6px 12px', cursor: 'pointer', fontSize: 12.5 }}>{lbl}</button>
+  const btn = (id, lbl) => <button key={id} onClick={() => setRango(id)} style={{ background: rango === id ? C.carbon : '#fff', color: rango === id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '6px 12px', cursor: 'pointer', fontSize: 12.5 }}>{lbl}</button>
 
   return (
     <div>
@@ -410,22 +412,22 @@ function SeccionCalendarioPagos({ pp }) {
         <select style={inp} value={fArea} onChange={e => setFArea(e.target.value)}><option value="">Todas las áreas</option>{AREAS.map(a => <option key={a}>{a}</option>)}</select>
         <select style={inp} value={fProv} onChange={e => setFProv(e.target.value)}><option value="">Todos los proveedores</option>{pp.proveedores.map(p => <option key={p.id}>{p.nombre}</option>)}</select>
       </div>
-      <div style={{ background: '#161616', color: '#fff', padding: '12px 16px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-        <span style={{ fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 13 }}>Total a pagar en el rango</span>
-        <span style={{ fontFamily: "'Oswald',sans-serif", fontSize: 22, fontWeight: 600, color: C.naranja }}>{clp(totalRango)}</span>
+      <div style={{ background: '#101315', color: '#fff', padding: '12px 16px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <span style={{ fontFamily: SEREIN.fontDisplay, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 13 }}>Total a pagar en el rango</span>
+        <span style={{ fontFamily: SEREIN.fontDisplay, fontSize: 22, fontWeight: 600, color: C.naranja }}>{clp(totalRango)}</span>
       </div>
-      {porFecha.length === 0 ? <Caja><div style={{ color: '#9AA0A6', fontSize: 13 }}>Sin pagos en este rango.</div></Caja> : porFecha.map(([fecha, docs]) => {
+      {porFecha.length === 0 ? <Caja><div style={{ color: '#9AA3AD', fontSize: 13 }}>Sin pagos en este rango.</div></Caja> : porFecha.map(([fecha, docs]) => {
         const totalDia = docs.reduce((a, d) => a + saldoDe(d), 0)
         const vencido = fecha < hoy()
         return (
-          <div key={fecha} style={{ background: '#fff', border: '1px solid #E2DED4', borderLeft: `4px solid ${vencido ? C.rojo : C.naranja}`, marginBottom: 10 }}>
-            <div style={{ padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #EEE9DF', flexWrap: 'wrap', gap: 6 }}>
+          <div key={fecha} style={{ background: '#fff', border: '1px solid #DFE4EA', borderLeft: `4px solid ${vencido ? C.rojo : C.naranja}`, marginBottom: 10 }}>
+            <div style={{ padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #DFE4EA', flexWrap: 'wrap', gap: 6 }}>
               <span style={{ fontWeight: 600 }}>{fecha} {vencido && <span style={{ color: C.rojo, fontSize: 12 }}>· VENCIDO</span>}</span>
-              <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, color: C.naranja }}>{clp(totalDia)}</span>
+              <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, color: C.naranja }}>{clp(totalDia)}</span>
             </div>
             <div style={{ padding: '6px 16px 10px' }}>
               {docs.map(d => (
-                <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 13, borderBottom: '1px solid #F4F0E9' }}>
+                <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 13, borderBottom: '1px solid #F2F4F7' }}>
                   <span>{d.proveedor} <span style={{ color: C.gris, fontSize: 12 }}>· {d.tipo_doc} {d.numero} · {d.area}</span></span>
                   <span style={{ fontWeight: 600 }}>{clp(saldoDe(d))}</span>
                 </div>
@@ -456,13 +458,13 @@ function SeccionCobros({ pp, setPp }) {
 
   return (
     <div>
-      <div style={{ fontSize: 12, color: '#2F5E3D', background: '#E7F2EA', padding: '8px 12px', marginBottom: 12 }}>
+      <div style={{ fontSize: 12, color: '#1B9E5D', background: '#E6F7EE', padding: '8px 12px', marginBottom: 12 }}>
         Ingresos esperados de clientes (plata que <b>entra</b>). En una fase futura se conectarán automáticamente con las facturas de venta.
       </div>
       {!creando && <BotonNuevo onClick={() => setCreando(true)}>Nuevo cobro esperado</BotonNuevo>}
       {creando && (
         <div style={{ background: '#fff', border: `2px solid ${C.verde}`, padding: 16, marginBottom: 14 }}>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Nuevo cobro esperado</div>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Nuevo cobro esperado</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
             <input style={inp} placeholder="Cliente *" value={f.cliente} onChange={e => setF({ ...f, cliente: e.target.value })} />
             <input style={inp} placeholder="Nº factura" value={f.factura} onChange={e => setF({ ...f, factura: e.target.value })} />
@@ -476,8 +478,8 @@ function SeccionCobros({ pp, setPp }) {
           </div>
           {num(f.neto) > 0 && <div style={{ fontSize: 12, color: C.gris, marginTop: 6 }}>Total: {clp(num(f.neto) * (f.conIva ? 1.19 : 1))}</div>}
           <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-            <button onClick={guardar} disabled={!f.cliente || num(f.neto) <= 0} style={{ background: (f.cliente && num(f.neto) > 0) ? C.verde : '#CBD2D6', color: '#fff', border: 'none', padding: '9px 18px', cursor: 'pointer', fontSize: 13 }}>Guardar cobro</button>
-            <button onClick={() => { setF(nuevo()); setCreando(false) }} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+            <button onClick={guardar} disabled={!f.cliente || num(f.neto) <= 0} style={{ background: (f.cliente && num(f.neto) > 0) ? C.verde : '#DFE4EA', color: '#fff', border: 'none', padding: '9px 18px', cursor: 'pointer', fontSize: 13 }}>Guardar cobro</button>
+            <button onClick={() => { setF(nuevo()); setCreando(false) }} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
           </div>
         </div>
       )}
@@ -491,7 +493,7 @@ function SeccionCobros({ pp, setPp }) {
               const atrasado = c.estado === 'Pendiente' && c.fecha_estimada < hoy()
               const estMostrar = atrasado ? 'Vencida' : c.estado
               return (
-                <tr key={c.id} style={{ borderBottom: '1px solid #EEE9DF', background: atrasado ? '#FDF3F0' : 'transparent' }}>
+                <tr key={c.id} style={{ borderBottom: '1px solid #DFE4EA', background: atrasado ? '#FDECDD' : 'transparent' }}>
                   <td style={{ padding: 8, fontWeight: 500 }}>{c.cliente}</td>
                   <td style={{ padding: 8, color: C.gris }}>{c.factura || '—'}</td>
                   <td style={{ padding: 8, color: C.gris }}>{c.fecha_emision}</td>
@@ -506,7 +508,7 @@ function SeccionCobros({ pp, setPp }) {
                 </tr>
               )
             })}
-            {pp.cobros.length === 0 && <tr><td colSpan={7} style={{ padding: 16, textAlign: 'center', color: '#9AA0A6' }}>Sin cobros esperados.</td></tr>}
+            {pp.cobros.length === 0 && <tr><td colSpan={7} style={{ padding: 16, textAlign: 'center', color: '#9AA3AD' }}>Sin cobros esperados.</td></tr>}
           </tbody>
         </table>
       </Caja>
@@ -563,15 +565,15 @@ function SeccionFlujo({ pp, setPp }) {
           </tr></thead>
           <tbody>
             {dias.map(d => (
-              <tr key={d.fecha} style={{ borderBottom: '1px solid #EEE9DF' }}>
+              <tr key={d.fecha} style={{ borderBottom: '1px solid #DFE4EA' }}>
                 <td style={{ padding: 8, fontWeight: 500 }}>{d.fecha}</td>
-                <td style={{ padding: 8, textAlign: 'right', color: d.ent ? C.verde : '#CBD2D6' }}>{d.ent ? clp(d.ent) : '—'}</td>
-                <td style={{ padding: 8, textAlign: 'right', color: d.sal ? C.rojo : '#CBD2D6' }}>{d.sal ? clp(d.sal) : '—'}</td>
+                <td style={{ padding: 8, textAlign: 'right', color: d.ent ? C.verde : '#DFE4EA' }}>{d.ent ? clp(d.ent) : '—'}</td>
+                <td style={{ padding: 8, textAlign: 'right', color: d.sal ? C.rojo : '#DFE4EA' }}>{d.sal ? clp(d.sal) : '—'}</td>
                 <td style={{ padding: 8, textAlign: 'right', fontWeight: 600, color: d.neto >= 0 ? C.verde : C.rojo }}>{clp(d.neto)}</td>
                 <td style={{ padding: 8, textAlign: 'right', fontWeight: 600, color: d.acum >= 0 ? C.carbon : C.rojo }}>{clp(d.acum)}</td>
               </tr>
             ))}
-            {dias.length === 0 && <tr><td colSpan={5} style={{ padding: 16, textAlign: 'center', color: '#9AA0A6' }}>Sin movimientos proyectados este mes.</td></tr>}
+            {dias.length === 0 && <tr><td colSpan={5} style={{ padding: 16, textAlign: 'center', color: '#9AA3AD' }}>Sin movimientos proyectados este mes.</td></tr>}
           </tbody>
         </table>
       </Caja>
@@ -611,22 +613,22 @@ function SeccionReportes({ pp }) {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14 }}>
         <Caja>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Pagos pendientes por proveedor</div>
-          {porProveedor.length === 0 ? <div style={{ color: '#9AA0A6', fontSize: 13 }}>Sin pagos pendientes.</div> : porProveedor.map(([prov, monto]) => {
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Pagos pendientes por proveedor</div>
+          {porProveedor.length === 0 ? <div style={{ color: '#9AA3AD', fontSize: 13 }}>Sin pagos pendientes.</div> : porProveedor.map(([prov, monto]) => {
             const max = porProveedor[0][1]
             return (
               <div key={prov} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                 <span style={{ fontSize: 13, width: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prov}</span>
-                <div style={{ flex: 1, height: 8, background: '#EEE9DF' }}><div style={{ width: `${(monto / max) * 100}%`, height: '100%', background: C.naranja }} /></div>
+                <div style={{ flex: 1, height: 8, background: '#DFE4EA' }}><div style={{ width: `${(monto / max) * 100}%`, height: '100%', background: C.naranja }} /></div>
                 <span style={{ fontSize: 13, width: 110, textAlign: 'right', fontWeight: 600 }}>{clp(monto)}</span>
               </div>
             )
           })}
         </Caja>
         <Caja>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Resumen del mes</div>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Resumen del mes</div>
           {[['Total por pagar este mes', clp(totalPorPagarMes), C.rojo], ['Total por cobrar este mes', clp(totalPorCobrarMes), C.verde], ['Pagos vencidos', `${vencidos.length} · ${clp(vencidos.reduce((a, d) => a + saldoDe(d), 0))}`, C.rojo], ['Cobros vencidos', `${cobrosVencidos.length} · ${clp(cobrosVencidos.reduce((a, c) => a + c.total, 0))}`, C.rojo], ['Diferencia proyectada del mes', clp(totalPorCobrarMes - totalPorPagarMes), (totalPorCobrarMes - totalPorPagarMes) >= 0 ? C.verde : C.rojo]].map(([l, v, col]) => (
-            <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid #EEE9DF', fontSize: 13 }}>
+            <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid #DFE4EA', fontSize: 13 }}>
               <span style={{ color: C.gris }}>{l}</span><span style={{ fontWeight: 600, color: col }}>{v}</span>
             </div>
           ))}
@@ -667,27 +669,27 @@ function SeccionResumen({ pp }) {
   return (
     <div>
       {alertas.map((a, i) => (
-        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', borderLeft: `4px solid ${a.col}`, border: '1px solid #E2DED4', padding: '10px 14px', marginBottom: 8, fontSize: 13 }}>
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', borderLeft: `4px solid ${a.col}`, border: '1px solid #DFE4EA', padding: '10px 14px', marginBottom: 8, fontSize: 13 }}>
           <AlertTriangle size={16} color={a.col} /> <span><b>Atención:</b> {a.txt}</span>
         </div>
       ))}
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 13, textTransform: 'uppercase', color: C.rojo, margin: '14px 0 8px' }}>Pagos a proveedores (salidas)</div>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase', color: C.rojo, margin: '14px 0 8px' }}>Pagos a proveedores (salidas)</div>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
         <Kpi label="Pagos hoy" valor={clp(r.pagosHoy)} color={C.rojo} />
         <Kpi label="Próximos 7 días" valor={clp(r.pagos7)} color={C.naranja} />
         <Kpi label="Vencidos" valor={clp(r.pagosVencidos)} color={C.rojo} />
         <Kpi label="Total por pagar este mes" valor={clp(r.pagosMes)} color={C.carbon} />
       </div>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 13, textTransform: 'uppercase', color: C.verde, margin: '14px 0 8px' }}>Cobros de clientes (entradas)</div>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase', color: C.verde, margin: '14px 0 8px' }}>Cobros de clientes (entradas)</div>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
         <Kpi label="Cobros hoy" valor={clp(r.cobrosHoy)} color={C.verde} />
         <Kpi label="Próximos 7 días" valor={clp(r.cobros7)} color={C.verde} />
         <Kpi label="Vencidos" valor={clp(r.cobrosVencidos)} color={C.rojo} />
         <Kpi label="Total por cobrar este mes" valor={clp(r.cobrosMes)} color={C.carbon} />
       </div>
-      <div style={{ background: '#161616', color: '#fff', padding: '16px 20px', marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-        <span style={{ fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: 0.5 }}>Flujo proyectado del mes (cobros − pagos)</span>
-        <span style={{ fontFamily: "'Oswald',sans-serif", fontSize: 26, fontWeight: 600, color: r.flujoMes >= 0 ? '#6FD08C' : '#E8836F' }}>{clp(r.flujoMes)} {r.flujoMes >= 0 ? '▲' : '▼'}</span>
+      <div style={{ background: '#101315', color: '#fff', padding: '16px 20px', marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <span style={{ fontFamily: SEREIN.fontDisplay, textTransform: 'uppercase', letterSpacing: 0.5 }}>Flujo proyectado del mes (cobros − pagos)</span>
+        <span style={{ fontFamily: SEREIN.fontDisplay, fontSize: 26, fontWeight: 600, color: r.flujoMes >= 0 ? '#1B9E5D' : '#C5453D' }}>{clp(r.flujoMes)} {r.flujoMes >= 0 ? '▲' : '▼'}</span>
       </div>
     </div>
   )
@@ -716,7 +718,7 @@ export default function ProveedoresPagosModule({ pp: ppExt, setPp: setPpExt, gas
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            style={{ background: tab === t.id ? C.carbon : '#fff', color: tab === t.id ? '#fff' : C.carbon, border: '1px solid #CBD2D6', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
+            style={{ background: tab === t.id ? C.carbon : '#fff', color: tab === t.id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
             {t.icono}{t.label}
           </button>
         ))}
@@ -727,17 +729,17 @@ export default function ProveedoresPagosModule({ pp: ppExt, setPp: setPpExt, gas
         const pend = (gastos || []).filter(g => g.tipo === 'fijo' && g.estado !== 'Pagada' && g.estado !== 'Anulado');
         if (!pend.length) return null;
         const hayVencido = pend.some(g => g.vencimiento && g.vencimiento < hoyStr);
-        return (<div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: '3px solid ' + (hayVencido ? '#DC2626' : '#FF6B00'), marginBottom: 16, padding: 14 }}>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 8 }}>Gastos fijos por pagar ({pend.length})</div>
+        return (<div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: '3px solid ' + (hayVencido ? '#C5453D' : '#F77716'), marginBottom: 16, padding: 14 }}>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 8 }}>Gastos fijos por pagar ({pend.length})</div>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}><tbody>
           {pend.slice().sort((a, b) => (a.vencimiento || '').localeCompare(b.vencimiento || '')).map((g, i) => {
             const venc = g.vencimiento || '';
             const vencido = venc && venc < hoyStr;
             const proximo = venc && !vencido && venc <= en7;
-            const color = vencido ? '#DC2626' : proximo ? '#FF6B00' : '#7A8288';
-            return (<tr key={i} style={{ borderBottom: '1px solid #EEE7DF' }}>
+            const color = vencido ? '#C5453D' : proximo ? '#F77716' : '#9AA3AD';
+            return (<tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>
               <td style={{ padding: '6px 8px', fontWeight: 600 }}>{g.nombre}</td>
-              <td style={{ padding: '6px 8px', color: '#7A8288' }}>{g.proveedor || '-'}</td>
+              <td style={{ padding: '6px 8px', color: '#9AA3AD' }}>{g.proveedor || '-'}</td>
               <td style={{ padding: '6px 8px', textAlign: 'right' }}>{clp(g.neto || 0)}</td>
               <td style={{ padding: '6px 8px', color: color, fontWeight: (vencido || proximo) ? 700 : 400, whiteSpace: 'nowrap' }}>{venc || '-'}{vencido ? ' - VENCIDO' : proximo ? ' - vence pronto' : ''}</td>
             </tr>);

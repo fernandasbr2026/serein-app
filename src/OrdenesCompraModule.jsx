@@ -9,10 +9,12 @@ import { PROVEEDORES_FICHA } from './proveedores-data.js'
 // Alimenta: costos de la OT, cuentas por pagar y flujo de caja.
 // ============================================================
 
-const C = { naranja: '#FF6B00', teal: '#0B7285', carbon: '#0F1A2E', verde: '#12805C', rojo: '#D64545', gris: '#8A929E', azul: '#061A40' }
+import { SEREIN } from './theme-serein.js'
+// Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
+const C = { naranja: SEREIN.orange, teal: '#0E7A8F', carbon: SEREIN.text, verde: SEREIN.green, rojo: SEREIN.red, gris: SEREIN.textFaint, azul: SEREIN.ink }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const num = s => { const v = parseInt(String(s).replace(/[^\d-]/g, ''), 10); return isNaN(v) ? 0 : v }
-const inp = { padding: '6px 8px', border: '1px solid #CBD2D6', fontSize: 12.5, boxSizing: 'border-box' }
+const inp = { padding: '6px 8px', border: '1px solid #DFE4EA', fontSize: 12.5, boxSizing: 'border-box' }
 const hoy = () => new Date().toISOString().slice(0, 10)
 const sumarDias = (fecha, dias) => { if (!fecha) return ''; const d = new Date(fecha + 'T12:00:00'); d.setDate(d.getDate() + (parseInt(dias, 10) || 0)); return d.toISOString().slice(0, 10) }
 
@@ -70,8 +72,8 @@ export const costoOCdeOT = (ocs, numeroOT) => (ocs || []).filter(o => o.estadoPa
   return a + asigs.filter(x => x.ot === numeroOT).reduce((s, x) => s + ocNeto(o) * (num(x.pct) || 0) / 100, 0)
 }, 0)
 
-const fondoEstado = e => ({ Pagada: '#E7F2EA', 'Parcialmente pagada': '#F9E9DE', Vencida: '#F6E0DA', Pendiente: '#F9E9DE', Anulada: '#EEE' }[e] || '#EEE')
-const colorEstado = e => ({ Pagada: C.verde, 'Parcialmente pagada': C.naranja, Vencida: C.rojo, Pendiente: '#8C4519', Anulada: C.gris }[e] || C.gris)
+const fondoEstado = e => ({ Pagada: '#E6F7EE', 'Parcialmente pagada': '#FDECDD', Vencida: '#FCEBEA', Pendiente: '#FDECDD', Anulada: '#EEE' }[e] || '#EEE')
+const colorEstado = e => ({ Pagada: C.verde, 'Parcialmente pagada': C.naranja, Vencida: C.rojo, Pendiente: '#D9600A', Anulada: C.gris }[e] || C.gris)
 
 function FilaOC({ oc, otsDisponibles, upd, onDelete, proveedores = PROVEEDORES_FICHA }) {
   const [abierta, setAbierta] = useState(false)
@@ -88,26 +90,26 @@ function FilaOC({ oc, otsDisponibles, upd, onDelete, proveedores = PROVEEDORES_F
   const delItem = i => upd(oc.id, { items: items.filter((_, j) => j !== i) })
   return (
     <>
-      <tr style={{ borderBottom: '1px solid #EEE9DF', background: vencido ? '#FDF3F0' : 'transparent' }}>
+      <tr style={{ borderBottom: '1px solid #DFE4EA', background: vencido ? '#FDECDD' : 'transparent' }}>
         <td style={{ padding: '4px 6px' }}><input value={oc.numero} onChange={e => upd(oc.id, { numero: e.target.value })} style={{ ...inp, width: 66, fontWeight: 600, padding: '5px 6px' }} /></td>
         <td style={{ padding: '4px 6px' }}><input list="prov-list-oc" value={oc.proveedor} onChange={e => setProv(e.target.value)} style={{ ...inp, width: 180, padding: '5px 6px' }} /></td>
         <td style={{ padding: '4px 6px' }}><input value={oc.rut || ''} onChange={e => upd(oc.id, { rut: e.target.value })} style={{ ...inp, width: 100, padding: '5px 6px' }} /></td>
         <td style={{ padding: '4px 6px' }}><select value={oc.categoria || ''} onChange={e => upd(oc.id, { categoria: e.target.value })} style={{ ...inp, width: 120, padding: '5px 6px' }}><option value="">—</option>{CATEGORIAS.map(x => <option key={x}>{x}</option>)}</select></td>
         <td style={{ padding: '4px 6px' }}><input type="date" value={oc.fecha || ''} onChange={e => upd(oc.id, { fecha: e.target.value })} style={{ ...inp, width: 132, padding: '5px 6px' }} /></td>
-        <td style={{ padding: '4px 6px', textAlign: 'right' }}><input value={ocNeto(oc)} readOnly={items.length > 0} title={items.length > 0 ? 'Se calcula desde los ítems' : ''} onChange={e => upd(oc.id, { neto: num(e.target.value), monto: undefined })} style={{ ...inp, width: 100, padding: '5px 6px', textAlign: 'right', fontWeight: 600, background: items.length > 0 ? '#F1EDE6' : '#fff' }} /></td>
+        <td style={{ padding: '4px 6px', textAlign: 'right' }}><input value={ocNeto(oc)} readOnly={items.length > 0} title={items.length > 0 ? 'Se calcula desde los ítems' : ''} onChange={e => upd(oc.id, { neto: num(e.target.value), monto: undefined })} style={{ ...inp, width: 100, padding: '5px 6px', textAlign: 'right', fontWeight: 600, background: items.length > 0 ? '#E2E7EC' : '#fff' }} /></td>
         <td style={{ padding: '4px 6px', textAlign: 'right', color: C.gris, whiteSpace: 'nowrap' }}>{clp(ocIva(oc))}</td>
         <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }}>{clp(ocTotal(oc))}</td>
         <td style={{ padding: '4px 6px' }}><input value={oc.plazo != null ? oc.plazo : 30} onChange={e => upd(oc.id, { plazo: num(e.target.value), vencimiento: sumarDias(oc.fecha, num(e.target.value)) })} style={{ ...inp, width: 50, padding: '5px 6px', textAlign: 'right' }} /></td>
         <td style={{ padding: '4px 6px' }}><input type="date" value={v} onChange={e => upd(oc.id, { vencimiento: e.target.value })} style={{ ...inp, width: 132, padding: '5px 6px', color: vencido ? C.rojo : C.carbon }} /></td>
         <td style={{ padding: '4px 6px' }}><select value={oc.estadoPago} onChange={e => upd(oc.id, { estadoPago: e.target.value })} style={{ border: 'none', background: fondoEstado(oc.estadoPago), color: colorEstado(oc.estadoPago), padding: '4px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{ESTADOS_PAGO.map(x => <option key={x}>{x}</option>)}</select></td>
-        <td style={{ padding: '4px 6px', whiteSpace: 'nowrap', textAlign: 'right', position: 'sticky', right: 0, background: vencido ? '#FDF3F0' : '#fff', zIndex: 1, boxShadow: '-6px 0 6px -4px rgba(0,0,0,.12)' }}>
+        <td style={{ padding: '4px 6px', whiteSpace: 'nowrap', textAlign: 'right', position: 'sticky', right: 0, background: vencido ? '#FDECDD' : '#fff', zIndex: 1, boxShadow: '-6px 0 6px -4px rgba(0,0,0,.12)' }}>
           <button onClick={() => descargarOCPDF(oc)} title="Descargar OC (PDF)" style={{ background: C.azul, color: '#fff', border: 'none', cursor: 'pointer', padding: '4px 7px', marginRight: 4 }}><Download size={13} /></button>
-          <button onClick={() => setAbierta(!abierta)} title="Detalle, ítems y asignación a OT" style={{ background: 'none', border: '1px solid #CBD2D6', cursor: 'pointer', padding: '3px 6px', marginRight: 4 }}>{abierta ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</button>
+          <button onClick={() => setAbierta(!abierta)} title="Detalle, ítems y asignación a OT" style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '3px 6px', marginRight: 4 }}>{abierta ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</button>
           <button onClick={() => window.confirm('¿Eliminar esta OC?') && onDelete(oc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
         </td>
       </tr>
       {abierta && (
-        <tr style={{ background: '#FBF6F0' }}>
+        <tr style={{ background: '#F2F4F7' }}>
           <td colSpan={12} style={{ padding: '10px 14px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8, marginBottom: 10 }}>
               <label style={{ fontSize: 11, color: C.gris }}>Área principal<select value={oc.area || ''} onChange={e => upd(oc.id, { area: e.target.value })} style={{ ...inp, width: '100%', marginTop: 3 }}><option value="">—</option>{AREAS.map(a => <option key={a}>{a}</option>)}</select></label>
@@ -122,10 +124,10 @@ function FilaOC({ oc, otsDisponibles, upd, onDelete, proveedores = PROVEEDORES_F
             <div style={{ fontSize: 11.5, fontWeight: 600, color: C.gris, textTransform: 'uppercase', margin: '4px 0 6px' }}>Ítems de la OC (aparecen en el PDF; si agregas ítems, el neto se calcula solo)</div>
             {items.length > 0 && (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 6 }}>
-                <thead><tr style={{ borderBottom: '1px solid #CBD2D6' }}>{['Código', 'Producto o servicio', 'Cant', 'Precio', 'Comentario', ''].map((h, i) => <th key={i} style={{ textAlign: ['Cant', 'Precio'].includes(h) ? 'right' : 'left', padding: '3px 6px', fontSize: 10, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+                <thead><tr style={{ borderBottom: '1px solid #DFE4EA' }}>{['Código', 'Producto o servicio', 'Cant', 'Precio', 'Comentario', ''].map((h, i) => <th key={i} style={{ textAlign: ['Cant', 'Precio'].includes(h) ? 'right' : 'left', padding: '3px 6px', fontSize: 10, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
                 <tbody>
                   {items.map((it, i) => (
-                    <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                    <tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>
                       <td style={{ padding: '2px 4px' }}><input value={it.codigo} onChange={e => updItem(i, 'codigo', e.target.value)} style={{ ...inp, width: 60, padding: '5px 6px' }} /></td>
                       <td style={{ padding: '2px 4px' }}><input value={it.producto} onChange={e => updItem(i, 'producto', e.target.value)} style={{ ...inp, width: 210, padding: '5px 6px' }} /></td>
                       <td style={{ padding: '2px 4px', textAlign: 'right' }}><input value={it.cantidad} onChange={e => updItem(i, 'cantidad', num(e.target.value))} style={{ ...inp, width: 55, padding: '5px 6px', textAlign: 'right' }} /></td>
@@ -137,7 +139,7 @@ function FilaOC({ oc, otsDisponibles, upd, onDelete, proveedores = PROVEEDORES_F
                 </tbody>
               </table>
             )}
-            <button onClick={addItem} style={{ background: 'none', border: '1px dashed #CBD2D6', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris, marginBottom: 12 }}>+ Agregar ítem</button>
+            <button onClick={addItem} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris, marginBottom: 12 }}>+ Agregar ítem</button>
 
             <div style={{ fontSize: 11.5, fontWeight: 600, color: C.gris, textTransform: 'uppercase', marginBottom: 6 }}>Asignación a OT (reparto del costo)</div>
             {asigs.map((x, i) => (
@@ -152,7 +154,7 @@ function FilaOC({ oc, otsDisponibles, upd, onDelete, proveedores = PROVEEDORES_F
               </div>
             ))}
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 4 }}>
-              <button onClick={addAsig} style={{ background: 'none', border: '1px dashed #CBD2D6', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Asignar a OT</button>
+              <button onClick={addAsig} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Asignar a OT</button>
               {asigs.length > 0 && <span style={{ fontSize: 12, fontWeight: 600, color: sumaPct === 100 ? C.verde : C.rojo }}>Suma: {sumaPct}% {sumaPct === 100 ? '✓' : '(debería ser 100%)'}</span>}
             </div>
           </td>
@@ -184,9 +186,9 @@ function FormOC({ inicial, otsDisponibles, onGuardar, onCancelar, proveedores = 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 70, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '30px 16px' }} onClick={onCancelar}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#fff', border: `2px solid ${C.naranja}`, width: '100%', maxWidth: 780, padding: 18 }}>
-        <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, textTransform: 'uppercase', marginBottom: 12 }}>Orden de compra · N° {f.numero}</div>
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, textTransform: 'uppercase', marginBottom: 12 }}>Orden de compra · N° {f.numero}</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
-          <label style={lab}>N° OC (correlativo)<input style={{ ...inp, background: '#F1EDE6', fontWeight: 600 }} value={f.numero} onChange={e => set('numero', e.target.value)} /></label>
+          <label style={lab}>N° OC (correlativo)<input style={{ ...inp, background: '#E2E7EC', fontWeight: 600 }} value={f.numero} onChange={e => set('numero', e.target.value)} /></label>
           <label style={lab}>Proveedor *<input list="prov-list-oc" style={inp} value={f.proveedor} onChange={e => setProveedor(e.target.value)} placeholder="Escribe o elige de la lista…" /></label>
           <label style={lab}>RUT proveedor<input style={inp} value={f.rut} onChange={e => set('rut', e.target.value)} /></label>
           <label style={lab}>Categoría<select style={inp} value={f.categoria} onChange={e => set('categoria', e.target.value)}>{CATEGORIAS.map(x => <option key={x}>{x}</option>)}</select></label>
@@ -203,10 +205,10 @@ function FormOC({ inicial, otsDisponibles, onGuardar, onCancelar, proveedores = 
         <div style={{ fontSize: 12, fontWeight: 600, color: C.gris, textTransform: 'uppercase', margin: '14px 0 6px' }}>Ítems (aparecen en el PDF; si agregas, el neto se calcula solo)</div>
         {conItems && (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 6 }}>
-            <thead><tr style={{ borderBottom: '1px solid #CBD2D6' }}>{['Código', 'Producto o servicio', 'Cant', 'Precio', 'Comentario', ''].map((h, i) => <th key={i} style={{ textAlign: ['Cant', 'Precio'].includes(h) ? 'right' : 'left', padding: '3px 6px', fontSize: 10, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+            <thead><tr style={{ borderBottom: '1px solid #DFE4EA' }}>{['Código', 'Producto o servicio', 'Cant', 'Precio', 'Comentario', ''].map((h, i) => <th key={i} style={{ textAlign: ['Cant', 'Precio'].includes(h) ? 'right' : 'left', padding: '3px 6px', fontSize: 10, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
             <tbody>
               {items.map((it, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                <tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>
                   <td style={{ padding: '2px 4px' }}><input value={it.codigo} onChange={e => setItem(i, 'codigo', e.target.value)} style={{ ...inp, width: 60, padding: '5px 6px' }} /></td>
                   <td style={{ padding: '2px 4px' }}><input value={it.producto} onChange={e => setItem(i, 'producto', e.target.value)} style={{ ...inp, width: 210, padding: '5px 6px' }} /></td>
                   <td style={{ padding: '2px 4px', textAlign: 'right' }}><input value={it.cantidad} onChange={e => setItem(i, 'cantidad', num(e.target.value))} style={{ ...inp, width: 55, padding: '5px 6px', textAlign: 'right' }} /></td>
@@ -219,7 +221,7 @@ function FormOC({ inicial, otsDisponibles, onGuardar, onCancelar, proveedores = 
           </table>
         )}
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
-          <button onClick={addItem} style={{ background: 'none', border: '1px dashed #CBD2D6', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Agregar ítem</button>
+          <button onClick={addItem} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Agregar ítem</button>
           {!conItems && <label style={{ fontSize: 12, color: C.gris, display: 'flex', alignItems: 'center', gap: 6 }}>o Monto neto directo: <input value={f.neto} onChange={e => set('neto', num(e.target.value))} style={{ ...inp, width: 120, textAlign: 'right' }} /></label>}
         </div>
 
@@ -233,7 +235,7 @@ function FormOC({ inicial, otsDisponibles, onGuardar, onCancelar, proveedores = 
           </div>
         ))}
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <button onClick={addAsig} style={{ background: 'none', border: '1px dashed #CBD2D6', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Asignar a OT</button>
+          <button onClick={addAsig} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Asignar a OT</button>
           {asigs.length > 0 && <span style={{ fontSize: 12, fontWeight: 600, color: sumaPct === 100 ? C.verde : C.rojo }}>Suma: {sumaPct}%</span>}
         </div>
 
@@ -243,7 +245,7 @@ function FormOC({ inicial, otsDisponibles, onGuardar, onCancelar, proveedores = 
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
           <button onClick={guardar} style={{ background: C.verde, color: '#fff', border: 'none', padding: '9px 18px', cursor: 'pointer', fontSize: 13 }}>Guardar OC</button>
-          <button onClick={onCancelar} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+          <button onClick={onCancelar} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
         </div>
       </div>
     </div>
@@ -277,26 +279,26 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
         {provLista.map(p => <option key={p.id || p.nombre} value={p.nombre}>{p.rut || ''}</option>)}
       </datalist>
       {creando && <FormOC inicial={nueva()} otsDisponibles={otsDisponibles} proveedores={proveedores} onGuardar={oc => { setOcs([oc, ...ocs]); setCreando(false) }} onCancelar={() => setCreando(false)} />}
-      <div style={{ fontSize: 12, color: '#8C4519', background: '#F9E9DE', padding: '8px 12px', marginBottom: 12 }}>
+      <div style={{ fontSize: 12, color: '#D9600A', background: '#FDECDD', padding: '8px 12px', marginBottom: 12 }}>
         <b>Órdenes de compra a proveedores</b> (emitidas por Serein). Cada OC puede asociarse a una o varias OT con reparto porcentual; su costo neto se carga a esas OT. Las OC pendientes alimentan cuentas por pagar y el flujo de caja del Consolidado.
       </div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
-        <button onClick={() => setCreando(true)} style={{ background: C.naranja, color: '#fff', border: 'none', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Agregar OC</button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, border: '1px solid #CBD2D6', padding: '2px 6px' }}>
+        <button onClick={() => setCreando(true)} style={{ background: C.naranja, color: '#fff', border: 'none', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Agregar OC</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, border: '1px solid #DFE4EA', padding: '2px 6px' }}>
           <Search size={13} color={C.gris} />
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar N°/proveedor/RUT/categoría…" style={{ border: 'none', outline: 'none', fontSize: 12.5, width: 190 }} />
         </div>
         <select style={inp} value={fEst} onChange={e => setFEst(e.target.value)}><option value="">Todos los estados</option>{ESTADOS_PAGO.map(x => <option key={x}>{x}</option>)}</select>
         <span style={{ fontSize: 12.5, color: C.gris }}>{mostradas.length} OC · Total {clp(totalTodas)} · <b style={{ color: C.rojo }}>Por pagar {clp(totalPend)}</b></span>
       </div>
-      <div style={{ background: '#fff', border: '1px solid #E2DED4', overflowX: 'auto', padding: 8 }}>
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', overflowX: 'auto', padding: 8 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
           <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
             {['Nº OC', 'Proveedor', 'RUT', 'Categoría', 'Fecha', 'Neto', 'IVA', 'Total', 'Plazo', 'Vencimiento', 'Estado de pago', ''].map((h, hi) => <th key={hi} style={{ textAlign: ['Neto', 'IVA', 'Total'].includes(h) ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap', ...(h === '' ? { position: 'sticky', right: 0, background: '#fff', zIndex: 3 } : {}) }}>{h || 'Acciones'}</th>)}
           </tr></thead>
           <tbody>
             {pg.items.map(o => <FilaOC key={o.id} oc={o} otsDisponibles={otsDisponibles} upd={upd} onDelete={eliminar} proveedores={proveedores} />)}
-            {mostradas.length === 0 && <tr><td colSpan={12} style={{ padding: 16, textAlign: 'center', color: '#9AA0A6' }}>Sin órdenes de compra.</td></tr>}
+            {mostradas.length === 0 && <tr><td colSpan={12} style={{ padding: 16, textAlign: 'center', color: '#9AA3AD' }}>Sin órdenes de compra.</td></tr>}
           </tbody>
         </table>
         <Paginador page={pg.page} paginas={pg.paginas} total={pg.total} setPage={setPage} />

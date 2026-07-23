@@ -1,12 +1,14 @@
 import React, { useState, useMemo } from 'react'
 import { Plus, Trash2, X, Copy, Landmark, ReceiptText, PieChart as PieIcon, CalendarClock, BarChart3, CheckCircle2 } from 'lucide-react'
 
-const C = { naranja: '#FF6B00', carbon: '#0F1A2E', verde: '#12805C', rojo: '#D64545', gris: '#8A929E' }
+import { SEREIN } from './theme-serein.js'
+// Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
+const C = { naranja: SEREIN.orange, carbon: SEREIN.text, verde: SEREIN.green, rojo: SEREIN.red, gris: SEREIN.textFaint }
 const clp = n => '$' + Math.round(n).toLocaleString('es-CL')
 const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
 const hoy = () => new Date().toISOString().slice(0, 10)
 const mesDe = f => (f || '').slice(0, 7)
-const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
+const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 
 export const AREAS_GASTO = ['Santa Rosa', 'Istria', 'Producción / Planta', 'Proyectos', 'Administración', 'Comercial', 'Finanzas', 'Gerencia', 'General empresa']
 const CATEGORIAS_FIJO = ['Arriendo', 'Luz', 'Agua', 'Internet', 'Teléfono', 'Contabilidad', 'Software', 'Seguros', 'Sueldos administrativos', 'Sueldos trabajadores', 'Imposiciones', 'Patentes', 'Servicios externos', 'Mantenciones', 'Otros']
@@ -44,7 +46,7 @@ function EditorDistribucion({ dist, setDist, plantillas, areas }) {
   const suma = dist.reduce((a, d) => a + (parseFloat(d.pct) || 0), 0)
   const ok = Math.abs(suma - 100) < 0.01
   return (
-    <div style={{ background: '#FAF7F3', padding: 12, marginTop: 8 }}>
+    <div style={{ background: '#F2F4F7', padding: 12, marginTop: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: C.gris, textTransform: 'uppercase' }}>Distribución por área</span>
         <select onChange={e => { const p = plantillas.find(x => x.id === e.target.value); if (p) setDist(p.items.map(i => ({ ...i }))); e.target.value = '' }} defaultValue="" style={{ ...inp, fontSize: 12 }}>
@@ -63,7 +65,7 @@ function EditorDistribucion({ dist, setDist, plantillas, areas }) {
         </div>
       ))}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <button onClick={() => setDist(repartir([...dist, { area: areas[0], pct: 0 }]))} style={{ background: 'none', border: '1px dashed #CBD2D6', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Agregar área</button>
+        <button onClick={() => setDist(repartir([...dist, { area: areas[0], pct: 0 }]))} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Agregar área</button>
         <span style={{ fontSize: 13, fontWeight: 700, color: ok ? C.verde : C.rojo }}>Suma: {suma}% {ok ? '✓' : '— debe ser 100%'}</span>
       </div>
     </div>
@@ -88,7 +90,7 @@ function FormGasto({ tipo, fin, setFin, otsDisponibles, onCerrar }) {
 
   return (
     <div style={{ background: '#fff', border: `2px solid ${C.naranja}`, padding: 16, marginBottom: 14 }}>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>
         Nuevo gasto {tipo === 'fijo' ? 'fijo' : 'variable / compra'}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
@@ -114,13 +116,13 @@ function FormGasto({ tipo, fin, setFin, otsDisponibles, onCerrar }) {
         </select>
       </div>
       {num(f.neto) > 0 && f.conIva && <div style={{ fontSize: 12, color: C.gris, marginTop: 6 }}>IVA: {clp(num(f.neto) * 0.19)} · Total: {clp(num(f.neto) * 1.19)}</div>}
-      {f.ot && <div style={{ fontSize: 12, color: '#8C4519', background: '#F9E9DE', padding: '6px 10px', marginTop: 6 }}>Este gasto se cargará como costo de la {f.ot} además del área.</div>}
+      {f.ot && <div style={{ fontSize: 12, color: '#D9600A', background: '#FDECDD', padding: '6px 10px', marginTop: 6 }}>Este gasto se cargará como costo de la {f.ot} además del área.</div>}
       <EditorDistribucion dist={dist} setDist={setDist} plantillas={fin.plantillas} areas={fin.areas} />
       <input style={{ ...inp, width: '100%', marginTop: 8 }} placeholder="Observaciones" value={f.obs} onChange={e => setF({ ...f, obs: e.target.value })} />
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
         <button onClick={guardar} disabled={!ok}
-          style={{ background: ok ? C.verde : '#CBD2D6', color: '#fff', border: 'none', padding: '9px 18px', cursor: ok ? 'pointer' : 'not-allowed', fontSize: 13 }}>Guardar gasto</button>
-        <button onClick={onCerrar} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+          style={{ background: ok ? C.verde : '#DFE4EA', color: '#fff', border: 'none', padding: '9px 18px', cursor: ok ? 'pointer' : 'not-allowed', fontSize: 13 }}>Guardar gasto</button>
+        <button onClick={onCerrar} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
       </div>
     </div>
   )
@@ -158,7 +160,7 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
     <div>
       {!creando && (
         <button onClick={() => setCreando(true)}
-          style={{ background: C.naranja, color: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+          style={{ background: C.naranja, color: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
           <Plus size={15} /> Nuevo gasto {tipo === 'fijo' ? 'fijo' : 'variable'}
         </button>
       )}
@@ -166,23 +168,23 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
 
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', margin: '14px 0 10px' }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: C.gris, textTransform: 'uppercase' }}>Area</span>
-        <select value={fArea} onChange={e => setFArea(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #CBD2D6', fontSize: 13, background: '#fff' }}>
+        <select value={fArea} onChange={e => setFArea(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #DFE4EA', fontSize: 13, background: '#fff' }}>
           <option value="">Todas las areas</option>
           {(fin.areas || []).map(a => <option key={a} value={a}>{a}</option>)}
         </select>
-        {fArea && <button onClick={() => setFArea('')} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '6px 10px', cursor: 'pointer', fontSize: 12 }}>Limpiar</button>}
+        {fArea && <button onClick={() => setFArea('')} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '6px 10px', cursor: 'pointer', fontSize: 12 }}>Limpiar</button>}
       </div>
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
         {[['Gastos', String(resumen.n)], [fArea ? 'Neto ' + fArea : 'Neto total', clp(Math.round(resumen.neto))], [fArea ? 'Total ' + fArea : 'Total con IVA', clp(Math.round(resumen.total))]].map(([k, v], n) => (
-          <div key={n} style={{ flex: '1 1 180px', background: '#fff', border: '1px solid #E2DED4', borderTop: '3px solid ' + C.naranja, padding: '12px 14px' }}>
+          <div key={n} style={{ flex: '1 1 180px', background: '#fff', border: '1px solid #DFE4EA', borderTop: '3px solid ' + C.naranja, padding: '12px 14px' }}>
             <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase', fontWeight: 700 }}>{k}</div>
-            <div style={{ fontSize: 21, fontWeight: 700, color: C.carbon, fontFamily: "'Oswald',sans-serif" }}>{v}</div>
+            <div style={{ fontSize: 21, fontWeight: 700, color: C.carbon, fontFamily: SEREIN.fontDisplay }}>{v}</div>
           </div>
         ))}
       </div>
 
-      <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18, overflowX: 'auto' }}>
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18, overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
@@ -193,17 +195,17 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
           </thead>
           <tbody>
             {gastos.map(g => (
-              <tr key={g.id} style={{ borderBottom: '1px solid #EEE9DF', verticalAlign: 'top', opacity: g.estado === 'Anulado' ? 0.45 : 1 }}>
+              <tr key={g.id} style={{ borderBottom: '1px solid #DFE4EA', verticalAlign: 'top', opacity: g.estado === 'Anulado' ? 0.45 : 1 }}>
                 <td style={{ padding: '8px', fontWeight: 500 }}>{g.nombre}{g.ot && <div style={{ fontSize: 11, color: C.naranja, fontFamily: "'JetBrains Mono',monospace" }}>{g.ot}</div>}</td>
                 <td style={{ padding: '8px', color: C.gris }}>{g.categoria}</td>
                 <td style={{ padding: '8px', color: C.gris }}>{g.proveedor || '—'}</td>
-                <td style={{ padding: '8px', textAlign: 'right' }}>{clp(netoEf(g, fin.ufValor))}{g.esUF ? <span style={{ fontSize: 10, color: '#7A8288', display: 'block' }}>{g.uf} UF</span> : null}</td>
+                <td style={{ padding: '8px', textAlign: 'right' }}>{clp(netoEf(g, fin.ufValor))}{g.esUF ? <span style={{ fontSize: 10, color: '#9AA3AD', display: 'block' }}>{g.uf} UF</span> : null}</td>
                 <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600 }}>{clp(g.neto + g.iva)}</td>
                 <td style={{ padding: '8px', color: C.gris, whiteSpace: 'nowrap' }}>{g.vencimiento}</td>
                 <td style={{ padding: '8px', color: C.gris, fontSize: 12 }}>{g.frecuencia}</td>
                 <td style={{ padding: '8px' }}>
                   <select value={g.estado} onChange={e => setFin({ ...fin, gastos: fin.gastos.map(x => x.id === g.id ? { ...x, estado: e.target.value } : x) })}
-                    style={{ border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '3px 6px', background: g.estado === 'Pagado' ? '#E7F2EA' : g.estado === 'Vencido' ? '#F6E0DA' : g.estado === 'Anulado' ? '#EEE' : '#F9E9DE', color: g.estado === 'Pagado' ? C.verde : g.estado === 'Vencido' ? C.rojo : g.estado === 'Anulado' ? C.gris : '#8C4519' }}>
+                    style={{ border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '3px 6px', background: g.estado === 'Pagado' ? '#E6F7EE' : g.estado === 'Vencido' ? '#FCEBEA' : g.estado === 'Anulado' ? '#EEE' : '#FDECDD', color: g.estado === 'Pagado' ? C.verde : g.estado === 'Vencido' ? C.rojo : g.estado === 'Anulado' ? C.gris : '#D9600A' }}>
                     {ESTADOS_GASTO.map(x => <option key={x}>{x}</option>)}
                   </select>
                 </td>
@@ -214,7 +216,7 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
                 </td>
               </tr>
             ))}
-            {gastos.length === 0 && <tr><td colSpan={10} style={{ padding: 16, textAlign: 'center', color: '#9AA0A6' }}>Sin gastos registrados.</td></tr>}
+            {gastos.length === 0 && <tr><td colSpan={10} style={{ padding: 16, textAlign: 'center', color: '#9AA3AD' }}>Sin gastos registrados.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -231,20 +233,20 @@ function Plantillas({ fin, setFin }) {
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14 }}>
-      <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}>
-        <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Crear plantilla</div>
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Crear plantilla</div>
         <input style={{ ...inp, width: '100%', marginBottom: 8 }} placeholder='Nombre (ej: "SR / Istria 50-50")' value={nombre} onChange={e => setNombre(e.target.value)} />
         <EditorDistribucion dist={items} setDist={setItems} plantillas={[]} areas={fin.areas} />
         <button onClick={() => { if (nombre && ok) { setFin({ ...fin, plantillas: [...fin.plantillas, { id: 'p' + Date.now(), nombre, items: items.map(i => ({ area: i.area, pct: parseFloat(i.pct) })) }] }); setNombre(''); setItems([{ area: AREAS_GASTO[0], pct: 100 }]) } }}
           disabled={!ok || !nombre}
-          style={{ background: ok && nombre ? C.naranja : '#CBD2D6', color: '#fff', border: 'none', padding: '9px 18px', cursor: ok && nombre ? 'pointer' : 'not-allowed', fontSize: 13, marginTop: 10 }}>
+          style={{ background: ok && nombre ? C.naranja : '#DFE4EA', color: '#fff', border: 'none', padding: '9px 18px', cursor: ok && nombre ? 'pointer' : 'not-allowed', fontSize: 13, marginTop: 10 }}>
           Guardar plantilla
         </button>
       </div>
-      <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}>
-        <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Plantillas guardadas</div>
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Plantillas guardadas</div>
         {fin.plantillas.map(p => (
-          <div key={p.id} style={{ borderBottom: '1px solid #EEE9DF', padding: '8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div key={p.id} style={{ borderBottom: '1px solid #DFE4EA', padding: '8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <div style={{ fontWeight: 600, fontSize: 13 }}>{p.nombre}</div>
               <div style={{ fontSize: 12, color: C.gris }}>{p.items.map(i => `${i.area} ${i.pct}%`).join(' · ')}</div>
@@ -286,13 +288,13 @@ function CreditosLeasing({ fin, setFin }) {
     <div>
       {!creando && (
         <button onClick={() => setCreando(true)}
-          style={{ background: C.naranja, color: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+          style={{ background: C.naranja, color: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
           <Plus size={15} /> Nuevo crédito / leasing
         </button>
       )}
       {creando && (
         <div style={{ background: '#fff', border: `2px solid ${C.naranja}`, padding: 16, marginBottom: 14 }}>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Nueva obligación financiera</div>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Nueva obligación financiera</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
             <select style={inp} value={f.tipo} onChange={e => setF({ ...f, tipo: e.target.value })}>{TIPOS_OBLIGACION.map(t => <option key={t}>{t}</option>)}</select>
             <input style={inp} placeholder="Banco / institución *" value={f.institucion} onChange={e => setF({ ...f, institucion: e.target.value })} />
@@ -309,8 +311,8 @@ function CreditosLeasing({ fin, setFin }) {
           <EditorDistribucion dist={dist} setDist={setDist} plantillas={fin.plantillas} areas={fin.areas} />
           <div style={{ fontSize: 12, color: C.gris, marginTop: 8 }}>El calendario de cuotas se genera automáticamente; luego puedes editar capital/interés cuota a cuota y marcar pagos.</div>
           <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-            <button onClick={crear} disabled={!ok} style={{ background: ok ? C.verde : '#CBD2D6', color: '#fff', border: 'none', padding: '9px 18px', cursor: ok ? 'pointer' : 'not-allowed', fontSize: 13 }}>Crear con calendario</button>
-            <button onClick={() => setCreando(false)} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+            <button onClick={crear} disabled={!ok} style={{ background: ok ? C.verde : '#DFE4EA', color: '#fff', border: 'none', padding: '9px 18px', cursor: ok ? 'pointer' : 'not-allowed', fontSize: 13 }}>Crear con calendario</button>
+            <button onClick={() => setCreando(false)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
           </div>
         </div>
       )}
@@ -320,10 +322,10 @@ function CreditosLeasing({ fin, setFin }) {
         const saldo = o.cuotas.filter(c => c.estado !== 'Pagada').reduce((a, c) => a + c.total, 0)
         const vencidas = o.cuotas.filter(c => c.estado !== 'Pagada' && c.vencimiento < hoy())
         return (
-          <div key={o.id} style={{ background: '#fff', border: '1px solid #E2DED4', marginBottom: 14 }}>
+          <div key={o.id} style={{ background: '#fff', border: '1px solid #DFE4EA', marginBottom: 14 }}>
             <div onClick={() => setAbierta(abierta === o.id ? null : o.id)} style={{ padding: '14px 18px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
               <div>
-                <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15 }}>{o.tipo} · {o.institucion}</div>
+                <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15 }}>{o.tipo} · {o.institucion}</div>
                 <div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>
                   {o.activo && `${o.activo} · `}{o.nCuotas} cuotas de {clp(o.valorCuota)} · día {o.diaVenc} · {o.dist.map(d => `${d.area} ${d.pct}%`).join(', ')}
                 </div>
@@ -335,13 +337,13 @@ function CreditosLeasing({ fin, setFin }) {
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>Saldo pendiente</div>
-                  <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 16, color: C.naranja }}>{clp(saldo)}</div>
+                  <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 16, color: C.naranja }}>{clp(saldo)}</div>
                 </div>
-                {vencidas.length > 0 && <span style={{ background: '#F6E0DA', color: C.rojo, padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>{vencidas.length} vencida{vencidas.length > 1 ? 's' : ''}</span>}
+                {vencidas.length > 0 && <span style={{ background: '#FCEBEA', color: C.rojo, padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>{vencidas.length} vencida{vencidas.length > 1 ? 's' : ''}</span>}
               </div>
             </div>
             {abierta === o.id && (
-              <div style={{ borderTop: '1px solid #EEE9DF', padding: 18, overflowX: 'auto' }}>
+              <div style={{ borderTop: '1px solid #DFE4EA', padding: 18, overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
@@ -354,7 +356,7 @@ function CreditosLeasing({ fin, setFin }) {
                     {o.cuotas.map(c => {
                       const vencida = c.estado !== 'Pagada' && c.vencimiento < hoy()
                       return (
-                        <tr key={c.n} style={{ borderBottom: '1px solid #EEE9DF', background: vencida ? '#FDF3F0' : 'transparent' }}>
+                        <tr key={c.n} style={{ borderBottom: '1px solid #DFE4EA', background: vencida ? '#FDECDD' : 'transparent' }}>
                           <td style={{ padding: '6px 8px', fontWeight: 600 }}>{c.n}</td>
                           <td style={{ padding: '6px 8px', color: vencida ? C.rojo : C.gris }}>{c.vencimiento}</td>
                           <td style={{ padding: '6px 8px' }}>
@@ -366,7 +368,7 @@ function CreditosLeasing({ fin, setFin }) {
                           <td style={{ padding: '6px 8px', fontWeight: 600 }}>{clp(c.total)}</td>
                           <td style={{ padding: '6px 8px' }}>
                             <button onClick={() => actualizarCuota(o.id, c.n, c.estado === 'Pagada' ? { estado: 'Pendiente', fechaPago: null } : { estado: 'Pagada', fechaPago: hoy() })}
-                              style={{ background: c.estado === 'Pagada' ? '#E7F2EA' : vencida ? '#F6E0DA' : '#F9E9DE', color: c.estado === 'Pagada' ? C.verde : vencida ? C.rojo : '#8C4519', border: 'none', padding: '3px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                              style={{ background: c.estado === 'Pagada' ? '#E6F7EE' : vencida ? '#FCEBEA' : '#FDECDD', color: c.estado === 'Pagada' ? C.verde : vencida ? C.rojo : '#D9600A', border: 'none', padding: '3px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                               {c.estado === 'Pagada' ? '✓ Pagada' : vencida ? 'Vencida' : 'Pendiente'}
                             </button>
                           </td>
@@ -423,29 +425,29 @@ function ProyeccionFin({ fin }) {
   for (let k = 0; k < 12; k++) { const d = new Date(now.getFullYear(), now.getMonth() + k, 1); meses.push({ key: k, etiqueta: d.toLocaleDateString('es-CL', { month: 'short', year: '2-digit' }), fijos: fijoM, total: totalM }) }
   const max = Math.max(1, totalM)
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18, marginTop: 16 }}>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Proyeccion a 12 meses</div>
-      <div style={{ fontSize: 12, color: '#7A8288', marginBottom: 14 }}>Forecast informativo: gastos fijos proyectados, y fijos + variables (promedio del mes vigente). Se actualiza a medida que cargas mas gastos.</div>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18, marginTop: 16 }}>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Proyeccion a 12 meses</div>
+      <div style={{ fontSize: 12, color: '#9AA3AD', marginBottom: 14 }}>Forecast informativo: gastos fijos proyectados, y fijos + variables (promedio del mes vigente). Se actualiza a medida que cargas mas gastos.</div>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 140, marginBottom: 8 }}>
         {meses.map(m => (
           <div key={m.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 0 }}>
             <div style={{ width: '100%', height: 115, position: 'relative' }}>
-              <div title={'Fijos + variables ' + clp(m.total)} style={{ width: '68%', height: (m.total / max * 115) + 'px', background: '#D2642F', position: 'absolute', bottom: 0, left: '16%' }} />
-              <div title={'Fijos ' + clp(m.fijos)} style={{ width: '68%', height: (m.fijos / max * 115) + 'px', background: '#061A40', position: 'absolute', bottom: 0, left: '16%' }} />
+              <div title={'Fijos + variables ' + clp(m.total)} style={{ width: '68%', height: (m.total / max * 115) + 'px', background: '#F77716', position: 'absolute', bottom: 0, left: '16%' }} />
+              <div title={'Fijos ' + clp(m.fijos)} style={{ width: '68%', height: (m.fijos / max * 115) + 'px', background: '#101315', position: 'absolute', bottom: 0, left: '16%' }} />
             </div>
-            <div style={{ fontSize: 9, color: '#7A8288', whiteSpace: 'nowrap' }}>{m.etiqueta}</div>
+            <div style={{ fontSize: 9, color: '#9AA3AD', whiteSpace: 'nowrap' }}>{m.etiqueta}</div>
           </div>
         ))}
       </div>
-      <div style={{ display: 'flex', gap: 16, fontSize: 11.5, color: '#7A8288', marginBottom: 10 }}>
-        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#061A40', marginRight: 5 }} />Gastos fijos</span>
-        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#D2642F', marginRight: 5 }} />Fijos + variables</span>
+      <div style={{ display: 'flex', gap: 16, fontSize: 11.5, color: '#9AA3AD', marginBottom: 10 }}>
+        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#101315', marginRight: 5 }} />Gastos fijos</span>
+        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#F77716', marginRight: 5 }} />Fijos + variables</span>
       </div>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-          <thead><tr style={{ borderBottom: '2px solid #161616' }}>{['Mes', 'Fijos', 'Fijos + variables'].map((h, i) => <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '6px 8px', fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+          <thead><tr style={{ borderBottom: '2px solid #101315' }}>{['Mes', 'Fijos', 'Fijos + variables'].map((h, i) => <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '6px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
           <tbody>
-            {meses.map(m => (<tr key={m.key} style={{ borderBottom: '1px solid #EEE9DF' }}><td style={{ padding: '6px 8px' }}>{m.etiqueta}</td><td style={{ padding: '6px 8px', textAlign: 'right' }}>{clp(m.fijos)}</td><td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{clp(m.total)}</td></tr>))}
+            {meses.map(m => (<tr key={m.key} style={{ borderBottom: '1px solid #DFE4EA' }}><td style={{ padding: '6px 8px' }}>{m.etiqueta}</td><td style={{ padding: '6px 8px', textAlign: 'right' }}>{clp(m.fijos)}</td><td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{clp(m.total)}</td></tr>))}
           </tbody>
         </table>
       </div>
@@ -458,9 +460,9 @@ function ResumenMensual({ fin }) {
   const r = useMemo(() => calcularResumenFin(fin, mes), [fin, mes])
 
   const kpi = (label, valor, color) => (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 14, flex: '1 1 170px' }}>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 14, flex: '1 1 170px' }}>
       <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{label}</div>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 21, fontWeight: 600, color: color || C.carbon, whiteSpace: 'nowrap' }}>{valor}</div>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 21, fontWeight: 600, color: color || C.carbon, whiteSpace: 'nowrap' }}>{valor}</div>
     </div>
   )
 
@@ -478,15 +480,15 @@ function ResumenMensual({ fin }) {
         {r.reembolsable > 0 ? kpi('Reembolsable por tercero', clp(r.reembolsable), C.gris) : null}
         {kpi('Cuotas vencidas', r.cuotasVencidas.length, r.cuotasVencidas.length > 0 ? C.rojo : C.verde)}
       </div>
-      <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}>
-        <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Gastos del mes por área</div>
-        {Object.keys(r.porArea).length === 0 ? <div style={{ fontSize: 13, color: '#9AA0A6' }}>Sin gastos este mes.</div> : (
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Gastos del mes por área</div>
+        {Object.keys(r.porArea).length === 0 ? <div style={{ fontSize: 13, color: '#9AA3AD' }}>Sin gastos este mes.</div> : (
           Object.entries(r.porArea).sort((a, b) => b[1] - a[1]).map(([area, monto]) => {
             const max = Math.max(...Object.values(r.porArea))
             return (
               <div key={area} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                 <span style={{ fontSize: 13, width: 170 }}>{area}</span>
-                <div style={{ flex: 1, height: 8, background: '#EEE9DF' }}>
+                <div style={{ flex: 1, height: 8, background: '#DFE4EA' }}>
                   <div style={{ width: `${(monto / max) * 100}%`, height: '100%', background: C.naranja }} />
                 </div>
                 <span style={{ fontSize: 13, width: 110, textAlign: 'right', fontWeight: 600 }}>{clp(monto)}</span>
@@ -520,7 +522,7 @@ export default function FinanzasModule({ otsDisponibles = [], fin: finExt, setFi
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            style={{ background: tab === t.id ? C.carbon : '#fff', color: tab === t.id ? '#fff' : C.carbon, border: '1px solid #CBD2D6', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
+            style={{ background: tab === t.id ? C.carbon : '#fff', color: tab === t.id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
             {t.icono}{t.label}
           </button>
         ))}

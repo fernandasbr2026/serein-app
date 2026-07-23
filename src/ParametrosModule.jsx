@@ -8,11 +8,13 @@ import { Plus, Trash2, Landmark, Info, TrendingUp, RefreshCw } from 'lucide-reac
 // Versión en memoria (mismo patrón que el resto de la app).
 // ============================================================
 
-const C = { naranja: '#FF6B00', carbon: '#0F1A2E', verde: '#12805C', rojo: '#D64545', gris: '#8A929E', azul: '#061A40' }
+import { SEREIN } from './theme-serein.js'
+// Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
+const C = { naranja: SEREIN.orange, carbon: SEREIN.text, verde: SEREIN.green, rojo: SEREIN.red, gris: SEREIN.textFaint, azul: SEREIN.ink }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
 const dec = s => { const v = parseFloat(String(s).replace(',', '.').replace(/[^\d.]/g, '')); return isNaN(v) ? 0 : v }
-const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
+const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 
 // Datos de prueba (los que entregó Gerencia)
 export const PARAMS_SEED = {
@@ -71,13 +73,13 @@ function SeccionFactoring({ params, setParams }) {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <Landmark size={16} color={C.naranja} />
-        <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, textTransform: 'uppercase' }}>Empresas de Factoring</span>
+        <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, textTransform: 'uppercase' }}>Empresas de Factoring</span>
       </div>
-      <div style={{ fontSize: 12, color: '#8C4519', background: '#F9E9DE', padding: '8px 12px', marginBottom: 12, display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+      <div style={{ fontSize: 12, color: '#D9600A', background: '#FDECDD', padding: '8px 12px', marginBottom: 12, display: 'flex', gap: 6, alignItems: 'flex-start' }}>
         <Info size={14} style={{ marginTop: 1, flexShrink: 0 }} />
         <span>La tasa e interés se aplican <b>mensualmente</b> y prorrateados por los días del crédito. Estos valores autocompletan el cálculo de pérdida al factorizar una factura.</span>
       </div>
-      <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18, overflowX: 'auto' }}>
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18, overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
@@ -88,7 +90,7 @@ function SeccionFactoring({ params, setParams }) {
           </thead>
           <tbody>
             {lista.map(f => (
-              <tr key={f.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
+              <tr key={f.id} style={{ borderBottom: '1px solid #DFE4EA' }}>
                 <td style={{ padding: '7px 8px' }}><input value={f.nombre} onChange={e => actualizar(f.id, 'nombre', e.target.value)} style={{ ...inp, width: '100%', fontWeight: 600 }} /></td>
                 <td style={{ padding: '7px 8px' }}>{numInput(f.id, 'tasa', f.tasa, '%')}</td>
                 <td style={{ padding: '7px 8px' }}>{numInput(f.id, 'tasaMora', f.tasaMora, '%')}</td>
@@ -96,18 +98,18 @@ function SeccionFactoring({ params, setParams }) {
                 <td style={{ padding: '7px 4px', textAlign: 'right' }}><button onClick={() => eliminar(f.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button></td>
               </tr>
             ))}
-            {lista.length === 0 && <tr><td colSpan={5} style={{ padding: 12, textAlign: 'center', color: '#9AA0A6' }}>Sin empresas de factoring.</td></tr>}
-            <tr style={{ background: '#FAF7F3' }}>
+            {lista.length === 0 && <tr><td colSpan={5} style={{ padding: 12, textAlign: 'center', color: '#9AA3AD' }}>Sin empresas de factoring.</td></tr>}
+            <tr style={{ background: '#F2F4F7' }}>
               <td style={{ padding: '7px 8px' }}><input placeholder="Nueva empresa" value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })} style={{ ...inp, width: '100%' }} /></td>
               <td style={{ padding: '7px 8px', textAlign: 'right' }}><input placeholder="0,83" value={nuevo.tasa} onChange={e => setNuevo({ ...nuevo, tasa: e.target.value })} style={{ ...inp, width: 90, textAlign: 'right' }} /></td>
               <td style={{ padding: '7px 8px', textAlign: 'right' }}><input placeholder="3,5" value={nuevo.tasaMora} onChange={e => setNuevo({ ...nuevo, tasaMora: e.target.value })} style={{ ...inp, width: 90, textAlign: 'right' }} /></td>
               <td style={{ padding: '7px 8px', textAlign: 'right' }}><input placeholder="50000" value={nuevo.costoOp} onChange={e => setNuevo({ ...nuevo, costoOp: e.target.value })} style={{ ...inp, width: 90, textAlign: 'right' }} /></td>
-              <td style={{ padding: '7px 4px', textAlign: 'right' }}><button onClick={agregar} disabled={!nuevo.nombre} style={{ background: nuevo.nombre ? C.verde : '#CBD2D6', color: '#fff', border: 'none', padding: '6px 8px', cursor: nuevo.nombre ? 'pointer' : 'not-allowed' }}><Plus size={14} /></button></td>
+              <td style={{ padding: '7px 4px', textAlign: 'right' }}><button onClick={agregar} disabled={!nuevo.nombre} style={{ background: nuevo.nombre ? C.verde : '#DFE4EA', color: '#fff', border: 'none', padding: '6px 8px', cursor: nuevo.nombre ? 'pointer' : 'not-allowed' }}><Plus size={14} /></button></td>
             </tr>
           </tbody>
         </table>
       </div>
-      <div style={{ fontSize: 12, color: '#9AA0A6', marginTop: 10 }}>
+      <div style={{ fontSize: 12, color: '#9AA3AD', marginTop: 10 }}>
         Este módulo irá creciendo con más parámetros reutilizables (condiciones de pago, áreas, categorías, etc.) para autocompletar otros formularios.
       </div>
     </div>
@@ -134,12 +136,12 @@ function SeccionUF({ params, setParams }) {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <TrendingUp size={16} color={C.naranja} />
-        <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, textTransform: 'uppercase' }}>Valor UF (actualizado en línea)</span>
+        <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, textTransform: 'uppercase' }}>Valor UF (actualizado en línea)</span>
       </div>
-      <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18, maxWidth: 460 }}>
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18, maxWidth: 460 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>UF de hoy</span>
-          <span style={{ fontFamily: "'Oswald',sans-serif", fontSize: 26, fontWeight: 600, color: C.carbon }}>{clp(uf.valor)}</span>
+          <span style={{ fontFamily: SEREIN.fontDisplay, fontSize: 26, fontWeight: 600, color: C.carbon }}>{clp(uf.valor)}</span>
           {uf.fecha && <span style={{ fontSize: 12, color: C.gris }}>al {uf.fecha}</span>}
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}>
@@ -150,7 +152,7 @@ function SeccionUF({ params, setParams }) {
           <input value={uf.valor || ''} onChange={e => setParams({ ...params, uf: { valor: num(e.target.value), fecha: uf.fecha } })} style={{ ...inp, width: 110, textAlign: 'right' }} />
         </div>
         {error && <div style={{ fontSize: 12, color: C.rojo, marginTop: 8 }}>{error}</div>}
-        <div style={{ fontSize: 12, color: C.gris, marginTop: 12, background: '#FAF7F3', padding: 10 }}>
+        <div style={{ fontSize: 12, color: C.gris, marginTop: 12, background: '#F2F4F7', padding: 10 }}>
           Fuente: mindicador.cl (UF diaria del Banco Central). Este valor se usa para gastos en UF (ej. arriendo de Santa Rosa): el monto se calcula como <b>UF × valor de hoy</b>, y al registrar el pago se guarda la UF del día.
         </div>
       </div>
@@ -163,29 +165,29 @@ function SeccionInstrumentos({ params, setParams }) {
   const inst = params.instrumentos || { espMarca: 'ELCOMETER', espSerie: 'MH11472', rugMarca: 'ELCOMETER', rugSerie: 'NE30319', termoMarca: 'ELCOMETER', termoSerie: 'KCA721' }
   useEffect(() => { if (!params.instrumentos) setParams({ ...params, instrumentos: inst }) }, [])
   const set = (k, v) => setParams({ ...params, instrumentos: { ...inst, [k]: v } })
-  const ip = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box', width: '100%', marginTop: 4 }
-  const lb = { fontSize: 12, color: '#7A8288' }
-  return (<div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Instrumentos / equipos de inspeccion</div><div style={{ marginBottom: 16, paddingBottom: 14, borderBottom: '1px solid #E2DED4' }}><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 13, textTransform: 'uppercase', marginBottom: 4 }}>Logo de la empresa</div><div style={{ fontSize: 12, color: '#6b6b6b', marginBottom: 8 }}>Se usa en todos los PDF descargables (protocolos, cotizaciones y ordenes de compra).</div><div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>{(params.logo) ? <img src={params.logo} alt="logo" style={{ height: 50, background: '#fff', border: '1px solid #E2DED4', borderRadius: 6, padding: 4, objectFit: 'contain' }} /> : <div style={{ height: 50, width: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #C9C4B8', borderRadius: 6, fontSize: 11, color: '#9a9a9a' }}>Sin logo</div>}<label style={{ cursor: 'pointer', background: '#061A40', color: '#fff', fontSize: 12, fontWeight: 600, padding: '8px 14px', borderRadius: 6 }}>Subir logo<input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const fl = e.target.files[0]; if (!fl) return; const rd = new FileReader(); rd.onload = () => { const d = rd.result; try { localStorage.setItem('serein_logo', d) } catch (x) {} setParams({ ...params, logo: d }) }; rd.readAsDataURL(fl) }} /></label>{params.logo ? <button onClick={() => { try { localStorage.removeItem('serein_logo') } catch (x) {} setParams({ ...params, logo: '' }) }} style={{ background: 'transparent', border: '1px solid #D8DCE5', color: '#DC2626', fontSize: 12, padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>Quitar</button> : null}</div></div><div style={{ marginBottom: 16, paddingBottom: 14, borderBottom: '1px solid #E2DED4' }}><div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 13, textTransform: 'uppercase', marginBottom: 4 }}>Logo Istria (PIG / PGP de Istria)</div><div style={{ fontSize: 12, color: '#6b6b6b', marginBottom: 8 }}>Se usa solo en los protocolos PIG y PGP de las OT del area Istria. Si no cargas uno, esos documentos usan el logo SEREIN.</div><div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>{(params.logoIstria) ? <img src={params.logoIstria} alt="logo Istria" style={{ height: 50, background: '#fff', border: '1px solid #E2DED4', borderRadius: 6, padding: 4, objectFit: 'contain' }} /> : <div style={{ height: 50, width: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #C9C4B8', borderRadius: 6, fontSize: 11, color: '#9a9a9a' }}>Sin logo Istria</div>}<label style={{ cursor: 'pointer', background: '#061A40', color: '#fff', fontSize: 12, fontWeight: 600, padding: '8px 14px', borderRadius: 6 }}>Subir logo Istria<input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const fl = e.target.files[0]; if (!fl) return; const rd = new FileReader(); rd.onload = () => { const d = rd.result; try { localStorage.setItem('serein_logoIstria', d) } catch (x) {} setParams({ ...params, logoIstria: d }) }; rd.readAsDataURL(fl) }} /></label>{params.logoIstria ? <button onClick={() => { try { localStorage.removeItem('serein_logoIstria') } catch (x) {} setParams({ ...params, logoIstria: '' }) }} style={{ background: 'transparent', border: '1px solid #D8DCE5', color: '#DC2626', fontSize: 12, padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>Quitar</button> : null}</div></div><div style={{ fontSize: 12, color: '#7A8288', marginBottom: 14 }}>Estos codigos se cargan automaticamente al generar un protocolo PGP y siguen siendo editables en cada protocolo. Cambialos aqui cuando cambien los equipos.</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px,1fr))', gap: 12 }}><label style={lb}>Medidor de espesor - Marca<input style={ip} value={inst.espMarca || ''} onChange={e => set('espMarca', e.target.value)} /></label><label style={lb}>Medidor de espesor - Serie<input style={ip} value={inst.espSerie || ''} onChange={e => set('espSerie', e.target.value)} /></label><label style={lb}>Rugosimetro - Marca<input style={ip} value={inst.rugMarca || ''} onChange={e => set('rugMarca', e.target.value)} /></label><label style={lb}>Rugosimetro - Serie<input style={ip} value={inst.rugSerie || ''} onChange={e => set('rugSerie', e.target.value)} /></label><label style={lb}>Termohigrometro - Marca<input style={ip} value={inst.termoMarca || ''} onChange={e => set('termoMarca', e.target.value)} /></label><label style={lb}>Termohigrometro - Serie<input style={ip} value={inst.termoSerie || ''} onChange={e => set('termoSerie', e.target.value)} /></label></div><div style={{ fontSize: 12, fontWeight: 600, color: '#5a6b85', margin: '16px 0 8px' }}>Fotos de los equipos (aparecen en la ultima hoja de los protocolos)</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px,1fr))', gap: 14 }}>{[['Medidor de espesor', 'espFotos'], ['Rugosimetro', 'rugFotos'], ['Termohigrometro', 'termoFotos']].map(eq => { const fotos = inst[eq[1]] || []; return (<div key={eq[1]} style={{ border: '1px solid #E2DED4', padding: 10 }}><div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>{eq[0]}</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{fotos.map((d, idx) => (<div key={idx} style={{ position: 'relative' }}><img src={d} style={{ width: 70, height: 70, objectFit: 'contain', background: '#F5F7FA', border: '1px solid #CBD2D6' }} /><button onClick={() => set(eq[1], fotos.filter((_, j) => j !== idx))} style={{ position: 'absolute', top: -6, right: -6, background: '#B5432E', color: '#fff', border: 'none', borderRadius: '50%', width: 18, height: 18, cursor: 'pointer', fontSize: 11 }}>x</button></div>))}{fotos.length < 3 && (<label style={{ width: 70, height: 70, border: '1px dashed #CBD2D6', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#7A8288', fontSize: 20 }}>+<input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { const files = [...(e.target.files || [])].slice(0, 3 - fotos.length); let pend = files.length; if (!pend) return; const acc = []; files.forEach(f => imgToDataP(f, d => { acc.push(d); pend--; if (pend === 0) set(eq[1], [...fotos, ...acc]) })); e.target.value = '' }} /></label>)}</div></div>) })}</div></div>) }
+  const ip = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box', width: '100%', marginTop: 4 }
+  const lb = { fontSize: 12, color: '#9AA3AD' }
+  return (<div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Instrumentos / equipos de inspeccion</div><div style={{ marginBottom: 16, paddingBottom: 14, borderBottom: '1px solid #DFE4EA' }}><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase', marginBottom: 4 }}>Logo de la empresa</div><div style={{ fontSize: 12, color: '#5A636E', marginBottom: 8 }}>Se usa en todos los PDF descargables (protocolos, cotizaciones y ordenes de compra).</div><div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>{(params.logo) ? <img src={params.logo} alt="logo" style={{ height: 50, background: '#fff', border: '1px solid #DFE4EA', borderRadius: 6, padding: 4, objectFit: 'contain' }} /> : <div style={{ height: 50, width: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #DFE4EA', borderRadius: 6, fontSize: 11, color: '#9AA3AD' }}>Sin logo</div>}<label style={{ cursor: 'pointer', background: '#101315', color: '#fff', fontSize: 12, fontWeight: 600, padding: '8px 14px', borderRadius: 6 }}>Subir logo<input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const fl = e.target.files[0]; if (!fl) return; const rd = new FileReader(); rd.onload = () => { const d = rd.result; try { localStorage.setItem('serein_logo', d) } catch (x) {} setParams({ ...params, logo: d }) }; rd.readAsDataURL(fl) }} /></label>{params.logo ? <button onClick={() => { try { localStorage.removeItem('serein_logo') } catch (x) {} setParams({ ...params, logo: '' }) }} style={{ background: 'transparent', border: '1px solid #DFE4EA', color: '#C5453D', fontSize: 12, padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>Quitar</button> : null}</div></div><div style={{ marginBottom: 16, paddingBottom: 14, borderBottom: '1px solid #DFE4EA' }}><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase', marginBottom: 4 }}>Logo Istria (PIG / PGP de Istria)</div><div style={{ fontSize: 12, color: '#5A636E', marginBottom: 8 }}>Se usa solo en los protocolos PIG y PGP de las OT del area Istria. Si no cargas uno, esos documentos usan el logo SEREIN.</div><div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>{(params.logoIstria) ? <img src={params.logoIstria} alt="logo Istria" style={{ height: 50, background: '#fff', border: '1px solid #DFE4EA', borderRadius: 6, padding: 4, objectFit: 'contain' }} /> : <div style={{ height: 50, width: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #DFE4EA', borderRadius: 6, fontSize: 11, color: '#9AA3AD' }}>Sin logo Istria</div>}<label style={{ cursor: 'pointer', background: '#101315', color: '#fff', fontSize: 12, fontWeight: 600, padding: '8px 14px', borderRadius: 6 }}>Subir logo Istria<input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const fl = e.target.files[0]; if (!fl) return; const rd = new FileReader(); rd.onload = () => { const d = rd.result; try { localStorage.setItem('serein_logoIstria', d) } catch (x) {} setParams({ ...params, logoIstria: d }) }; rd.readAsDataURL(fl) }} /></label>{params.logoIstria ? <button onClick={() => { try { localStorage.removeItem('serein_logoIstria') } catch (x) {} setParams({ ...params, logoIstria: '' }) }} style={{ background: 'transparent', border: '1px solid #DFE4EA', color: '#C5453D', fontSize: 12, padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>Quitar</button> : null}</div></div><div style={{ fontSize: 12, color: '#9AA3AD', marginBottom: 14 }}>Estos codigos se cargan automaticamente al generar un protocolo PGP y siguen siendo editables en cada protocolo. Cambialos aqui cuando cambien los equipos.</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px,1fr))', gap: 12 }}><label style={lb}>Medidor de espesor - Marca<input style={ip} value={inst.espMarca || ''} onChange={e => set('espMarca', e.target.value)} /></label><label style={lb}>Medidor de espesor - Serie<input style={ip} value={inst.espSerie || ''} onChange={e => set('espSerie', e.target.value)} /></label><label style={lb}>Rugosimetro - Marca<input style={ip} value={inst.rugMarca || ''} onChange={e => set('rugMarca', e.target.value)} /></label><label style={lb}>Rugosimetro - Serie<input style={ip} value={inst.rugSerie || ''} onChange={e => set('rugSerie', e.target.value)} /></label><label style={lb}>Termohigrometro - Marca<input style={ip} value={inst.termoMarca || ''} onChange={e => set('termoMarca', e.target.value)} /></label><label style={lb}>Termohigrometro - Serie<input style={ip} value={inst.termoSerie || ''} onChange={e => set('termoSerie', e.target.value)} /></label></div><div style={{ fontSize: 12, fontWeight: 600, color: '#5A636E', margin: '16px 0 8px' }}>Fotos de los equipos (aparecen en la ultima hoja de los protocolos)</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px,1fr))', gap: 14 }}>{[['Medidor de espesor', 'espFotos'], ['Rugosimetro', 'rugFotos'], ['Termohigrometro', 'termoFotos']].map(eq => { const fotos = inst[eq[1]] || []; return (<div key={eq[1]} style={{ border: '1px solid #DFE4EA', padding: 10 }}><div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>{eq[0]}</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{fotos.map((d, idx) => (<div key={idx} style={{ position: 'relative' }}><img src={d} style={{ width: 70, height: 70, objectFit: 'contain', background: '#F2F4F7', border: '1px solid #DFE4EA' }} /><button onClick={() => set(eq[1], fotos.filter((_, j) => j !== idx))} style={{ position: 'absolute', top: -6, right: -6, background: '#C5453D', color: '#fff', border: 'none', borderRadius: '50%', width: 18, height: 18, cursor: 'pointer', fontSize: 11 }}>x</button></div>))}{fotos.length < 3 && (<label style={{ width: 70, height: 70, border: '1px dashed #DFE4EA', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#9AA3AD', fontSize: 20 }}>+<input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { const files = [...(e.target.files || [])].slice(0, 3 - fotos.length); let pend = files.length; if (!pend) return; const acc = []; files.forEach(f => imgToDataP(f, d => { acc.push(d); pend--; if (pend === 0) set(eq[1], [...fotos, ...acc]) })); e.target.value = '' }} /></label>)}</div></div>) })}</div></div>) }
 
 function SeccionEmpresa({ params, setParams }) {
   const emp = params.empresa || {}
   const set = (k, v) => setParams({ ...params, empresa: { ...(params.empresa || {}), [k]: v } })
-  const ip = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box', width: '100%', marginTop: 4 }
-  const lb = { fontSize: 12, color: '#7A8288' }
+  const ip = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box', width: '100%', marginTop: 4 }
+  const lb = { fontSize: 12, color: '#9AA3AD' }
   const campos = [['razonSocial', 'Razón social'], ['rut', 'RUT'], ['giro', 'Giro'], ['direccion', 'Dirección'], ['comuna', 'Comuna / Ciudad'], ['telefono', 'Teléfono'], ['correo', 'Correo'], ['web', 'Sitio web']]
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Datos de la empresa</div>
-      <div style={{ fontSize: 12, color: '#7A8288', marginBottom: 14 }}>Fuente única para el encabezado de cotizaciones, órdenes de compra y OT. Al editarlos se reflejan en los documentos nuevos. Se guardan en la nube.</div>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Datos de la empresa</div>
+      <div style={{ fontSize: 12, color: '#9AA3AD', marginBottom: 14 }}>Fuente única para el encabezado de cotizaciones, órdenes de compra y OT. Al editarlos se reflejan en los documentos nuevos. Se guardan en la nube.</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px,1fr))', gap: 12 }}>
         {campos.map(c => (<label key={c[0]} style={lb}>{c[1]}<input style={ip} value={emp[c[0]] || ''} onChange={e => set(c[0], e.target.value)} /></label>))}
       </div>
-      <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #E2DED4' }}>
-        <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 13, textTransform: 'uppercase', marginBottom: 4 }}>Logo de la empresa</div>
-        <div style={{ fontSize: 12, color: '#6b6b6b', marginBottom: 8 }}>Se usa en los PDF (cotizaciones, OC, protocolos). Tambien se puede administrar en la pestana Instrumentos.</div>
+      <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #DFE4EA' }}>
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase', marginBottom: 4 }}>Logo de la empresa</div>
+        <div style={{ fontSize: 12, color: '#5A636E', marginBottom: 8 }}>Se usa en los PDF (cotizaciones, OC, protocolos). Tambien se puede administrar en la pestana Instrumentos.</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          {(params.logo) ? <img src={params.logo} alt="logo" style={{ height: 50, background: '#fff', border: '1px solid #E2DED4', borderRadius: 6, padding: 4, objectFit: 'contain' }} /> : <div style={{ height: 50, width: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #C9C4B8', borderRadius: 6, fontSize: 11, color: '#9a9a9a' }}>Sin logo</div>}
-          <label style={{ cursor: 'pointer', background: '#061A40', color: '#fff', fontSize: 12, fontWeight: 600, padding: '8px 14px', borderRadius: 6 }}>Subir logo<input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const fl = e.target.files[0]; if (!fl) return; const rd = new FileReader(); rd.onload = () => { const d = rd.result; try { localStorage.setItem('serein_logo', d) } catch (x) {} setParams({ ...params, logo: d }) }; rd.readAsDataURL(fl) }} /></label>
+          {(params.logo) ? <img src={params.logo} alt="logo" style={{ height: 50, background: '#fff', border: '1px solid #DFE4EA', borderRadius: 6, padding: 4, objectFit: 'contain' }} /> : <div style={{ height: 50, width: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #DFE4EA', borderRadius: 6, fontSize: 11, color: '#9AA3AD' }}>Sin logo</div>}
+          <label style={{ cursor: 'pointer', background: '#101315', color: '#fff', fontSize: 12, fontWeight: 600, padding: '8px 14px', borderRadius: 6 }}>Subir logo<input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const fl = e.target.files[0]; if (!fl) return; const rd = new FileReader(); rd.onload = () => { const d = rd.result; try { localStorage.setItem('serein_logo', d) } catch (x) {} setParams({ ...params, logo: d }) }; rd.readAsDataURL(fl) }} /></label>
         </div>
       </div>
     </div>
@@ -205,7 +207,7 @@ export default function ParametrosModule({ params: pExt, setParams: setPExt }) {
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            style={{ background: tab === t.id ? C.carbon : '#fff', color: tab === t.id ? '#fff' : C.carbon, border: '1px solid #CBD2D6', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
+            style={{ background: tab === t.id ? C.carbon : '#fff', color: tab === t.id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
             {t.icono}{t.label}
           </button>
         ))}

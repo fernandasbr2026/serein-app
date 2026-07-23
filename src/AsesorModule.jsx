@@ -4,13 +4,15 @@ import { calcularResumenFin } from './FinanzasModule.jsx'
 import { calcularPerdidaFactoring } from './ParametrosModule.jsx'
 import { AlertTriangle, CheckCircle2, TrendingDown, TrendingUp, Wallet, Landmark, Receipt, Info, Flag, Factory, ShoppingCart, Banknote, Lightbulb } from 'lucide-react'
 
-const C = { navy: '#1A2733', line: '#E2DED4', gray: '#7A8288', red: '#B5432E', orange: '#D2642F', green: '#3D7A4E' }
+import { SEREIN } from './theme-serein.js'
+// Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
+const C = { navy: SEREIN.ink, line: SEREIN.line, gray: SEREIN.textFaint, red: SEREIN.red, orange: SEREIN.orange, green: SEREIN.green }
 const clp = n => '$' + Math.round(+n || 0).toLocaleString('es-CL')
 const hoy = () => new Date().toISOString().slice(0, 10)
 const mesDe = d => (d || '').slice(0, 7)
 function sumarDias(f, n) { const d = new Date(f + 'T00:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
 const SEVR = { rojo: 3, amarillo: 2, verde: 1 }
-const SEV_COLOR = { rojo: '#B5432E', amarillo: '#D2642F', verde: '#3D7A4E' }
+const SEV_COLOR = { rojo: '#C5453D', amarillo: '#F77716', verde: '#1B9E5D' }
 const ICON = { alert: AlertTriangle, wallet: Wallet, down: TrendingDown, bank: Landmark, receipt: Receipt, ok: CheckCircle2, info: Info }
 const NADA = 'No existe información suficiente para este análisis.'
 const MESN = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -21,7 +23,7 @@ function Tarjeta({ icon: Ico, titulo, color, vacio, children }) {
     <div style={{ background: '#fff', border: '1px solid ' + C.line, borderTop: '3px solid ' + (color || C.navy), borderRadius: 6, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <Ico size={16} color={color || C.navy} />
-        <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', color: C.navy, letterSpacing: 0.4 }}>{titulo}</span>
+        <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', color: C.navy, letterSpacing: 0.4 }}>{titulo}</span>
       </div>
       {vacio ? <div style={{ fontSize: 12.5, color: C.gray, fontStyle: 'italic' }}>{NADA}</div> : <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>{children}</div>}
     </div>
@@ -32,7 +34,7 @@ function Fila({ k, v, color }) {
 }
 
 const TEMAS = ['Ventas', 'OT', 'OC', 'Facturas', 'Clientes', 'Produccion', 'Compras', 'Cobranza']
-const tabBtn = on => ({ background: on ? C.navy : '#fff', color: on ? '#fff' : C.navy, border: '1px solid ' + C.line, borderRadius: 4, padding: '7px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase' })
+const tabBtn = on => ({ background: on ? C.navy : '#fff', color: on ? '#fff' : C.navy, border: '1px solid ' + C.line, borderRadius: 4, padding: '7px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: SEREIN.fontDisplay, textTransform: 'uppercase' })
 
 function ChatIA() {
   const [convs, setConvs] = useState([])
@@ -80,12 +82,12 @@ function ChatIA() {
     <div style={{ display: 'flex', gap: 12, minHeight: 500 }}>
       <div style={{ width: 190, borderRight: '1px solid ' + C.line, paddingRight: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <button onClick={nueva} style={{ background: C.navy, color: '#fff', border: 'none', borderRadius: 4, padding: '8px 10px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>+ Nueva conversacion</button>
-        {convs.map(c => (<button key={c.id} onClick={() => abrir(c.id)} style={{ textAlign: 'left', background: c.id === conv ? '#F1EDE5' : 'transparent', border: '1px solid ' + C.line, borderRadius: 4, padding: '7px 9px', cursor: 'pointer', fontSize: 12, color: C.navy, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.titulo || 'Conversacion'}</button>))}
+        {convs.map(c => (<button key={c.id} onClick={() => abrir(c.id)} style={{ textAlign: 'left', background: c.id === conv ? '#E2E7EC' : 'transparent', border: '1px solid ' + C.line, borderRadius: 4, padding: '7px 9px', cursor: 'pointer', fontSize: 12, color: C.navy, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.titulo || 'Conversacion'}</button>))}
         {!cargando && convs.length === 0 ? <div style={{ fontSize: 12, color: C.gray }}>Sin conversaciones aun.</div> : null}
       </div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {error ? <div style={{ background: '#FDECEC', border: '1px solid ' + C.red, color: C.red, padding: '8px 12px', borderRadius: 4, fontSize: 12.5, marginBottom: 8 }}>{error}</div> : null}
-        <div style={{ flex: 1, minHeight: 300, overflowY: 'auto', border: '1px solid ' + C.line, borderRadius: 6, padding: 12, background: '#FCFAF6', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {error ? <div style={{ background: '#FCEBEA', border: '1px solid ' + C.red, color: C.red, padding: '8px 12px', borderRadius: 4, fontSize: 12.5, marginBottom: 8 }}>{error}</div> : null}
+        <div style={{ flex: 1, minHeight: 300, overflowY: 'auto', border: '1px solid ' + C.line, borderRadius: 6, padding: 12, background: '#F2F4F7', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {cargando ? <div style={{ color: C.gray, fontSize: 13 }}>Cargando historial...</div> : null}
           {!cargando && msgs.length === 0 ? <div style={{ color: C.gray, fontSize: 13 }}>Escribe un mensaje o elige un tema para empezar. El historial queda guardado en tu cuenta.</div> : null}
           {msgs.map((m, i) => (<div key={m.id || i} style={{ alignSelf: m.rol === 'user' ? 'flex-end' : 'flex-start', maxWidth: '78%', background: m.rol === 'user' ? C.navy : '#fff', color: m.rol === 'user' ? '#fff' : C.navy, border: '1px solid ' + C.line, borderRadius: 8, padding: '8px 11px', fontSize: 13 }}>{m.tema && m.rol === 'user' ? <div style={{ fontSize: 10, opacity: 0.85, marginBottom: 2, textTransform: 'uppercase' }}>{m.tema}</div> : null}{m.texto}</div>))}
@@ -494,40 +496,40 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
         {!soloOp && <button onClick={() => setVista('chat')} style={tabBtn(vista === 'chat')}>Chat</button>}
       </div>
       {vista === 'chat' ? <ChatIA /> : vista === 'operacional' ? (<div>
-        <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: C.navy }}>Analista Operacional</div>
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: C.navy }}>Analista Operacional</div>
         <div style={{ fontSize: 12.5, color: C.gray, marginBottom: 12 }}>Servicio que analiza automaticamente al ingresar y guarda los resultados en la base. Todo dentro del Dashboard.</div>
         {analisisOp.length === 0 ? <div style={{ color: C.gray, fontSize: 13, border: '1px dashed ' + C.line, borderRadius: 6, padding: 16, textAlign: 'center' }}>Aun no hay analisis guardado. Si es la primera vez, corre serein_ai_setup.sql en Supabase.</div> : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
             {['OT', 'Produccion', 'Planta', 'Calidad', 'Retrasos', 'Horas Hombre', 'Capacidad'].map(area => { const a = analisisOp.find(x => x.area === area); if (!a) return null; const v = (area === 'Produccion' || area === 'Calidad' || area === 'Capacidad') ? (a.valor + '%') : String(a.valor); return (
               <div key={area} style={{ background: '#fff', border: '1px solid ' + C.line, borderTop: '3px solid ' + C.navy, borderRadius: 6, padding: '12px 14px' }}>
-                <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 13, textTransform: 'uppercase', color: C.navy }}>{a.area}</div>
-                <div style={{ fontSize: 21, fontWeight: 700, color: C.navy, fontFamily: "'Oswald',sans-serif", margin: '2px 0 4px' }}>{v}</div>
-                <div style={{ fontSize: 12, color: '#3A4045' }}>{a.resumen}</div>
+                <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase', color: C.navy }}>{a.area}</div>
+                <div style={{ fontSize: 21, fontWeight: 700, color: C.navy, fontFamily: SEREIN.fontDisplay, margin: '2px 0 4px' }}>{v}</div>
+                <div style={{ fontSize: 12, color: '#5A636E' }}>{a.resumen}</div>
                 <div style={{ fontSize: 10.5, color: C.gray, marginTop: 6 }}>{(a.fecha || '').slice(0, 10)} · fuente: {a.fuente}</div>
               </div>
             ) })}
           </div>
         )}
       </div>) : vista === 'comercial' ? (<div>
-        <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: C.navy }}>Analista Comercial</div>
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: C.navy }}>Analista Comercial</div>
         <div style={{ fontSize: 12.5, color: C.gray, marginBottom: 12 }}>Servicio que analiza automaticamente al ingresar y guarda los resultados en la base. Preparado para reglas inteligentes.</div>
         {analisisCom.length === 0 ? <div style={{ color: C.gray, fontSize: 13, border: '1px dashed ' + C.line, borderRadius: 6, padding: 16, textAlign: 'center' }}>Aun no hay analisis guardado. Si es la primera vez, corre serein_ai_setup.sql en Supabase.</div> : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
             {['Cotizaciones', 'Clientes', 'Seguimientos', 'Conversion', 'Ventas', 'Margenes'].map(area => { const a = analisisCom.find(x => x.area === area); if (!a) return null; const v = (area === 'Conversion' || area === 'Margenes') ? (a.valor + '%') : (area === 'Clientes' || area === 'Seguimientos') ? String(a.valor) : clp(a.valor); return (
               <div key={area} style={{ background: '#fff', border: '1px solid ' + C.line, borderTop: '3px solid ' + C.navy, borderRadius: 6, padding: '12px 14px' }}>
-                <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 13, textTransform: 'uppercase', color: C.navy }}>{a.area}</div>
-                <div style={{ fontSize: 21, fontWeight: 700, color: C.navy, fontFamily: "'Oswald',sans-serif", margin: '2px 0 4px' }}>{v}</div>
-                <div style={{ fontSize: 12, color: '#3A4045' }}>{a.resumen}</div>
+                <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase', color: C.navy }}>{a.area}</div>
+                <div style={{ fontSize: 21, fontWeight: 700, color: C.navy, fontFamily: SEREIN.fontDisplay, margin: '2px 0 4px' }}>{v}</div>
+                <div style={{ fontSize: 12, color: '#5A636E' }}>{a.resumen}</div>
                 <div style={{ fontSize: 10.5, color: C.gray, marginTop: 6 }}>{(a.fecha || '').slice(0, 10)} · fuente: {a.fuente}</div>
               </div>
             ) })}
           </div>
         )}
       </div>) : vista === 'analista' ? (<div>
-        <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: C.navy }}>Analista Financiero</div>
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: C.navy }}>Analista Financiero</div>
         <div style={{ fontSize: 12.5, color: C.gray, marginBottom: 12 }}>Servicio que analiza automaticamente al ingresar y guarda los resultados en la base. Preparado para ejecucion automatica.</div>
         {cajaInfo && cajaInfo.cajaReal !== null && (
-          <div style={{ border: '1px solid ' + C.line, borderRadius: 8, padding: 14, marginBottom: 14, background: '#F8FAFC' }}>
+          <div style={{ border: '1px solid ' + C.line, borderRadius: 8, padding: 14, marginBottom: 14, background: '#F2F4F7' }}>
             <div style={{ fontWeight: 700, color: C.navy, marginBottom: 10 }}>Caja real</div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <div style={{ flex: '1 1 150px', background: '#fff', border: '1px solid ' + C.line, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, color: C.gray }}>Flujo de caja (esperado)</div><div style={{ fontSize: 18, fontWeight: 700, color: C.navy }}>{clp(cajaInfo.flujo)}</div></div>
@@ -541,11 +543,11 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
           const maxV = Math.max(1, ...gastosLC.cat.map(x => Math.abs(x[1])))
           const cardG = (lbl, val, col) => <div style={{ flex: '1 1 150px', background: '#fff', border: '1px solid ' + C.line, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, color: C.gray }}>{lbl}</div><div style={{ fontSize: 18, fontWeight: 700, color: col }}>{clp(val)}</div></div>
           return (
-            <div style={{ border: '1px solid ' + C.line, borderRadius: 8, padding: 14, marginBottom: 14, background: '#F8FAFC' }}>
+            <div style={{ border: '1px solid ' + C.line, borderRadius: 8, padding: 14, marginBottom: 14, background: '#F2F4F7' }}>
               <div style={{ fontWeight: 700, color: C.navy, marginBottom: 10 }}>Gastos del Libro de Compras · Fijos vs Variables</div>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
-                {cardG('Gastos fijos', gastosLC.fijo, '#2563EB')}
-                {cardG('Gastos variables', gastosLC.variable, '#D97706')}
+                {cardG('Gastos fijos', gastosLC.fijo, '#2A5FB0')}
+                {cardG('Gastos variables', gastosLC.variable, '#D9600A')}
                 {cardG('Total neto', gastosLC.total, C.navy)}
               </div>
               {gastosLC.sin > 0 ? <div style={{ fontSize: 11, color: C.gray, marginBottom: 10 }}>Sin clasificar (abre el Libro de Compras para autoclasificar): {clp(gastosLC.sin)}</div> : null}
@@ -565,16 +567,16 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
             {['Ventas', 'Compras', 'IVA', 'Factoring', 'Creditos', 'Leasing', 'Gastos', 'Flujo de Caja', 'Rentabilidad'].map(area => { const a = analisisFin.find(x => x.area === area); if (!a) return null; return (
               <div key={area} style={{ background: '#fff', border: '1px solid ' + C.line, borderTop: '3px solid ' + C.navy, borderRadius: 6, padding: '12px 14px' }}>
-                <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 13, textTransform: 'uppercase', color: C.navy }}>{a.area}</div>
-                <div style={{ fontSize: 21, fontWeight: 700, color: C.navy, fontFamily: "'Oswald',sans-serif", margin: '2px 0 4px' }}>{clp(a.valor)}</div>
-                <div style={{ fontSize: 12, color: '#3A4045' }}>{a.resumen}</div>
+                <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase', color: C.navy }}>{a.area}</div>
+                <div style={{ fontSize: 21, fontWeight: 700, color: C.navy, fontFamily: SEREIN.fontDisplay, margin: '2px 0 4px' }}>{clp(a.valor)}</div>
+                <div style={{ fontSize: 12, color: '#5A636E' }}>{a.resumen}</div>
                 <div style={{ fontSize: 10.5, color: C.gray, marginTop: 6 }}>{(a.fecha || '').slice(0, 10)} · fuente: {a.fuente}</div>
               </div>
             ) })}
           </div>
         )}
       </div>) : vista === 'recs' ? (<div>
-        <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: C.navy }}>Recomendaciones</div>
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: C.navy }}>Recomendaciones</div>
         <div style={{ fontSize: 12.5, color: C.gray, marginBottom: 12 }}>Generadas por reglas del sistema (preparado para que la IA las genere despues). Todo dentro del Dashboard.</div>
         {recsDB.length === 0 ? <div style={{ color: C.gray, fontSize: 13, border: '1px dashed ' + C.line, borderRadius: 6, padding: 16, textAlign: 'center' }}>No hay recomendaciones registradas. Si es la primera vez, corre serein_ai_setup.sql en Supabase.</div> : (
           <div style={{ display: 'grid', gap: 10 }}>
@@ -584,9 +586,9 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
                   <span style={{ fontWeight: 700, fontSize: 14, color: C.navy }}>{r.titulo}</span>
                   <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 3, border: '1px solid ' + C.line, color: C.gray, textTransform: 'uppercase' }}>{r.modulo}</span>
                   <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 3, color: '#fff', background: r.prioridad === 'Alta' ? C.red : r.prioridad === 'Media' ? C.orange : C.gray }}>{r.prioridad}</span>
-                  <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: r.estado === 'Aplicada' ? '#E7F2EA' : r.estado === 'Descartada' ? '#EEE' : '#FBF0E2', color: r.estado === 'Aplicada' ? C.green : r.estado === 'Descartada' ? C.gray : C.orange }}>{r.estado}</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: r.estado === 'Aplicada' ? '#E6F7EE' : r.estado === 'Descartada' ? '#EEE' : '#FDECDD', color: r.estado === 'Aplicada' ? C.green : r.estado === 'Descartada' ? C.gray : C.orange }}>{r.estado}</span>
                 </div>
-                <div style={{ fontSize: 13, color: '#3A4045', marginBottom: 4 }}>{r.descripcion}</div>
+                <div style={{ fontSize: 13, color: '#5A636E', marginBottom: 4 }}>{r.descripcion}</div>
                 <div style={{ fontSize: 12, color: C.gray }}><b>Motivo:</b> {r.motivo}</div>
                 <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>{(r.fecha || '').slice(0, 10)} · fuente: {r.fuente}</div>
                 {r.estado === 'Nueva' ? <div style={{ marginTop: 8, display: 'flex', gap: 6 }}><button onClick={() => aplicarRec(r.id)} style={{ background: C.green, border: 'none', color: '#fff', borderRadius: 3, padding: '5px 10px', cursor: 'pointer', fontSize: 12 }}>Aplicar</button><button onClick={() => descartarRec(r.id)} style={{ background: 'transparent', border: '1px solid ' + C.line, color: C.navy, borderRadius: 3, padding: '5px 10px', cursor: 'pointer', fontSize: 12 }}>Descartar</button></div> : null}
@@ -595,7 +597,7 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
           </div>
         )}
       </div>) : vista === 'alertas' ? (<div>
-        <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: C.navy }}>Motor de alertas</div>
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: C.navy }}>Motor de alertas</div>
         <div style={{ fontSize: 12.5, color: C.gray, marginBottom: 12 }}>Se revisa automaticamente al ingresar. Cada alerta queda guardada en la base de datos.</div>
         {alertasDB.length === 0 ? <div style={{ color: C.gray, fontSize: 13, border: '1px dashed ' + C.line, borderRadius: 6, padding: 16, textAlign: 'center' }}>No hay alertas registradas. Si es la primera vez, corre alertas_setup.sql en Supabase.</div> : (
           <div style={{ overflowX: 'auto', border: '1px solid ' + C.line, borderRadius: 6 }}>
@@ -603,11 +605,11 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
               <thead><tr style={{ background: C.navy, color: '#fff' }}>{['Fecha', 'Area', 'Prioridad', 'Estado', 'Registro', 'Descripcion', 'Revision', 'Resolucion', ''].map(h => <th key={h} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 11, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
               <tbody>
                 {alertasDB.map(a => (
-                  <tr key={a.id} style={{ borderBottom: '1px solid #EEECE4' }}>
+                  <tr key={a.id} style={{ borderBottom: '1px solid #E2E7EC' }}>
                     <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{(a.fecha || '').slice(0, 10)}</td>
                     <td style={{ padding: '7px 10px' }}>{a.area || '-'}</td>
                     <td style={{ padding: '7px 10px', fontWeight: 700, color: a.prioridad === 'Alta' ? C.red : a.prioridad === 'Media' ? C.orange : C.gray }}>{a.prioridad || '-'}</td>
-                    <td style={{ padding: '7px 10px' }}><span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: a.estado === 'Resuelta' ? '#E7F2EA' : a.estado === 'Revisada' ? '#FBF0E2' : '#F6E0DA', color: a.estado === 'Resuelta' ? C.green : a.estado === 'Revisada' ? C.orange : C.red }}>{a.estado}</span></td>
+                    <td style={{ padding: '7px 10px' }}><span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: a.estado === 'Resuelta' ? '#E6F7EE' : a.estado === 'Revisada' ? '#FDECDD' : '#FCEBEA', color: a.estado === 'Resuelta' ? C.green : a.estado === 'Revisada' ? C.orange : C.red }}>{a.estado}</span></td>
                     <td style={{ padding: '7px 10px', fontSize: 11.5, color: C.gray }}>{a.registro_relacionado || '-'}</td>
                     <td style={{ padding: '7px 10px' }}>{a.descripcion}</td>
                     <td style={{ padding: '7px 10px', whiteSpace: 'nowrap', color: C.gray }}>{a.fecha_revision ? a.fecha_revision.slice(0, 10) : '-'}</td>
@@ -624,9 +626,9 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
         )}
       </div>) : (<div>
       {ceoView && (
-        <div style={{ border: '2px solid ' + C.navy, borderRadius: 12, padding: 18, marginBottom: 18, background: '#FBFAF7' }}>
+        <div style={{ border: '2px solid ' + C.navy, borderRadius: 12, padding: 18, marginBottom: 18, background: '#F2F4F7' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4, flexWrap: 'wrap' }}>
-            <div style={{ background: C.navy, color: '#fff', fontFamily: "'Oswald',sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: 1, padding: '4px 10px', borderRadius: 6 }}>CEO IA</div>
+            <div style={{ background: C.navy, color: '#fff', fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 13, letterSpacing: 1, padding: '4px 10px', borderRadius: 6 }}>CEO IA</div>
             <div style={{ fontSize: 12, color: C.gray }}>Coordina Finanzas, Comercial, Produccion, Cobranza, Compras y RRHH · se actualiza al ingresar</div>
           </div>
           {ceoView.vacio ? (
@@ -634,19 +636,19 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14, marginTop: 12 }}>
               <div>
-                <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', fontSize: 13, color: C.red, marginBottom: 6 }}>Prioridades</div>
+                <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', fontSize: 13, color: C.red, marginBottom: 6 }}>Prioridades</div>
                 {ceoView.prioridades.length ? ceoView.prioridades.map((p, i) => <div key={i} style={{ fontSize: 12.5, marginBottom: 5, paddingLeft: 10, borderLeft: '3px solid ' + C.red }}><b style={{ color: C.navy }}>{p.area}:</b> {p.texto}</div>) : <div style={{ fontSize: 12, color: C.gray }}>Sin prioridades definidas.</div>}
               </div>
               <div>
-                <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', fontSize: 13, color: C.orange, marginBottom: 6 }}>Alertas criticas</div>
+                <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', fontSize: 13, color: C.orange, marginBottom: 6 }}>Alertas criticas</div>
                 {ceoView.criticas.length ? ceoView.criticas.map((a, i) => <div key={i} style={{ fontSize: 12.5, marginBottom: 5, paddingLeft: 10, borderLeft: '3px solid ' + C.orange }}><b style={{ color: C.navy }}>{a.area || 'General'}:</b> {a.descripcion}</div>) : <div style={{ fontSize: 12, color: C.gray }}>Sin alertas criticas abiertas.</div>}
               </div>
               <div>
-                <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', fontSize: 13, color: C.navy, marginBottom: 6 }}>Resumen ejecutivo</div>
+                <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', fontSize: 13, color: C.navy, marginBottom: 6 }}>Resumen ejecutivo</div>
                 {ceoView.resumen.map((r, i) => <div key={i} style={{ fontSize: 12.5, marginBottom: 5 }}><b style={{ color: C.navy }}>{r.area}:</b> <span style={{ color: C.gray }}>{r.texto}</span></div>)}
               </div>
               <div>
-                <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', fontSize: 13, color: C.green, marginBottom: 6 }}>Recomendaciones</div>
+                <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', fontSize: 13, color: C.green, marginBottom: 6 }}>Recomendaciones</div>
                 {ceoView.recs.length ? ceoView.recs.map((r, i) => <div key={i} style={{ fontSize: 12.5, marginBottom: 5, paddingLeft: 10, borderLeft: '3px solid ' + C.green }}><b style={{ color: C.navy }}>{r.modulo || 'General'}:</b> {r.titulo}</div>) : <div style={{ fontSize: 12, color: C.gray }}>Sin recomendaciones activas.</div>}
               </div>
             </div>
@@ -654,7 +656,7 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
         </div>
       )}
       <div style={{ marginBottom: 16 }}>
-        <h2 style={{ fontFamily: "'Oswald',sans-serif", fontSize: 24, fontWeight: 600, textTransform: 'uppercase', margin: 0, color: C.navy }}>Dashboard Inteligente</h2>
+        <h2 style={{ fontFamily: SEREIN.fontDisplay, fontSize: 24, fontWeight: 600, textTransform: 'uppercase', margin: 0, color: C.navy }}>Dashboard Inteligente</h2>
         <div style={{ fontSize: 12.5, color: C.gray }}>Se actualiza automaticamente al ingresar · datos reales del sistema</div>
       </div>
       <div style={grid}>
@@ -707,7 +709,7 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
       </div>
       {cobranza && cobranza.porCliente.length > 0 && (
         <div style={{ marginTop: 16 }}>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 15, fontWeight: 600, textTransform: 'uppercase', color: C.navy, marginBottom: 10 }}>Cobranza · Historial por cliente</div>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 15, fontWeight: 600, textTransform: 'uppercase', color: C.navy, marginBottom: 10 }}>Cobranza · Historial por cliente</div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
             {[['Facturado', cobranza.facturado, C.navy], ['Cobrado (pagos/abonos)', cobranza.cobrado, C.green], ['Por cobrar', cobranza.porCobrar, C.orange], ['Vencido', cobranza.montoVenc, C.red]].map(pair => <div key={pair[0]} style={{ flex: '1 1 150px', background: '#fff', border: '1px solid ' + C.line, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, color: C.gray }}>{pair[0]}</div><div style={{ fontSize: 17, fontWeight: 700, color: pair[2] }}>{clp(pair[1])}</div></div>)}
           </div>
@@ -735,9 +737,9 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
       )}
       {orden.length > 0 && (
         <div>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 15, fontWeight: 600, textTransform: 'uppercase', color: C.navy, marginBottom: 10 }}>Detalle de alertas</div>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 15, fontWeight: 600, textTransform: 'uppercase', color: C.navy, marginBottom: 10 }}>Detalle de alertas</div>
           <div style={{ display: 'grid', gap: 10 }}>
-            {orden.map((a, i) => { const Ico = ICON[a.icono] || Info; return (<div key={i} style={{ background: '#fff', border: '1px solid ' + C.line, borderLeft: '5px solid ' + SEV_COLOR[a.sev], borderRadius: 4, padding: '12px 14px' }}><div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}><Ico size={17} color={SEV_COLOR[a.sev]} /><span style={{ fontWeight: 700, fontSize: 14, color: C.navy }}>{a.titulo}</span><span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, color: SEV_COLOR[a.sev], border: '1px solid ' + SEV_COLOR[a.sev], borderRadius: 3, padding: '1px 6px', textTransform: 'uppercase' }}>{a.area}</span></div><div style={{ fontSize: 13, color: '#3A4045', marginBottom: 4 }}>{a.detalle}</div><div style={{ fontSize: 12.5, color: C.gray }}><strong style={{ color: C.orange }}>Recomendacion:</strong> {a.recomendacion}</div>{a.ir && onIr && <button onClick={() => onIr(a.ir)} style={{ marginTop: 8, background: 'transparent', border: '1px solid ' + C.line, borderRadius: 3, padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.navy }}>Ir al modulo</button>}</div>) })}
+            {orden.map((a, i) => { const Ico = ICON[a.icono] || Info; return (<div key={i} style={{ background: '#fff', border: '1px solid ' + C.line, borderLeft: '5px solid ' + SEV_COLOR[a.sev], borderRadius: 4, padding: '12px 14px' }}><div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}><Ico size={17} color={SEV_COLOR[a.sev]} /><span style={{ fontWeight: 700, fontSize: 14, color: C.navy }}>{a.titulo}</span><span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, color: SEV_COLOR[a.sev], border: '1px solid ' + SEV_COLOR[a.sev], borderRadius: 3, padding: '1px 6px', textTransform: 'uppercase' }}>{a.area}</span></div><div style={{ fontSize: 13, color: '#5A636E', marginBottom: 4 }}>{a.detalle}</div><div style={{ fontSize: 12.5, color: C.gray }}><strong style={{ color: C.orange }}>Recomendacion:</strong> {a.recomendacion}</div>{a.ir && onIr && <button onClick={() => onIr(a.ir)} style={{ marginTop: 8, background: 'transparent', border: '1px solid ' + C.line, borderRadius: 3, padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.navy }}>Ir al modulo</button>}</div>) })}
           </div>
         </div>
       )}

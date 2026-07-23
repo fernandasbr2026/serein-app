@@ -1,11 +1,13 @@
 import React, { useState, useMemo } from 'react'
 import { Plus, Trash2, X, ShoppingCart, ClipboardList, Factory, CheckCircle2, AlertTriangle, Paperclip, Settings2, Filter } from 'lucide-react'
 
-const C = { naranja: '#FF6B00', carbon: '#0F1A2E', verde: '#12805C', rojo: '#D64545', gris: '#8A929E', azul: '#25608E' }
+import { SEREIN } from './theme-serein.js'
+// Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
+const C = { naranja: SEREIN.orange, carbon: SEREIN.text, verde: SEREIN.green, rojo: SEREIN.red, gris: SEREIN.textFaint, azul: SEREIN.blue }
 const clp = n => '$' + Math.round(n).toLocaleString('es-CL')
 const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
 const hoy = () => new Date().toISOString().slice(0, 10)
-const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
+const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 
 const AREAS_COMPRA = ['Santa Rosa', 'Istria', 'Producción / Planta', 'Proyectos', 'Administración', 'Comercial', 'Otra']
 const CATEGORIAS = ['Pintura', 'Granalla', 'Diésel', 'EPP', 'Herramientas', 'Repuestos', 'Transporte', 'Materiales menores', 'Arriendo de equipo', 'Mantención', 'Otro']
@@ -50,9 +52,9 @@ export const COMPRAS_OP_SEED = [
 
 function ChipEstado({ e }) {
   const map = {
-    'Pendiente de revisión': ['#F9E9DE', '#8C4519'], 'Aprobada': ['#E7F2EA', C.verde],
-    'Observada': ['#FDF3D7', '#8A6A00'], 'Rechazada': ['#F6E0DA', C.rojo],
-    'Corregida por Gerencia': ['#E7EEF2', C.azul], 'Contabilizada': ['#E9E7F2', '#5B4E8C'], 'Pagada': ['#E7F2EA', C.verde],
+    'Pendiente de revisión': ['#FDECDD', '#D9600A'], 'Aprobada': ['#E6F7EE', C.verde],
+    'Observada': ['#FDF3D7', '#8A6A00'], 'Rechazada': ['#FCEBEA', C.rojo],
+    'Corregida por Gerencia': ['#E7EEF2', C.azul], 'Contabilizada': ['#E9E7F2', '#5B4E8C'], 'Pagada': ['#E6F7EE', C.verde],
   }
   const [bg, fg] = map[e] || ['#EEE', '#666']
   return <span style={{ background: bg, color: fg, padding: '2px 8px', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>{e}</span>
@@ -70,8 +72,8 @@ function MisOTs({ ots, proyectos, mo, comprasOp, planta }) {
 
   return (
     <div>
-      <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18, marginBottom: 14, overflowX: 'auto' }}>
-        <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>OT/OC de {planta} · vista operativa</div>
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18, marginBottom: 14, overflowX: 'auto' }}>
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>OT/OC de {planta} · vista operativa</div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
@@ -82,7 +84,7 @@ function MisOTs({ ots, proyectos, mo, comprasOp, planta }) {
           </thead>
           <tbody>
             {otsPlanta.map(o => (
-              <tr key={o.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
+              <tr key={o.id} style={{ borderBottom: '1px solid #DFE4EA' }}>
                 <td style={{ padding: '7px 8px', fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 12 }}>{o.numero}</td>
                 <td style={{ padding: '7px 8px', fontWeight: 500 }}>{o.cliente}</td>
                 <td style={{ padding: '7px 8px', color: C.gris }}>{o.esquema}</td>
@@ -95,10 +97,10 @@ function MisOTs({ ots, proyectos, mo, comprasOp, planta }) {
         </table>
       </div>
       {proyectos?.length > 0 && (
-        <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Proyectos activos · vista operativa</div>
+        <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Proyectos activos · vista operativa</div>
           {proyectos.map(p => (
-            <div key={p.id} style={{ borderBottom: '1px solid #EEE9DF', padding: '7px 0', fontSize: 13, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+            <div key={p.id} style={{ borderBottom: '1px solid #DFE4EA', padding: '7px 0', fontSize: 13, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
               <span><b>{p.nombre}</b> · {p.cliente}</span>
               <span style={{ color: C.gris }}>avance {p.avance}% · {comprasDe(p.nombre)} compra{comprasDe(p.nombre) !== 1 ? 's' : ''}</span>
             </div>
@@ -160,7 +162,7 @@ function FormCompra({ config, ots, proyectos, planta, usuario, onGuardar }) {
   }
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
         <label style={{ fontSize: 12, color: C.gris }}>Fecha de compra
           <input type="date" style={{ ...inp, width: '100%', marginTop: 4 }} value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} />
@@ -182,7 +184,7 @@ function FormCompra({ config, ots, proyectos, planta, usuario, onGuardar }) {
         )}
         {config.supervisorIngresaMonto && (
           <button type="button" onClick={() => setF({ ...f, aplicaIva: !f.aplicaIva })}
-            style={{ ...inp, cursor: 'pointer', background: f.aplicaIva ? '#fff' : '#F9E9DE', color: f.aplicaIva ? C.carbon : '#8C4519', fontWeight: 600, textAlign: 'left' }}>
+            style={{ ...inp, cursor: 'pointer', background: f.aplicaIva ? '#fff' : '#FDECDD', color: f.aplicaIva ? C.carbon : '#D9600A', fontWeight: 600, textAlign: 'left' }}>
             {f.aplicaIva ? '✓ Con IVA 19% (factura)' : '✕ No contempla IVA (boleta u otro)'}
           </button>
         )}
@@ -193,7 +195,7 @@ function FormCompra({ config, ots, proyectos, planta, usuario, onGuardar }) {
       </div>
 
       {config.supervisorIngresaMonto && num(f.neto) > 0 && (
-        <div style={{ fontSize: 13, background: '#F7F4EE', padding: '8px 12px', marginTop: 10, display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 13, background: '#F2F4F7', padding: '8px 12px', marginTop: 10, display: 'flex', gap: 18, flexWrap: 'wrap' }}>
           <span>Neto: <b>{clp(num(f.neto))}</b></span>
           <span>IVA {f.aplicaIva ? '19%' : '(no aplica)'}: <b>{clp(f.aplicaIva ? Math.round(num(f.neto) * 0.19) : 0)}</b></span>
           <span>Total bruto: <b style={{ color: C.naranja }}>{clp(f.aplicaIva ? num(f.neto) + Math.round(num(f.neto) * 0.19) : num(f.neto))}</b></span>
@@ -201,18 +203,18 @@ function FormCompra({ config, ots, proyectos, planta, usuario, onGuardar }) {
       )}
 
       {/* ASIGNACIÓN */}
-      <div style={{ background: '#FAF7F3', padding: 12, marginTop: 12 }}>
+      <div style={{ background: '#F2F4F7', padding: 12, marginTop: 12 }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: C.gris, textTransform: 'uppercase', marginBottom: 8 }}>¿A dónde corresponde esta compra?</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
           {TIPOS_ASIG.map(t => (
             <button key={t} onClick={() => cambiarTipo(t)}
-              style={{ background: tipoAsig === t ? C.carbon : '#fff', color: tipoAsig === t ? '#fff' : C.carbon, border: '1px solid #CBD2D6', padding: '6px 11px', cursor: 'pointer', fontSize: 12 }}>
+              style={{ background: tipoAsig === t ? C.carbon : '#fff', color: tipoAsig === t ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '6px 11px', cursor: 'pointer', fontSize: 12 }}>
               {t}
             </button>
           ))}
         </div>
         {tipoAsig === 'Pendiente de revisión por Gerencia' ? (
-          <div style={{ fontSize: 13, color: '#8C4519' }}>Gerencia asignará esta compra después. Puedes guardarla igual.</div>
+          <div style={{ fontSize: 13, color: '#D9600A' }}>Gerencia asignará esta compra después. Puedes guardarla igual.</div>
         ) : (
           <>
             {items.map((it, i) => (
@@ -228,7 +230,7 @@ function FormCompra({ config, ots, proyectos, planta, usuario, onGuardar }) {
             ))}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               {(tipoAsig === 'Varias OT/OC' || tipoAsig === 'Varias áreas') && (
-                <button onClick={agregarItem} style={{ background: 'none', border: '1px dashed #CBD2D6', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Agregar (reparte en partes iguales)</button>
+                <button onClick={agregarItem} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Agregar (reparte en partes iguales)</button>
               )}
               <span style={{ fontSize: 13, fontWeight: 700, color: asigOk ? C.verde : C.rojo, marginLeft: 'auto' }}>Suma: {suma.toFixed(2).replace('.00', '')}% {asigOk ? '✓' : '— debe ser 100%'}</span>
             </div>
@@ -240,13 +242,13 @@ function FormCompra({ config, ots, proyectos, planta, usuario, onGuardar }) {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
         <button onClick={guardar} disabled={!asigOk}
-          style={{ background: asigOk ? C.naranja : '#CBD2D6', color: '#fff', border: 'none', padding: '10px 22px', cursor: asigOk ? 'pointer' : 'not-allowed', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+          style={{ background: asigOk ? C.naranja : '#DFE4EA', color: '#fff', border: 'none', padding: '10px 22px', cursor: asigOk ? 'pointer' : 'not-allowed', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
           Guardar compra
         </button>
         {guardado && <span style={{ color: C.verde, fontSize: 13, display: 'flex', alignItems: 'center', gap: 5 }}><CheckCircle2 size={15} /> Compra registrada — quedó pendiente de revisión por Gerencia</span>}
       </div>
       {!config.supervisorVeMontoDespues && config.supervisorIngresaMonto && (
-        <div style={{ fontSize: 12, color: '#8C4519', background: '#F9E9DE', padding: '6px 10px', marginTop: 10 }}>
+        <div style={{ fontSize: 12, color: '#D9600A', background: '#FDECDD', padding: '6px 10px', marginTop: 10 }}>
           El monto que ingreses es solo dato de registro: después de guardar no será visible para ti, solo para Gerencia.
         </div>
       )}
@@ -258,7 +260,7 @@ function FormCompra({ config, ots, proyectos, planta, usuario, onGuardar }) {
 function MisCompras({ comprasOp, usuario, config }) {
   const mias = comprasOp.filter(c => c.supervisor === usuario)
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18, overflowX: 'auto' }}>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18, overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
           <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
@@ -269,18 +271,18 @@ function MisCompras({ comprasOp, usuario, config }) {
         </thead>
         <tbody>
           {mias.map(c => (
-            <tr key={c.id} style={{ borderBottom: '1px solid #EEE9DF', verticalAlign: 'top' }}>
+            <tr key={c.id} style={{ borderBottom: '1px solid #DFE4EA', verticalAlign: 'top' }}>
               <td style={{ padding: '7px 8px', whiteSpace: 'nowrap' }}>{c.fecha}</td>
               <td style={{ padding: '7px 8px', fontWeight: 500 }}>{c.proveedor}<div style={{ fontSize: 11, color: C.gris }}>{c.descripcion}</div></td>
               <td style={{ padding: '7px 8px' }}>{c.categoria}</td>
-              <td style={{ padding: '7px 8px', fontSize: 12 }}>{c.asignacion.tipo === 'Pendiente de revisión por Gerencia' ? <span style={{ color: '#8C4519' }}>Pendiente</span> : c.asignacion.items.map(i => `${i.ref} ${i.pct}%`).join(' · ')}</td>
+              <td style={{ padding: '7px 8px', fontSize: 12 }}>{c.asignacion.tipo === 'Pendiente de revisión por Gerencia' ? <span style={{ color: '#D9600A' }}>Pendiente</span> : c.asignacion.items.map(i => `${i.ref} ${i.pct}%`).join(' · ')}</td>
               <td style={{ padding: '7px 8px', fontSize: 12, color: C.gris }}>{c.tipoDoc}{c.numDoc && ` ${c.numDoc}`}{c.adjunto && <span title={c.adjunto}> 📎</span>}</td>
               {config.supervisorVeMontoDespues && <td style={{ padding: '7px 8px' }}>{c.neto != null ? clp(totalDe(c)) : '—'}</td>}
               <td style={{ padding: '7px 8px' }}><ChipEstado e={c.estado} /></td>
               <td style={{ padding: '7px 8px', fontSize: 12, color: c.obsGerencia ? '#8A6A00' : C.gris }}>{c.obsGerencia || '—'}</td>
             </tr>
           ))}
-          {mias.length === 0 && <tr><td colSpan={8} style={{ padding: 16, textAlign: 'center', color: '#9AA0A6' }}>Aún no has registrado compras.</td></tr>}
+          {mias.length === 0 && <tr><td colSpan={8} style={{ padding: 16, textAlign: 'center', color: '#9AA3AD' }}>Aún no has registrado compras.</td></tr>}
         </tbody>
       </table>
     </div>
@@ -302,7 +304,7 @@ function RevisionGerencia({ comprasOp, setComprasOp }) {
   const upd = (id, cambios) => setComprasOp(cs => cs.map(c => c.id === id ? { ...c, ...cambios } : c))
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
         <Filter size={15} color={C.gris} />
         <select value={fEstado} onChange={e => setFEstado(e.target.value)} style={inp}>
@@ -324,7 +326,7 @@ function RevisionGerencia({ comprasOp, setComprasOp }) {
           </thead>
           <tbody>
             {filtradas.map(c => (
-              <tr key={c.id} style={{ borderBottom: '1px solid #EEE9DF', verticalAlign: 'top' }}>
+              <tr key={c.id} style={{ borderBottom: '1px solid #DFE4EA', verticalAlign: 'top' }}>
                 <td style={{ padding: '7px 8px', whiteSpace: 'nowrap' }}>{c.fecha}</td>
                 <td style={{ padding: '7px 8px', fontSize: 12 }}>{c.supervisor}</td>
                 <td style={{ padding: '7px 8px', fontWeight: 500 }}>{c.proveedor}<div style={{ fontSize: 11, color: C.gris }}>{c.descripcion} {c.cantidad && `· ${c.cantidad} ${c.unidad}`} {c.adjunto && '📎'}</div></td>
@@ -349,14 +351,14 @@ function RevisionGerencia({ comprasOp, setComprasOp }) {
                     onChange={e => upd(c.id, { neto: e.target.value === '' ? null : num(e.target.value) })}
                     style={{ ...inp, width: 92, padding: '4px 6px', fontStyle: c.neto == null ? 'italic' : 'normal' }} />
                   <div onClick={() => upd(c.id, { aplicaIva: !c.aplicaIva })} title="Tocar para cambiar"
-                    style={{ fontSize: 11, cursor: 'pointer', marginTop: 3, color: c.aplicaIva ? C.gris : '#8C4519', fontWeight: 600 }}>
+                    style={{ fontSize: 11, cursor: 'pointer', marginTop: 3, color: c.aplicaIva ? C.gris : '#D9600A', fontWeight: 600 }}>
                     {c.aplicaIva ? `+IVA ${clp(ivaDe(c))}` : 'sin IVA ✕'}
                   </div>
                   {c.neto != null && <div style={{ fontSize: 12, fontWeight: 700, color: C.naranja, marginTop: 2 }}>{clp(totalDe(c))}</div>}
                 </td>
                 <td style={{ padding: '7px 8px' }}>
                   <select value={c.estado} onChange={e => upd(c.id, { estado: e.target.value })}
-                    style={{ border: '1px solid #E2DED4', padding: '3px 5px', fontSize: 11, cursor: 'pointer', background: '#fff' }}>
+                    style={{ border: '1px solid #DFE4EA', padding: '3px 5px', fontSize: 11, cursor: 'pointer', background: '#fff' }}>
                     {ESTADOS.map(s => <option key={s}>{s}</option>)}
                   </select>
                 </td>
@@ -369,7 +371,7 @@ function RevisionGerencia({ comprasOp, setComprasOp }) {
                 </td>
               </tr>
             ))}
-            {filtradas.length === 0 && <tr><td colSpan={9} style={{ padding: 16, textAlign: 'center', color: '#9AA0A6' }}>Sin compras con esos filtros.</td></tr>}
+            {filtradas.length === 0 && <tr><td colSpan={9} style={{ padding: 16, textAlign: 'center', color: '#9AA3AD' }}>Sin compras con esos filtros.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -396,31 +398,31 @@ function TotalesAlertas({ comprasOp, config, setConfig }) {
   return (
     <div>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
-        <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 14, flex: '1 1 170px' }}>
+        <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 14, flex: '1 1 170px' }}>
           <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>Total compras del mes (bruto)</div>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 22, fontWeight: 600, color: C.naranja }}>{clp(totalMes)}</div>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 22, fontWeight: 600, color: C.naranja }}>{clp(totalMes)}</div>
         </div>
         {alertas.map(([l, n]) => (
-          <div key={l} style={{ background: '#fff', border: '1px solid #E2DED4', padding: 14, flex: '1 1 150px' }}>
+          <div key={l} style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 14, flex: '1 1 150px' }}>
             <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{l}</div>
-            <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 22, fontWeight: 600, color: n > 0 ? C.rojo : C.verde }}>{n}</div>
+            <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 22, fontWeight: 600, color: n > 0 ? C.rojo : C.verde }}>{n}</div>
           </div>
         ))}
       </div>
 
-      <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18, marginBottom: 14 }}>
-        <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Total bruto por área / OT / proyecto (montos ingresados)</div>
-        {Object.keys(porRef).length === 0 ? <div style={{ fontSize: 13, color: '#9AA0A6' }}>Sin montos ingresados aún.</div> :
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18, marginBottom: 14 }}>
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Total bruto por área / OT / proyecto (montos ingresados)</div>
+        {Object.keys(porRef).length === 0 ? <div style={{ fontSize: 13, color: '#9AA3AD' }}>Sin montos ingresados aún.</div> :
           Object.entries(porRef).sort((a, b) => b[1] - a[1]).map(([ref, m]) => (
-            <div key={ref} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #EEE9DF', padding: '6px 0', fontSize: 13 }}>
+            <div key={ref} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #DFE4EA', padding: '6px 0', fontSize: 13 }}>
               <span style={{ fontFamily: ref.startsWith('OT') ? "'JetBrains Mono',monospace" : 'inherit', fontWeight: 600 }}>{ref}</span>
               <b>{clp(m)}</b>
             </div>
           ))}
       </div>
 
-      <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}>
-        <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
           <Settings2 size={15} /> Configuración de permisos del Supervisor
         </div>
         <div style={{ fontSize: 12, color: C.gris, marginBottom: 10 }}>Solo Gerencia ve y cambia estos permisos.</div>
@@ -462,7 +464,7 @@ export default function ComprasOperativasModule({ esGerencia, planta = null, usu
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            style={{ background: tab === t.id ? C.carbon : '#fff', color: tab === t.id ? '#fff' : C.carbon, border: '1px solid #CBD2D6', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
+            style={{ background: tab === t.id ? C.carbon : '#fff', color: tab === t.id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
             {t.icono}{t.label}
           </button>
         ))}

@@ -8,9 +8,11 @@ import { Plus, Trash2, ChevronDown, ChevronUp, Building2, Phone, Mail, User } fr
 // Versión en memoria.
 // ============================================================
 
-const C = { azul: '#061A40', teal: '#0B7285', ambar: '#FF6B00', rojo: '#D64545', verde: '#12805C', carbon: '#0F1A2E', gris: '#8A929E' }
+import { SEREIN } from './theme-serein.js'
+// Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
+const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
-const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
+const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 const norm = s => (s || '').toString().trim().toLowerCase()
 
 export const CLIENTES_SEED = [
@@ -51,30 +53,30 @@ function TarjetaCliente({ cli, proyectos, ots, onUpdate, onDelete }) {
   function guardar() { onUpdate(cli.id, f); setEditando(false) }
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', marginBottom: 12 }}>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', marginBottom: 12 }}>
       <div onClick={() => setAbierto(!abierto)} style={{ padding: '14px 18px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
           <Building2 size={18} color={C.teal} />
           <div>
-            <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15 }}>{cli.nombre}</div>
+            <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15 }}>{cli.nombre}</div>
             <div style={{ fontSize: 12, color: C.gris }}>{cli.rut || 'sin RUT'} · {otList.length} OT</div>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>Venta acumulada</div>
-            <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 16 }}>{clp(totalVenta)}</div>
+            <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 16 }}>{clp(totalVenta)}</div>
           </div>
           {abierto ? <ChevronUp size={18} color={C.gris} /> : <ChevronDown size={18} color={C.gris} />}
         </div>
       </div>
 
       {abierto && (
-        <div style={{ borderTop: '1px solid #EEE9DF', padding: 18 }}>
+        <div style={{ borderTop: '1px solid #DFE4EA', padding: 18 }}>
           {/* Ficha */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.gris }}>Ficha del cliente</span>
-            {!editando && <button onClick={() => { setF(cli); setEditando(true) }} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '5px 10px', cursor: 'pointer', fontSize: 12 }}>Editar ficha</button>}
+            {!editando && <button onClick={() => { setF(cli); setEditando(true) }} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12 }}>Editar ficha</button>}
           </div>
           {editando ? (
             <div>
@@ -88,7 +90,7 @@ function TarjetaCliente({ cli, proyectos, ots, onUpdate, onDelete }) {
               <input style={{ ...inp, width: '100%', marginTop: 8 }} placeholder="Observaciones" value={f.obs} onChange={e => setF({ ...f, obs: e.target.value })} />
               <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                 <button onClick={guardar} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Guardar</button>
-                <button onClick={() => setEditando(false)} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+                <button onClick={() => setEditando(false)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
               </div>
             </div>
           ) : (
@@ -107,7 +109,7 @@ function TarjetaCliente({ cli, proyectos, ots, onUpdate, onDelete }) {
               <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['OT', 'Origen', 'Detalle', 'Área', 'Venta'].map((h, i) => <th key={i} style={{ textAlign: h === 'Venta' ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
               <tbody>
                 {otList.map((o, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                  <tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>
                     <td style={{ padding: '7px 8px', fontWeight: 600 }}>{o.ot}</td>
                     <td style={{ padding: '7px 8px', color: C.gris }}>{o.origen}</td>
                     <td style={{ padding: '7px 8px', color: C.gris }}>{o.detalle}</td>
@@ -115,7 +117,7 @@ function TarjetaCliente({ cli, proyectos, ots, onUpdate, onDelete }) {
                     <td style={{ padding: '7px 8px', textAlign: 'right' }}>{clp(o.venta)}</td>
                   </tr>
                 ))}
-                {otList.length === 0 && <tr><td colSpan={5} style={{ padding: 12, textAlign: 'center', color: '#9AA0A6' }}>Sin OT asociadas a este cliente.</td></tr>}
+                {otList.length === 0 && <tr><td colSpan={5} style={{ padding: 12, textAlign: 'center', color: '#9AA3AD' }}>Sin OT asociadas a este cliente.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -145,17 +147,17 @@ export default function ClientesModule({ clientes: cExt, setClientes: setCExt, p
   return (
     <div>
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 14, flex: '1 1 150px' }}>
+        <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 14, flex: '1 1 150px' }}>
           <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>Clientes</div>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 22, fontWeight: 600 }}>{clientes.length}</div>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 22, fontWeight: 600 }}>{clientes.length}</div>
         </div>
         <input style={{ ...inp, flex: '1 1 200px' }} placeholder="Buscar cliente…" value={busca} onChange={e => setBusca(e.target.value)} />
-        {!creando && <button onClick={() => setCreando(true)} style={{ background: C.azul, color: '#fff', border: 'none', padding: '9px 16px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Nuevo cliente</button>}
+        {!creando && <button onClick={() => setCreando(true)} style={{ background: C.azul, color: '#fff', border: 'none', padding: '9px 16px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Nuevo cliente</button>}
       </div>
 
       {creando && (
         <div style={{ background: '#fff', border: `2px solid ${C.azul}`, padding: 16, marginBottom: 14 }}>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Nuevo cliente</div>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Nuevo cliente</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px,1fr))', gap: 8 }}>
             <input style={inp} placeholder="Nombre *" value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })} />
             <input style={inp} placeholder="RUT" value={nuevo.rut} onChange={e => setNuevo({ ...nuevo, rut: e.target.value })} />
@@ -164,14 +166,14 @@ export default function ClientesModule({ clientes: cExt, setClientes: setCExt, p
             <input style={inp} placeholder="Correo" value={nuevo.correo} onChange={e => setNuevo({ ...nuevo, correo: e.target.value })} />
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-            <button onClick={crear} disabled={!nuevo.nombre} style={{ background: nuevo.nombre ? C.verde : '#CBD2D6', color: '#fff', border: 'none', padding: '8px 16px', cursor: 'pointer', fontSize: 13 }}>Crear cliente</button>
-            <button onClick={() => setCreando(false)} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '8px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+            <button onClick={crear} disabled={!nuevo.nombre} style={{ background: nuevo.nombre ? C.verde : '#DFE4EA', color: '#fff', border: 'none', padding: '8px 16px', cursor: 'pointer', fontSize: 13 }}>Crear cliente</button>
+            <button onClick={() => setCreando(false)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '8px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
           </div>
         </div>
       )}
 
       {lista.map(c => <TarjetaCliente key={c.id} cli={c} proyectos={proyectos} ots={ots} onUpdate={actualizar} onDelete={eliminar} />)}
-      {lista.length === 0 && <div style={{ color: '#9AA0A6', fontSize: 13, textAlign: 'center', padding: 20 }}>Sin clientes.</div>}
+      {lista.length === 0 && <div style={{ color: '#9AA3AD', fontSize: 13, textAlign: 'center', padding: 20 }}>Sin clientes.</div>}
     </div>
   )
 }

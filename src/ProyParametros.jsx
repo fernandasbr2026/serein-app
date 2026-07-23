@@ -9,8 +9,10 @@ import { CC_DEFS } from './proyectos-data.js'
 // nube via sync.js (prefijo serein_). No toca los datos de proyectos.
 // ============================================================
 
-const C = { azul: '#061A40', teal: '#0B7285', ambar: '#FF6B00', rojo: '#D64545', verde: '#12805C', carbon: '#0F1A2E', gris: '#8A929E' }
-const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
+import { SEREIN } from './theme-serein.js'
+// Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
+const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
+const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 const clp = n => '$' + Math.round(+n || 0).toLocaleString('es-CL')
 const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
 const LS_KEY = 'serein_proyParams'
@@ -49,8 +51,8 @@ export default function ProyParametros() {
     setTimeout(() => setMsg(''), 2800)
   }
 
-  const card = { background: '#fff', border: '1px solid #E2DED4', padding: 16, marginBottom: 16 }
-  const h = { fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }
+  const card = { background: '#fff', border: '1px solid #DFE4EA', padding: 16, marginBottom: 16 }
+  const h = { fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }
 
   return (
     <div>
@@ -68,7 +70,7 @@ export default function ProyParametros() {
             </thead>
             <tbody>
               {p.centros.map((c, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                <tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>
                   <td style={{ padding: '4px 8px' }}><input value={c.codigo} onChange={e => setCentro(i, 'codigo', e.target.value)} placeholder="A1" style={{ ...inp, width: 70 }} /></td>
                   <td style={{ padding: '4px 8px' }}><input value={c.nombre} onChange={e => setCentro(i, 'nombre', e.target.value)} placeholder="PINTURA, INGENIERIA, MONTAJE..." style={{ ...inp, width: 260 }} /></td>
                   <td style={{ padding: '4px 8px' }}>
@@ -80,11 +82,11 @@ export default function ProyParametros() {
                   <td style={{ padding: '4px 4px', textAlign: 'right' }}><button onClick={() => delCentro(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={15} /></button></td>
                 </tr>
               ))}
-              {p.centros.length === 0 && <tr><td colSpan={4} style={{ padding: 12, textAlign: 'center', color: '#9AA0A6' }}>Sin centros de costo. Agrega el primero.</td></tr>}
+              {p.centros.length === 0 && <tr><td colSpan={4} style={{ padding: 12, textAlign: 'center', color: '#9AA3AD' }}>Sin centros de costo. Agrega el primero.</td></tr>}
             </tbody>
           </table>
         </div>
-        <button onClick={addCentro} style={{ background: 'none', border: '1px dashed #CBD2D6', padding: '6px 12px', cursor: 'pointer', fontSize: 12.5, color: C.gris, marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Plus size={14} /> Agregar centro de costo</button>
+        <button onClick={addCentro} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '6px 12px', cursor: 'pointer', fontSize: 12.5, color: C.gris, marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Plus size={14} /> Agregar centro de costo</button>
       </div>
 
       <div style={card}>
@@ -100,7 +102,7 @@ export default function ProyParametros() {
           <thead><tr style={{ borderBottom: `1px solid ${C.carbon}` }}><th style={{ textAlign: 'left', padding: '4px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>Costo neto</th><th style={{ textAlign: 'left', padding: '4px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>Margen sugerido %</th></tr></thead>
           <tbody>
             {p.margenPorTamano.map((t, i) => (
-              <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
+              <tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>
                 <td style={{ padding: '4px 10px', color: C.gris }}>{t.hasta ? 'Hasta ' + clp(t.hasta) : 'Mayores'}</td>
                 <td style={{ padding: '4px 10px' }}><input value={t.margen} onChange={e => setTramo(i, e.target.value)} style={{ ...inp, width: 80, textAlign: 'right' }} /></td>
               </tr>
@@ -110,7 +112,7 @@ export default function ProyParametros() {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button onClick={guardar} style={{ background: C.verde, color: '#fff', border: 'none', padding: '9px 18px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase' }}>Guardar parametros</button>
+        <button onClick={guardar} style={{ background: C.verde, color: '#fff', border: 'none', padding: '9px 18px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase' }}>Guardar parametros</button>
         {msg && <span style={{ color: C.verde, fontSize: 13, fontWeight: 600 }}>{msg}</span>}
       </div>
     </div>

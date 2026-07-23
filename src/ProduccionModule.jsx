@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from 'react'
 import { Plus, Trash2, CalendarDays, Factory, ClipboardList, BarChart3, CheckCircle2, AlertTriangle, Users } from 'lucide-react'
 
-const C = { naranja: '#FF6B00', carbon: '#0F1A2E', verde: '#12805C', rojo: '#D64545', gris: '#8A929E', azul: '#25608E' }
-const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
+import { SEREIN } from './theme-serein.js'
+// Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
+const C = { naranja: SEREIN.orange, carbon: SEREIN.text, verde: SEREIN.green, rojo: SEREIN.red, gris: SEREIN.textFaint, azul: SEREIN.blue }
+const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 const hoy = () => new Date().toISOString().slice(0, 10)
 const fm2 = n => n.toLocaleString('es-CL', { maximumFractionDigits: 1 })
 
@@ -53,7 +55,7 @@ export function calcularM2(avances, ots) {
 }
 
 function ChipVal({ v }) {
-  const map = { 'Pendiente de revisión': ['#F9E9DE', '#8C4519'], 'Validado': ['#E7F2EA', C.verde], 'Observado': ['#FDF3D7', '#8A6A00'], 'Corregido': ['#E7EEF2', C.azul], 'Anulado': ['#EEE', C.gris] }
+  const map = { 'Pendiente de revisión': ['#FDECDD', '#D9600A'], 'Validado': ['#E6F7EE', C.verde], 'Observado': ['#FDF3D7', '#8A6A00'], 'Corregido': ['#E7EEF2', C.azul], 'Anulado': ['#EEE', C.gris] }
   const [bg, fg] = map[v] || ['#EEE', '#666']
   return <span style={{ background: bg, color: fg, padding: '2px 8px', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>{v}</span>
 }
@@ -98,7 +100,7 @@ function RegistroAvance({ plantaFija, plantas, ots, avances, setAvances, usuario
   const totalSel = Object.values(seleccion).reduce((a, s) => a + s.size, 0)
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, marginBottom: 14 }}>
         <label style={{ fontSize: 12, color: C.gris }}>Fecha
           <input type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }} />
@@ -117,12 +119,12 @@ function RegistroAvance({ plantaFija, plantas, ots, avances, setAvances, usuario
       <div style={{ fontSize: 12, color: C.gris, marginBottom: 8 }}>
         Toca la OT trabajada y marca el/los procesos realizados hoy (puedes registrar varias OT):
       </div>
-      {otsPlanta.length === 0 && <div style={{ fontSize: 13, color: '#9AA0A6', padding: 10 }}>No hay OTs activas en {f.planta}.</div>}
+      {otsPlanta.length === 0 && <div style={{ fontSize: 13, color: '#9AA3AD', padding: 10 }}>No hay OTs activas en {f.planta}.</div>}
       {otsPlanta.map(o => {
         const sel = seleccion[o.numero] || new Set()
         const procesosOT = o.procesos?.length ? o.procesos : PROCESOS
         return (
-          <div key={o.id} style={{ border: `1px solid ${sel.size ? C.naranja : '#E2DED4'}`, padding: 12, marginBottom: 8, background: sel.size ? '#FDF6F1' : '#fff' }}>
+          <div key={o.id} style={{ border: `1px solid ${sel.size ? C.naranja : '#DFE4EA'}`, padding: 12, marginBottom: 8, background: sel.size ? '#FDF6F1' : '#fff' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
               <div>
                 <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 12, background: C.carbon, color: '#fff', padding: '2px 7px', marginRight: 8 }}>{o.numero}</span>
@@ -133,7 +135,7 @@ function RegistroAvance({ plantaFija, plantas, ots, avances, setAvances, usuario
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {procesosOT.map(p => (
                 <button key={p} onClick={() => toggleProceso(o.numero, p)}
-                  style={{ background: sel.has(p) ? C.naranja : '#fff', color: sel.has(p) ? '#fff' : C.carbon, border: `1px solid ${sel.has(p) ? C.naranja : '#CBD2D6'}`, padding: '6px 12px', cursor: 'pointer', fontSize: 12.5 }}>
+                  style={{ background: sel.has(p) ? C.naranja : '#fff', color: sel.has(p) ? '#fff' : C.carbon, border: `1px solid ${sel.has(p) ? C.naranja : '#DFE4EA'}`, padding: '6px 12px', cursor: 'pointer', fontSize: 12.5 }}>
                   {p}
                 </button>
               ))}
@@ -148,7 +150,7 @@ function RegistroAvance({ plantaFija, plantas, ots, avances, setAvances, usuario
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14 }}>
         <button onClick={guardar} disabled={totalSel === 0}
-          style={{ background: totalSel > 0 ? C.naranja : '#CBD2D6', color: '#fff', border: 'none', padding: '10px 22px', cursor: totalSel > 0 ? 'pointer' : 'not-allowed', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+          style={{ background: totalSel > 0 ? C.naranja : '#DFE4EA', color: '#fff', border: 'none', padding: '10px 22px', cursor: totalSel > 0 ? 'pointer' : 'not-allowed', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
           Guardar avance ({totalSel})
         </button>
         {guardado && <span style={{ color: C.verde, fontSize: 13, display: 'flex', alignItems: 'center', gap: 5 }}><CheckCircle2 size={15} /> Registro guardado correctamente</span>}
@@ -193,7 +195,7 @@ function ListaAvances({ avances, setAvances, ots, esGerencia, usuario, mo }) {
   }
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18, overflowX: 'auto' }}>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18, overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
           <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
@@ -207,14 +209,14 @@ function ListaAvances({ avances, setAvances, ots, esGerencia, usuario, mo }) {
             const k = a.ot + '|' + a.proceso
             const sobre = resumen[k]?.sobreavance
             return (
-              <tr key={a.id} style={{ borderBottom: '1px solid #EEE9DF', background: sobre ? '#FDF3F0' : 'transparent', opacity: a.validacion === 'Anulado' ? 0.45 : 1 }}>
+              <tr key={a.id} style={{ borderBottom: '1px solid #DFE4EA', background: sobre ? '#FDECDD' : 'transparent', opacity: a.validacion === 'Anulado' ? 0.45 : 1 }}>
                 <td style={{ padding: '7px 8px', whiteSpace: 'nowrap' }}>{a.fecha}</td>
                 <td style={{ padding: '7px 8px' }}>{a.planta}</td>
                 <td style={{ padding: '7px 8px', fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 700 }}>{a.ot}</td>
                 <td style={{ padding: '7px 8px' }}>{a.proceso}</td>
                 <td style={{ padding: '7px 8px' }}>
                   <select value={a.estadoDia} onChange={e => setAvances(av => av.map(x => x.id === a.id ? { ...x, estadoDia: e.target.value } : x))}
-                    style={{ border: 'none', background: a.estadoDia === 'Terminado proceso' ? '#E7F2EA' : '#F9E9DE', color: a.estadoDia === 'Terminado proceso' ? C.verde : '#8C4519', padding: '2px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    style={{ border: 'none', background: a.estadoDia === 'Terminado proceso' ? '#E6F7EE' : '#FDECDD', color: a.estadoDia === 'Terminado proceso' ? C.verde : '#D9600A', padding: '2px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                     {ESTADOS_DIA.map(s => <option key={s}>{s}</option>)}
                   </select>
                 </td>
@@ -236,7 +238,7 @@ function ListaAvances({ avances, setAvances, ots, esGerencia, usuario, mo }) {
                 <td style={{ padding: '7px 8px' }}>
                   {esGerencia ? (
                     <select value={a.validacion} onChange={e => cambiarValidacion(a, e.target.value)}
-                      style={{ border: '1px solid #E2DED4', padding: '3px 6px', fontSize: 11, cursor: 'pointer', background: '#fff' }}>
+                      style={{ border: '1px solid #DFE4EA', padding: '3px 6px', fontSize: 11, cursor: 'pointer', background: '#fff' }}>
                       {VALIDACIONES.map(v => <option key={v}>{v}</option>)}
                     </select>
                   ) : <ChipVal v={a.validacion} />}
@@ -248,7 +250,7 @@ function ListaAvances({ avances, setAvances, ots, esGerencia, usuario, mo }) {
               </tr>
             )
           })}
-          {visibles.length === 0 && <tr><td colSpan={9} style={{ padding: 16, textAlign: 'center', color: '#9AA0A6' }}>Sin registros.</td></tr>}
+          {visibles.length === 0 && <tr><td colSpan={9} style={{ padding: 16, textAlign: 'center', color: '#9AA3AD' }}>Sin registros.</td></tr>}
         </tbody>
       </table>
       {esGerencia && (
@@ -267,13 +269,13 @@ function AvancePorOT({ avances, ots, plantasVisibles }) {
 
   return (
     <div>
-      {otsConAvance.length === 0 && <div style={{ background: '#fff', border: '1px dashed #CBD2D6', padding: 20, textAlign: 'center', color: '#9AA0A6', fontSize: 13 }}>Aún no hay avances registrados.</div>}
+      {otsConAvance.length === 0 && <div style={{ background: '#fff', border: '1px dashed #DFE4EA', padding: 20, textAlign: 'center', color: '#9AA3AD', fontSize: 13 }}>Aún no hay avances registrados.</div>}
       {otsConAvance.map(o => {
         const procesos = (o.procesos?.length ? o.procesos : []).map(p => resumen[o.numero + '|' + p] || { proceso: p, m2OT: o.m2, dias: 0, total: 0, pct: 0, terminado: false })
         const totalProceso = procesos.reduce((a, p) => a + p.total, 0)
         const pctGeneral = procesos.length ? procesos.reduce((a, p) => a + p.pct, 0) / procesos.length : 0
         return (
-          <div key={o.id} style={{ background: '#fff', border: '1px solid #E2DED4', padding: 16, marginBottom: 12 }}>
+          <div key={o.id} style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 16, marginBottom: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
               <div>
                 <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 12, background: C.carbon, color: '#fff', padding: '2px 7px', marginRight: 8 }}>{o.numero}</span>
@@ -288,7 +290,7 @@ function AvancePorOT({ avances, ots, plantasVisibles }) {
             {procesos.map(p => (
               <div key={p.proceso} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                 <span style={{ fontSize: 13, width: 150 }}>{p.proceso}{p.terminado && <span style={{ color: C.verde }}> ✓</span>}</span>
-                <div style={{ flex: 1, height: 10, background: '#EEE9DF' }}>
+                <div style={{ flex: 1, height: 10, background: '#DFE4EA' }}>
                   <div style={{ width: `${Math.min(100, p.pct)}%`, height: '100%', background: p.pct >= 100 ? C.verde : C.naranja, transition: 'width .3s' }} />
                 </div>
                 <span style={{ fontSize: 12, width: 190, textAlign: 'right', color: C.gris }}>
@@ -332,9 +334,9 @@ function Reportes({ avances, ots, mo }) {
   }
 
   const kpi = (l, v, color) => (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 14, flex: '1 1 150px' }}>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 14, flex: '1 1 150px' }}>
       <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{l}</div>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 21, fontWeight: 600, color: color || C.carbon }}>{v}</div>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 21, fontWeight: 600, color: color || C.carbon }}>{v}</div>
     </div>
   )
 
@@ -349,7 +351,7 @@ function Reportes({ avances, ots, mo }) {
         <div style={{ display: 'flex', gap: 6 }}>
           {[['Hoy', 0], ['7 días', 7], ['30 días', 30]].map(([l, d]) => (
             <button key={l} onClick={() => { const x = new Date(); x.setDate(x.getDate() - d); setDesde(x.toISOString().slice(0, 10)); setHasta(hoy()) }}
-              style={{ background: '#fff', border: '1px solid #CBD2D6', padding: '6px 10px', cursor: 'pointer', fontSize: 12 }}>{l}</button>
+              style={{ background: '#fff', border: '1px solid #DFE4EA', padding: '6px 10px', cursor: 'pointer', fontSize: 12 }}>{l}</button>
           ))}
         </div>
       </div>
@@ -363,8 +365,8 @@ function Reportes({ avances, ots, mo }) {
       </div>
 
       {/* Comparativa por planta */}
-      <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18, marginBottom: 14, overflowX: 'auto' }}>
-        <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Comparativa por planta</div>
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18, marginBottom: 14, overflowX: 'auto' }}>
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Comparativa por planta</div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
@@ -379,7 +381,7 @@ function Reportes({ avances, ots, mo }) {
               const g = d['Granallado'] || 0, pi = d['Pintura'] || 0
               const otros = Object.entries(d).filter(([k]) => k !== 'Granallado' && k !== 'Pintura').reduce((a, [, v]) => a + v, 0)
               return (
-                <tr key={pl} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                <tr key={pl} style={{ borderBottom: '1px solid #DFE4EA' }}>
                   <td style={{ padding: '8px', fontWeight: 600 }}>{pl}</td>
                   <td style={{ padding: '8px', textAlign: 'right' }}>{fm2(g)}</td>
                   <td style={{ padding: '8px', textAlign: 'right' }}>{fm2(pi)}</td>
@@ -401,7 +403,7 @@ function Reportes({ avances, ots, mo }) {
       </div>
 
       {otsSinMov.length > 0 && (
-        <div style={{ background: '#FDF3F0', border: '1px solid #F0C9BA', padding: 14, fontSize: 13 }}>
+        <div style={{ background: '#FDECDD', border: '1px solid #F0C9BA', padding: 14, fontSize: 13 }}>
           <b style={{ color: C.rojo }}>OTs sin movimiento en el período:</b>{' '}
           {otsSinMov.map(o => `${o.numero} (${o.cliente})`).join(' · ')}
         </div>
@@ -429,7 +431,7 @@ export default function ProduccionModule({ esGerencia, plantaFija = null, planta
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            style={{ background: tab === t.id ? C.carbon : '#fff', color: tab === t.id ? '#fff' : C.carbon, border: '1px solid #CBD2D6', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
+            style={{ background: tab === t.id ? C.carbon : '#fff', color: tab === t.id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
             {t.icono}{t.label}
           </button>
         ))}

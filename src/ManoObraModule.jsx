@@ -2,11 +2,13 @@ import React, { useState, useMemo, useEffect } from 'react'
 import { Plus, Trash2, CalendarDays, Clock3, Users, Wallet, Table2, EyeOff, Download, FileText, FileSpreadsheet } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
-const C = { naranja: '#FF6B00', carbon: '#0F1A2E', verde: '#12805C', rojo: '#D64545', gris: '#8A929E' }
+import { SEREIN } from './theme-serein.js'
+// Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
+const C = { naranja: SEREIN.orange, carbon: SEREIN.text, verde: SEREIN.green, rojo: SEREIN.red, gris: SEREIN.textFaint }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
 const hoy = () => new Date().toISOString().slice(0, 10)
-const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
+const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 
 // ============================================================
 // NÓMINA / ASISTENCIA · SEREIN 2026
@@ -68,14 +70,14 @@ export const costoMOdeOT = (mo, numOT) => {
   return asis + hex
 }
 
-function Aviso({ hijo }) { return <div style={{ background: '#F9E9DE', color: '#8C4519', padding: '8px 12px', fontSize: 12, marginTop: 8 }}>{hijo}</div> }
+function Aviso({ hijo }) { return <div style={{ background: '#FDECDD', color: '#D9600A', padding: '8px 12px', fontSize: 12, marginTop: 8 }}>{hijo}</div> }
 
 function TabsInternos({ tabs, sel, onSel }) {
   return (
     <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
       {tabs.map(t => (
         <button key={t.id} onClick={() => onSel(t.id)}
-          style={{ background: sel === t.id ? C.carbon : '#fff', color: sel === t.id ? '#fff' : C.carbon, border: '1px solid #CBD2D6', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
+          style={{ background: sel === t.id ? C.carbon : '#fff', color: sel === t.id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
           {t.icono}{t.label}
         </button>
       ))}
@@ -106,7 +108,7 @@ function RegistroDiario({ mo, setMo, otsDisponibles, esGerencia, usuario, areas 
   }
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, marginBottom: 14 }}>
         <label style={{ fontSize: 12, color: C.gris }}>Fecha
           <input type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }} />
@@ -129,7 +131,7 @@ function RegistroDiario({ mo, setMo, otsDisponibles, esGerencia, usuario, areas 
           const sel = f.trabajadorIds.includes(t.id)
           return (
             <button key={t.id} onClick={() => setF({ ...f, trabajadorIds: toggle(f.trabajadorIds, t.id) })}
-              style={{ background: sel ? C.naranja : '#fff', color: sel ? '#fff' : C.carbon, border: `1px solid ${sel ? C.naranja : '#CBD2D6'}`, padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>
+              style={{ background: sel ? C.naranja : '#fff', color: sel ? '#fff' : C.carbon, border: `1px solid ${sel ? C.naranja : '#DFE4EA'}`, padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>
               {t.nombre}{cargoDe(t) ? ` (${cargoDe(t)})` : ''}
             </button>
           )
@@ -142,7 +144,7 @@ function RegistroDiario({ mo, setMo, otsDisponibles, esGerencia, usuario, areas 
           const sel = f.ots.includes(o)
           return (
             <button key={o} onClick={() => setF({ ...f, ots: toggle(f.ots, o) })}
-              style={{ background: sel ? C.carbon : '#fff', color: sel ? '#fff' : C.carbon, border: `1px solid ${sel ? C.carbon : '#CBD2D6'}`, padding: '7px 12px', cursor: 'pointer', fontSize: 13, fontFamily: "'JetBrains Mono',monospace" }}>
+              style={{ background: sel ? C.carbon : '#fff', color: sel ? '#fff' : C.carbon, border: `1px solid ${sel ? C.carbon : '#DFE4EA'}`, padding: '7px 12px', cursor: 'pointer', fontSize: 13, fontFamily: "'JetBrains Mono',monospace" }}>
               {o}
             </button>
           )
@@ -157,7 +159,7 @@ function RegistroDiario({ mo, setMo, otsDisponibles, esGerencia, usuario, areas 
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14 }}>
         <button onClick={guardar}
-          style={{ background: C.naranja, color: '#fff', border: 'none', padding: '10px 22px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+          style={{ background: C.naranja, color: '#fff', border: 'none', padding: '10px 22px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
           Guardar registro
         </button>
         {guardado && <span style={{ color: C.verde, fontSize: 13 }}>✓ Registro guardado correctamente</span>}
@@ -185,7 +187,7 @@ function HorasExtras({ mo, setMo, otsDisponibles, esGerencia, usuario }) {
   }
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, marginBottom: 14 }}>
         <label style={{ fontSize: 12, color: C.gris }}>Fecha
           <input type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }} />
@@ -211,7 +213,7 @@ function HorasExtras({ mo, setMo, otsDisponibles, esGerencia, usuario }) {
       </label>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14 }}>
         <button onClick={guardar}
-          style={{ background: C.naranja, color: '#fff', border: 'none', padding: '10px 22px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+          style={{ background: C.naranja, color: '#fff', border: 'none', padding: '10px 22px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
           Guardar horas extras
         </button>
         {guardado && <span style={{ color: C.verde, fontSize: 13 }}>✓ Registro guardado correctamente</span>}
@@ -229,9 +231,9 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
 
   return (
     <div>
-      <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18, marginBottom: 14 }}>
-        <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Asistencias registradas</div>
-        {visibles.length === 0 ? <div style={{ fontSize: 13, color: '#9AA0A6' }}>Sin registros aún.</div> : (
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18, marginBottom: 14 }}>
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Asistencias registradas</div>
+        {visibles.length === 0 ? <div style={{ fontSize: 13, color: '#9AA3AD' }}>Sin registros aún.</div> : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
@@ -243,7 +245,7 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
               </thead>
               <tbody>
                 {visibles.map(a => (
-                  <tr key={a.id} style={{ borderBottom: '1px solid #EEE9DF', verticalAlign: 'top' }}>
+                  <tr key={a.id} style={{ borderBottom: '1px solid #DFE4EA', verticalAlign: 'top' }}>
                     <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>{a.fecha}{a.jornada === 'Media' && <span style={{ fontSize: 11, color: C.gris }}> (½)</span>}</td>
                     <td style={{ padding: '8px' }}>{a.area}</td>
                     <td style={{ padding: '8px', color: C.gris, fontSize: 12 }}>{a.supervisor}</td>
@@ -262,9 +264,9 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
         )}
       </div>
 
-      <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}>
-        <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Horas extras registradas</div>
-        {hexVisibles.length === 0 ? <div style={{ fontSize: 13, color: '#9AA0A6' }}>Sin horas extras.</div> : (
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Horas extras registradas</div>
+        {hexVisibles.length === 0 ? <div style={{ fontSize: 13, color: '#9AA3AD' }}>Sin horas extras.</div> : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
@@ -275,7 +277,7 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
             </thead>
             <tbody>
               {hexVisibles.map(h => (
-                <tr key={h.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                <tr key={h.id} style={{ borderBottom: '1px solid #DFE4EA' }}>
                   <td style={{ padding: '8px' }}>{h.fecha}</td>
                   <td style={{ padding: '8px' }}>{nombreDe(h.trabajadorId)}</td>
                   <td style={{ padding: '8px' }}>{h.horas} h</td>
@@ -297,15 +299,15 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
 // ================= TRABAJADORES (VISTA SUPERVISOR, SIN VALORES) =================
 function TrabajadoresView({ mo }) {
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Trabajadores</div>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Trabajadores</div>
       <div style={{ fontSize: 12, color: C.gris, marginBottom: 12 }}>Listado del personal. Los valores de sueldo y asistencia solo son visibles para Gerencia.</div>
       {GRUPOS.map(g => {
         const lista = (mo.trabajadores || []).filter(t => t.grupo === g)
         if (lista.length === 0) return null
         return (
           <div key={g} style={{ marginBottom: 16 }}>
-            <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 12.5, color: C.naranja, textTransform: 'uppercase', marginBottom: 6 }}>{g}</div>
+            <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, color: C.naranja, textTransform: 'uppercase', marginBottom: 6 }}>{g}</div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
@@ -316,7 +318,7 @@ function TrabajadoresView({ mo }) {
               </thead>
               <tbody>
                 {lista.map(t => (
-                  <tr key={t.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                  <tr key={t.id} style={{ borderBottom: '1px solid #DFE4EA' }}>
                     <td style={{ padding: '8px', fontWeight: 500 }}>{t.nombre}</td>
                     <td style={{ padding: '8px' }}>{t.cargo}</td>
                     <td style={{ padding: '8px', color: C.gris }}>{t.nacionalidad}</td>
@@ -352,9 +354,9 @@ function CostosPorOT({ mo }) {
   const nombreDe = id => (mo.trabajadores || []).find(t => t.id === id)?.nombre || id
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Mano de obra acumulada por OT / OC</div>
-      {Object.keys(acumulado).length === 0 ? <div style={{ fontSize: 13, color: '#9AA0A6' }}>Sin costos registrados.</div> : (
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Mano de obra acumulada por OT / OC</div>
+      {Object.keys(acumulado).length === 0 ? <div style={{ fontSize: 13, color: '#9AA3AD' }}>Sin costos registrados.</div> : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
@@ -366,7 +368,7 @@ function CostosPorOT({ mo }) {
             </thead>
             <tbody>
               {Object.entries(acumulado).map(([ot, d]) => (
-                <tr key={ot} style={{ borderBottom: '1px solid #EEE9DF', verticalAlign: 'top' }}>
+                <tr key={ot} style={{ borderBottom: '1px solid #DFE4EA', verticalAlign: 'top' }}>
                   <td style={{ padding: '8px', fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 12 }}>{ot}</td>
                   <td style={{ padding: '8px', textAlign: 'right' }}>{clp(d.normal)}</td>
                   <td style={{ padding: '8px', textAlign: 'right' }}>{clp(d.hex)}</td>
@@ -390,21 +392,21 @@ function NominaMO({ mo, setMo }) {
   const addTrab = grupo => setMo({ ...mo, trabajadores: [...mo.trabajadores, { id: 't' + Date.now(), grupo, nombre: '', cargo: '', nacionalidad: 'Chilena', sueldo: 0, imposiciones: 0, sabado: 0, domingo: 0 }] })
   const delTrab = id => window.confirm('¿Eliminar este trabajador?') && setMo({ ...mo, trabajadores: (mo.trabajadores || []).filter(t => t.id !== id) })
 
-  const auto = { color: C.gris, background: '#F7F4EE', fontStyle: 'italic', whiteSpace: 'nowrap' }
+  const auto = { color: C.gris, background: '#F2F4F7', fontStyle: 'italic', whiteSpace: 'nowrap' }
   const th = t => <th style={{ textAlign: 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{t}</th>
 
   return (
     <div>
-      <div style={{ background: '#F7F4EE', border: '1px solid #E2DED4', padding: '10px 14px', fontSize: 12.5, color: '#5A5148', marginBottom: 14 }}>
+      <div style={{ background: '#F2F4F7', border: '1px solid #DFE4EA', padding: '10px 14px', fontSize: 12.5, color: '#5A5148', marginBottom: 14 }}>
         Todos los campos en blanco son editables. Las columnas en gris (día bruto, día sin imposiciones, hora, hora extra) se calculan solas:
         <b> día bruto = (sueldo + imposiciones) ÷ 30</b>, <b>día s/imp = sueldo ÷ 30</b>, <b>hora = día bruto ÷ 9</b>, <b>hora extra = hora × 1,5</b>. Sábado y Domingo se ingresan a mano.
       </div>
       {GRUPOS.map(g => {
         const lista = (mo.trabajadores || []).filter(t => t.grupo === g)
         return (
-          <div key={g} style={{ background: '#fff', border: '1px solid #E2DED4', padding: 16, marginBottom: 14 }}>
+          <div key={g} style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 16, marginBottom: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>{g} <span style={{ color: C.gris, fontWeight: 400 }}>· {lista.length}</span></span>
+              <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>{g} <span style={{ color: C.gris, fontWeight: 400 }}>· {lista.length}</span></span>
               <button onClick={() => addTrab(g)} style={{ background: C.carbon, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Agregar trabajador</button>
             </div>
             <div style={{ overflowX: 'auto' }}>
@@ -418,7 +420,7 @@ function NominaMO({ mo, setMo }) {
                   {lista.map(t => {
                     const c = calc(t)
                     return (
-                      <tr key={t.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                      <tr key={t.id} style={{ borderBottom: '1px solid #DFE4EA' }}>
                         <td style={{ padding: '4px 6px' }}><input value={t.nombre} onChange={e => setTrab(t.id, 'nombre', e.target.value)} style={{ ...inp, width: 150, fontWeight: 600 }} /></td>
                         <td style={{ padding: '4px 6px' }}><input value={t.cargo} onChange={e => setTrab(t.id, 'cargo', e.target.value)} style={{ ...inp, width: 150 }} /></td>
                         <td style={{ padding: '4px 6px' }}><input value={t.nacionalidad} onChange={e => setTrab(t.id, 'nacionalidad', e.target.value)} style={{ ...inp, width: 90 }} /></td>
@@ -434,7 +436,7 @@ function NominaMO({ mo, setMo }) {
                       </tr>
                     )
                   })}
-                  {lista.length === 0 && <tr><td colSpan={12} style={{ padding: 14, textAlign: 'center', color: '#9AA0A6' }}>Sin trabajadores en este grupo. Usa “Agregar trabajador”.</td></tr>}
+                  {lista.length === 0 && <tr><td colSpan={12} style={{ padding: 14, textAlign: 'center', color: '#9AA3AD' }}>Sin trabajadores en este grupo. Usa “Agregar trabajador”.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -476,10 +478,10 @@ function PagoMensual({ mo }) {
   const totalGeneral = resumen.reduce((s, r) => s + r.total, 0)
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
         <div>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Planilla de pago mensual</div>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Planilla de pago mensual</div>
           <div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>{habiles} días hábiles (lun–vie) en el mes seleccionado · feriados no descontados</div>
         </div>
         <input type="month" value={mes} onChange={e => setMes(e.target.value)} style={inp} />
@@ -495,7 +497,7 @@ function PagoMensual({ mo }) {
           </thead>
           <tbody>
             {resumen.map(r => (
-              <tr key={r.nombre} style={{ borderBottom: '1px solid #EEE9DF' }}>
+              <tr key={r.nombre} style={{ borderBottom: '1px solid #DFE4EA' }}>
                 <td style={{ padding: '8px', fontWeight: 500 }}>{r.nombre}</td>
                 <td style={{ padding: '8px', color: C.gris }}>{r.cargo}</td>
                 <td style={{ padding: '8px', textAlign: 'right' }}>{r.diasTrabajados}</td>
@@ -639,7 +641,7 @@ function Informes({ mo }) {
 
   return (
     <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Informes de asistencia y nómina</div>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Informes de asistencia y nómina</div>
       <div style={{ fontSize: 12, color: C.gris, marginBottom: 14 }}>Elige período, áreas y trabajadores, y descarga en Excel o PDF.</div>
 
       <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase', marginBottom: 6 }}>Período</div>
@@ -677,10 +679,10 @@ function Informes({ mo }) {
       <div style={{ fontSize: 12, color: C.gris, marginBottom: 14 }}>{trabsSel.length} trabajador(es) en el informe.</div>
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        <button onClick={descargarExcel} style={{ background: C.verde, color: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <button onClick={descargarExcel} style={{ background: C.verde, color: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
           <FileSpreadsheet size={16} /> Descargar Excel
         </button>
-        <button onClick={descargarPDF} style={{ background: C.carbon, color: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <button onClick={descargarPDF} style={{ background: C.carbon, color: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
           <FileText size={16} /> Descargar PDF
         </button>
       </div>
