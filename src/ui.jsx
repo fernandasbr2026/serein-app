@@ -1,7 +1,56 @@
 import LogoSerein from './LogoSerein.jsx'
-import { LayoutGrid, Sparkles, Building2, Factory, Wrench, Wallet, ShoppingCart, FileText, Receipt, ShieldAlert, Landmark, Users, ClipboardList, Package, Settings, User, Search, Bell, Menu, ChevronsLeft, LogOut, Circle, ChevronDown, Network, Handshake, Archive, ArrowUp, ArrowDown } from 'lucide-react'
-import { useState } from 'react'
+import { LayoutGrid, Sparkles, Building2, Factory, Wrench, Wallet, ShoppingCart, FileText, Receipt, ShieldAlert, Landmark, Users, ClipboardList, Package, Settings, User, Search, Bell, Menu, ChevronsLeft, LogOut, Circle, ChevronDown, Network, Handshake, Archive, ArrowUp, ArrowDown, CheckCircle2, UploadCloud, AlertTriangle, RotateCw } from 'lucide-react'
+import { useState, useEffect } from 'react'
 import { SEREIN, PILL_VARIANT } from './theme-serein.js'
+import { suscribirEstadoGuardado, pushState } from './sync.js'
+
+// Indicador honesto de guardado: refleja el ciclo real de pushState() (no
+// una suposición) — se muestra en el Sidebar, visible para todos los
+// usuarios en todo momento, para cualquier tipo de cambio (texto, fotos,
+// documentos: todo pasa por el mismo pushState()). Incluye un botón para
+// forzar el guardado y confirmar que efectivamente llegó a la nube.
+export function EstadoGuardado({ colapsado }) {
+  const [estado, setEstado] = useState(() => ({ fase: 'guardado', ultimoOk: null, ultimoError: null }))
+  const [forzando, setForzando] = useState(false)
+  useEffect(() => suscribirEstadoGuardado(setEstado), [])
+
+  const forzar = async () => {
+    setForzando(true)
+    const r = await pushState()
+    setForzando(false)
+    if (r.ok && r.n === 0) window.alert('No hay cambios pendientes — todo lo que cargaste ya está guardado en la nube.')
+    else if (r.ok) window.alert('Guardado confirmado: los cambios llegaron a la nube (Supabase).')
+    else window.alert('No se pudo guardar. Revisa tu conexión a internet e inténtalo de nuevo. Si el problema sigue, avisa al administrador.')
+  }
+
+  const cfg = {
+    guardando: { icon: UploadCloud, color: SEREIN.orange, bg: SEREIN.orangeSoft, texto: 'Guardando…' },
+    guardado: { icon: CheckCircle2, color: SEREIN.green, bg: SEREIN.greenSoft, texto: 'Guardado en la nube' },
+    error: { icon: AlertTriangle, color: SEREIN.red, bg: SEREIN.redSoft, texto: 'Error al guardar' },
+  }[estado.fase] || { icon: CheckCircle2, color: SEREIN.green, bg: SEREIN.greenSoft, texto: 'Guardado en la nube' }
+  const Icon = cfg.icon
+
+  if (colapsado) {
+    return (
+      <button onClick={forzar} title={cfg.texto + ' · Click para forzar guardado'} disabled={forzando}
+        style={{ margin: '10px auto', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,.06)', border: 'none', cursor: 'pointer' }}>
+        <Icon size={17} color={cfg.color} style={estado.fase === 'guardando' || forzando ? { animation: 'girar 1s linear infinite' } : undefined} />
+      </button>
+    )
+  }
+  return (
+    <div style={{ margin: '0 18px 12px', padding: '9px 12px', borderRadius: 8, background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.08)', display: 'flex', alignItems: 'center', gap: 9 }}>
+      <Icon size={16} color={cfg.color} style={estado.fase === 'guardando' || forzando ? { animation: 'girar 1s linear infinite', flexShrink: 0 } : { flexShrink: 0 }} />
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: '#EDEFF1' }}>{forzando ? 'Guardando…' : cfg.texto}</div>
+        {estado.fase === 'error' && estado.ultimoError && <div style={{ fontSize: 10, color: '#C6CBD1', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={estado.ultimoError}>{estado.ultimoError}</div>}
+      </div>
+      <button onClick={forzar} disabled={forzando} title="Forzar guardado y confirmar" style={{ background: 'none', border: 'none', cursor: forzando ? 'default' : 'pointer', color: '#9AA2A9', padding: 4, flexShrink: 0, display: 'flex' }}>
+        <RotateCw size={13} style={forzando ? { animation: 'girar 1s linear infinite' } : undefined} />
+      </button>
+    </div>
+  )
+}
 
 // THEME mantiene las mismas claves de siempre (los modulos que ya lo importan
 // no cambian una linea de codigo) — solo se actualizan los VALORES a la
@@ -85,6 +134,7 @@ export function Sidebar({ tabs, areaSel, setAreaSel, nombreTab, perfil, email, o
         <div style={{ fontSize: 11, color: '#9AA2A9' }}>{rol}</div>
       </div>}
     </div>
+    <EstadoGuardado colapsado={colapsado} />
     <nav style={{ flex: 1, overflowY: 'auto', padding: '4px 12px 16px' }}>
       {grupos.map(g => (<div key={g.nombre} style={{ marginBottom: 2 }}>
         {!colapsado && <div style={{ fontFamily: THEME.fontDisplay, fontSize: 11, fontWeight: 700, letterSpacing: 2, color: '#6B737B', textTransform: 'uppercase', margin: '18px 4px 8px' }}>{g.nombre}</div>}
@@ -137,7 +187,7 @@ export function Sidebar({ tabs, areaSel, setAreaSel, nombreTab, perfil, email, o
 }
 
 export function GlobalStyles() {
-  return (<style>{'*{box-sizing:border-box}' + 'body{margin:0}' + '::selection{background:rgba(247,119,22,.18)}' + '::-webkit-scrollbar{width:10px;height:10px}' + '::-webkit-scrollbar-thumb{background:#CBD2DC;border-radius:8px;border:2px solid transparent;background-clip:content-box}' + '::-webkit-scrollbar-thumb:hover{background:#AAB3C0;background-clip:content-box}' + '::-webkit-scrollbar-track{background:transparent}' + 'table tbody tr{transition:background .12s ease}' + 'table tbody tr:hover{background:#FAFBFB}' + 'input:focus,select:focus,textarea:focus{outline:none;box-shadow:0 0 0 3px rgba(247,119,22,.15);border-color:#F77716 !important}' + 'button{transition:filter .12s ease,transform .06s ease,background .12s ease}' + 'button:not(:disabled):active{transform:translateY(1px)}'}</style>)
+  return (<style>{'*{box-sizing:border-box}' + 'body{margin:0}' + '::selection{background:rgba(247,119,22,.18)}' + '::-webkit-scrollbar{width:10px;height:10px}' + '::-webkit-scrollbar-thumb{background:#CBD2DC;border-radius:8px;border:2px solid transparent;background-clip:content-box}' + '::-webkit-scrollbar-thumb:hover{background:#AAB3C0;background-clip:content-box}' + '::-webkit-scrollbar-track{background:transparent}' + 'table tbody tr{transition:background .12s ease}' + 'table tbody tr:hover{background:#FAFBFB}' + 'input:focus,select:focus,textarea:focus{outline:none;box-shadow:0 0 0 3px rgba(247,119,22,.15);border-color:#F77716 !important}' + 'button{transition:filter .12s ease,transform .06s ease,background .12s ease}' + 'button:not(:disabled):active{transform:translateY(1px)}' + '@keyframes girar{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}'}</style>)
 }
 
 // ---------------- Componentes de presentacion reutilizables (Serein 2026) ----------------

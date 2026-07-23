@@ -18,6 +18,26 @@ const PROT_DESDE_PREFIX = '__protdesde_'
 const PROTECCION_MAX_MS = 90 * 1000
 let lastPushed = {}
 
+// ————— Estado de guardado observable —————
+// Antes no había forma honesta de saber, desde la pantalla, si un cambio
+// realmente llegó a la nube o no — la app asumía que sí. Este estado
+// refleja el ciclo de vida REAL de pushState() (no una suposición) para
+// que la UI pueda mostrar "Guardando…" / "Guardado" / "Error al guardar"
+// de forma verificable, para cualquier tipo de cambio (texto, fotos,
+// documentos — todo pasa por el mismo pushState()).
+let estadoGuardado = { fase: 'guardado', ultimoOk: null, ultimoError: null }
+const listeners = new Set()
+function emitirEstado(parcial) {
+  estadoGuardado = { ...estadoGuardado, ...parcial }
+  listeners.forEach(fn => { try { fn(estadoGuardado) } catch (e) {} })
+}
+export function suscribirEstadoGuardado(fn) {
+  listeners.add(fn)
+  fn(estadoGuardado)
+  return () => listeners.delete(fn)
+}
+export function obtenerEstadoGuardado() { return estadoGuardado }
+
 // Única puerta de entrada para aplicar un valor que viene de la nube
 // (ya sea por sondeo/pullState() o por el canal en tiempo real de
 // Dashboard.jsx) sobre localStorage. Antes esta protección solo vivía
@@ -87,21 +107,25 @@ export async function pushState() {
       if (k && KEY_RE.test(k)) { const v = localStorage.getItem(k); if (v !== lastPushed[k]) rows.push({ id: k, value: v, updated_at: new Date().toISOString() }) }
     }
     if (rows.length) {
+      emitirEstado({ fase: 'guardando' })
       const { error } = await supabase.from('app_state').upsert(rows, { onConflict: 'id' })
       if (error) {
         // Antes este error se descartaba en silencio — si algo bloqueaba la
         // subida (permisos, RLS, etc.) no había forma de enterarse.
         console.error('sync: pushState() falló al subir a la nube —', error.message || error, error)
+        emitirEstado({ fase: 'error', ultimoError: error.message || String(error) })
         return { ok: false }
       }
       rows.forEach(r => {
         lastPushed[r.id] = r.value
         try { localStorage.setItem(OK_PREFIX + r.id, r.value); localStorage.removeItem(PROT_DESDE_PREFIX + r.id) } catch (e) {}
       })
+      emitirEstado({ fase: 'guardado', ultimoOk: Date.now(), ultimoError: null })
     }
     return { ok: true, n: rows.length }
   } catch (e) {
     console.error('sync: pushState() lanzó una excepción —', e)
+    emitirEstado({ fase: 'error', ultimoError: (e && e.message) || String(e) })
     return { ok: false }
   } finally {
     ocupado = false
