@@ -14,7 +14,7 @@ const clp = n => '$' + Math.round(+n || 0).toLocaleString('es-CL')
 const precioMargen = (costoM2, pctMargen) => { const m = Math.min(Math.max(+pctMargen || 0, 0), 95) / 100; return (1 - m) > 0 ? (+costoM2 || 0) / (1 - m) : (+costoM2 || 0) }
 const milsProm = c => { const a = +c.mMin || 0; const b = (c.mMax === '' || c.mMax == null) ? a : (+c.mMax || 0); return b > 0 ? (a + b) / 2 : a }
 function nuevaCapa() { return { p: '', mMin: 2, mMax: 4, perdida: 2 } }
-function nuevoItem() { return { desc: '', ral: '', m2: 0, grado: 'SP-10 (near-white)', dif: 'A - Estandar', limpieza: 0, capas: [nuevaCapa()] } }
+function nuevoItem() { return { desc: '', ral: '', m2: 0, grado: 'SP-10 (near-white)', dif: 'A - Estandar', limpieza: 0, capas: [nuevaCapa()], sinGranallado: false } }
 // Folio numérico plano, en la misma secuencia que usa CotizacionesModule (nuevaCot/maxFolio) — sin prefijo,
 // para que al aprobar una cotización 'OT-' + folio no quede 'OT-Cot-793'.
 function proximoNumero(cots) { let mx = 792; (cots || []).forEach(c => { const s = (c.numero || c.folio || '') + ''; const m = s.match(/(\d+)/); if (m) mx = Math.max(mx, +m[1]) }); return String(mx + 1) }
@@ -54,7 +54,7 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
   const [cliQuery, setCliQuery] = useState((inicial && inicial.cliente) || '')
   const [cliSel, setCliSel] = useState(inicial && inicial.cliente ? { nombre: inicial.cliente, rut: inicial.rut || '', giro: inicial.giro || '', direccion: inicial.direccion || '', comuna: inicial.comuna || '' } : null)
   const [cliOpen, setCliOpen] = useState(false)
-  const [items, setItems] = useState(() => (inicial && inicial.items && inicial.items.length) ? inicial.items.map(it => ({ desc: it.descripcion || '', ral: it.ral || '', m2: it.m2 || 0, grado: it.gradoSSPC || 'SP-10 (near-white)', dif: it.factorDificultad || 'A - Estandar', limpieza: it.limpiezaSP1 || 0, capas: (it.capas || []).map(c => ({ p: c.p || '', mMin: (c.mMin != null ? c.mMin : (c.m != null ? c.m : 2)), mMax: (c.mMax != null ? c.mMax : (c.m != null ? c.m : 4)), perdida: (c.perdida != null ? c.perdida : 2) })) })) : [nuevoItem()])
+  const [items, setItems] = useState(() => (inicial && inicial.items && inicial.items.length) ? inicial.items.map(it => ({ desc: it.descripcion || '', ral: it.ral || '', m2: it.m2 || 0, grado: it.gradoSSPC || 'SP-10 (near-white)', dif: it.factorDificultad || 'A - Estandar', limpieza: it.limpiezaSP1 || 0, capas: (it.capas || []).map(c => ({ p: c.p || '', mMin: (c.mMin != null ? c.mMin : (c.m != null ? c.m : 2)), mMax: (c.mMax != null ? c.mMax : (c.m != null ? c.m : 4)), perdida: (c.perdida != null ? c.perdida : 2) })), sinGranallado: it.sinGranallado || false })) : [nuevoItem()])
   const [pct, setPct] = useState((inicial && (inicial.margenVenta != null ? inicial.margenVenta : inicial.porcentajeGanancia)) || 35)
   const [provPintura, setProvPintura] = useState((inicial && inicial.proveedorPintura) || '')
   const [sg, setSg] = useState(3380000)
@@ -70,7 +70,18 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
 
   function updItem(i, fn) { setItems(prev => prev.map((x, k) => { if (k !== i) return x; const n = { ...x, capas: x.capas.map(c => ({ ...c })) }; fn(n); return n })) }
   function capasEng(it) { return it.capas.filter(c => c.p).map(c => ({ p: c.p, m: milsProm(c), perdida: c.perdida })) }
-  function dg(it) { const g = P.grados.find(x => x.grado === it.grado); const f = P.factores.find(x => x.nivel === it.dif); return desgloseItem({ esquema: { capas: capasEng(it) }, factorGrado: g ? g.factor : 1, factorDif: f ? f.factor : 1, limpiezaSP1: +it.limpieza || 0, m2: +it.m2 || 0 }, ctx) }
+  // Con sinGranallado el item se cotiza solo con pintura (a veces el
+  // cliente ya tiene la superficie preparada y solo necesita pintar) — se
+  // descuenta el costo de granallado del desglose sin tocar el resto del
+  // cálculo, así el grado SSPC elegido no afecta el precio mientras la
+  // casilla esté marcada.
+  function dg(it) {
+    const g = P.grados.find(x => x.grado === it.grado)
+    const f = P.factores.find(x => x.nivel === it.dif)
+    const d = desgloseItem({ esquema: { capas: capasEng(it) }, factorGrado: g ? g.factor : 1, factorDif: f ? f.factor : 1, limpiezaSP1: +it.limpieza || 0, m2: +it.m2 || 0 }, ctx)
+    if (it.sinGranallado) { d.costoM2 -= d.granallado; d.granallado = 0 }
+    return d
+  }
   const totalCot = items.reduce((s, it) => s + precioMargen(dg(it).costoM2, pct) * (+it.m2 || 0), 0)
   function cargarEsquema(i, nombre) { const e = P.esquemas.find(x => x.n === nombre); if (!e) return; updItem(i, n => { n.capas = e.capas.map(c => ({ p: c.p, mMin: c.m, mMax: c.m, perdida: cte.perdidaTipica || 2 })) }) }
 
@@ -90,7 +101,7 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
     const numero = (inicial && (inicial.numero || inicial.folio)) || proximoNumero(base)
     const cli = cliSel || { nombre: cliQuery }
     const cot = { id: (inicial && inicial.id) || ('cot' + Date.now()), numero, folio: numero, area: sede, vencimiento: new Date().toISOString().slice(0, 10), tipo: 'calculo', origen: 'cotizador', estado: (inicial && inicial.estado) || 'Alta probabilidad de cierre', cliente: cli.nombre || '', rut: cli.rut || '', giro: cli.giro || '', direccion: cli.direccion || '', comuna: cli.comuna || '', ciudad: cli.ciudad || cli.comuna || '', condicionPago: 'CONTADO', vendedor: cli.vendedor || 'Venta general', sede, fecha: new Date().toISOString().slice(0, 10), margenVenta: +pct, porcentajeGanancia: +pct, proveedorPintura: provPintura,
-      items: items.map((it, i) => { const d = dg(it); const pm = precioMargen(d.costoM2, pct); return { codigo: it.grado || '', detalle: (it.desc || 'Item ' + (i + 1)) + (it.ral ? ' - ' + it.ral : '') + ' - ' + (it.capas.filter(c => c.p).map(c => c.p).join(' + ') || 'solo granallado ' + it.grado), cant: +it.m2 || 0, unidad: 'm²', pUnitario: Math.round(pm), descuento: 0, comentario: (it.capas.filter(c => c.p).map(c => c.p + ' ' + milsProm(c) + ' mils').join(' + ') || 'Solo granallado') + ' - ' + it.grado, descripcion: it.desc, ral: it.ral, m2: +it.m2 || 0, gradoSSPC: it.grado, factorDificultad: it.dif, limpiezaSP1: +it.limpieza || 0, capas: it.capas.filter(c => c.p), costoM2: Math.round(d.costoM2), precioM2: Math.round(pm), comprasPintura: d.comprasPintura || [], pinturaCompraTotal: (d.comprasPintura || []).reduce((a, cp) => a + (cp.costo || 0), 0), total: Math.round(pm * (+it.m2 || 0)), desglose: { granallado: Math.round(d.granallado), limpieza: Math.round(d.limpieza), diluyente: Math.round(d.diluyente), pintura: Math.round(d.pintura), fijos: Math.round(d.fijos) } } }),
+      items: items.map((it, i) => { const d = dg(it); const pm = precioMargen(d.costoM2, pct); const etiquetaGrado = it.sinGranallado ? 'sin granallado' : it.grado; return { codigo: it.sinGranallado ? '' : it.grado, detalle: (it.desc || 'Item ' + (i + 1)) + (it.ral ? ' - ' + it.ral : '') + ' - ' + (it.capas.filter(c => c.p).map(c => c.p).join(' + ') || (it.sinGranallado ? 'sin ítems' : 'solo granallado ' + it.grado)), cant: +it.m2 || 0, unidad: 'm²', pUnitario: Math.round(pm), descuento: 0, comentario: (it.capas.filter(c => c.p).map(c => c.p + ' ' + milsProm(c) + ' mils').join(' + ') || (it.sinGranallado ? 'Sin ítems' : 'Solo granallado')) + ' - ' + etiquetaGrado, descripcion: it.desc, ral: it.ral, m2: +it.m2 || 0, gradoSSPC: it.grado, sinGranallado: !!it.sinGranallado, factorDificultad: it.dif, limpiezaSP1: +it.limpieza || 0, capas: it.capas.filter(c => c.p), costoM2: Math.round(d.costoM2), precioM2: Math.round(pm), comprasPintura: d.comprasPintura || [], pinturaCompraTotal: (d.comprasPintura || []).reduce((a, cp) => a + (cp.costo || 0), 0), total: Math.round(pm * (+it.m2 || 0)), desglose: { granallado: Math.round(d.granallado), limpieza: Math.round(d.limpieza), diluyente: Math.round(d.diluyente), pintura: Math.round(d.pintura), fijos: Math.round(d.fijos) } } }),
       total: Math.round(totalCot), montoCotizado: Math.round(totalCot), supuestos: { sueldosGranallado: +sg, sueldosPintores: +sp, totalFijos } }
     const nuevo = inicial ? base.map(x => x.id === cot.id ? cot : x) : [...base, cot]
     try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
@@ -146,7 +157,7 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
 <input list="cot-provpint" value={provPintura} onChange={e => setProvPintura(e.target.value)} placeholder="Escribe o elige un proveedor de pintura" style={{ ...inp, width: '100%', marginTop: 4 }} />
 <datalist id="cot-provpint">{proveedores.map((p, k) => <option key={k} value={p.nombre} />)}</datalist>
 </div>
-{items.map((it, i) => { const d = dg(it); const pm = precioMargen(d.costoM2, pct); const soloGran = d.nCapas === 0; return (
+{items.map((it, i) => { const d = dg(it); const pm = precioMargen(d.costoM2, pct); const soloGran = d.nCapas === 0 && !it.sinGranallado; return (
       <div key={i} style={card}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <div style={{ fontWeight: 600, color: T.navy }}>Item {i + 1}{soloGran ? ' - SOLO GRANALLADO' : ''}</div>
@@ -161,15 +172,20 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
         </div>
 
         <div style={{ background: '#F2F4F7', border: '1px solid ' + T.border, borderLeft: '4px solid ' + T.orange, borderRadius: 8, padding: '10px 14px', marginBottom: 12, display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ minWidth: 250 }}>
+          <div style={{ minWidth: 250, opacity: it.sinGranallado ? 0.5 : 1 }}>
             <span style={lab}>Tipo de granallado (grado SSPC)</span>
-            <select value={it.grado} onChange={e => updItem(i, x => x.grado = e.target.value)} style={{ ...inp, width: '100%' }}>{P.grados.map((g, k) => <option key={k} value={g.grado}>{g.grado} (x{g.factor})</option>)}</select>
+            <select value={it.grado} onChange={e => updItem(i, x => x.grado = e.target.value)} disabled={it.sinGranallado} style={{ ...inp, width: '100%' }}>{P.grados.map((g, k) => <option key={k} value={g.grado}>{g.grado} (x{g.factor})</option>)}</select>
           </div>
           <div>
             <div style={{ fontSize: 10.5, color: T.textMute, textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.4 }}>Granallado</div>
-            <div style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 700, color: T.navy, lineHeight: 1.1 }}>{clp(d.granallado)}<span style={{ fontSize: 12, color: T.textMute, fontWeight: 400 }}> /m2</span></div>
+            <div style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 700, color: it.sinGranallado ? T.textMute : T.navy, lineHeight: 1.1 }}>{clp(d.granallado)}<span style={{ fontSize: 12, color: T.textMute, fontWeight: 400 }}> /m2</span></div>
           </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: T.textSoft, cursor: 'pointer' }}>
+            <input type="checkbox" checked={!it.sinGranallado} onChange={e => updItem(i, x => x.sinGranallado = !e.target.checked)} style={{ width: 'auto' }} />
+            Incluir granallado
+          </label>
           {(+it.limpieza || 0) > 0 && <div><div style={{ fontSize: 10.5, color: T.textMute, textTransform: 'uppercase', fontWeight: 700 }}>Limpieza SP-1</div><div style={{ fontSize: 15, fontWeight: 600, color: T.textSoft }}>{clp(+it.limpieza || 0)} /m2</div></div>}
+          {it.sinGranallado && <div style={{ fontSize: 11.5, color: T.warn, fontWeight: 600 }}>Sin granallado — solo se cotiza la pintura sobre superficie ya preparada.</div>}
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
@@ -195,7 +211,7 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
             </tbody>
           </table>
         </div>}
-        {it.capas.length === 0 && <div style={{ fontSize: 12.5, color: T.textMute, fontStyle: 'italic', padding: '6px 0' }}>Sin capas de pintura - se cotiza solo el granallado.</div>}
+        {it.capas.length === 0 && <div style={{ fontSize: 12.5, color: T.textMute, fontStyle: 'italic', padding: '6px 0' }}>{it.sinGranallado ? 'Sin capas de pintura y sin granallado - este item no sumara nada al total.' : 'Sin capas de pintura - se cotiza solo el granallado.'}</div>}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
           <button onClick={() => updItem(i, x => x.capas.push(nuevaCapa()))} style={{ background: 'transparent', border: '1px dashed ' + T.border, borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: T.textSoft, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Capa</button>
           <div style={{ fontSize: 12.5, color: T.textSoft }}>Costo pintura: <b style={{ color: T.navy }}>{clp(d.pintura)}/m2</b> - {d.nCapas} capas · mils promedio por rango</div>
@@ -203,7 +219,7 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
 
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start', borderTop: '1px solid ' + T.borderSoft, paddingTop: 10, marginTop: 10 }}>
           <div style={{ minWidth: 200, flex: 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: T.textSoft, padding: '1px 0' }}><span>Granallado /m2 ({it.grado})</span><span>{clp(d.granallado)}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: T.textSoft, padding: '1px 0' }}><span>Granallado /m2 {it.sinGranallado ? '(sin granallado)' : '(' + it.grado + ')'}</span><span>{clp(d.granallado)}</span></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: T.textSoft, padding: '1px 0' }}><span>Limpieza SP-1 /m2</span><span>{clp(d.limpieza)}</span></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: T.textSoft, padding: '1px 0' }}><span>Diluyente /m2</span><span>{clp(d.diluyente)}</span></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: T.textSoft, padding: '1px 0' }}><span>Pintura /m2</span><span>{clp(d.pintura)}</span></div>
