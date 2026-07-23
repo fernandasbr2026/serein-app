@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { COTIZADOR_SEED, indexProductos, desgloseItem, valorM2Capa, rendimientoM2Gal, valorGalon } from './cotizador-data.js'
-import { pullState, pushState } from './sync.js'
+import { pushState } from './sync.js'
 import { THEME } from './ui.jsx'
 import { Plus, Trash2, ChevronLeft } from 'lucide-react'
 
@@ -74,18 +74,19 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
   const totalCot = items.reduce((s, it) => s + precioMargen(dg(it).costoM2, pct) * (+it.m2 || 0), 0)
   function cargarEsquema(i, nombre) { const e = P.esquemas.find(x => x.n === nombre); if (!e) return; updItem(i, n => { n.capas = e.capas.map(c => ({ p: c.p, mMin: c.m, mMax: c.m, perdida: cte.perdidaTipica || 2 })) }) }
 
-  async function guardar() {
+  function guardar() {
     const sinM2 = items.map((it, i) => ((+it.m2 || 0) > 0 ? 0 : i + 1)).filter(Boolean)
     if (sinM2.length) {
       const msg = 'La' + (sinM2.length > 1 ? 's piezas N\u00b0 ' : ' pieza N\u00b0 ') + sinM2.join(', ') + (sinM2.length > 1 ? ' est\u00e1n' : ' est\u00e1') + ' en 0 m\u00b2. Su total quedar\u00e1 en $0 y no sumar\u00e1 al total de la cotizaci\u00f3n.\n\n\u00bfGenerar la cotizaci\u00f3n de todas formas?'
       if (!window.confirm(msg)) return
     }
-    // Trae lo mas fresco de la nube justo antes de asignar folio y guardar \u2014
-    // si no, dos personas cotizando al mismo tiempo pueden calcular el mismo
-    // "proximo numero" desde su propio estado atrasado y chocar (folios
-    // duplicados con distinto cliente).
-    let base = cotizaciones || []
-    try { await pullState(); const fc = JSON.parse(localStorage.getItem('serein_cotizaciones') || 'null'); if (Array.isArray(fc)) base = fc } catch (e) {}
+    // Usa lo que ya est\u00e1 cargado en memoria (cotizaciones, mantenido al d\u00eda
+    // por la sincronizaci\u00f3n en tiempo real y el sondeo cada 15s de
+    // Dashboard.jsx) en vez de esperar (await) una nueva consulta a la nube
+    // justo antes de guardar \u2014 con conexi\u00f3n lenta o inestable ese await
+    // pod\u00eda demorar mucho o no resolver nunca, dejando el bot\u00f3n "Guardar"
+    // sin ning\u00fan efecto visible.
+    const base = cotizaciones || []
     const numero = (inicial && (inicial.numero || inicial.folio)) || proximoNumero(base)
     const cli = cliSel || { nombre: cliQuery }
     const cot = { id: (inicial && inicial.id) || ('cot' + Date.now()), numero, folio: numero, area: sede, vencimiento: new Date().toISOString().slice(0, 10), tipo: 'calculo', origen: 'cotizador', estado: (inicial && inicial.estado) || 'Alta probabilidad de cierre', cliente: cli.nombre || '', rut: cli.rut || '', giro: cli.giro || '', direccion: cli.direccion || '', comuna: cli.comuna || '', ciudad: cli.ciudad || cli.comuna || '', condicionPago: 'CONTADO', vendedor: cli.vendedor || 'Venta general', sede, fecha: new Date().toISOString().slice(0, 10), margenVenta: +pct, porcentajeGanancia: +pct, proveedorPintura: provPintura,

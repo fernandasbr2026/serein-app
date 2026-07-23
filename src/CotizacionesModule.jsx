@@ -3,7 +3,7 @@ import { Plus, Trash2, FileText, Download, CheckCircle2, Search, X } from 'lucid
 import * as XLSX from 'xlsx'
 import Paginador, { paginar } from './Paginador.jsx'
 import { PROVEEDORES_FICHA } from './proveedores-data.js'
-import { pullState, pushState } from './sync.js'
+import { pushState } from './sync.js'
 import { SEREIN } from './theme-serein.js'
 
 // ============================================================
@@ -387,22 +387,17 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
 
   const maxFolio = cotizaciones.reduce((m, c) => Math.max(m, parseInt(String(c.folio).replace(/\D/g, ''), 10) || 0), 792)
 
-  // Trae lo mas fresco de la nube antes de guardar/aprobar/eliminar una cotizacion:
-  // si dos personas cotizan al mismo tiempo con el estado local un poco atrasado
-  // (ej. Carolina desde su sesion y otra persona desde la suya), guardar solo con
-  // lo que cada pestana tenia en memoria puede pisar la cotizacion de la otra
-  // persona o repetir el mismo folio. Se lee lo ultimo de la nube justo antes de
-  // guardar y se sube de inmediato, para achicar al maximo esa ventana.
-  async function fresco() {
-    try { await pullState() } catch (e) {}
-    let cots = null, otsF = null
-    try { cots = JSON.parse(localStorage.getItem('serein_cotizaciones') || 'null') } catch (e) {}
-    try { otsF = JSON.parse(localStorage.getItem('serein_ots') || 'null') } catch (e) {}
-    return { cots: Array.isArray(cots) ? cots : cotizaciones, ots: Array.isArray(otsF) ? otsF : (ots || []) }
-  }
-
-  const guardar = async cot => {
-    const { cots: base } = await fresco()
+  // guardar/eliminar/aprobar escriben con lo que ya está cargado en memoria
+  // (cotizaciones/ots, mantenidos al día por la sincronización en tiempo real
+  // y el sondeo cada 15s de Dashboard.jsx) y suben el cambio de inmediato sin
+  // bloquear la pantalla. Antes esperaban (await) traer el estado más fresco
+  // de la nube justo antes de escribir — con conexión lenta o inestable ese
+  // await podía demorar mucho o no resolver nunca, y botones como "Aprobar y
+  // crear OT" quedaban sin ningún efecto visible aunque el clic sí se
+  // registrara (el mismo problema que afectó a "Cerrar OT" en Órdenes de
+  // Trabajo).
+  const guardar = cot => {
+    const base = cotizaciones
     const existe = base.some(c => c.id === cot.id)
     let cotFinal = cot
     if (!existe) {
@@ -415,19 +410,19 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
     pushState()
     setCreando(false); setEditId(null)
   }
-  const eliminar = async id => {
+  const eliminar = id => {
     if (!window.confirm('¿Eliminar esta cotización?')) return
-    const { cots: base } = await fresco()
-    const nuevo = base.filter(c => c.id !== id)
+    const nuevo = cotizaciones.filter(c => c.id !== id)
     try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
     setCotizaciones(nuevo)
     pushState()
   }
 
-  async function aprobar(cot, fechaEntrega = '', responsable = '') {
-    const { cots: baseCots, ots: baseOts } = await fresco()
+  function aprobar(cot, fechaEntrega = '', responsable = '') {
+    const baseCots = cotizaciones
+    const baseOts = ots || []
     const cotFresca = baseCots.find(c => c.id === cot.id) || cot
-    if (cotFresca.estado === 'Aprobada') { setCotizaciones(baseCots); window.alert('Esta cotización ya fue aprobada y su OT ya existe.'); return }
+    if (cotFresca.estado === 'Aprobada') { window.alert('Esta cotización ya fue aprobada y su OT ya existe.'); return }
     const numeroOT = 'OT-' + cotFresca.folio
     let nuevasOts = baseOts
     if (baseOts.some(o => o.numero === numeroOT)) { window.alert('Ya existe una OT creada para esta cotización (' + numeroOT + '). No se creó otra.') }
