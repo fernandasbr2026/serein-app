@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx'
 import { supabase } from './supabase.js'
 import { pushState } from './sync.js'
 import { calcularPerdidaFactoring } from './ParametrosModule.jsx'
+import { descargarInformeFacturas } from './informeFacturas.js'
 
 import { SEREIN } from './theme-serein.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
@@ -244,6 +245,20 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
     try { await supabase.from('libro_ventas').update({ oculto: false }).in('id', ids) } catch (e) { setErrMsg('Error al restaurar: ' + (e.message || e)) }
     setSel(new Set())
   }
+  const descargarInforme = () => {
+    const elegidas = filtradas.filter(r => sel.has(r.id))
+    if (!elegidas.length) return
+    descargarInformeFacturas(elegidas.map(r => ({
+      folio: r.document_number,
+      cliente: r.client_name,
+      fechaEmision: r.emission_date,
+      ventaNeta: sgn(r) * (Number(r.neto) || 0),
+      iva: sgn(r) * (Number(r.iva) || 0),
+      total: sgn(r) * (Number(r.total) || 0),
+      fechaVencimiento: r.vencimiento,
+      estado: r.estado_pago,
+    })))
+  }
 
   const facturaVacia = { emission_date: new Date().toISOString().slice(0, 10), document_number: '', client_name: '', client_rut: '', document_type: 'Factura', neto: '', iva: '', area: '' }
   const [mostrarAgregar, setMostrarAgregar] = useState(false)
@@ -333,6 +348,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
           <span style={{ fontSize: 12.5, color: C.mut }}>{sel.size} seleccionado(s)</span>
+          <button onClick={descargarInforme} disabled={!sel.size} style={{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5, background: sel.size ? C.navy : '#DFE4EA', color: sel.size ? '#fff' : C.mut, cursor: sel.size ? 'pointer' : 'default' }}>Descargar informe PDF</button>
           {!verOcultas && <button onClick={eliminarSel} disabled={!sel.size} style={{ ...{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5 }, background: sel.size ? C.red : '#DFE4EA', color: sel.size ? '#fff' : C.mut, cursor: sel.size ? 'pointer' : 'default' }}>Eliminar seleccionados</button>}
           {verOcultas && <button onClick={restaurarSel} disabled={!sel.size} style={{ ...{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5 }, background: sel.size ? C.green : '#DFE4EA', color: sel.size ? '#fff' : C.mut, cursor: sel.size ? 'pointer' : 'default' }}>Restaurar seleccionados</button>}
           <button onClick={() => { setVerOcultas(v => !v); setSel(new Set()) }} style={{ background: 'transparent', border: '1px solid ' + C.border, padding: '7px 12px', borderRadius: 6, fontSize: 12.5, cursor: 'pointer', color: C.navy }}>{verOcultas ? 'Volver al libro' : 'Ver ocultos'}</button>

@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx'
 import { calcularPerdidaFactoring, perdidaFactoringFactura } from './ParametrosModule.jsx'
 import Paginador, { paginar } from './Paginador.jsx'
 import { pullState, pushState } from './sync.js'
+import { descargarInformeFacturas } from './informeFacturas.js'
 export { FACTURAS_SEED } from './facturas-data.js'
 const CONDICIONES_DIAS = [{ label: '30 días', dias: 30 }, { label: '45 días', dias: 45 }, { label: '60 días', dias: 60 }, { label: '90 días', dias: 90 }]
 const norm = s => (s || '').toString().toLowerCase()
@@ -160,6 +161,20 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
     eliminarFresco(() => [])
     setSel(new Set())
   }
+  const descargarInforme = () => {
+    const elegidas = mostradas.filter(x => sel.has(x.id))
+    if (!elegidas.length) return
+    descargarInformeFacturas(elegidas.map(x => ({
+      folio: x.numero,
+      cliente: x.cliente,
+      fechaEmision: x.fecha_emision,
+      ventaNeta: parseInt(String(x.neto).replace(/\D/g, ''), 10) || 0,
+      iva: ivaFacturaDe(x),
+      total: montoFacturaDe(x),
+      fechaVencimiento: x.vencimiento,
+      estado: x.estado,
+    })))
+  }
   const totalMonto = mostradas.reduce((a, x) => a + montoFacturaDe(x), 0)
   const cobrado = mostradas.filter(x => x.estado === 'Pagado').reduce((a, x) => a + montoFacturaDe(x), 0)
   const totalComision = mostradas.reduce((a, x) => a + comisionDe(x), 0)
@@ -259,6 +274,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '0 12px 10px' }}>
           <span style={{ fontSize: 12.5, color: C.gris }}>{sel.size} seleccionada(s)</span>
+          <button onClick={descargarInforme} disabled={!sel.size} style={{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5, background: sel.size ? C.azul : '#DFE4EA', color: sel.size ? '#fff' : C.gris, cursor: sel.size ? 'pointer' : 'default' }}>Descargar informe PDF</button>
           <button onClick={eliminarSel} disabled={!sel.size} style={{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5, background: sel.size ? C.rojo : '#DFE4EA', color: sel.size ? '#fff' : C.gris, cursor: sel.size ? 'pointer' : 'default' }}>Eliminar seleccionadas</button>
           <button onClick={vaciarArea} disabled={!lista.length} style={{ background: 'transparent', border: '1px solid ' + C.rojo, color: C.rojo, padding: '7px 12px', borderRadius: 6, fontSize: 12.5, fontWeight: 700, cursor: lista.length ? 'pointer' : 'default' }}>Vaciar area {area}</button>
         </div>
