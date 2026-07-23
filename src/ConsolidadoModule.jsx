@@ -4,8 +4,12 @@ import { totales as totalesCot } from './CotizacionesModule.jsx'
 import { supabase } from './supabase.js'
 import { AlertTriangle, TrendingUp, TrendingDown, Wallet, Landmark, Receipt, Sparkles, CheckCircle2, ShieldAlert, Info } from 'lucide-react'
 import * as XLSX from 'xlsx'
+import { SEREIN } from './theme-serein.js'
 
-const C = { navy: '#061A40', carbon: '#0F1A2E', orange: '#FF6B00', azul: '#25608E', verde: '#12805C', rojo: '#D64545', ambar: '#C9860B', teal: '#0B7285', gray: '#8A929E', line: '#E6E8EE', soft: '#F5F6F8' }
+// Paleta reskineada a la identidad Serein 2026 — mismas claves de siempre,
+// solo cambian los valores hex. Nada de la logica de abajo (calculos,
+// filtros, useMemo) se toca.
+const C = { navy: SEREIN.ink, carbon: SEREIN.text, orange: SEREIN.orange, azul: SEREIN.blue, verde: SEREIN.green, rojo: SEREIN.red, ambar: '#B8720C', teal: '#0E7A8F', gray: SEREIN.textFaint, line: SEREIN.line, soft: SEREIN.fog }
 const SEV = { ok: C.verde, warn: C.ambar, crit: C.rojo }
 const clp = n => '$' + Math.round(+n || 0).toLocaleString('es-CL')
 const pad2 = x => (x < 10 ? '0' + x : '' + x)
@@ -15,10 +19,10 @@ function fechaCL(f) { if (!f) return '-'; const s = ('' + f).slice(0, 10); const
 const num = n => (+n || 0)
 
 function Card({ titulo, icon: Ico, children, borde }) {
-  return (<div style={{ background: '#fff', border: '1px solid ' + C.line, borderTop: '3px solid ' + (borde || C.orange), borderRadius: 14, boxShadow: '0 1px 3px rgba(16,24,40,.06), 0 1px 2px rgba(16,24,40,.04)', padding: '16px 18px', marginBottom: 18 }}>
+  return (<div style={{ background: SEREIN.paper, border: '1px solid ' + C.line, borderTop: '3px solid ' + (borde || C.orange), borderRadius: SEREIN.radius, boxShadow: SEREIN.shadow, padding: '16px 18px', marginBottom: 18 }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
       {Ico && <Ico size={16} color={borde || C.navy} />}
-      <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 13.5, textTransform: 'uppercase', letterSpacing: 0.4, color: C.carbon }}>{titulo}</span>
+      <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 13.5, textTransform: 'uppercase', letterSpacing: 0.4, color: C.carbon }}>{titulo}</span>
     </div>
     {children}
   </div>)
@@ -26,9 +30,9 @@ function Card({ titulo, icon: Ico, children, borde }) {
 
 function SemCard({ label, valor, sub, sev }) {
   const col = SEV[sev] || C.navy
-  return (<div style={{ flex: '1 1 160px', minWidth: 150, background: '#fff', border: '1px solid ' + C.line, borderLeft: '4px solid ' + col, borderRadius: 12, boxShadow: '0 1px 3px rgba(16,24,40,.06)', padding: '14px 16px' }}>
+  return (<div style={{ flex: '1 1 160px', minWidth: 150, background: SEREIN.paper, border: '1px solid ' + C.line, borderLeft: '4px solid ' + col, borderRadius: SEREIN.radius, boxShadow: SEREIN.shadow, padding: '14px 16px' }}>
     <div style={{ fontSize: 10.5, color: C.gray, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, marginBottom: 3 }}>{label}</div>
-    <div style={{ fontSize: 21, fontWeight: 700, color: col, fontFamily: "'Oswald',sans-serif", lineHeight: 1.1 }}>{valor}</div>
+    <div style={{ fontSize: 22, fontWeight: 800, color: col, fontFamily: SEREIN.fontDisplay, lineHeight: 1.1 }}>{valor}</div>
     {sub && <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>{sub}</div>}
   </div>)
 }
@@ -254,7 +258,7 @@ function CashFlowPanel({ cc, d }) {
         <Fila label="Saldo proyectado" valor={clp(num(cc.saldoProy))} color={num(cc.saldoProy) >= 0 ? C.verde : C.rojo} />
       </div>
     </div>
-    <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 4, background: pos ? '#EAF3EC' : '#F7E9E6', border: '1px solid ' + (pos ? C.verde : C.rojo), display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 6, background: pos ? SEREIN.greenSoft : SEREIN.redSoft, border: '1px solid ' + (pos ? C.verde : C.rojo), display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
       <span style={{ fontSize: 13, fontWeight: 600, color: pos ? C.verde : C.rojo }}>{pos ? 'La empresa se proyecta POSITIVA' : 'Atención: proyección NEGATIVA'}</span>
       <span style={{ fontSize: 14, fontWeight: 700, color: pos ? C.verde : C.rojo }}>Saldo 30 días: {clp(d.saldo30)}</span>
     </div>
@@ -278,7 +282,7 @@ function ProfitabilityPanel({ cc, d }) {
 
 function ProductionStatusPanel({ d }) {
   const box = (n, l, col) => (<div style={{ flex: '1 1 90px', textAlign: 'center', background: C.soft, borderRadius: 4, padding: '8px 4px' }}>
-    <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: 22, fontWeight: 700, color: col }}>{n}</div>
+    <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 22, fontWeight: 800, color: col }}>{n}</div>
     <div style={{ fontSize: 10.5, color: C.gray, textTransform: 'uppercase' }}>{l}</div>
   </div>)
   return (<Card titulo="OT y producción" icon={TrendingUp} borde={C.orange}>
@@ -374,18 +378,18 @@ function AreaCostPanel({ fin, facturas }) {
   const ventaDe = a => ((fac[a]) || []).reduce((s, f) => s + (f.neto || 0), 0)
   const rows = AR.map(a => { const fj = fijoDe(a), cp = compraDe(a), vt = ventaDe(a); return { a, fj, cp, vt, ut: vt - fj - cp } })
   const tot = rows.reduce((t, r) => ({ fj: t.fj + r.fj, cp: t.cp + r.cp, vt: t.vt + r.vt, ut: t.ut + r.ut }), { fj: 0, cp: 0, vt: 0, ut: 0 })
-  const th = { textAlign: 'right', padding: '8px 10px', fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }
+  const th = { textAlign: 'right', padding: '8px 10px', fontSize: 11, color: SEREIN.textFaint, textTransform: 'uppercase' }
   const td = { padding: '8px 10px', textAlign: 'right', whiteSpace: 'nowrap' }
   return (
-    <div style={{ background: '#fff', border: '1px solid #EEF0F4', borderRadius: 14, boxShadow: '0 1px 3px rgba(16,24,40,.06)', padding: 18, marginTop: 16 }}>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 4 }}>Costos y ventas por area</div>
-      <div style={{ fontSize: 12, color: '#7A8288', marginBottom: 12 }}>Costos fijos por area + compras asignadas (Libro de compras) y venta acumulada por area. Toma los mismos datos de cada modulo.</div>
+    <div style={{ background: SEREIN.paper, border: '1px solid ' + SEREIN.line, borderRadius: SEREIN.radius, boxShadow: SEREIN.shadow, padding: 18, marginTop: 16 }}>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 14, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 4 }}>Costos y ventas por area</div>
+      <div style={{ fontSize: 12, color: SEREIN.textFaint, marginBottom: 12 }}>Costos fijos por area + compras asignadas (Libro de compras) y venta acumulada por area. Toma los mismos datos de cada modulo.</div>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead><tr style={{ borderBottom: '2px solid #061A40' }}><th style={{ ...th, textAlign: 'left' }}>Area</th><th style={th}>Costos fijos</th><th style={th}>Compras asignadas</th><th style={th}>Venta acumulada</th><th style={th}>Utilidad</th></tr></thead>
+          <thead><tr style={{ borderBottom: '2px solid ' + SEREIN.ink }}><th style={{ ...th, textAlign: 'left' }}>Area</th><th style={th}>Costos fijos</th><th style={th}>Compras asignadas</th><th style={th}>Venta acumulada</th><th style={th}>Utilidad</th></tr></thead>
           <tbody>
-            {rows.map(r => (<tr key={r.a} style={{ borderBottom: '1px solid #EEE9DF' }}><td style={{ padding: '8px 10px', fontWeight: 600 }}>{r.a}</td><td style={td}>{clp(r.fj)}</td><td style={td}>{clp(r.cp)}</td><td style={td}>{clp(r.vt)}</td><td style={{ ...td, fontWeight: 600, color: r.ut >= 0 ? '#12805C' : '#D64545' }}>{clp(r.ut)}</td></tr>))}
-            <tr style={{ borderTop: '2px solid #061A40', fontWeight: 700 }}><td style={{ padding: '8px 10px' }}>Total</td><td style={td}>{clp(tot.fj)}</td><td style={td}>{clp(tot.cp)}</td><td style={td}>{clp(tot.vt)}</td><td style={{ ...td, color: tot.ut >= 0 ? '#12805C' : '#D64545' }}>{clp(tot.ut)}</td></tr>
+            {rows.map(r => (<tr key={r.a} style={{ borderBottom: '1px solid ' + SEREIN.fog2 }}><td style={{ padding: '8px 10px', fontWeight: 600 }}>{r.a}</td><td style={td}>{clp(r.fj)}</td><td style={td}>{clp(r.cp)}</td><td style={td}>{clp(r.vt)}</td><td style={{ ...td, fontWeight: 600, color: r.ut >= 0 ? SEREIN.green : SEREIN.red }}>{clp(r.ut)}</td></tr>))}
+            <tr style={{ borderTop: '2px solid ' + SEREIN.ink, fontWeight: 700 }}><td style={{ padding: '8px 10px' }}>Total</td><td style={td}>{clp(tot.fj)}</td><td style={td}>{clp(tot.cp)}</td><td style={td}>{clp(tot.vt)}</td><td style={{ ...td, color: tot.ut >= 0 ? SEREIN.green : SEREIN.red }}>{clp(tot.ut)}</td></tr>
           </tbody>
         </table>
       </div>
@@ -444,7 +448,7 @@ export default function ConsolidadoModule(props) {
       const res = libroCons.vNeta - libroCons.cNeto
       return (
         <div style={{ border: '2px solid ' + C.navy, borderRadius: 12, padding: 16, marginBottom: 18, background: C.soft }}>
-          <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 700, color: C.navy, fontSize: 15, textTransform: 'uppercase', letterSpacing: 0.5 }}>Consolidado segun libros</div>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 800, color: C.navy, fontSize: 15, textTransform: 'uppercase', letterSpacing: 0.5 }}>Consolidado segun libros</div>
           <div style={{ fontSize: 12, color: C.gray, marginBottom: 12 }}>Cifras reales del Libro de Ventas ({libroCons.nV} facturas) y del Libro de Compras ({libroCons.nC} documentos).</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
             <div style={lcCard}><div style={lbl}>Venta neta (Libro de Ventas)</div><div style={{ ...val, color: C.azul }}>{clp(libroCons.vNeta)}</div><div style={sub}>Bruto {clp(libroCons.vBruta)}</div></div>
@@ -461,7 +465,7 @@ export default function ConsolidadoModule(props) {
               const caja = cobrado - egr
               const linea = (t, v, neg) => (<div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '3px 0' }}><span style={{ color: C.gray }}>{t}</span><span style={{ fontWeight: 600, color: neg ? C.rojo : C.navy }}>{neg ? '- ' : ''}{clp(v)}</span></div>)
               return (<div>
-                <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 700, color: C.navy, fontSize: 13, textTransform: 'uppercase', marginBottom: 6 }}>Caja que deberias tener</div>
+                <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 800, color: C.navy, fontSize: 13, textTransform: 'uppercase', marginBottom: 6 }}>Caja que deberias tener</div>
                 <div style={{ maxWidth: 480 }}>
                   {linea('Cobrado (ingresos reales)', cobrado, false)}
                   {linea('Compras (Libro de Compras)', num(libroCons.cNeto), true)}

@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx'
 import Paginador, { paginar } from './Paginador.jsx'
 import { PROVEEDORES_FICHA } from './proveedores-data.js'
 import { pullState, pushState } from './sync.js'
+import { SEREIN } from './theme-serein.js'
 
 // ============================================================
 // MÓDULO: Cotizaciones (formato PDF descargable) + generación de OT
@@ -12,16 +13,18 @@ import { pullState, pushState } from './sync.js'
 //   formato pero SIN valores (para los supervisores).
 // ============================================================
 
-const C = { azul: '#061A40', teal: '#0B7285', ambar: '#FF6B00', rojo: '#D64545', verde: '#12805C', carbon: '#0F1A2E', gris: '#8A929E' }
+// Paleta reskineada a la identidad Serein 2026 — mismas claves de siempre,
+// solo cambian los valores hex. La logica de abajo no se toca.
+const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
 // Cantidad con decimales: la coma es separador decimal; el punto se usa como miles
 const numDec = s => { let x = String(s == null ? '' : s).trim().replace(/[^\d.,-]/g, ''); if (x.includes(',')) x = x.replace(/\./g, '').replace(',', '.'); else if (/^-?\d{1,3}(\.\d{3})+$/.test(x)) x = x.replace(/\./g, ''); const v = parseFloat(x); return isNaN(v) ? 0 : v }
 const fmtCant = s => numDec(s).toLocaleString('es-CL', { maximumFractionDigits: 2 })
-const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
+const inp = { padding: '9px 11px', border: '1px solid ' + SEREIN.line, borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }
 const AREAS = ['Santa Rosa', 'Istria', 'Proyectos']
 const ESTADOS_COT = ['Alta probabilidad de cierre', 'Baja probabilidad de cierre', 'Aprobada', 'Rechazada', 'Otro']
-const colorEstadoCot = e => ({ 'Aprobada': ['#E7F2EA', C.verde], 'Rechazada': ['#F6E0DA', C.rojo], 'Alta probabilidad de cierre': ['#E7EEF2', C.azul], 'Baja probabilidad de cierre': ['#F9E9DE', '#8C4519'], 'Otro': ['#EEE', C.gris] }[e] || ['#EEE', C.gris])
+const colorEstadoCot = e => ({ 'Aprobada': [SEREIN.greenSoft, C.verde], 'Rechazada': [SEREIN.redSoft, C.rojo], 'Alta probabilidad de cierre': [SEREIN.blueSoft, SEREIN.blue], 'Baja probabilidad de cierre': [SEREIN.orangeSoft, SEREIN.orangeDark], 'Otro': [SEREIN.fog2, C.gris] }[e] || [SEREIN.fog2, C.gris])
 
 // Datos de la empresa (encabezado del documento)
 const _EMP_DEF = { nombre: 'SERVICIOS REVESTIMIENTOS INDUSTRIALES SPA', rut: '76.860.656-0', giro: 'Revestimientos Industriales y habitacionales', direccion: 'Santa Rosa 70, RENCA', telefono: '56999369503', email: 'administracion@sereinspa.com' }
@@ -70,7 +73,7 @@ function enPalabras(n) {
 }
 
 // ---- Generar el HTML del documento e imprimir (Guardar como PDF) ----
-function estilosDoc() { return '@page{size:A4;margin:18mm 14mm 14mm}body{font-family:Inter,Arial,Helvetica,sans-serif;color:#101828;font-size:12px;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.head{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #061A40;padding-bottom:10px}.emp b{color:#061A40;font-size:15px}.emp div{color:#5a6b85;line-height:1.45;font-size:10.5px}.doc{text-align:right}.doc .t{font-size:20px;font-weight:800;color:#061A40}.doc .f{font-size:13px;font-weight:700;color:#FF6B00}table{width:100%;border-collapse:collapse;margin-top:10px}.cli td{padding:4px 8px;font-size:11px;vertical-align:top}.cli .lbl{color:#5a6b85;text-transform:uppercase;font-size:9px}.items th{background:#061A40;color:#fff;padding:6px 8px;font-size:10px;text-align:left}.items td{border:1px solid #D8DCE5;padding:6px 8px;font-size:11px;vertical-align:top}.items .r{text-align:right}.tot{width:auto;margin-left:auto;margin-top:10px}.tot td{padding:4px 12px;font-size:12px}.tot .lbl{color:#5a6b85;text-align:right}.tot .big{font-weight:800;font-size:14px;color:#061A40}.words{margin-top:8px;font-size:11px;color:#344054}.badge{display:inline-block;border:1px solid #D8DCE5;background:#F5F7FA;color:#5a6b85;padding:2px 8px;font-size:10px;margin-top:6px;border-radius:4px}.pb{page-break-before:always;padding-top:6px}.cond{font-size:11px;border-bottom:1px solid #D8DCE5;padding-bottom:8px;margin:8px 0}.cond ol{padding-left:18px;font-size:11px;line-height:1.5}.cond li{margin-bottom:5px;color:#101828}.cond .datos{margin-top:10px;border:1px solid #D8DCE5;padding:10px;font-size:11px;line-height:1.5;background:#F5F7FA}' }
+function estilosDoc() { return '@page{size:A4;margin:18mm 14mm 14mm}body{font-family:Inter,Arial,Helvetica,sans-serif;color:#101828;font-size:12px;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.head{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #101315;padding-bottom:10px}.emp b{color:#101315;font-size:15px}.emp div{color:#5a6b85;line-height:1.45;font-size:10.5px}.doc{text-align:right}.doc .t{font-size:20px;font-weight:800;color:#101315}.doc .f{font-size:13px;font-weight:700;color:#F77716}table{width:100%;border-collapse:collapse;margin-top:10px}.cli td{padding:4px 8px;font-size:11px;vertical-align:top}.cli .lbl{color:#5a6b85;text-transform:uppercase;font-size:9px}.items th{background:#101315;color:#fff;padding:6px 8px;font-size:10px;text-align:left}.items td{border:1px solid #D8DCE5;padding:6px 8px;font-size:11px;vertical-align:top}.items .r{text-align:right}.tot{width:auto;margin-left:auto;margin-top:10px}.tot td{padding:4px 12px;font-size:12px}.tot .lbl{color:#5a6b85;text-align:right}.tot .big{font-weight:800;font-size:14px;color:#101315}.words{margin-top:8px;font-size:11px;color:#344054}.badge{display:inline-block;border:1px solid #D8DCE5;background:#F5F7FA;color:#5a6b85;padding:2px 8px;font-size:10px;margin-top:6px;border-radius:4px}.pb{page-break-before:always;padding-top:6px}.cond{font-size:11px;border-bottom:1px solid #D8DCE5;padding-bottom:8px;margin:8px 0}.cond ol{padding-left:18px;font-size:11px;line-height:1.5}.cond li{margin-bottom:5px;color:#101828}.cond .datos{margin-top:10px;border:1px solid #D8DCE5;padding:10px;font-size:11px;line-height:1.5;background:#F5F7FA}' }
 
 // Condiciones comerciales y operativas (se adjuntan a la cotización)
 function htmlCondiciones() {
@@ -162,7 +165,7 @@ export function descargarInformePintura(cot) {
   const fmt = n => (Math.round((n || 0) * 10) / 10).toLocaleString('es-CL')
   const filasHtml = filas.map(f => `<tr><td>${f.pieza}</td><td>${f.detalle}</td><td class="r">${fmt(f.m2)} m\u00b2</td><td>${f.producto}</td><td class="r">${f.envases}</td><td class="r">${fmt(f.litrosEnvase)} L</td><td class="r">${fmt(f.litrosComprados)} L</td><td class="r">${fmt(f.sobrante)} L</td><td class="r">${clp(f.costo)}</td></tr>`).join('')
   const consolHtml = Object.values(consol).map(c => `<tr><td>${c.producto}</td><td class="r">${c.envases} x ${fmt(c.litrosEnvase)} L</td><td class="r">${fmt(c.litrosComprados)} L</td><td class="r">${clp(c.costo)}</td></tr>`).join('')
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Compra pintura ${cot.folio || ''}</title><style>${estilosDoc()} h2{font-family:Oswald,Arial;color:#061A40;margin:14px 0 6px;font-size:15px} .sub{color:#5A6472;font-size:12px;margin-bottom:10px}</style></head><body>`
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Compra pintura ${cot.folio || ''}</title><style>${estilosDoc()} h2{font-family:Oswald,Arial;color:#101315;margin:14px 0 6px;font-size:15px} .sub{color:#5A636E;font-size:12px;margin-bottom:10px}</style></head><body>`
     + `<div class="head"><div class="emp"><b>${EMPRESA.nombre || 'SEREIN SpA'}</b><div>${EMPRESA.rut || ''}</div></div><div class="doc"><div class="t">Compra de pintura</div><div class="f">Cotizaci\u00f3n N\u00b0 ${cot.folio || ''}</div></div></div>`
     + `<div class="sub">Cliente: <b>${cot.cliente || ''}</b> \u00b7 Fecha: ${cot.fecha || ''} \u00b7 \u00c1rea: ${cot.area || ''}</div>`
     + `<h2>Total a comprar por producto</h2>`
@@ -185,7 +188,7 @@ if (!rows.length) { window.alert('Esta cotizacion no tiene detalle de compra de 
 const fmt = n => (Math.round((n || 0) * 10) / 10).toLocaleString('es-CL')
 const totEnv = rows.reduce((a, c) => a + c.envases, 0)
 const filasHtml = rows.map((c, i) => `<tr><td>${i + 1}</td><td>${c.producto}</td><td class="r">${c.envases}</td><td class="r">${fmt(c.litrosEnvase)} L</td><td class="r">${fmt(c.envases * c.litrosEnvase)} L</td></tr>`).join('')
-const html = `<!doctype html><html><head><meta charset="utf-8"><title>Solicitud pintura ${cot.folio || ''}</title><style>${estilosDoc()} h2{font-family:Oswald,Arial;color:#061A40;margin:14px 0 6px;font-size:15px} .sub{color:#5A6472;font-size:12px;margin-bottom:10px}</style></head><body>`
+const html = `<!doctype html><html><head><meta charset="utf-8"><title>Solicitud pintura ${cot.folio || ''}</title><style>${estilosDoc()} h2{font-family:Oswald,Arial;color:#101315;margin:14px 0 6px;font-size:15px} .sub{color:#5A636E;font-size:12px;margin-bottom:10px}</style></head><body>`
 + `<div class="head"><div class="emp"><b>${EMPRESA.nombre || 'SEREIN SpA'}</b><div>R.U.T: ${EMPRESA.rut || ''}</div><div>${EMPRESA.direccion || ''}</div><div>${EMPRESA.email || ''}</div></div><div class="doc"><div class="t">Solicitud de compra</div><div class="f">Pintura · Cot. N° ${cot.folio || ''}</div></div></div>`
 + `<div class="sub">Fecha: ${new Date().toISOString().slice(0, 10)} · Obra/Cliente: ${cot.cliente || ''} · Área: ${cot.area || ''}</div>`
 + `<div style="font-size:12px;margin:6px 0 10px">Estimado proveedor, solicitamos cotizar y despachar los siguientes productos (envases completos):</div>`
@@ -238,7 +241,7 @@ function MiniAddCliente({ nombreInicial, onAdd, onCancel }) {
   const [c, setC] = useState({ nombre: nombreInicial || '', rut: '', giro: '', direccion: '', comuna: '' })
   const sc = (k, v) => setC({ ...c, [k]: v })
   return (
-    <div style={{ background: '#FAF7F3', border: '1px solid #E2DED4', padding: 12, marginTop: 6 }}>
+    <div style={{ background: '#F2F4F7', border: '1px solid #DFE4EA', padding: 12, marginTop: 6 }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: C.gris, textTransform: 'uppercase', marginBottom: 8 }}>Añadir cliente a la lista</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
         <input style={inp} placeholder="Nombre / Razón social *" value={c.nombre} onChange={e => sc('nombre', e.target.value)} />
@@ -249,7 +252,7 @@ function MiniAddCliente({ nombreInicial, onAdd, onCancel }) {
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         <button type="button" onClick={() => c.nombre.trim() && onAdd(c)} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5 }}>Guardar cliente</button>
-        <button type="button" onClick={onCancel} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>Cancelar</button>
+        <button type="button" onClick={onCancel} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>Cancelar</button>
       </div>
     </div>
   )
@@ -272,20 +275,20 @@ function FormCotizacion({ inicial, onGuardar, onCancelar, clientes = [], onAddCl
   const lab = { fontSize: 11, color: C.gris, display: 'flex', flexDirection: 'column', gap: 3 }
   return (
     <div style={{ background: '#fff', border: `2px solid ${C.teal}`, padding: 16, marginBottom: 16 }}>
-      <div style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 15, textTransform: 'uppercase', marginBottom: 12 }}>Cotización · Folio N° {f.folio || '—'}</div>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 15, textTransform: 'uppercase', marginBottom: 12 }}>Cotización · Folio N° {f.folio || '—'}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
-        <label style={lab}>Folio N° (correlativo automático)<input style={{ ...inp, background: '#F1EDE6', fontWeight: 600 }} value={f.folio} readOnly /></label>
+        <label style={lab}>Folio N° (correlativo automático)<input style={{ ...inp, background: '#E2E7EC', fontWeight: 600 }} value={f.folio} readOnly /></label>
         <div style={{ ...lab, gridColumn: '1 / -1' }}>Área / módulo al que irá la OT *
           <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
             {AREAS.map(a => (
-              <button key={a} type="button" onClick={() => set('area', a)} style={{ padding: '8px 16px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, border: '1px solid ' + (f.area === a ? C.teal : '#CBD2D6'), background: f.area === a ? C.teal : '#fff', color: f.area === a ? '#fff' : C.carbon }}>{a}</button>
+              <button key={a} type="button" onClick={() => set('area', a)} style={{ padding: '8px 16px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, border: '1px solid ' + (f.area === a ? C.teal : '#DFE4EA'), background: f.area === a ? C.teal : '#fff', color: f.area === a ? '#fff' : C.carbon }}>{a}</button>
             ))}
           </div>
         </div>
         <div style={{ ...lab, gridColumn: '1 / -1' }}>Cliente / Señor(es) *
           <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap', alignItems: 'center' }}>
             <input style={{ ...inp, flex: '1 1 220px' }} list="dl-cot-cli" value={f.cliente} onChange={e => aplicarCliente(e.target.value)} placeholder="Escribe y selecciona; se autocompletan sus datos" />
-            <button type="button" onClick={() => setAddCli(v => !v)} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5, whiteSpace: 'nowrap' }}>+ Añadir cliente</button>
+            <button type="button" onClick={() => setAddCli(v => !v)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5, whiteSpace: 'nowrap' }}>+ Añadir cliente</button>
           </div>
           <datalist id="dl-cot-cli">{(clientes || []).map(cl => <option key={cl.id || cl.nombre} value={cl.nombre} />)}</datalist>
           {addCli && <MiniAddCliente nombreInicial={f.cliente} onAdd={cli => { onAddCliente(cli); setF(prev => ({ ...prev, cliente: cli.nombre, rut: cli.rut || '', giro: cli.giro || '', direccion: cli.direccion || '', comuna: cli.comuna || '' })); setAddCli(false) }} onCancel={() => setAddCli(false)} />}
@@ -313,7 +316,7 @@ function FormCotizacion({ inicial, onGuardar, onCancelar, clientes = [], onAddCl
           <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Código', 'Detalle', 'Cant', 'Unid', 'P. Unitario', 'Desc.', 'Comentario/Esquema', 'Total', ''].map(h => <th key={h} style={{ textAlign: ['P. Unitario', 'Desc.', 'Total', 'Cant'].includes(h) ? 'right' : 'left', padding: '4px 6px', fontSize: 10, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
           <tbody>
             {f.items.map((it, i) => (
-              <tr key={i} style={{ borderBottom: '1px solid #EEE9DF' }}>
+              <tr key={i} style={{ borderBottom: '1px solid #E2E7EC' }}>
                 <td style={{ padding: '3px 4px' }}><input value={it.codigo} onChange={e => setItem(i, 'codigo', e.target.value)} style={{ ...inp, width: 60, padding: '5px 6px' }} /></td>
                 <td style={{ padding: '3px 4px', verticalAlign: 'top' }}><textarea value={it.detalle} onChange={e => setItem(i, 'detalle', e.target.value)} rows={3} style={{ ...inp, width: 280, minWidth: 240, padding: '6px 8px', resize: 'both', fontFamily: 'inherit', lineHeight: 1.4 }} /></td>
                 <td style={{ padding: '3px 4px', textAlign: 'right' }}><input value={it.cant} onChange={e => setItem(i, 'cant', e.target.value)} style={{ ...inp, width: 55, padding: '5px 6px', textAlign: 'right' }} /></td>
@@ -328,7 +331,7 @@ function FormCotizacion({ inicial, onGuardar, onCancelar, clientes = [], onAddCl
           </tbody>
         </table>
       </div>
-      <button onClick={addItem} style={{ background: 'none', border: '1px dashed #CBD2D6', padding: '6px 12px', cursor: 'pointer', fontSize: 12, color: C.gris, marginTop: 8 }}>+ Agregar ítem</button>
+      <button onClick={addItem} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '6px 12px', cursor: 'pointer', fontSize: 12, color: C.gris, marginTop: 8 }}>+ Agregar ítem</button>
 
       <textarea rows={3} style={{ ...inp, width: '100%', marginTop: 10, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.4 }} placeholder="Comentario general de la cotización (opcional)" value={f.comentario} onChange={e => set('comentario', e.target.value)} />
 
@@ -339,7 +342,7 @@ function FormCotizacion({ inicial, onGuardar, onCancelar, clientes = [], onAddCl
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
         <button onClick={() => { if (f.folio && f.cliente) onGuardar(f) }} style={{ background: C.verde, color: '#fff', border: 'none', padding: '9px 18px', cursor: 'pointer', fontSize: 13 }}>Guardar cotización</button>
-        <button onClick={onCancelar} style={{ background: 'none', border: '1px solid #CBD2D6', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+        <button onClick={onCancelar} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
       </div>
     </div>
   )
@@ -483,28 +486,28 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12, borderBottom: '1px solid #E6E8EE', paddingBottom: 8 }}>
-        <button onClick={() => setModo('rapida')} style={{ background: 'transparent', border: 'none', borderBottom: '2px solid #FF6B00', padding: '6px 2px', marginRight: 12, cursor: 'pointer', fontWeight: 600, fontSize: 13, color: '#061A40' }}>Cotizacion rapida</button>
-        <button onClick={() => { setCalcInicial(null); setModo('calculo') }} style={{ background: 'transparent', border: 'none', padding: '6px 2px', marginRight: 12, cursor: 'pointer', fontWeight: 500, fontSize: 13, color: '#5A6472' }}>Nueva por calculo</button>
-        <button onClick={() => setModo('params')} style={{ background: 'transparent', border: 'none', padding: '6px 2px', cursor: 'pointer', fontWeight: 500, fontSize: 13, color: '#5A6472' }}>Parametros Cotizador</button>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, borderBottom: '1px solid #DFE4EA', paddingBottom: 8 }}>
+        <button onClick={() => setModo('rapida')} style={{ background: 'transparent', border: 'none', borderBottom: '2px solid #F77716', padding: '6px 2px', marginRight: 12, cursor: 'pointer', fontWeight: 600, fontSize: 13, color: '#101315' }}>Cotizacion rapida</button>
+        <button onClick={() => { setCalcInicial(null); setModo('calculo') }} style={{ background: 'transparent', border: 'none', padding: '6px 2px', marginRight: 12, cursor: 'pointer', fontWeight: 500, fontSize: 13, color: '#5A636E' }}>Nueva por calculo</button>
+        <button onClick={() => setModo('params')} style={{ background: 'transparent', border: 'none', padding: '6px 2px', cursor: 'pointer', fontWeight: 500, fontSize: 13, color: '#5A636E' }}>Parametros Cotizador</button>
       </div>
       {aproCot && (<div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(6,26,64,.45)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
         <div style={{ background: '#fff', borderRadius: 14, boxShadow: '0 20px 50px rgba(16,24,40,.25)', padding: 22, width: 440, maxWidth: '100%' }}>
-          <h3 style={{ margin: '0 0 6px', fontFamily: "'Oswald',sans-serif", fontSize: 16, color: '#061A40', textTransform: 'uppercase' }}>Aprobar y generar OT</h3>
-          <div style={{ fontSize: 12.5, color: '#5A6472', marginBottom: 14 }}>Se creara la OT-{aproCot.folio} con el mismo numero. Completa los datos de la orden:</div>
+          <h3 style={{ margin: '0 0 6px', fontFamily: SEREIN.fontDisplay, fontSize: 16, color: '#101315', textTransform: 'uppercase' }}>Aprobar y generar OT</h3>
+          <div style={{ fontSize: 12.5, color: '#5A636E', marginBottom: 14 }}>Se creara la OT-{aproCot.folio} con el mismo numero. Completa los datos de la orden:</div>
           <div style={{ display: 'grid', gap: 10 }}>
-            <div><span style={{ fontSize: 11.5, color: '#8A929E', fontWeight: 600, textTransform: 'uppercase' }}>Fecha de entrega</span><input type="date" value={aproFecha} onChange={e => setAproFecha(e.target.value)} style={{ border: '1px solid #E6E8EE', borderRadius: 8, padding: '8px 10px', fontSize: 13, width: '100%', boxSizing: 'border-box' }} /></div>
-            <div><span style={{ fontSize: 11.5, color: '#8A929E', fontWeight: 600, textTransform: 'uppercase' }}>Responsable</span><input value={aproResp} onChange={e => setAproResp(e.target.value)} placeholder="Nombre del responsable" style={{ border: '1px solid #E6E8EE', borderRadius: 8, padding: '8px 10px', fontSize: 13, width: '100%', boxSizing: 'border-box' }} /></div>
+            <div><span style={{ fontSize: 11.5, color: '#9AA3AD', fontWeight: 600, textTransform: 'uppercase' }}>Fecha de entrega</span><input type="date" value={aproFecha} onChange={e => setAproFecha(e.target.value)} style={{ border: '1px solid #DFE4EA', borderRadius: 8, padding: '8px 10px', fontSize: 13, width: '100%', boxSizing: 'border-box' }} /></div>
+            <div><span style={{ fontSize: 11.5, color: '#9AA3AD', fontWeight: 600, textTransform: 'uppercase' }}>Responsable</span><input value={aproResp} onChange={e => setAproResp(e.target.value)} placeholder="Nombre del responsable" style={{ border: '1px solid #DFE4EA', borderRadius: 8, padding: '8px 10px', fontSize: 13, width: '100%', boxSizing: 'border-box' }} /></div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
-            <button onClick={() => setAproCot(null)} style={{ background: '#fff', border: '1px solid #E6E8EE', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontSize: 13, color: '#5A6472' }}>Cancelar</button>
-            <button onClick={() => { const cc = aproCot; setAproCot(null); aprobar(cc, aproFecha, aproResp); setAproFecha(''); setAproResp('') }} style={{ background: '#FF6B00', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 15px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Aprobar y crear OT</button>
+            <button onClick={() => setAproCot(null)} style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontSize: 13, color: '#5A636E' }}>Cancelar</button>
+            <button onClick={() => { const cc = aproCot; setAproCot(null); aprobar(cc, aproFecha, aproResp); setAproFecha(''); setAproResp('') }} style={{ background: '#F77716', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 15px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Aprobar y crear OT</button>
           </div>
         </div>
       </div>)}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
-        <button onClick={() => setCreando(true)} style={{ background: C.teal, color: '#fff', border: 'none', padding: '9px 16px', cursor: 'pointer', fontSize: 13, fontFamily: "'Oswald',sans-serif", fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Nueva cotización</button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, border: '1px solid #CBD2D6', padding: '2px 6px' }}>
+        <button onClick={() => setCreando(true)} style={{ background: C.teal, color: '#fff', border: 'none', padding: '9px 16px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Nueva cotización</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, border: '1px solid #DFE4EA', padding: '2px 6px' }}>
           <Search size={13} color={C.gris} />
           <input value={busca} list="dl-cot-busca" onChange={e => setBusca(e.target.value)} placeholder="Buscar folio/cliente…" style={{ border: 'none', outline: 'none', fontSize: 12.5, width: 170 }} />
           <datalist id="dl-cot-busca">{nombresBusca.map(n => <option key={n} value={n} />)}</datalist>
@@ -513,30 +516,30 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
         <span style={{ fontSize: 12.5, color: C.gris }}>{mostradas.length} cotización(es)</span>
       </div>
       {rep && (
-        <div style={{ background: '#FAF7F3', border: '1px solid #E2DED4', padding: 12, marginBottom: 14, display: 'flex', gap: 14, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div style={{ background: '#F2F4F7', border: '1px solid #DFE4EA', padding: 12, marginBottom: 14, display: 'flex', gap: 14, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <label style={{ fontSize: 11, color: C.gris }}>Desde<input type="date" value={repDesde} onChange={e => setRepDesde(e.target.value)} style={{ ...inp, display: 'block', marginTop: 3 }} /></label>
           <label style={{ fontSize: 11, color: C.gris }}>Hasta<input type="date" value={repHasta} onChange={e => setRepHasta(e.target.value)} style={{ ...inp, display: 'block', marginTop: 3 }} /></label>
           <label style={{ fontSize: 11, color: C.gris }}>Cliente<select value={repCliente} onChange={e => setRepCliente(e.target.value)} style={{ ...inp, display: 'block', marginTop: 3 }}><option value="">Todos</option>{clientesActivos.map(c => <option key={c} value={c}>{c}</option>)}</select></label>
           <div style={{ fontSize: 11, color: C.gris }}>Áreas
             <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
               {AREAS.map(a => (
-                <button key={a} type="button" onClick={() => toggleArea(a)} style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600, border: '1px solid ' + (repAreas.includes(a) ? C.teal : '#CBD2D6'), background: repAreas.includes(a) ? C.teal : '#fff', color: repAreas.includes(a) ? '#fff' : C.carbon }}>{a}</button>
+                <button key={a} type="button" onClick={() => toggleArea(a)} style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600, border: '1px solid ' + (repAreas.includes(a) ? C.teal : '#DFE4EA'), background: repAreas.includes(a) ? C.teal : '#fff', color: repAreas.includes(a) ? '#fff' : C.carbon }}>{a}</button>
               ))}
             </div>
           </div>
           <button onClick={generarInformeCot} style={{ background: C.verde, color: '#fff', border: 'none', padding: '8px 16px', cursor: 'pointer', fontSize: 13 }}>Generar Excel</button>
-          <span style={{ fontSize: 11.5, color: '#9AA0A6' }}>Fechas vacías = todo. Toca las áreas para incluirlas o excluirlas.</span>
+          <span style={{ fontSize: 11.5, color: '#9AA3AD' }}>Fechas vacías = todo. Toca las áreas para incluirlas o excluirlas.</span>
         </div>
       )}
 
-      <div style={{ background: '#fff', border: '1px solid #E2DED4', overflowX: 'auto' }}>
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Folio', 'Cliente', 'Área', 'Fecha', 'Total', 'Estado', 'Acciones'].map(h => <th key={h} style={{ textAlign: h === 'Total' ? 'right' : 'left', padding: '8px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
           <tbody>
             {pg.items.map(c => {
               const t = totales(c)
               return (
-                <tr key={c.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                <tr key={c.id} style={{ borderBottom: '1px solid #E2E7EC' }}>
                   <td style={{ padding: '8px 10px', fontWeight: 700, fontFamily: "'JetBrains Mono',monospace" }}>N° {c.folio}</td>
                   <td style={{ padding: '8px 10px' }}>{c.cliente}
                     {(() => {
@@ -563,23 +566,23 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <button onClick={() => descargarCotizacionPDF(c)} title="Descargar cotización PDF" style={{ background: C.carbon, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 4 }}><Download size={12} /> Cotización</button>
                       {c.estado === 'Aprobada' && <button onClick={() => descargarOTPDF(c)} title="Descargar OT sin valores" style={{ background: C.azul, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 4 }}><Download size={12} /> OT (sin valores)</button>}
-                        {c.estado === 'Aprobada' && (c.items || []).some(it => (it.comprasPintura || []).length) && <button onClick={() => descargarInformePintura(c)} title="Descargar informe de compra de pintura" style={{ background: C.ambar || '#FF6B00', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, borderRadius: 4 }}>Pintura</button>}
-                        {c.estado === 'Aprobada' && (c.items || []).some(it => (it.comprasPintura || []).length) && <button onClick={() => descargarSolicitudPintura(c)} title="Descargar solicitud de compra al proveedor (PDF)" style={{ background: '#0B7285', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, borderRadius: 4 }}>Solicitud proveedor</button>}
-                        {(c.proveedorPintura || (c.items || []).some(it => (it.comprasPintura || []).length)) && <button onClick={() => generarOCPintura(c)} title="Generar Orden de Compra de pintura" style={{ background: '#12805C', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, borderRadius: 4 }}>Generar OC</button>}
-                      {c.tipo === 'calculo' && <button onClick={() => { setCalcInicial(c); setModo('calculo') }} title="Abrir/editar en la calculadora por calculo" style={{ background: '#061A40', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, borderRadius: 4 }}>Calculadora</button>}
-                      <button onClick={() => setEditId(c.id)} title="Editar" style={{ background: 'none', border: '1px solid #CBD2D6', padding: '5px 8px', cursor: 'pointer', fontSize: 11.5 }}><FileText size={12} /></button>
+                        {c.estado === 'Aprobada' && (c.items || []).some(it => (it.comprasPintura || []).length) && <button onClick={() => descargarInformePintura(c)} title="Descargar informe de compra de pintura" style={{ background: C.ambar || '#F77716', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, borderRadius: 4 }}>Pintura</button>}
+                        {c.estado === 'Aprobada' && (c.items || []).some(it => (it.comprasPintura || []).length) && <button onClick={() => descargarSolicitudPintura(c)} title="Descargar solicitud de compra al proveedor (PDF)" style={{ background: '#0E7A8F', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, borderRadius: 4 }}>Solicitud proveedor</button>}
+                        {(c.proveedorPintura || (c.items || []).some(it => (it.comprasPintura || []).length)) && <button onClick={() => generarOCPintura(c)} title="Generar Orden de Compra de pintura" style={{ background: '#1B9E5D', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, borderRadius: 4 }}>Generar OC</button>}
+                      {c.tipo === 'calculo' && <button onClick={() => { setCalcInicial(c); setModo('calculo') }} title="Abrir/editar en la calculadora por calculo" style={{ background: '#101315', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, borderRadius: 4 }}>Calculadora</button>}
+                      <button onClick={() => setEditId(c.id)} title="Editar" style={{ background: 'none', border: '1px solid #DFE4EA', padding: '5px 8px', cursor: 'pointer', fontSize: 11.5 }}><FileText size={12} /></button>
                       <button onClick={() => eliminar(c.id)} title="Eliminar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
                     </div>
                   </td>
                 </tr>
               )
             })}
-            {mostradas.length === 0 && <tr><td colSpan={7} style={{ padding: 18, textAlign: 'center', color: '#9AA0A6' }}>Sin cotizaciones. Crea la primera con "Nueva cotización".</td></tr>}
+            {mostradas.length === 0 && <tr><td colSpan={7} style={{ padding: 18, textAlign: 'center', color: '#9AA3AD' }}>Sin cotizaciones. Crea la primera con "Nueva cotización".</td></tr>}
           </tbody>
         </table>
         <Paginador page={pg.page} paginas={pg.paginas} total={pg.total} setPage={setPage} />
       </div>
-      <div style={{ fontSize: 12, color: '#9AA0A6', marginTop: 8 }}>
+      <div style={{ fontSize: 12, color: '#9AA3AD', marginTop: 8 }}>
         "Descargar" abre el documento con formato y usa <b>Guardar como PDF</b> del navegador. Al aprobar, se genera la OT con el mismo número en Órdenes de Trabajo; la OT se descarga <b>sin valores</b> para los supervisores.
       </div>
     </div>

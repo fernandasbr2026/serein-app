@@ -4,7 +4,7 @@ import React from 'react'
 // Recreado en SVG para que se vea nítido en cualquier tamaño.
 // props: alto (px), oscuro (true = para fondos oscuros: texto blanco)
 export default function LogoSerein({ alto = 40, oscuro = false }) {
-  const naranja = '#D2642F'
+  const naranja = '#F77716'
   const negro = oscuro ? '#FFFFFF' : '#111111'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: alto * 0.22 }}>
