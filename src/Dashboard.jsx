@@ -312,25 +312,42 @@ export default function Dashboard({ perfil, email, onLogout }) {
       if (!aplicarSiSeguro(key, valorStr)) return
       try { setter(JSON.parse(valorStr)) } catch (e) {}
     }
-    const canal = supabase.channel('app_state_vivo').on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, payload => {
-      const fila = payload.new
-      if (!fila || typeof fila.id !== 'string' || !fila.id.startsWith('serein_')) return
-      aplicar(fila.id.slice('serein_'.length), fila.value)
-    }).subscribe()
+    let canal = null
+    const suscribir = () => {
+      canal = supabase.channel('app_state_vivo').on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, payload => {
+        const fila = payload.new
+        if (!fila || typeof fila.id !== 'string' || !fila.id.startsWith('serein_')) return
+        aplicar(fila.id.slice('serein_'.length), fila.value)
+      }).subscribe()
+    }
+    suscribir()
     const refrescar = async () => {
       const r = await pullState()
       if (!r.ok) return
       Object.keys(setters).forEach(clave => aplicar(clave, localStorage.getItem('serein_' + clave)))
     }
     const id = setInterval(refrescar, 15000)
-    const onVis = () => { if (document.visibilityState === 'visible') refrescar() }
+    // Si la pestaña estuvo minimizada, con la pantalla bloqueada o en
+    // segundo plano un buen rato (celular, wifi inestable de planta), el
+    // canal en tiempo real puede quedar muerto EN SILENCIO — Supabase no
+    // avisa, y esa pestaña deja de recibir los cambios de otros usuarios
+    // hasta que alguien la recarga a mano. Por eso, al volver a la
+    // pestaña, además de traer lo último con refrescar() se vuelve a
+    // armar el canal desde cero — así una sesión que estuvo "dormida" una
+    // hora no se queda desactualizada para siempre.
+    const reconectar = () => {
+      refrescar()
+      try { supabase.removeChannel(canal) } catch (e) {}
+      suscribir()
+    }
+    const onVis = () => { if (document.visibilityState === 'visible') reconectar() }
     document.addEventListener('visibilitychange', onVis)
-    window.addEventListener('focus', refrescar)
+    window.addEventListener('focus', reconectar)
     return () => {
       try { supabase.removeChannel(canal) } catch (e) {}
       clearInterval(id)
       document.removeEventListener('visibilitychange', onVis)
-      window.removeEventListener('focus', refrescar)
+      window.removeEventListener('focus', reconectar)
     }
   }, [])
 
