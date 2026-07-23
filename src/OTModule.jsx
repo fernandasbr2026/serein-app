@@ -397,7 +397,7 @@ function TileOT({ ot, onOpen, onDragStart, onDropOn, verValores }) {
   )
 }
 
-function TarjetaOT({ ot, onUpdate, onDelete, onCambiarEstado, onAgregarVenta, onEliminarVenta, verValores = true, ordenesCompra = [], mo = null, otsAll = [], instrumentos = null, libroCompras = [], enModal = false }) {
+function TarjetaOT({ ot, onUpdate, onDelete, onCambiarEstado, onAgregarVenta, onEliminarVenta, onAgregarArray, verValores = true, ordenesCompra = [], mo = null, otsAll = [], instrumentos = null, libroCompras = [], enModal = false }) {
   const [abierta, setAbierta] = useState(false)
   const [addVenta, setAddVenta] = useState(false)
   const [addAbono, setAddAbono] = useState(false)
@@ -414,7 +414,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, onCambiarEstado, onAgregarVenta, on
     setGuardando(false)
     if (r.ok && r.n === 0) window.alert('Ya está todo guardado en la nube — no había cambios pendientes.')
     else if (r.ok) window.alert('Guardado confirmado: los cambios de esta OT llegaron a Supabase.')
-    else window.alert('No se pudo guardar. Revisa tu conexión a internet e inténtalo de nuevo — no cierres esta ficha todavía.')
+    else window.alert('No se pudo guardar' + (r.error ? ':\n\n' + r.error : '') + '\n\nRevisa tu conexión a internet e inténtalo de nuevo — no cierres esta ficha todavía. Si el mensaje se repite, avisa al administrador con este texto.')
   }
 
   const ventaTotal = (ot.ventas || []).reduce((a, v) => a + v.neta, 0)
@@ -530,7 +530,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, onCambiarEstado, onAgregarVenta, on
         <div style={{ marginTop: 14 }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
             <span style={{ fontSize:13, fontWeight:700, textTransform:'uppercase', color:'#D9600A' }}>Recepción / Partidas / entregas de material</span>
-            <button onClick={() => onUpdate(ot.id, { partidas: [...(ot.partidas || []), { id: 'pa' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [] }] })} style={{ background: C.teal, color:'#fff', border:'none', padding:'6px 12px', cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', gap:4 }}><Plus size={14} /> Agregar recepción</button>
+            <button onClick={() => onAgregarArray(ot.id, 'partidas', { id: 'pa' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [] })} style={{ background: C.teal, color:'#fff', border:'none', padding:'6px 12px', cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', gap:4 }}><Plus size={14} /> Agregar recepción</button>
           </div>
           {(ot.partidas || []).length === 0 ? (<div style={{ fontSize:12, color:'#9AA3AD', marginBottom:6 }}>Sin registros.</div>) : null}
           <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
@@ -566,7 +566,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, onCambiarEstado, onAgregarVenta, on
         <div style={{ marginTop: 14 }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
             <span style={{ fontSize:13, fontWeight:700, textTransform:'uppercase', color:'#D9600A' }}>Entregas / Despacho SEREIN</span>
-            <button onClick={() => onUpdate(ot.id, { despachos: [...(ot.despachos || []), { id: 'de' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [] }] })} style={{ background: C.teal, color:'#fff', border:'none', padding:'6px 12px', cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', gap:4 }}><Plus size={14} /> Agregar despacho</button>
+            <button onClick={() => onAgregarArray(ot.id, 'despachos', { id: 'de' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [] })} style={{ background: C.teal, color:'#fff', border:'none', padding:'6px 12px', cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', gap:4 }}><Plus size={14} /> Agregar despacho</button>
           </div>
           <SobrantePanel ot={ot} />
           {(ot.despachos || []).length === 0 ? (<div style={{ fontSize:12, color:'#9AA3AD', marginBottom:6 }}>Sin registros.</div>) : null}
@@ -765,7 +765,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, onCambiarEstado, onAgregarVenta, on
                   </tbody>
                 </table>
               )}
-              {addAbono && <FormAbono onAdd={x => { onUpdate(ot.id, { abonos: [...(ot.abonos || []), x] }); setAddAbono(false) }} onCancel={() => setAddAbono(false)} />}
+              {addAbono && <FormAbono onAdd={x => { onAgregarArray(ot.id, 'abonos', x); setAddAbono(false) }} onCancel={() => setAddAbono(false)} />}
 
               {verValores && (libroCompras || []).some(l => l.ot_id === ot.numero) ? (() => { const cs = (libroCompras || []).filter(l => l.ot_id === ot.numero); const sub = cs.reduce((a, l) => a + (Number(l.neto) || 0), 0); return (<div style={{ marginTop: 14, border: '1px solid #D8DCE5', borderRadius: 6, padding: 10, background: '#F2F4F7' }}><div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#101315', marginBottom: 6 }}>Compras del libro de compras (SII) asignadas</div><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}><tbody>{cs.map((l, i) => (<tr key={i} style={{ borderBottom: '1px solid #E7E4DC' }}><td style={{ padding: '4px 6px', color: '#9AA3AD', whiteSpace: 'nowrap' }}>{l.emission_date}</td><td style={{ padding: '4px 6px' }}>{l.provider_name}</td><td style={{ padding: '4px 6px', color: '#9AA3AD' }}>Folio {l.document_number}</td><td style={{ padding: '4px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>{clp(l.neto)}</td></tr>))}</tbody></table><div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}><span style={{ fontSize: 11, color: '#9AA3AD' }}>Subtotal neto (informativo, aun no sumado a la utilidad)</span><span style={{ fontWeight: 700, color: '#101315' }}>{clp(sub)}</span></div></div>); })() : null}
 
@@ -805,7 +805,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, onCambiarEstado, onAgregarVenta, on
                   </tbody>
                 </table>
               )}
-              {addCosto && <FormCosto onAdd={c => { onUpdate(ot.id, { costos: [...(ot.costos || []), c] }); setAddCosto(false) }} onCancel={() => setAddCosto(false)} />}
+              {addCosto && <FormCosto onAdd={c => { onAgregarArray(ot.id, 'costos', c); setAddCosto(false) }} onCancel={() => setAddCosto(false)} />}
 
               {porCat.length > 0 && (
                 <div style={{ marginTop: 14 }}>
@@ -1103,6 +1103,26 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
     pushState()
   }
 
+  // Agregar un ítem nuevo a un array de la OT (partidas/despachos: "Agregar
+  // recepción"/"Agregar despacho") es distinto a editar un campo existente
+  // — si dos personas agregan una entrega/recepción casi al mismo tiempo,
+  // cada una parte de SU copia local del array (que puede no tener
+  // todavía la del otro) y al guardar reemplaza el array completo: la
+  // que se sube último "gana" y la otra desaparece sin aviso, aunque las
+  // dos hayan llegado a subirse con éxito. Mismo patrón que ya usa
+  // eliminar(): traer lo más fresco de la nube justo antes de agregar,
+  // para achicar esa ventana de choque al mínimo.
+  const agregarAArray = async (id, campo, item) => {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_ots') || 'null') } catch (e) {}
+    const base = Array.isArray(fresco) ? fresco : otsAll
+    const nuevo = base.map(o => o.id === id ? { ...o, [campo]: [...(o[campo] || []), item] } : o)
+    try { localStorage.setItem('serein_ots', JSON.stringify(nuevo)) } catch (e) {}
+    setOts(nuevo)
+    pushState()
+  }
+
   // Escribe localStorage ANTES de pushState() de forma sincrónica (no
   // adentro del updater funcional de setOts, que React corre después) —
   // si no, pushState() podía alcanzar a leer localStorage todavía con el
@@ -1257,7 +1277,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
                 <button onClick={() => setSel(null)} style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><X size={15} /> Cerrar</button>
               </div>
               <div style={{ padding: 12 }}>
-                <TarjetaOT ot={so} onUpdate={actualizar} onDelete={id => { eliminar(id); setSel(null) }} onCambiarEstado={cambiarEstado} onAgregarVenta={agregarVenta} onEliminarVenta={eliminarVenta} verValores={verValores} ordenesCompra={ordenesCompra} mo={mo} otsAll={otsAll} instrumentos={instrumentos} libroCompras={libroCompras} enModal />
+                <TarjetaOT ot={so} onUpdate={actualizar} onDelete={id => { eliminar(id); setSel(null) }} onCambiarEstado={cambiarEstado} onAgregarVenta={agregarVenta} onEliminarVenta={eliminarVenta} onAgregarArray={agregarAArray} verValores={verValores} ordenesCompra={ordenesCompra} mo={mo} otsAll={otsAll} instrumentos={instrumentos} libroCompras={libroCompras} enModal />
               </div>
             </div>
           </div>

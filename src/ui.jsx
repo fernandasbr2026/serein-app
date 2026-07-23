@@ -20,7 +20,7 @@ export function EstadoGuardado({ colapsado }) {
     setForzando(false)
     if (r.ok && r.n === 0) window.alert('No hay cambios pendientes — todo lo que cargaste ya está guardado en la nube.')
     else if (r.ok) window.alert('Guardado confirmado: los cambios llegaron a la nube (Supabase).')
-    else window.alert('No se pudo guardar. Revisa tu conexión a internet e inténtalo de nuevo. Si el problema sigue, avisa al administrador.')
+    else window.alert('No se pudo guardar' + (r.error ? ':\n\n' + r.error : '') + '\n\nRevisa tu conexión a internet e inténtalo de nuevo. Si el mensaje se repite, avisa al administrador con este texto.')
   }
 
   const cfg = {
