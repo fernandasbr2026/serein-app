@@ -53,7 +53,7 @@ export default function App() {
       } catch (e) {}
     }
     chequear()
-    const id = setInterval(chequear, 5 * 60 * 1000)
+    const id = setInterval(chequear, 60 * 1000)
     const onVis = () => { if (document.visibilityState === 'visible') chequear() }
     document.addEventListener('visibilitychange', onVis)
     return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVis) }

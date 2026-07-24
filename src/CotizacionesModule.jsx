@@ -3,7 +3,7 @@ import { Plus, Trash2, FileText, Download, CheckCircle2, Search, X } from 'lucid
 import * as XLSX from 'xlsx'
 import Paginador, { paginar } from './Paginador.jsx'
 import { PROVEEDORES_FICHA } from './proveedores-data.js'
-import { pushState, pullState } from './sync.js'
+import { pushState, pullState, escribirConReintento, leerFresco } from './sync.js'
 import { SEREIN } from './theme-serein.js'
 
 // ============================================================
@@ -397,75 +397,52 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
   // se sabe.
   const avisarSiFallaSubida = () => { pushState().then(r => { if (!r.ok) window.alert('Esto quedó guardado en este equipo, pero no se pudo subir a la nube todavía' + (r.error ? ':\n\n' + r.error : '') + '\n\nRevisa tu conexión e inténtalo de nuevo, o usa el botón de guardado en el menú lateral.') }) }
 
-  // Causa real de "creo una cotización y después desaparece" (caso real:
-  // la N° 825 se perdió dos veces): guardar()/aprobar() escribían el
-  // arreglo COMPLETO de cotizaciones/OT a partir de lo que esta sesión
-  // tenía cargado en memoria, sin traer lo más fresco de la nube antes.
-  // Si esa copia local estaba un poco atrasada (otra persona guardó algo
-  // en el minuto anterior, o el sondeo de 15s aún no alcanzaba a llegar),
-  // el push de ESTA sesión subía un arreglo que no incluía lo que la otra
-  // persona acababa de agregar — y como pushState() sube el arreglo tal
-  // cual (no hace merge por ítem), esa cotización ajena quedaba borrada
-  // de la nube sin ningún error ni aviso (la subida en sí sí funcionaba).
-  // No es lo mismo que el problema de "Aprobar y crear OT" colgado que
-  // motivó sacar el await en su momento (PR #39) — ahí el problema era
-  // que el CLIC se congelaba esperando la nube. Acá la solución es traer
-  // lo fresco ANTES de calcular el resultado final, pero SIN bloquear el
-  // clic: el formulario se cierra al instante y todo el cálculo (incluido
-  // el folio, que también dependía de esta misma copia local) se hace en
-  // segundo plano sobre la copia más reciente posible.
+  // Segundo intento de arreglo (el primero, pull-fresh-antes-de-escribir,
+  // no bastó — el caso real que lo probó: administración y Mario crearon
+  // la cotización N° 825 con casi 2 HORAS de diferencia, no al mismo
+  // tiempo, así que no era una carrera de segundos). Ahora se usa
+  // escribirConReintento() (src/sync.js): sube el cambio directo a la fila
+  // de Supabase con un compare-and-swap real — si nadie más la tocó desde
+  // que se leyó, sube; si alguien la tocó (aunque sea horas antes y este
+  // equipo nunca se enteró), reintenta solo AUTOMÁTICAMENTE trayendo lo
+  // más nuevo y aplicando el mismo cambio otra vez, hasta 6 veces. También
+  // aísla esta escritura del resto de las claves que pushState() sube
+  // juntas en un solo lote — si algo en otra clave bloqueaba ese lote
+  // completo, esto deja de depender de eso.
   const guardar = cot => {
     setCreando(false); setEditId(null)
     ;(async () => {
-      try { await pullState() } catch (e) {}
-      let fresco = null
-      try { fresco = JSON.parse(localStorage.getItem('serein_cotizaciones') || 'null') } catch (e) {}
-      const base = Array.isArray(fresco) ? fresco : cotizaciones
-      const existe = base.some(c => c.id === cot.id)
-      let cotFinal = cot
-      if (!existe) {
-        // Si dos personas crean una cotización casi al mismo tiempo, cada
-        // una puede calcular el "próximo folio" desde su propia copia y
-        // terminar con el MISMO número — aunque sean cotizaciones
-        // distintas. Se revisa contra la copia recién traída de la nube
-        // y, si el folio calculado ya está en uso, se sigue subiendo
-        // hasta encontrar uno libre.
-        let folioFresco = base.reduce((m, c) => Math.max(m, parseInt(String(c.folio).replace(/\D/g, ''), 10) || 0), 792) + 1
-        while (base.some(c => String(c.folio) === String(folioFresco))) folioFresco++
-        cotFinal = { ...cot, folio: String(folioFresco) }
-      }
-      const nuevo = existe ? base.map(c => c.id === cotFinal.id ? cotFinal : c) : [cotFinal, ...base]
-      try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
-      setCotizaciones(nuevo)
-      avisarSiFallaSubida()
+      const r = await escribirConReintento('serein_cotizaciones', base => {
+        base = base || []
+        const existe = base.some(c => c.id === cot.id)
+        let cotFinal = cot
+        if (!existe) {
+          let folioFresco = base.reduce((m, c) => Math.max(m, parseInt(String(c.folio).replace(/\D/g, ''), 10) || 0), 792) + 1
+          while (base.some(c => String(c.folio) === String(folioFresco))) folioFresco++
+          cotFinal = { ...cot, folio: String(folioFresco) }
+        }
+        return existe ? base.map(c => c.id === cotFinal.id ? cotFinal : c) : [cotFinal, ...base]
+      })
+      if (!r.ok) { window.alert('No se pudo guardar la cotización' + (r.error ? ':\n\n' + r.error : '') + '\n\nRevisa tu conexión e inténtalo de nuevo.'); return }
+      setCotizaciones(r.value)
     })()
   }
   const eliminar = async id => {
     if (!window.confirm('¿Eliminar esta cotización?')) return
-    try { await pullState() } catch (e) {}
-    let fresco = null
-    try { fresco = JSON.parse(localStorage.getItem('serein_cotizaciones') || 'null') } catch (e) {}
-    const base = Array.isArray(fresco) ? fresco : cotizaciones
-    const nuevo = base.filter(c => c.id !== id)
-    try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
-    setCotizaciones(nuevo)
-    avisarSiFallaSubida()
+    const r = await escribirConReintento('serein_cotizaciones', base => (base || []).filter(c => c.id !== id))
+    if (!r.ok) { window.alert('No se pudo eliminar la cotización' + (r.error ? ':\n\n' + r.error : '')); return }
+    setCotizaciones(r.value)
   }
 
   function aprobar(cot, fechaEntrega = '', responsable = '') {
     ;(async () => {
-      try { await pullState() } catch (e) {}
-      let frescoCots = null, frescoOts = null
-      try { frescoCots = JSON.parse(localStorage.getItem('serein_cotizaciones') || 'null') } catch (e) {}
-      try { frescoOts = JSON.parse(localStorage.getItem('serein_ots') || 'null') } catch (e) {}
-      const baseCots = Array.isArray(frescoCots) ? frescoCots : cotizaciones
-      const baseOts = Array.isArray(frescoOts) ? frescoOts : (ots || [])
-      const cotFresca = baseCots.find(c => c.id === cot.id) || cot
+      const cotFresca = (await leerFresco('serein_cotizaciones') || []).find(c => c.id === cot.id) || cot
       if (cotFresca.estado === 'Aprobada') { window.alert('Esta cotización ya fue aprobada y su OT ya existe.'); return }
       const numeroOT = 'OT-' + cotFresca.folio
-      let nuevasOts = baseOts
-      if (baseOts.some(o => o.numero === numeroOT)) { window.alert('Ya existe una OT creada para esta cotización (' + numeroOT + '). No se creó otra.') }
-      else {
+      let yaExistiaOT = false
+      const rOts = await escribirConReintento('serein_ots', baseOts => {
+        baseOts = baseOts || []
+        if (baseOts.some(o => o.numero === numeroOT)) { yaExistiaOT = true; return baseOts }
         const t = totales(cotFresca)
         const nuevaOT = {
           id: 'ot' + Date.now(), numero: numeroOT, area: cotFresca.area || 'Santa Rosa', cliente: cotFresca.cliente, fecha: cotFresca.fecha,
@@ -473,13 +450,14 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
           procesos: [], preparacion: '—', esquema: (cotFresca.items || []).map(i => i.comentario).filter(Boolean).join(' · ') || '—',
           estado: 'Cotizada', fechaEntrega, responsable, ventas: [], costos: [], itemsCot: cotFresca.items, folioCot: cotFresca.folio, pinturaCotizada: (() => { const m = {}; (cotFresca.items || []).forEach(it => (it.comprasPintura || []).forEach(cp => { if (!m[cp.producto]) m[cp.producto] = { producto: cp.producto, litrosEnvase: cp.litrosEnvase, envases: 0, litros: 0 }; m[cp.producto].envases += cp.envases; m[cp.producto].litros += (cp.litrosComprados || 0) })); return Object.values(m) })(),
         }
-        nuevasOts = [nuevaOT, ...baseOts]
-      }
-      const nuevasCots = baseCots.map(c => c.id === cotFresca.id ? { ...c, estado: 'Aprobada' } : c)
-      try { localStorage.setItem('serein_ots', JSON.stringify(nuevasOts)); localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevasCots)) } catch (e) {}
-      setOts(nuevasOts)
-      setCotizaciones(nuevasCots)
-      avisarSiFallaSubida()
+        return [nuevaOT, ...baseOts]
+      })
+      if (!rOts.ok) { window.alert('No se pudo crear la OT' + (rOts.error ? ':\n\n' + rOts.error : '')); return }
+      setOts(rOts.value)
+      if (yaExistiaOT) { window.alert('Ya existe una OT creada para esta cotización (' + numeroOT + '). No se creó otra.'); return }
+      const rCots = await escribirConReintento('serein_cotizaciones', baseCots => (baseCots || []).map(c => c.id === cotFresca.id ? { ...c, estado: 'Aprobada' } : c))
+      if (!rCots.ok) { window.alert('La OT se creó, pero no se pudo marcar la cotización como aprobada' + (rCots.error ? ':\n\n' + rCots.error : '') + '. Márcala manualmente desde el selector de estado.'); return }
+      setCotizaciones(rCots.value)
       window.alert('Cotización aprobada. Se generó la ' + numeroOT + ' en el módulo Órdenes de Trabajo. Ya puedes descargar la OT (sin valores).')
     })()
   }
@@ -510,20 +488,11 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
   window.alert('OC N ' + numero + ' creada en Ordenes de Compra (proveedor: ' + prov + '). Revisala y descarga su PDF en el modulo Ordenes de Compra.')
 }
 
-  // Mismo bug de choque concurrente que guardar()/eliminar()/aprobar(): sin
-  // traer lo fresco antes, cambiar el estado desde acá podía subir un
-  // arreglo que no incluyera una cotización que otra persona acababa de
-  // crear o editar, borrándola.
   const updateCot = (id, cambios) => {
     ;(async () => {
-      try { await pullState() } catch (e) {}
-      let fresco = null
-      try { fresco = JSON.parse(localStorage.getItem('serein_cotizaciones') || 'null') } catch (e) {}
-      const base = Array.isArray(fresco) ? fresco : cotizaciones
-      const nuevo = base.map(x => x.id === id ? { ...x, ...cambios } : x)
-      try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
-      setCotizaciones(nuevo)
-      avisarSiFallaSubida()
+      const r = await escribirConReintento('serein_cotizaciones', base => (base || []).map(x => x.id === id ? { ...x, ...cambios } : x))
+      if (!r.ok) { window.alert('No se pudo guardar el cambio de estado' + (r.error ? ':\n\n' + r.error : '')); return }
+      setCotizaciones(r.value)
     })()
   }
   const setEstadoCot = (c, nuevo) => { if (nuevo === 'Aprobada' && c.estado !== 'Aprobada') setAproCot(c); else updateCot(c.id, { estado: nuevo }) }

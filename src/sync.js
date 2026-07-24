@@ -86,6 +86,76 @@ export async function pullState() {
   } catch (e) { return { ok: false, n: 0 } }
 }
 
+// ————— Escritura con reintento (compare-and-swap real contra la nube) —————
+// Antes, para evitar choques al agregar/editar/borrar un ítem de un arreglo
+// compartido (ej. cotizaciones), el patrón era "traer lo más fresco y
+// después escribir" (pullState() + calcular + pushState()). Eso reduce la
+// ventana de choque pero NO la elimina: entre el momento en que se lee lo
+// fresco y el momento en que se sube, sigue pasando tiempo — si dos
+// personas guardan casi al mismo tiempo, ambas pueden leer la misma base
+// "fresca" y calcular folios/resultados distintos, y la que sube segundo
+// pisa por completo lo que subió la primera (fue justo lo que le pasó a la
+// cotización 825: administración y Mario la crearon casi al mismo tiempo,
+// ambas pasaron por el pull-fresh, y aun así una borró a la otra).
+// Esta función corrige eso de raíz con verdadero compare-and-swap: escribe
+// el valor nuevo en la fila de Supabase SOLO SI nadie la cambió desde que
+// se leyó (comparando contra el valor exacto leído, no contra el tiempo).
+// Si alguien más escribió primero, la escritura no aplica ningún cambio
+// (0 filas afectadas) y se reintenta automáticamente, volviendo a leer el
+// valor más nuevo y aplicando la MISMA mutación sobre esa base — así
+// ninguna escritura se pierde en silencio, sin importar cuántas personas
+// guarden al mismo tiempo ni cuán ajustado sea el margen.
+// `mutar(actual)` recibe el valor actual (ya parseado, o null si la fila
+// todavía no existe) y debe devolver el valor nuevo completo a guardar.
+export async function escribirConReintento(key, mutar, intentos = 6) {
+  for (let intento = 0; intento < intentos; intento++) {
+    let actual = null
+    try {
+      const { data, error } = await supabase.from('app_state').select('value').eq('id', key).maybeSingle()
+      if (error) return { ok: false, error: error.message || String(error) }
+      if (data && data.value != null) { try { actual = JSON.parse(data.value) } catch (e) { actual = null } }
+    } catch (e) {
+      return { ok: false, error: (e && e.message) || String(e) }
+    }
+    const valorAnteriorStr = actual == null ? null : JSON.stringify(actual)
+    let nuevo
+    try { nuevo = mutar(actual) } catch (e) { return { ok: false, error: 'Error al calcular el cambio: ' + ((e && e.message) || String(e)) } }
+    const valorNuevoStr = JSON.stringify(nuevo)
+    try {
+      if (valorAnteriorStr == null) {
+        // Fila nueva: si alguien se adelanta a crearla, el insert falla por
+        // llave duplicada y el siguiente intento del for la trata como
+        // edición (compare-and-swap normal) sobre lo que esa persona subió.
+        const { error } = await supabase.from('app_state').insert({ id: key, value: valorNuevoStr, updated_at: new Date().toISOString() })
+        if (error) continue
+      } else {
+        const { data: filas, error } = await supabase.from('app_state').update({ value: valorNuevoStr, updated_at: new Date().toISOString() }).eq('id', key).eq('value', valorAnteriorStr).select('id')
+        if (error) return { ok: false, error: error.message || String(error) }
+        if (!filas || filas.length === 0) continue // alguien más escribió primero — reintentar sobre lo más nuevo
+      }
+    } catch (e) { return { ok: false, error: (e && e.message) || String(e) } }
+    try { localStorage.setItem(key, valorNuevoStr); localStorage.setItem(OK_PREFIX + key, valorNuevoStr); localStorage.removeItem(PROT_DESDE_PREFIX + key) } catch (e) {}
+    lastPushed[key] = valorNuevoStr
+    emitirEstado({ fase: 'guardado', ultimoOk: Date.now(), ultimoError: null })
+    return { ok: true, value: nuevo }
+  }
+  const msg = 'Varias personas guardaron al mismo tiempo y no se pudo confirmar el cambio tras ' + intentos + ' intentos. Inténtalo de nuevo.'
+  emitirEstado({ fase: 'error', ultimoError: msg })
+  return { ok: false, error: msg }
+}
+
+// Lee el valor más fresco posible de una clave directo de la nube (no de
+// localStorage, que puede estar protegido/atrasado) — para decisiones que
+// solo necesitan leer, sin escribir (ej. mostrar los datos más recientes
+// de una cotización antes de aprobarla).
+export async function leerFresco(key) {
+  try {
+    const { data, error } = await supabase.from('app_state').select('value').eq('id', key).maybeSingle()
+    if (error || !data || data.value == null) return null
+    try { return JSON.parse(data.value) } catch (e) { return null }
+  } catch (e) { return null }
+}
+
 let ocupado = false
 let pendiente = false
 // Antes: si pushState() se llamaba mientras otro push seguía en curso, esa
