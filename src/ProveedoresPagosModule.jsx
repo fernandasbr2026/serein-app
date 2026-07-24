@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react'
 import { Plus, Trash2, X, Truck, ReceiptText, CalendarClock, CalendarDays, TrendingUp, TrendingDown, FileText, BarChart3, Wallet, AlertTriangle, Search } from 'lucide-react'
 import { OC_SEED } from './ordenes-compra-data.js'
 import { ocTotal } from './OrdenesCompraModule.jsx'
+import { pullState, pushState } from './sync.js'
 
 // ============================================================
 // MÓDULO: Proveedores, Pagos y Calendario de Flujo de Caja
@@ -109,13 +110,29 @@ function SeccionProveedores({ pp, setPp }) {
   const nuevo = () => ({ nombre: '', rut: '', giro: '', contacto: '', telefono: '', correo: '', direccion: '', tipo: TIPOS_PROVEEDOR[0], condicion: '30 días', estado: 'Activo', obs: '' })
   const [f, setF] = useState(nuevo())
 
-  function guardar() {
+  async function guardar() {
     if (!f.nombre) return
-    setPp({ ...pp, proveedores: [{ id: 'pv' + Date.now(), ...f }, ...pp.proveedores] })
+    const item = { id: 'pv' + Date.now(), ...f }
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_pp') || 'null') } catch (e) {}
+    const basePp = fresco && typeof fresco === 'object' ? fresco : pp
+    const nuevoPp = { ...basePp, proveedores: [item, ...(basePp.proveedores || [])] }
+    try { localStorage.setItem('serein_pp', JSON.stringify(nuevoPp)) } catch (e) {}
+    setPp(nuevoPp)
+    pushState()
     setF(nuevo()); setCreando(false)
   }
-  function eliminar(id) {
-    if (window.confirm('¿Eliminar este proveedor?')) setPp({ ...pp, proveedores: pp.proveedores.filter(p => p.id !== id) })
+  async function eliminar(id) {
+    if (!window.confirm('¿Eliminar este proveedor?')) return
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_pp') || 'null') } catch (e) {}
+    const basePp = fresco && typeof fresco === 'object' ? fresco : pp
+    const nuevoPp = { ...basePp, proveedores: (basePp.proveedores || []).filter(p => p.id !== id) }
+    try { localStorage.setItem('serein_pp', JSON.stringify(nuevoPp)) } catch (e) {}
+    setPp(nuevoPp)
+    pushState()
   }
 
   return (
@@ -173,17 +190,42 @@ function SeccionProveedores({ pp, setPp }) {
 // ============================================================
 function SeccionOC({ pp, setPp }) {
   const ocs = pp.ocs || []
-  const setOcs = arr => setPp({ ...pp, ocs: arr })
   const [busca, setBusca] = useState('')
   const [fEst, setFEst] = useState('')
-  const upd = (id, cambios) => setOcs(ocs.map(o => {
-    if (o.id !== id) return o
-    const n = { ...o, ...cambios }
-    if (('fecha' in cambios || 'plazo' in cambios) && n.fecha) n.vencimiento = sumarDias(n.fecha, parseInt(n.plazo, 10) || 0)
-    return n
-  }))
-  const agregar = () => setOcs([{ id: 'oc' + Date.now(), numero: '', proveedor: '', rut: '', fecha: hoy(), monto: 0, plazo: 30, vencimiento: sumarDias(hoy(), 30), estadoPago: 'Pendiente', estadoOC: '', obs: '' }, ...ocs])
-  const eliminar = id => { if (window.confirm('¿Eliminar esta OC?')) setOcs(ocs.filter(o => o.id !== id)) }
+  const upd = (id, cambios) => {
+    const nuevoOcs = ocs.map(o => {
+      if (o.id !== id) return o
+      const n = { ...o, ...cambios }
+      if (('fecha' in cambios || 'plazo' in cambios) && n.fecha) n.vencimiento = sumarDias(n.fecha, parseInt(n.plazo, 10) || 0)
+      return n
+    })
+    const nuevo = { ...pp, ocs: nuevoOcs }
+    try { localStorage.setItem('serein_pp', JSON.stringify(nuevo)) } catch (e) {}
+    setPp(nuevo)
+    pushState()
+  }
+  const agregar = async () => {
+    const item = { id: 'oc' + Date.now(), numero: '', proveedor: '', rut: '', fecha: hoy(), monto: 0, plazo: 30, vencimiento: sumarDias(hoy(), 30), estadoPago: 'Pendiente', estadoOC: '', obs: '' }
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_pp') || 'null') } catch (e) {}
+    const basePp = fresco && typeof fresco === 'object' ? fresco : pp
+    const nuevoPp = { ...basePp, ocs: [item, ...(basePp.ocs || [])] }
+    try { localStorage.setItem('serein_pp', JSON.stringify(nuevoPp)) } catch (e) {}
+    setPp(nuevoPp)
+    pushState()
+  }
+  const eliminar = async id => {
+    if (!window.confirm('¿Eliminar esta OC?')) return
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_pp') || 'null') } catch (e) {}
+    const basePp = fresco && typeof fresco === 'object' ? fresco : pp
+    const nuevoPp = { ...basePp, ocs: (basePp.ocs || []).filter(o => o.id !== id) }
+    try { localStorage.setItem('serein_pp', JSON.stringify(nuevoPp)) } catch (e) {}
+    setPp(nuevoPp)
+    pushState()
+  }
 
   const mostradas = ocs.filter(o =>
     (!busca || (String(o.numero) + ' ' + (o.proveedor || '') + ' ' + (o.rut || '')).toLowerCase().includes(busca.toLowerCase())) &&
@@ -249,14 +291,26 @@ function SeccionPorPagar({ pp, setPp }) {
   const nuevo = () => ({ tipo_doc: 'Factura', numero: '', proveedor: pp.proveedores[0]?.nombre || '', fecha_emision: hoy(), fecha_recepcion: hoy(), condicion: '30 días', fecha_vencimiento: sumarDias(hoy(), 30), neto: '', conIva: true, area: AREAS[0], ref_ot: '', forma_pago: 'Transferencia', obs: '' })
   const [f, setF] = useState(nuevo())
 
-  function guardar() {
+  async function guardar() {
     if (!f.numero || num(f.neto) <= 0 || !f.fecha_vencimiento) return
     const neto = num(f.neto), iva = f.conIva ? Math.round(neto * 0.19) : 0
     const d = { id: 'd' + Date.now(), tipo_doc: f.tipo_doc, numero: f.numero, proveedor: f.proveedor, oc: '', fecha_emision: f.fecha_emision, fecha_recepcion: f.fecha_recepcion, fecha_vencimiento: f.fecha_vencimiento, neto, iva, total: neto + iva, area: f.area, ref_ot: f.ref_ot, forma_pago: f.forma_pago, pagos: [], anulado: false, obs: f.obs }
-    setPp({ ...pp, docs: [d, ...pp.docs] })
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_pp') || 'null') } catch (e) {}
+    const basePp = fresco && typeof fresco === 'object' ? fresco : pp
+    const nuevoPp = { ...basePp, docs: [d, ...(basePp.docs || [])] }
+    try { localStorage.setItem('serein_pp', JSON.stringify(nuevoPp)) } catch (e) {}
+    setPp(nuevoPp)
+    pushState()
     setF(nuevo()); setCreando(false)
   }
-  const actualizar = (id, cambios) => setPp({ ...pp, docs: pp.docs.map(d => d.id === id ? { ...d, ...cambios } : d) })
+  const actualizar = (id, cambios) => {
+    const nuevo = { ...pp, docs: pp.docs.map(d => d.id === id ? { ...d, ...cambios } : d) }
+    try { localStorage.setItem('serein_pp', JSON.stringify(nuevo)) } catch (e) {}
+    setPp(nuevo)
+    pushState()
+  }
 
   return (
     <div>
@@ -308,7 +362,17 @@ function SeccionPorPagar({ pp, setPp }) {
                     <td style={{ padding: 8, whiteSpace: 'nowrap' }}>
                       <button onClick={() => setAbierto(abierto === d.id ? null : d.id)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '4px 8px', cursor: 'pointer', fontSize: 12, marginRight: 4 }}>Pagos</button>
                       <button title={d.anulado ? 'Reactivar' : 'Anular'} onClick={() => actualizar(d.id, { anulado: !d.anulado })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><X size={15} /></button>
-                      <button title="Eliminar" onClick={() => window.confirm('¿Eliminar documento?') && setPp({ ...pp, docs: pp.docs.filter(x => x.id !== d.id) })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
+                      <button title="Eliminar" onClick={async () => {
+                        if (!window.confirm('¿Eliminar documento?')) return
+                        try { await pullState() } catch (e) {}
+                        let fresco = null
+                        try { fresco = JSON.parse(localStorage.getItem('serein_pp') || 'null') } catch (e) {}
+                        const basePp = fresco && typeof fresco === 'object' ? fresco : pp
+                        const nuevoPp = { ...basePp, docs: (basePp.docs || []).filter(x => x.id !== d.id) }
+                        try { localStorage.setItem('serein_pp', JSON.stringify(nuevoPp)) } catch (e) {}
+                        setPp(nuevoPp)
+                        pushState()
+                      }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
                     </td>
                   </tr>
                   {abierto === d.id && <tr><td colSpan={8} style={{ padding: 0 }}><PagosDoc doc={d} actualizar={actualizar} /></td></tr>}
@@ -448,13 +512,26 @@ function SeccionCobros({ pp, setPp }) {
   const nuevo = () => ({ cliente: '', factura: '', oc_cliente: '', fecha_emision: hoy(), condicion: '30 días', fecha_estimada: sumarDias(hoy(), 30), neto: '', conIva: true, estado: 'Pendiente', obs: '' })
   const [f, setF] = useState(nuevo())
 
-  function guardar() {
+  async function guardar() {
     if (!f.cliente || num(f.neto) <= 0) return
     const neto = num(f.neto), iva = f.conIva ? Math.round(neto * 0.19) : 0
-    setPp({ ...pp, cobros: [{ id: 'c' + Date.now(), ...f, neto, iva, total: neto + iva, fecha_real: '' }, ...pp.cobros] })
+    const c = { id: 'c' + Date.now(), ...f, neto, iva, total: neto + iva, fecha_real: '' }
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_pp') || 'null') } catch (e) {}
+    const basePp = fresco && typeof fresco === 'object' ? fresco : pp
+    const nuevoPp = { ...basePp, cobros: [c, ...(basePp.cobros || [])] }
+    try { localStorage.setItem('serein_pp', JSON.stringify(nuevoPp)) } catch (e) {}
+    setPp(nuevoPp)
+    pushState()
     setF(nuevo()); setCreando(false)
   }
-  const actualizar = (id, cambios) => setPp({ ...pp, cobros: pp.cobros.map(c => c.id === id ? { ...c, ...cambios } : c) })
+  const actualizar = (id, cambios) => {
+    const nuevo = { ...pp, cobros: pp.cobros.map(c => c.id === id ? { ...c, ...cambios } : c) }
+    try { localStorage.setItem('serein_pp', JSON.stringify(nuevo)) } catch (e) {}
+    setPp(nuevo)
+    pushState()
+  }
 
   return (
     <div>
@@ -504,7 +581,17 @@ function SeccionCobros({ pp, setPp }) {
                       {ESTADOS_COBRO.map(x => <option key={x}>{x}</option>)}
                     </select>
                   </td>
-                  <td style={{ padding: 8 }}><button onClick={() => window.confirm('¿Eliminar cobro?') && setPp({ ...pp, cobros: pp.cobros.filter(x => x.id !== c.id) })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button></td>
+                  <td style={{ padding: 8 }}><button onClick={async () => {
+                    if (!window.confirm('¿Eliminar cobro?')) return
+                    try { await pullState() } catch (e) {}
+                    let fresco = null
+                    try { fresco = JSON.parse(localStorage.getItem('serein_pp') || 'null') } catch (e) {}
+                    const basePp = fresco && typeof fresco === 'object' ? fresco : pp
+                    const nuevoPp = { ...basePp, cobros: (basePp.cobros || []).filter(x => x.id !== c.id) }
+                    try { localStorage.setItem('serein_pp', JSON.stringify(nuevoPp)) } catch (e) {}
+                    setPp(nuevoPp)
+                    pushState()
+                  }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button></td>
                 </tr>
               )
             })}
@@ -549,7 +636,12 @@ function SeccionFlujo({ pp, setPp }) {
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
         <input type="month" value={mes} onChange={e => setMes(e.target.value)} style={inp} />
         <label style={{ fontSize: 12, color: C.gris, display: 'flex', alignItems: 'center', gap: 6 }}>Saldo inicial de caja:
-          <input style={{ ...inp, width: 150 }} value={pp.saldoInicial || 0} onChange={e => setPp({ ...pp, saldoInicial: num(e.target.value) })} />
+          <input style={{ ...inp, width: 150 }} value={pp.saldoInicial || 0} onChange={e => {
+            const nuevo = { ...pp, saldoInicial: num(e.target.value) }
+            try { localStorage.setItem('serein_pp', JSON.stringify(nuevo)) } catch (err) {}
+            setPp(nuevo)
+            pushState()
+          }} />
         </label>
       </div>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>

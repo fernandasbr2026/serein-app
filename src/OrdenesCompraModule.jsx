@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Plus, Trash2, Search, ChevronDown, ChevronUp, Download } from 'lucide-react'
 import Paginador, { paginar } from './Paginador.jsx'
 import { PROVEEDORES_FICHA } from './proveedores-data.js'
+import { pullState, pushState } from './sync.js'
 
 // ============================================================
 // MÓDULO: Órdenes de Compra a PROVEEDORES (emitidas por Serein)
@@ -256,9 +257,27 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
   const ocs = pp.ocs || []
   const provLista = Object.values((proveedores || []).reduce((m, p) => { const n = (p.nombre || '').trim(); if (n && !m[n.toLowerCase()]) m[n.toLowerCase()] = p; return m }, {}))
   const otsDisponibles = [...new Set((ots || []).map(o => o.numero).filter(Boolean))]
-  const setOcs = arr => setPp({ ...pp, ocs: arr })
-  const upd = (id, cambios) => setOcs(ocs.map(o => o.id === id ? { ...o, ...cambios } : o))
-  const eliminar = id => setOcs(ocs.filter(o => o.id !== id))
+  const upd = (id, cambios) => {
+    const nuevo = { ...pp, ocs: ocs.map(o => o.id === id ? { ...o, ...cambios } : o) }
+    try { localStorage.setItem('serein_pp', JSON.stringify(nuevo)) } catch (e) {}
+    setPp(nuevo)
+    pushState()
+  }
+  // pp.ocs tambien lo escriben ProveedoresPagosModule.jsx y
+  // generarOCPintura() en CotizacionesModule.jsx — antes de agregar o
+  // eliminar una OC acá se trae lo más fresco de la nube, para no partir
+  // de una copia vieja si alguien más tocó las OC mientras tanto.
+  const guardarOcFresco = async mutar => {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_pp') || 'null') } catch (e) {}
+    const basePp = fresco && typeof fresco === 'object' ? fresco : pp
+    const nuevoPp = { ...basePp, ocs: mutar(basePp.ocs || []) }
+    try { localStorage.setItem('serein_pp', JSON.stringify(nuevoPp)) } catch (e) {}
+    setPp(nuevoPp)
+    pushState()
+  }
+  const eliminar = id => guardarOcFresco(base => base.filter(o => o.id !== id))
   const maxOC = ocs.reduce((m, o) => Math.max(m, parseInt(String(o.numero).replace(/\D/g, ''), 10) || 0), 517)
   const [creando, setCreando] = useState(false)
   const nueva = () => ({ id: 'oc' + Date.now(), numero: String(maxOC + 1), proveedor: '', rut: '', categoria: 'Pintura', detalle: '', area: 'Santa Rosa', fecha: hoy(), neto: 0, plazo: 30, vencimiento: sumarDias(hoy(), 30), estadoPago: 'Pendiente', asignaciones: [], items: [], direccion: '', despacho: '', adjunto: '', obs: '' })
@@ -278,7 +297,7 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
       <datalist id="prov-list-oc">
         {provLista.map(p => <option key={p.id || p.nombre} value={p.nombre}>{p.rut || ''}</option>)}
       </datalist>
-      {creando && <FormOC inicial={nueva()} otsDisponibles={otsDisponibles} proveedores={proveedores} onGuardar={oc => { setOcs([oc, ...ocs]); setCreando(false) }} onCancelar={() => setCreando(false)} />}
+      {creando && <FormOC inicial={nueva()} otsDisponibles={otsDisponibles} proveedores={proveedores} onGuardar={oc => { guardarOcFresco(base => [oc, ...base]); setCreando(false) }} onCancelar={() => setCreando(false)} />}
       <div style={{ fontSize: 12, color: '#D9600A', background: '#FDECDD', padding: '8px 12px', marginBottom: 12 }}>
         <b>Órdenes de compra a proveedores</b> (emitidas por Serein). Cada OC puede asociarse a una o varias OT con reparto porcentual; su costo neto se carga a esas OT. Las OC pendientes alimentan cuentas por pagar y el flujo de caja del Consolidado.
       </div>

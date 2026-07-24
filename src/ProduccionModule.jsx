@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { Plus, Trash2, CalendarDays, Factory, ClipboardList, BarChart3, CheckCircle2, AlertTriangle, Users } from 'lucide-react'
+import { pullState, pushState } from './sync.js'
 
 import { SEREIN } from './theme-serein.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
@@ -76,7 +77,7 @@ function RegistroAvance({ plantaFija, plantas, ots, avances, setAvances, usuario
     })
   }
 
-  function guardar() {
+  async function guardar() {
     const nuevos = []
     Object.entries(seleccion).forEach(([otNum, procesos]) => {
       procesos.forEach(proc => {
@@ -92,7 +93,17 @@ function RegistroAvance({ plantaFija, plantas, ots, avances, setAvances, usuario
       })
     })
     if (nuevos.length === 0) return
-    setAvances(av => [...nuevos, ...av])
+    // Distintos supervisores de planta pueden registrar avances al mismo
+    // tiempo — se trae lo más fresco de la nube justo antes de guardar
+    // para no partir de una copia vieja y pisar avances ajenos.
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_avances') || 'null') } catch (e) {}
+    const base = Array.isArray(fresco) ? fresco : avances
+    const nuevo = [...nuevos, ...base]
+    try { localStorage.setItem('serein_avances', JSON.stringify(nuevo)) } catch (e) {}
+    setAvances(nuevo)
+    pushState()
     setSeleccion({}); setF({ ...f, obs: '' })
     setGuardado(true); setTimeout(() => setGuardado(false), 3500)
   }
@@ -168,21 +179,37 @@ function ListaAvances({ avances, setAvances, ots, esGerencia, usuario, mo }) {
   const visibles = (esGerencia ? avances : avances.filter(a => a.supervisor === usuario))
     .slice().sort((a, b) => b.fecha.localeCompare(a.fecha))
 
-  function ajustarM2(reg, nuevoStr) {
+  async function ajustarM2(reg, nuevoStr) {
     const nuevo = nuevoStr === '' ? null : parseFloat(nuevoStr)
     if (nuevo !== null && isNaN(nuevo)) return
     const anterior = reg.m2Ajustado
-    setAvances(av => av.map(a => a.id === reg.id ? {
+    // Trae lo más fresco antes de aplicar el ajuste — gerencia puede estar
+    // revisando registros al mismo tiempo que se cargan nuevos avances.
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_avances') || 'null') } catch (e) {}
+    const base = Array.isArray(fresco) ? fresco : avances
+    const actualizado = base.map(a => a.id === reg.id ? {
       ...a, m2Ajustado: nuevo, validacion: 'Corregido',
-      historial: [...a.historial, { fecha: hoy(), usuario, anterior, nuevo, motivo: 'Ajuste manual de m²' }],
-    } : a))
+      historial: [...(a.historial || []), { fecha: hoy(), usuario, anterior, nuevo, motivo: 'Ajuste manual de m²' }],
+    } : a)
+    try { localStorage.setItem('serein_avances', JSON.stringify(actualizado)) } catch (e) {}
+    setAvances(actualizado)
+    pushState()
   }
 
-  function cambiarValidacion(reg, v) {
-    setAvances(av => av.map(a => a.id === reg.id ? {
+  async function cambiarValidacion(reg, v) {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_avances') || 'null') } catch (e) {}
+    const base = Array.isArray(fresco) ? fresco : avances
+    const actualizado = base.map(a => a.id === reg.id ? {
       ...a, validacion: v,
-      historial: [...a.historial, { fecha: hoy(), usuario, anterior: a.validacion, nuevo: v, motivo: 'Cambio de estado' }],
-    } : a))
+      historial: [...(a.historial || []), { fecha: hoy(), usuario, anterior: a.validacion, nuevo: v, motivo: 'Cambio de estado' }],
+    } : a)
+    try { localStorage.setItem('serein_avances', JSON.stringify(actualizado)) } catch (e) {}
+    setAvances(actualizado)
+    pushState()
   }
 
   // Cruce con asistencia: trabajadores presentes por fecha+planta
@@ -215,7 +242,12 @@ function ListaAvances({ avances, setAvances, ots, esGerencia, usuario, mo }) {
                 <td style={{ padding: '7px 8px', fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 700 }}>{a.ot}</td>
                 <td style={{ padding: '7px 8px' }}>{a.proceso}</td>
                 <td style={{ padding: '7px 8px' }}>
-                  <select value={a.estadoDia} onChange={e => setAvances(av => av.map(x => x.id === a.id ? { ...x, estadoDia: e.target.value } : x))}
+                  <select value={a.estadoDia} onChange={e => {
+                    const nuevo = avances.map(x => x.id === a.id ? { ...x, estadoDia: e.target.value } : x)
+                    try { localStorage.setItem('serein_avances', JSON.stringify(nuevo)) } catch (err) {}
+                    setAvances(nuevo)
+                    pushState()
+                  }}
                     style={{ border: 'none', background: a.estadoDia === 'Terminado proceso' ? '#E6F7EE' : '#FDECDD', color: a.estadoDia === 'Terminado proceso' ? C.verde : '#D9600A', padding: '2px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                     {ESTADOS_DIA.map(s => <option key={s}>{s}</option>)}
                   </select>

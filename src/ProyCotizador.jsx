@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { cargarProyParams } from './ProyParametros.jsx'
+import { pullState, pushState } from './sync.js'
 
 // ============================================================
 // Cotizacion de PROYECTO por centros de costo (independiente del
@@ -78,7 +79,7 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
 
   function borrar(id) { if (!window.confirm('¿Eliminar este borrador de cotizacion?')) return; const next = cots.filter(c => c.id !== id); setCots(next); guardarCots(next) }
 
-  function aprobar(c) {
+  async function aprobar(c) {
     if (!setProyectos) { setMsg('No se pudo generar la OT (falta conexion con Proyectos).'); return }
     const q = 'T' + (Math.floor(new Date().getMonth() / 3) + 1)
     const nueva = {
@@ -89,7 +90,14 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
       snapshotProy: { centros: c.centros, costoNeto: c.costoNeto, costoBruto: c.costoBruto, ventaNeta: c.ventaNeta, ventaBruta: c.ventaBruta, utilidad: c.utilidad, margenPct: c.margenPct, modoMargen: c.modoMargen, fecha: new Date().toISOString().slice(0, 10) },
     }
     ;(c.centros || []).forEach((cc, i) => { const key = (cc.codigo || '').trim() || ('C' + (i + 1)); nueva.cc[key] = cc.neto; nueva.ccNombres[key] = cc.nombre || key })
-    setProyectos(prev => [nueva, ...(prev || [])])
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_proyectos') || 'null') } catch (e) {}
+    const base = Array.isArray(fresco) ? fresco : proyectos
+    const nuevoProyectos = [nueva, ...base]
+    try { localStorage.setItem('serein_proyectos', JSON.stringify(nuevoProyectos)) } catch (e) {}
+    setProyectos(nuevoProyectos)
+    pushState()
     const next = cots.map(x => x.id === c.id ? { ...x, estado: 'aprobada', otId: nueva.id, snapshot: nueva.snapshotProy } : x)
     setCots(next); guardarCots(next)
     setAprobando(null); setFEntrega(''); setFResp('')

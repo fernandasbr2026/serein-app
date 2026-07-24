@@ -8,6 +8,7 @@ import ProyCotizador from './ProyCotizador.jsx'
 import ProyComprasLibro from './ProyComprasLibro.jsx'
 import CotizadorIntumescenteModule from './CotizadorIntumescenteModule.jsx'
 import { supabase } from './supabase.js'
+import { pullState, pushState } from './sync.js'
 import * as XLSX from 'xlsx'
 // Cotizador de Proyectos visible solo para estos correos (el resto ve la gestion normal de OT)
 const COTIZADOR_PROY_EMAILS = ['administracion@sereinspa.com', 'mario@sereinspa.com']
@@ -735,7 +736,24 @@ function ProyCotizacionesList({ setProyectos }) {
       snapshotProy: { centros: c.centros, costoNeto: c.costoNeto, costoBruto: c.costoBruto, ventaNeta: c.ventaNeta, ventaBruta: c.ventaBruta, utilidad: c.utilidad, margenPct: c.margenPct, modoMargen: c.modoMargen, fecha: new Date().toISOString().slice(0, 10) },
     }
     ;(c.centros || []).forEach((cc, i) => { const key = (cc.codigo || '').trim() || ('C' + (i + 1)); nueva.cc[key] = cc.neto; nueva.ccNombres[key] = cc.nombre || key })
-    setProyectos(prev => [nueva, ...(prev || [])])
+    // Pattern B (pull-fresh antes de anteponer), pero sin await directo:
+    // el llamador (cambiarEstado) necesita el id de vuelta en el mismo
+    // tick para guardarlo en la cotización, así que el pull-fresh + guardado
+    // corre en segundo plano mientras el id (ya generado arriba) se
+    // devuelve de inmediato.
+    ;(async () => {
+      try { await pullState() } catch (e) {}
+      let fresco = null
+      try { fresco = JSON.parse(localStorage.getItem('serein_proyectos') || 'null') } catch (e) {}
+      if (Array.isArray(fresco)) {
+        const nuevo = [nueva, ...fresco]
+        try { localStorage.setItem('serein_proyectos', JSON.stringify(nuevo)) } catch (e) {}
+        setProyectos(nuevo)
+      } else {
+        setProyectos(prev => [nueva, ...(prev || [])])
+      }
+      pushState()
+    })()
     return nueva.id
   }
   const cambiarEstado = (c, nuevo) => {
@@ -788,13 +806,44 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
   const [vista, setVista] = useState('tarjetas')
   const [sel, setSel] = useState(null)
   const dragId = React.useRef(null)
-  const mover = (fromId, toId) => { if (!fromId || fromId === toId) return; setProyectos(ps => { const arr = [...ps]; const from = arr.findIndex(x => x.id === fromId); const to = arr.findIndex(x => x.id === toId); if (from < 0 || to < 0) return ps; const [it] = arr.splice(from, 1); arr.splice(to, 0, it); return arr }) }
+  const mover = (fromId, toId) => {
+    if (!fromId || fromId === toId) return
+    const arr = [...proyectos]
+    const from = arr.findIndex(x => x.id === fromId)
+    const to = arr.findIndex(x => x.id === toId)
+    if (from < 0 || to < 0) return
+    const [it] = arr.splice(from, 1)
+    arr.splice(to, 0, it)
+    try { localStorage.setItem('serein_proyectos', JSON.stringify(arr)) } catch (e) {}
+    setProyectos(arr)
+    pushState()
+  }
   const [emailUser, setEmailUser] = useState('')
   React.useEffect(() => { let v = true; supabase.auth.getUser().then(({ data }) => { if (v) setEmailUser((data && data.user && data.user.email) || '') }); return () => { v = false } }, [])
   const verCotizadorProy = COTIZADOR_PROY_EMAILS.includes((emailUser || '').trim().toLowerCase())
 
-  const actualizar = (id, cambios) => setProyectos(ps => ps.map(p => p.id === id ? { ...p, ...cambios } : p))
-  const eliminar = id => setProyectos(ps => ps.filter(p => p.id !== id))
+  // Pattern A (sin pull-fresh): actualizar() se usa tanto para ediciones de
+  // campo simple como para agregar un EDP nuevo a p.edps. Distinguir
+  // limpiamente "editar" de "agregar edp" exigiría un refactor mayor de
+  // todos los call sites actuales, así que se prioriza no romperlos y se
+  // usa aquí el patrón simple (persiste igual de inmediato, solo sin
+  // pull-fresh previo).
+  const actualizar = (id, cambios) => {
+    const nuevo = proyectos.map(p => p.id === id ? { ...p, ...cambios } : p)
+    try { localStorage.setItem('serein_proyectos', JSON.stringify(nuevo)) } catch (e) {}
+    setProyectos(nuevo)
+    pushState()
+  }
+  const eliminar = async id => {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_proyectos') || 'null') } catch (e) {}
+    const base = Array.isArray(fresco) ? fresco : proyectos
+    const nuevo = base.filter(p => p.id !== id)
+    try { localStorage.setItem('serein_proyectos', JSON.stringify(nuevo)) } catch (e) {}
+    setProyectos(nuevo)
+    pushState()
+  }
 
   // Alta de compra con anti-duplicado por folio + RUT (en TODO el consolidado)
   function agregarCompra(pId, compra) {
@@ -802,7 +851,19 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
       const dup = proyectos.some(p => (p.compras || []).some(c => c.folio && c.rut && c.folio.trim() === compra.folio.trim() && c.rut.trim() === compra.rut.trim()))
       if (dup && !window.confirm(`Ya existe una compra con folio ${compra.folio} y RUT ${compra.rut} en el consolidado. ¿Agregar de todas formas?`)) return false
     }
-    setProyectos(ps => ps.map(p => p.id === pId ? { ...p, compras: [...(p.compras || []), compra] } : p))
+    // Pattern B en segundo plano: el llamador (FormCompra) usa el valor de
+    // retorno síncrono (true/false) para cerrar el formulario, así que el
+    // pull-fresh + guardado no puede bloquear ese return.
+    ;(async () => {
+      try { await pullState() } catch (e) {}
+      let fresco = null
+      try { fresco = JSON.parse(localStorage.getItem('serein_proyectos') || 'null') } catch (e) {}
+      const base = Array.isArray(fresco) ? fresco : proyectos
+      const nuevo = base.map(p => p.id === pId ? { ...p, compras: [...(p.compras || []), compra] } : p)
+      try { localStorage.setItem('serein_proyectos', JSON.stringify(nuevo)) } catch (e) {}
+      setProyectos(nuevo)
+      pushState()
+    })()
     return true
   }
 
@@ -872,7 +933,24 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
         )}
       </div>
 
-      {creando && <FormProyecto onAdd={p => { setProyectos(ps => [p, ...ps]); setCreando(false) }} onCancel={() => setCreando(false)} />}
+      {creando && <FormProyecto onAdd={p => {
+        setCreando(false)
+        // Pattern B en segundo plano (crear proyecto nuevo no es urgente
+        // para la UI — el formulario ya se cerró arriba de inmediato).
+        ;(async () => {
+          try { await pullState() } catch (e) {}
+          let fresco = null
+          try { fresco = JSON.parse(localStorage.getItem('serein_proyectos') || 'null') } catch (e) {}
+          if (Array.isArray(fresco)) {
+            const nuevo = [p, ...fresco]
+            try { localStorage.setItem('serein_proyectos', JSON.stringify(nuevo)) } catch (e) {}
+            setProyectos(nuevo)
+          } else {
+            setProyectos(ps => [p, ...ps])
+          }
+          pushState()
+        })()
+      }} onCancel={() => setCreando(false)} />}
 
       {(vista === 'cotizarProy' && verCotizadorProy) ? (
         <ProyCotizador clientes={clientesSugeridos} proyectos={proyectos} setProyectos={setProyectos} />

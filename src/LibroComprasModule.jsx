@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
 import * as XLSX from 'xlsx'
 import { supabase } from './supabase.js'
-import { pushState } from './sync.js'
+import { pullState, pushState } from './sync.js'
 import { calcularPerdidaFactoring } from './ParametrosModule.jsx'
 
 import { SEREIN } from './theme-serein.js'
@@ -33,13 +33,25 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
   ].filter(o => o.n)
   const proyDeOT = n => (proyectos || []).find(p => otNumProy(p) === String(n || '').trim())
   const ccsDeOT = n => { const p = proyDeOT(n); if (!p) return []; const codes = [...new Set([...Object.keys(p.cc || {}), ...(p.compras || []).map(c => c.cc)])].filter(Boolean); return codes.map(c => ({ id: c, nombre: (p.ccNombres && p.ccNombres[c]) || c })) }
-  const imputarFicha = (r, otNum, ccCode) => {
+  // Escribe en proyectos (prop del padre, no el estado propio de este
+  // modulo) — trae lo mas fresco de la nube antes de mutar para no pisar
+  // cambios de otros modulos/pestañas, y persiste de inmediato (mismo
+  // patron ya probado en OTModule.jsx/FacturasModule.jsx) para no perder
+  // la imputacion si la persona navega antes del guardado general.
+  const imputarFicha = async (r, otNum, ccCode) => {
     if (!setProyectos) return
-    setProyectos(ps => (ps || []).map(p => {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_proyectos') || 'null') } catch (e) {}
+    const base = Array.isArray(fresco) ? fresco : (proyectos || [])
+    const nuevo = base.map(p => {
       const compras = (p.compras || []).filter(c => c.libroId !== r.id)
       if (otNumProy(p) !== String(otNum || '').trim() || !ccCode) return { ...p, compras }
       return { ...p, compras: [...compras, { id: 'lc' + r.id, proveedor: r.provider_name || '', folio: r.document_number || '', rut: r.provider_rut || '', monto: Math.round(Number(r.exenta ? (r.document_total || r.neto) : r.neto) || 0), cc: ccCode, fecha: r.emission_date || '', detalle: 'SII ' + (r.document_type || '') + (r.exenta ? ' (Exenta)' : ''), exento: !!r.exenta, origen: 'libro', libroId: r.id }] }
-    }))
+    })
+    try { localStorage.setItem('serein_proyectos', JSON.stringify(nuevo)) } catch (e) {}
+    setProyectos(nuevo)
+    pushState()
   }
   const [rows, setRows] = useState([])
   const [provTipo, setProvTipo] = useState({})

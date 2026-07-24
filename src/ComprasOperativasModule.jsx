@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { Plus, Trash2, X, ShoppingCart, ClipboardList, Factory, CheckCircle2, AlertTriangle, Paperclip, Settings2, Filter } from 'lucide-react'
+import { pullState, pushState } from './sync.js'
 
 import { SEREIN } from './theme-serein.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
@@ -301,7 +302,26 @@ function RevisionGerencia({ comprasOp, setComprasOp }) {
     (fTexto === '' || (c.proveedor + c.descripcion + c.supervisor + c.asignacion.items.map(i => i.ref).join(' ')).toLowerCase().includes(fTexto.toLowerCase()))
   )
 
-  const upd = (id, cambios) => setComprasOp(cs => cs.map(c => c.id === id ? { ...c, ...cambios } : c))
+  const upd = (id, cambios) => {
+    const nuevo = comprasOp.map(c => c.id === id ? { ...c, ...cambios } : c)
+    try { localStorage.setItem('serein_comprasOp', JSON.stringify(nuevo)) } catch (e) {}
+    setComprasOp(nuevo)
+    pushState()
+  }
+  // Borrar es potencialmente destructivo y varias personas (gerencia +
+  // varios supervisores) pueden estar tocando compras al mismo tiempo —
+  // se trae lo mas fresco de la nube justo antes de borrar, mismo patron
+  // ya probado en OTModule.jsx / FacturasModule.jsx.
+  const eliminarFresco = async id => {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_comprasOp') || 'null') } catch (e) {}
+    const base = Array.isArray(fresco) ? fresco : comprasOp
+    const nuevo = base.filter(x => x.id !== id)
+    try { localStorage.setItem('serein_comprasOp', JSON.stringify(nuevo)) } catch (e) {}
+    setComprasOp(nuevo)
+    pushState()
+  }
 
   return (
     <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
@@ -366,7 +386,7 @@ function RevisionGerencia({ comprasOp, setComprasOp }) {
                   <input value={c.obsGerencia} placeholder="—" onChange={e => upd(c.id, { obsGerencia: e.target.value })} style={{ ...inp, width: 130, padding: '4px 6px', fontSize: 12 }} />
                 </td>
                 <td style={{ padding: '7px 4px' }}>
-                  <button onClick={() => window.confirm('¿Eliminar esta compra?') && setComprasOp(cs => cs.filter(x => x.id !== c.id))}
+                  <button onClick={() => window.confirm('¿Eliminar esta compra?') && eliminarFresco(c.id)}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
                 </td>
               </tr>
@@ -393,7 +413,12 @@ function TotalesAlertas({ comprasOp, config, setConfig }) {
     ['Observadas', comprasOp.filter(c => c.estado === 'Observada').length],
   ]
 
-  const toggle = k => setConfig({ ...config, [k]: !config[k] })
+  const toggle = k => {
+    const nuevo = { ...config, [k]: !config[k] }
+    try { localStorage.setItem('serein_configCompras', JSON.stringify(nuevo)) } catch (e) {}
+    setConfig(nuevo)
+    pushState()
+  }
 
   return (
     <div>
@@ -448,6 +473,22 @@ export default function ComprasOperativasModule({ esGerencia, planta = null, usu
   const config = extCfg ?? intCfg
   const setConfig = extSetCfg ?? setIntCfg
 
+  // Registrar una compra nueva es el punto de mayor riesgo de choque: varios
+  // supervisores de distintas plantas pueden guardar al mismo tiempo, cada
+  // uno con su propia copia en memoria de comprasOp. Se trae lo mas fresco
+  // de la nube justo antes de anteponer la compra nueva, mismo patron ya
+  // probado en OTModule.jsx / FacturasModule.jsx.
+  const agregarCompraFresca = async c => {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_comprasOp') || 'null') } catch (e) {}
+    const base = Array.isArray(fresco) ? fresco : comprasOp
+    const nuevo = [c, ...base]
+    try { localStorage.setItem('serein_comprasOp', JSON.stringify(nuevo)) } catch (e) {}
+    setComprasOp(nuevo)
+    pushState()
+  }
+
   const tabs = esGerencia ? [
     { id: 'revision', label: 'Todas las compras', icono: <ClipboardList size={13} /> },
     { id: 'totales', label: 'Totales, alertas y permisos', icono: <Settings2 size={13} /> },
@@ -469,7 +510,7 @@ export default function ComprasOperativasModule({ esGerencia, planta = null, usu
           </button>
         ))}
       </div>
-      {tab === 'registrar' && <FormCompra config={config} ots={esGerencia ? ots : ots.filter(o => o.area === planta)} proyectos={proyectos} planta={planta} usuario={usuario} onGuardar={c => setComprasOp(cs => [c, ...cs])} />}
+      {tab === 'registrar' && <FormCompra config={config} ots={esGerencia ? ots : ots.filter(o => o.area === planta)} proyectos={proyectos} planta={planta} usuario={usuario} onGuardar={agregarCompraFresca} />}
       {tab === 'mias' && !esGerencia && <MisCompras comprasOp={comprasOp} usuario={usuario} config={config} />}
       {tab === 'misots' && !esGerencia && <MisOTs ots={ots} proyectos={proyectos} mo={mo} comprasOp={comprasOp} planta={planta} />}
       {tab === 'revision' && esGerencia && <RevisionGerencia comprasOp={comprasOp} setComprasOp={setComprasOp} />}

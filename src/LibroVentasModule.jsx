@@ -172,7 +172,14 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
       Object.keys(f).forEach(k => { if (f[k] !== '' && f[k] !== null && f[k] !== undefined) merge[k] = f[k] })
       base[r.area] = [merge, ...(base[r.area] || [])]
     }
+    // Escribe en facturas (prop del padre, no el estado propio de este
+    // modulo) — persiste sincrónicamente en localStorage y sube a la nube
+    // de inmediato, mismo patrón ya probado en OTModule.jsx/
+    // FacturasModule.jsx, para no perder la asignación si la persona
+    // navega antes del guardado general de 800ms.
+    try { localStorage.setItem('serein_facturas', JSON.stringify(base)) } catch (e) {}
     setFacturas(base)
+    pushState()
   }
 
   const setCampo = async (r, campo, valor) => {
@@ -214,7 +221,15 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
       if (!yaEsta) base[r.area] = [...(base[r.area] || []), fichaDe(r)]
     })
     Object.keys(base).forEach(a => { base[a] = (base[a] || []).filter(f => f.origen !== 'libroVentas' || validos.has(f.libroId)) })
-    if (JSON.stringify(facturas || {}) !== JSON.stringify(base)) setFacturas(base)
+    if (JSON.stringify(facturas || {}) !== JSON.stringify(base)) {
+      // Mismo motivo que en sincronizarFicha(): persistir de inmediato
+      // (sin bloquear con pullState() dentro de un efecto que corre en
+      // cada montaje/cambio de "todas") para no perder este resultado si
+      // la persona navega antes del guardado general.
+      try { localStorage.setItem('serein_facturas', JSON.stringify(base)) } catch (e) {}
+      setFacturas(base)
+      pushState()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todas, loading])
 

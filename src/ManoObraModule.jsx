@@ -3,6 +3,7 @@ import { Plus, Trash2, CalendarDays, Clock3, Users, Wallet, Table2, EyeOff, Down
 import * as XLSX from 'xlsx'
 
 import { SEREIN } from './theme-serein.js'
+import { pullState, pushState } from './sync.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
 const C = { naranja: SEREIN.orange, carbon: SEREIN.text, verde: SEREIN.green, rojo: SEREIN.red, gris: SEREIN.textFaint }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
@@ -91,7 +92,7 @@ function RegistroDiario({ mo, setMo, otsDisponibles, esGerencia, usuario, areas 
   const [guardado, setGuardado] = useState(false)
   const toggle = (lista, v) => lista.includes(v) ? lista.filter(x => x !== v) : [...lista, v]
 
-  function guardar() {
+  async function guardar() {
     if (f.trabajadorIds.length === 0 || (f.ots.length === 0 && !f.otManual.trim())) return
     const ots = [...f.ots, ...f.otManual.split(',').map(s => s.trim()).filter(Boolean)]
     const factor = f.jornada === 'Media' ? 0.5 : 1
@@ -102,7 +103,14 @@ function RegistroDiario({ mo, setMo, otsDisponibles, esGerencia, usuario, areas 
     const total = detalle.reduce((a, d) => a + d.valor, 0)
     const porOT = Object.fromEntries(ots.map(o => [o, Math.round(total / ots.length)]))
     const reg = { id: 'a' + Date.now(), fecha: f.fecha, supervisor: usuario, area: f.area, jornada: f.jornada, trabajadorIds: f.trabajadorIds, ots, obs: f.obs, costo: { total, detalle, porOT } }
-    setMo({ ...mo, asistencias: [reg, ...mo.asistencias] })
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_mo') || 'null') } catch (e) {}
+    const baseMo = fresco && typeof fresco === 'object' ? fresco : mo
+    const nuevo = { ...baseMo, asistencias: [reg, ...(baseMo.asistencias || [])] }
+    try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
+    setMo(nuevo)
+    pushState()
     setF({ ...f, trabajadorIds: [], ots: [], otManual: '', obs: '' })
     setGuardado(true); setTimeout(() => setGuardado(false), 3500)
   }
@@ -174,14 +182,21 @@ function HorasExtras({ mo, setMo, otsDisponibles, esGerencia, usuario }) {
   const [f, setF] = useState({ fecha: hoy(), trabajadorId: mo.trabajadores[0]?.id, horas: '', ot: '', otManual: '', obs: '' })
   const [guardado, setGuardado] = useState(false)
 
-  function guardar() {
+  async function guardar() {
     const ot = f.otManual.trim() || f.ot
     const horas = parseFloat(f.horas)
     if (!ot || !horas || horas <= 0) return
     const t = (mo.trabajadores || []).find(x => x.id === f.trabajadorId)
     const valorHex = valorHexDe(t)
     const reg = { id: 'h' + Date.now(), fecha: f.fecha, trabajadorId: f.trabajadorId, horas, ot, obs: f.obs, costo: { valorHex, total: Math.round(valorHex * horas) } }
-    setMo({ ...mo, horasExtras: [reg, ...mo.horasExtras] })
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_mo') || 'null') } catch (e) {}
+    const baseMo = fresco && typeof fresco === 'object' ? fresco : mo
+    const nuevo = { ...baseMo, horasExtras: [reg, ...(baseMo.horasExtras || [])] }
+    try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
+    setMo(nuevo)
+    pushState()
     setF({ ...f, horas: '', ot: '', otManual: '', obs: '' })
     setGuardado(true); setTimeout(() => setGuardado(false), 3500)
   }
@@ -229,6 +244,28 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
   const hexVisibles = mo.horasExtras
   const nombreDe = id => (mo.trabajadores || []).find(t => t.id === id)?.nombre || id
 
+  async function borrarAsistencia(id) {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_mo') || 'null') } catch (e) {}
+    const baseMo = fresco && typeof fresco === 'object' ? fresco : mo
+    const nuevo = { ...baseMo, asistencias: (baseMo.asistencias || []).filter(x => x.id !== id) }
+    try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
+    setMo(nuevo)
+    pushState()
+  }
+
+  async function borrarHorasExtras(id) {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_mo') || 'null') } catch (e) {}
+    const baseMo = fresco && typeof fresco === 'object' ? fresco : mo
+    const nuevo = { ...baseMo, horasExtras: (baseMo.horasExtras || []).filter(x => x.id !== id) }
+    try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
+    setMo(nuevo)
+    pushState()
+  }
+
   return (
     <div>
       <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18, marginBottom: 14 }}>
@@ -254,7 +291,7 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
                     {esGerencia && <td style={{ padding: '8px', fontWeight: 600 }}>{clp(a.costo.total)}</td>}
                     {esGerencia && <td style={{ padding: '8px', fontSize: 12 }}>{Object.entries(a.costo.porOT).map(([o, m]) => <div key={o}>{o}: {clp(m)}</div>)}</td>}
                     <td style={{ padding: '8px', textAlign: 'right' }}>
-                      {esGerencia && <button onClick={() => window.confirm('¿Eliminar este registro de asistencia?') && setMo({ ...mo, asistencias: (mo.asistencias || []).filter(x => x.id !== a.id) })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
+                      {esGerencia && <button onClick={() => window.confirm('¿Eliminar este registro de asistencia?') && borrarAsistencia(a.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
                     </td>
                   </tr>
                 ))}
@@ -284,7 +321,7 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
                   <td style={{ padding: '8px', fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{h.ot}</td>
                   {esGerencia && <td style={{ padding: '8px', fontWeight: 600 }}>{clp(h.costo.total)}</td>}
                   <td style={{ padding: '8px', textAlign: 'right' }}>
-                    {esGerencia && <button onClick={() => window.confirm('¿Eliminar estas horas extras?') && setMo({ ...mo, horasExtras: (mo.horasExtras || []).filter(x => x.id !== h.id) })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
+                    {esGerencia && <button onClick={() => window.confirm('¿Eliminar estas horas extras?') && borrarHorasExtras(h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
                   </td>
                 </tr>
               ))}
@@ -387,10 +424,35 @@ function CostosPorOT({ mo }) {
 
 // ================= NÓMINA / VALORES (GERENCIA) =================
 function NominaMO({ mo, setMo }) {
-  const setTrab = (id, campo, valor) => setMo({ ...mo, trabajadores: (mo.trabajadores || []).map(t => t.id === id ? { ...t, [campo]: valor } : t) })
+  const setTrab = (id, campo, valor) => {
+    const nuevo = { ...mo, trabajadores: (mo.trabajadores || []).map(t => t.id === id ? { ...t, [campo]: valor } : t) }
+    try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
+    setMo(nuevo)
+    pushState()
+  }
   const setNum = (id, campo, valor) => setTrab(id, campo, num(valor))
-  const addTrab = grupo => setMo({ ...mo, trabajadores: [...mo.trabajadores, { id: 't' + Date.now(), grupo, nombre: '', cargo: '', nacionalidad: 'Chilena', sueldo: 0, imposiciones: 0, sabado: 0, domingo: 0 }] })
-  const delTrab = id => window.confirm('¿Eliminar este trabajador?') && setMo({ ...mo, trabajadores: (mo.trabajadores || []).filter(t => t.id !== id) })
+  const addTrab = async grupo => {
+    const t = { id: 't' + Date.now(), grupo, nombre: '', cargo: '', nacionalidad: 'Chilena', sueldo: 0, imposiciones: 0, sabado: 0, domingo: 0 }
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_mo') || 'null') } catch (e) {}
+    const baseMo = fresco && typeof fresco === 'object' ? fresco : mo
+    const nuevo = { ...baseMo, trabajadores: [...(baseMo.trabajadores || []), t] }
+    try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
+    setMo(nuevo)
+    pushState()
+  }
+  const delTrab = async id => {
+    if (!window.confirm('¿Eliminar este trabajador?')) return
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_mo') || 'null') } catch (e) {}
+    const baseMo = fresco && typeof fresco === 'object' ? fresco : mo
+    const nuevo = { ...baseMo, trabajadores: (baseMo.trabajadores || []).filter(t => t.id !== id) }
+    try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
+    setMo(nuevo)
+    pushState()
+  }
 
   const auto = { color: C.gris, background: '#F2F4F7', fontStyle: 'italic', whiteSpace: 'nowrap' }
   const th = t => <th style={{ textAlign: 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{t}</th>

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react'
 import { Plus, Trash2, X, Copy, Landmark, ReceiptText, PieChart as PieIcon, CalendarClock, BarChart3, CheckCircle2 } from 'lucide-react'
 
 import { SEREIN } from './theme-serein.js'
+import { pullState, pushState } from './sync.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
 const C = { naranja: SEREIN.orange, carbon: SEREIN.text, verde: SEREIN.green, rojo: SEREIN.red, gris: SEREIN.textFaint }
 const clp = n => '$' + Math.round(n).toLocaleString('es-CL')
@@ -84,8 +85,19 @@ function FormGasto({ tipo, fin, setFin, otsDisponibles, onCerrar }) {
     if (!f.nombre || (f.esUF ? num(f.uf) : num(f.neto)) <= 0 || !ok) return
     const neto = f.esUF ? Math.round(num(f.uf) * (fin.ufValor || 0)) : num(f.neto)
     const g = { id: 'g' + Date.now(), tipo, nombre: f.nombre, categoria: f.categoria, proveedor: f.proveedor, documento: f.documento, neto, iva: f.conIva ? Math.round(neto * 0.19) : 0, vencimiento: f.vencimiento, frecuencia: f.frecuencia, estado: f.estado, ot: f.ot, dist: dist.map(d => ({ area: d.area, pct: parseFloat(d.pct) })), obs: f.obs, esUF: f.esUF, uf: num(f.uf) }
-    setFin({ ...fin, gastos: [g, ...fin.gastos] })
+    agregarGastoFresco(g)
     onCerrar()
+  }
+
+  async function agregarGastoFresco(gasto) {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_fin') || 'null') } catch (e) {}
+    const baseFin = fresco && typeof fresco === 'object' ? fresco : fin
+    const nuevoFin = { ...baseFin, gastos: [gasto, ...(baseFin.gastos || [])] }
+    try { localStorage.setItem('serein_fin', JSON.stringify(nuevoFin)) } catch (e) {}
+    setFin(nuevoFin)
+    pushState()
   }
 
   return (
@@ -156,6 +168,24 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
     })
   }
 
+  function cambiarEstadoGasto(id, estado) {
+    const nuevo = { ...fin, gastos: fin.gastos.map(g => g.id === id ? { ...g, estado } : g) }
+    try { localStorage.setItem('serein_fin', JSON.stringify(nuevo)) } catch (e) {}
+    setFin(nuevo)
+    pushState()
+  }
+
+  async function eliminarGastoFresco(id) {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_fin') || 'null') } catch (e) {}
+    const baseFin = fresco && typeof fresco === 'object' ? fresco : fin
+    const nuevoFin = { ...baseFin, gastos: (baseFin.gastos || []).filter(x => x.id !== id) }
+    try { localStorage.setItem('serein_fin', JSON.stringify(nuevoFin)) } catch (e) {}
+    setFin(nuevoFin)
+    pushState()
+  }
+
   return (
     <div>
       {!creando && (
@@ -204,7 +234,7 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
                 <td style={{ padding: '8px', color: C.gris, whiteSpace: 'nowrap' }}>{g.vencimiento}</td>
                 <td style={{ padding: '8px', color: C.gris, fontSize: 12 }}>{g.frecuencia}</td>
                 <td style={{ padding: '8px' }}>
-                  <select value={g.estado} onChange={e => setFin({ ...fin, gastos: fin.gastos.map(x => x.id === g.id ? { ...x, estado: e.target.value } : x) })}
+                  <select value={g.estado} onChange={e => cambiarEstadoGasto(g.id, e.target.value)}
                     style={{ border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '3px 6px', background: g.estado === 'Pagado' ? '#E6F7EE' : g.estado === 'Vencido' ? '#FCEBEA' : g.estado === 'Anulado' ? '#EEE' : '#FDECDD', color: g.estado === 'Pagado' ? C.verde : g.estado === 'Vencido' ? C.rojo : g.estado === 'Anulado' ? C.gris : '#D9600A' }}>
                     {ESTADOS_GASTO.map(x => <option key={x}>{x}</option>)}
                   </select>
@@ -212,7 +242,7 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
                 <td style={{ padding: '8px', fontSize: 12 }}>{g.dist.map(d => <div key={d.area}>{d.area}: {d.pct}% ({clp((g.neto) * d.pct / 100)})</div>)}</td>
                 <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>
                   <button title="Duplicar al mes siguiente" onClick={() => duplicarMesSiguiente(g)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Copy size={14} /></button>
-                  <button title="Eliminar" onClick={() => window.confirm(`¿Eliminar "${g.nombre}"?`) && setFin({ ...fin, gastos: fin.gastos.filter(x => x.id !== g.id) })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
+                  <button title="Eliminar" onClick={() => window.confirm(`¿Eliminar "${g.nombre}"?`) && eliminarGastoFresco(g.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
                 </td>
               </tr>
             ))}
@@ -231,13 +261,35 @@ function Plantillas({ fin, setFin }) {
   const suma = items.reduce((a, d) => a + (parseFloat(d.pct) || 0), 0)
   const ok = Math.abs(suma - 100) < 0.01
 
+  async function agregarPlantillaFresca(plantilla) {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_fin') || 'null') } catch (e) {}
+    const baseFin = fresco && typeof fresco === 'object' ? fresco : fin
+    const nuevoFin = { ...baseFin, plantillas: [...(baseFin.plantillas || []), plantilla] }
+    try { localStorage.setItem('serein_fin', JSON.stringify(nuevoFin)) } catch (e) {}
+    setFin(nuevoFin)
+    pushState()
+  }
+
+  async function eliminarPlantillaFresca(id) {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_fin') || 'null') } catch (e) {}
+    const baseFin = fresco && typeof fresco === 'object' ? fresco : fin
+    const nuevoFin = { ...baseFin, plantillas: (baseFin.plantillas || []).filter(x => x.id !== id) }
+    try { localStorage.setItem('serein_fin', JSON.stringify(nuevoFin)) } catch (e) {}
+    setFin(nuevoFin)
+    pushState()
+  }
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14 }}>
       <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
         <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Crear plantilla</div>
         <input style={{ ...inp, width: '100%', marginBottom: 8 }} placeholder='Nombre (ej: "SR / Istria 50-50")' value={nombre} onChange={e => setNombre(e.target.value)} />
         <EditorDistribucion dist={items} setDist={setItems} plantillas={[]} areas={fin.areas} />
-        <button onClick={() => { if (nombre && ok) { setFin({ ...fin, plantillas: [...fin.plantillas, { id: 'p' + Date.now(), nombre, items: items.map(i => ({ area: i.area, pct: parseFloat(i.pct) })) }] }); setNombre(''); setItems([{ area: AREAS_GASTO[0], pct: 100 }]) } }}
+        <button onClick={() => { if (nombre && ok) { agregarPlantillaFresca({ id: 'p' + Date.now(), nombre, items: items.map(i => ({ area: i.area, pct: parseFloat(i.pct) })) }); setNombre(''); setItems([{ area: AREAS_GASTO[0], pct: 100 }]) } }}
           disabled={!ok || !nombre}
           style={{ background: ok && nombre ? C.naranja : '#DFE4EA', color: '#fff', border: 'none', padding: '9px 18px', cursor: ok && nombre ? 'pointer' : 'not-allowed', fontSize: 13, marginTop: 10 }}>
           Guardar plantilla
@@ -251,7 +303,7 @@ function Plantillas({ fin, setFin }) {
               <div style={{ fontWeight: 600, fontSize: 13 }}>{p.nombre}</div>
               <div style={{ fontSize: 12, color: C.gris }}>{p.items.map(i => `${i.area} ${i.pct}%`).join(' · ')}</div>
             </div>
-            <button onClick={() => window.confirm(`¿Eliminar plantilla "${p.nombre}"?`) && setFin({ ...fin, plantillas: fin.plantillas.filter(x => x.id !== p.id) })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
+            <button onClick={() => window.confirm(`¿Eliminar plantilla "${p.nombre}"?`) && eliminarPlantillaFresca(p.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
           </div>
         ))}
       </div>
@@ -276,12 +328,37 @@ function CreditosLeasing({ fin, setFin }) {
       return { n: i + 1, vencimiento: fecha, capital: null, interes: null, seguro: null, total: vc, estado: 'Pendiente', fechaPago: null }
     })
     const o = { id: 'o' + Date.now(), tipo: f.tipo, institucion: f.institucion, montoOriginal: num(f.montoOriginal) || n * vc, inicio: f.inicio, nCuotas: n, valorCuota: vc, diaVenc: parseInt(f.diaVenc) || 5, tasa: f.tasa, estado: 'Vigente', activo: f.activo, dist: dist.map(x => ({ area: x.area, pct: parseFloat(x.pct) })), obs: f.obs, cuotas }
-    setFin({ ...fin, obligaciones: [o, ...fin.obligaciones] })
+    agregarObligacionFresca(o)
     setCreando(false)
   }
 
+  async function agregarObligacionFresca(o) {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_fin') || 'null') } catch (e) {}
+    const baseFin = fresco && typeof fresco === 'object' ? fresco : fin
+    const nuevoFin = { ...baseFin, obligaciones: [o, ...(baseFin.obligaciones || [])] }
+    try { localStorage.setItem('serein_fin', JSON.stringify(nuevoFin)) } catch (e) {}
+    setFin(nuevoFin)
+    pushState()
+  }
+
   function actualizarCuota(oid, n, cambios) {
-    setFin({ ...fin, obligaciones: fin.obligaciones.map(o => o.id !== oid ? o : { ...o, cuotas: o.cuotas.map(c => c.n === n ? { ...c, ...cambios } : c) }) })
+    const nuevo = { ...fin, obligaciones: fin.obligaciones.map(o => o.id !== oid ? o : { ...o, cuotas: o.cuotas.map(c => c.n === n ? { ...c, ...cambios } : c) }) }
+    try { localStorage.setItem('serein_fin', JSON.stringify(nuevo)) } catch (e) {}
+    setFin(nuevo)
+    pushState()
+  }
+
+  async function eliminarObligacionFresca(id) {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_fin') || 'null') } catch (e) {}
+    const baseFin = fresco && typeof fresco === 'object' ? fresco : fin
+    const nuevoFin = { ...baseFin, obligaciones: (baseFin.obligaciones || []).filter(x => x.id !== id) }
+    try { localStorage.setItem('serein_fin', JSON.stringify(nuevoFin)) } catch (e) {}
+    setFin(nuevoFin)
+    pushState()
   }
 
   return (
@@ -379,7 +456,7 @@ function CreditosLeasing({ fin, setFin }) {
                   </tbody>
                 </table>
                 <div style={{ marginTop: 12, textAlign: 'right' }}>
-                  <button onClick={() => window.confirm(`¿Eliminar ${o.tipo} ${o.institucion} completo?`) && setFin({ ...fin, obligaciones: fin.obligaciones.filter(x => x.id !== o.id) })}
+                  <button onClick={() => window.confirm(`¿Eliminar ${o.tipo} ${o.institucion} completo?`) && eliminarObligacionFresca(o.id)}
                     style={{ background: 'none', border: `1px solid ${C.rojo}`, color: C.rojo, padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}>
                     <Trash2 size={12} style={{ verticalAlign: -2 }} /> Eliminar obligación
                   </button>
