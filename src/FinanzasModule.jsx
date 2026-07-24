@@ -492,6 +492,28 @@ export function calcularResumenFin(fin, mes) {
   return { fijos, variables, porArea, cuotasMes, totalCuotasMes, interesMes, cuotasVencidas, deudaVigente, reembolsable, salidaCaja: fijos + variables + totalCuotasMes }
 }
 
+// calcularResumenFin() ya separa fijos/variables, pero solo a nivel
+// empresa (no por área) y para UN mes. Para el resumen financiero por
+// área (Santa Rosa/Istria) se necesita la misma separación fijo/variable
+// pero prorrateada por área y sumada sobre varios meses (el periodo
+// elegido) — se agrega esta función nueva en vez de modificar
+// calcularResumenFin(), que ya usan Finanzas y el Consolidado.
+export function resumenGastosPeriodoArea(fin, meses, area) {
+  let fijos = 0, variables = 0, sinClasificar = 0
+  ;(meses || []).forEach(mes => {
+    const gastosMes = fin.gastos.filter(g => g.estado !== 'Anulado' && (g.frecuencia === 'Mensual' ? mes >= mesDe(g.vencimiento) : (g.frecuencia === 'Anual' ? (mes.slice(5, 7) === (g.vencimiento || '').slice(5, 7) && mes >= mesDe(g.vencimiento)) : mesDe(g.vencimiento) === mes)))
+    gastosMes.forEach(g => {
+      const pct = ((g.dist || []).find(d => d.area === area) || {}).pct || 0
+      if (!pct) return
+      const monto = netoEf(g, fin.ufValor) * pct / 100
+      if (g.tipo === 'fijo') fijos += monto
+      else if (g.tipo === 'variable') variables += monto
+      else sinClasificar += monto
+    })
+  })
+  return { fijos, variables, sinClasificar }
+}
+
 function ProyeccionFin({ fin }) {
   const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
   const now = new Date()

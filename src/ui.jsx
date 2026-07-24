@@ -213,6 +213,19 @@ export function KpiCard({ icon: Icon, iconBg, iconColor, trend, trendUp, value, 
   </div>)
 }
 
+// Tarjeta de indicador financiero: neto primero, grande y con jerarquía
+// visual; el bruto/total debajo, en tamaño menor. Usada en toda la
+// pantalla de Resumen financiero (Santa Rosa/Istria) para que un mismo
+// indicador siempre muestre ambos valores en el mismo orden.
+export function MontoNetoBruto({ icon: Icon, iconBg, iconColor, label, neto, bruto, brutoLabel = 'Total' }) {
+  return (<div style={{ background: SEREIN.paper, border: '1px solid ' + SEREIN.line, borderRadius: SEREIN.radius, padding: 20 }}>
+    {Icon && <div style={{ width: 38, height: 38, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: iconBg || SEREIN.orangeSoft, color: iconColor || SEREIN.orangeDark, marginBottom: 14 }}><Icon size={19} /></div>}
+    <div style={{ fontSize: 13, color: SEREIN.textSoft, marginBottom: 4 }}>{label}</div>
+    <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 800, fontSize: 26, color: SEREIN.text, lineHeight: 1.15 }}>{neto}</div>
+    {bruto != null && <div style={{ fontSize: 12.5, color: SEREIN.textSoft, marginTop: 4 }}>{brutoLabel}: {bruto}</div>}
+  </div>)
+}
+
 // variant: 'verde' | 'naranja' | 'gris' | 'azul' | 'rojo'
 export function Pill({ variant = 'gris', children }) {
   const v = PILL_VARIANT[variant] || PILL_VARIANT.gris
