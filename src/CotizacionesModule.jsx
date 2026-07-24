@@ -447,8 +447,18 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
       let frescoCots = null, frescoOts = null
       try { frescoCots = JSON.parse(localStorage.getItem('serein_cotizaciones') || 'null') } catch (e) {}
       try { frescoOts = JSON.parse(localStorage.getItem('serein_ots') || 'null') } catch (e) {}
-      const baseCots = Array.isArray(frescoCots) ? frescoCots : cotizaciones
+      // Si la cotización que se está aprobando todavía no terminó de
+      // confirmarse en la nube (ej. se creó hace unos segundos y el push
+      // sigue en curso), este pull-fresh puede traer una copia que
+      // TODAVÍA no la incluye. Antes, escribir de vuelta esa copia
+      // incompleta borraba la cotización recién creada. Ahora, si no
+      // aparece en lo recién traído, se vuelve a agregar antes de escribir
+      // — nunca se pierde algo que ya existía en la pantalla de quien
+      // aprueba.
+      const baseCotsFrescas = Array.isArray(frescoCots) ? frescoCots : cotizaciones
       const baseOts = Array.isArray(frescoOts) ? frescoOts : (ots || [])
+      const yaEstaba = baseCotsFrescas.some(c => c.id === cot.id)
+      const baseCots = yaEstaba ? baseCotsFrescas : [cot, ...baseCotsFrescas]
       const cotFresca = baseCots.find(c => c.id === cot.id) || cot
       if (cotFresca.estado === 'Aprobada') { window.alert('Esta cotización ya fue aprobada y su OT ya existe.'); return }
       const numeroOT = 'OT-' + cotFresca.folio
