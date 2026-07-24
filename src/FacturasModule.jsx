@@ -5,6 +5,7 @@ import { calcularPerdidaFactoring, perdidaFactoringFactura } from './ParametrosM
 import Paginador, { paginar } from './Paginador.jsx'
 import { pullState, pushState } from './sync.js'
 import { descargarInformeFacturas } from './informeFacturas.js'
+import { ocultarFacturasDeLibro } from './facturasOcultas.js'
 export { FACTURAS_SEED } from './facturas-data.js'
 const CONDICIONES_DIAS = [{ label: '30 días', dias: 30 }, { label: '45 días', dias: 45 }, { label: '60 días', dias: 60 }, { label: '90 días', dias: 90 }]
 const norm = s => (s || '').toString().toLowerCase()
@@ -148,17 +149,29 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
   const [sel, setSel] = useState(() => new Set())
   const toggleSel = id => setSel(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const toggleTodas = () => setSel(s => s.size === mostradas.length ? new Set() : new Set(mostradas.map(x => x.id)))
+  // Las facturas con origen "libroVentas" se vuelven a crear solas cada vez
+  // que alguien abre el Libro de Ventas (esa pantalla sincroniza hacia acá
+  // toda venta con área asignada). Antes, borrarlas aquí no servía de nada:
+  // quedaban borradas un rato y volvían a aparecer en la próxima sincronización,
+  // porque el registro de origen en el Libro de Ventas seguía existiendo.
+  // Ahora, además de borrarlas de esta lista, se guarda su libroId en una
+  // lista de "no volver a traer" que LibroVentasModule.jsx respeta — el
+  // borrado queda definitivo sin tocar el Libro de Ventas en sí.
   const eliminarSel = () => {
     if (!sel.size) return
     if (!window.confirm('Se eliminaran ' + sel.size + ' factura(s) del area ' + area + '. Esta accion no se puede deshacer. Continuar?')) return
+    const idsLibro = mostradas.filter(x => sel.has(x.id) && x.origen === 'libroVentas' && x.libroId).map(x => x.libroId)
     eliminarFresco(baseLista => baseLista.filter(x => !sel.has(x.id)))
+    ocultarFacturasDeLibro(idsLibro, pushState)
     setSel(new Set())
   }
   const vaciarArea = () => {
     if (!lista.length) return
     if (!window.confirm('Se eliminaran TODAS las facturas del area ' + area + ' (' + lista.length + '). Esta accion no se puede deshacer. Continuar?')) return
     if (!window.confirm('Confirmacion final: vaciar por completo las facturas de ' + area + '?')) return
+    const idsLibro = lista.filter(x => x.origen === 'libroVentas' && x.libroId).map(x => x.libroId)
     eliminarFresco(() => [])
+    ocultarFacturasDeLibro(idsLibro, pushState)
     setSel(new Set())
   }
   const descargarInforme = () => {
@@ -322,7 +335,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                     </select>
                   </td>
                   <td style={{ padding: '5px 6px', textAlign: 'right', color: comisionDe(x) > 0 ? C.rojo : C.gris, whiteSpace: 'nowrap' }}>{comisionDe(x) > 0 ? clp(comisionDe(x)) : '—'}</td>
-                  <td style={{ padding: '5px 4px', textAlign: 'right' }}><button onClick={() => window.confirm(`¿Eliminar factura ${x.numero}?`) && eliminarFresco(baseLista => baseLista.filter(y => y.id !== x.id))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button></td>
+                  <td style={{ padding: '5px 4px', textAlign: 'right' }}><button onClick={() => { if (!window.confirm(`¿Eliminar factura ${x.numero}?`)) return; if (x.origen === 'libroVentas' && x.libroId) ocultarFacturasDeLibro([x.libroId], pushState); eliminarFresco(baseLista => baseLista.filter(y => y.id !== x.id)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button></td>
                 </tr>
                 {x.estado === 'Factoring' && (
                   <tr style={{ background: '#FDECDD' }}>
