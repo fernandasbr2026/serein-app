@@ -187,15 +187,24 @@ export async function pushState() {
     }
     if (rows.length) {
       emitirEstado({ fase: 'guardando' })
-      const { error } = await supabase.from('app_state').upsert(rows, { onConflict: 'id' })
+      // Se pide .select('id') a propósito: un upsert que solo mira `error`
+      // puede reportar éxito aunque Supabase, por una política RLS, haya
+      // filtrado la fila y actualizado 0 registros — Postgres NO trata eso
+      // como error. Sin este chequeo, la app cree que guardó (sin alerta,
+      // sin nada en consola) y el dato desaparece apenas alguien recarga o
+      // vuelve a entrar, porque nunca llegó de verdad a la base.
+      const { data: filasSubidas, error } = await supabase.from('app_state').upsert(rows, { onConflict: 'id' }).select('id')
       if (error) {
-        // Antes este error se descartaba en silencio — si algo bloqueaba la
-        // subida (permisos, RLS, tamaño del payload, etc.) no había forma
-        // de enterarse sin abrir la consola del navegador. Ahora el texto
-        // real del error viaja en la respuesta para que la pantalla se lo
-        // pueda mostrar directo a la persona, sin depender de eso.
         const msg = error.message || String(error)
         console.error('sync: pushState() falló al subir a la nube —', msg, error)
+        emitirEstado({ fase: 'error', ultimoError: msg })
+        return { ok: false, error: msg }
+      }
+      const idsConfirmados = new Set((filasSubidas || []).map(f => f.id))
+      const idsFallidos = rows.filter(r => !idsConfirmados.has(r.id)).map(r => r.id)
+      if (idsFallidos.length) {
+        const msg = 'Supabase no confirmó el guardado de: ' + idsFallidos.join(', ') + ' (probablemente un permiso/política RLS está bloqueando la escritura en silencio, sin marcar error).'
+        console.error('sync: pushState() —', msg)
         emitirEstado({ fase: 'error', ultimoError: msg })
         return { ok: false, error: msg }
       }
