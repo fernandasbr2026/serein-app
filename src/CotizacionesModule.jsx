@@ -510,11 +510,21 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
   window.alert('OC N ' + numero + ' creada en Ordenes de Compra (proveedor: ' + prov + '). Revisala y descarga su PDF en el modulo Ordenes de Compra.')
 }
 
+  // Mismo bug de choque concurrente que guardar()/eliminar()/aprobar(): sin
+  // traer lo fresco antes, cambiar el estado desde acá podía subir un
+  // arreglo que no incluyera una cotización que otra persona acababa de
+  // crear o editar, borrándola.
   const updateCot = (id, cambios) => {
-    const nuevo = cotizaciones.map(x => x.id === id ? { ...x, ...cambios } : x)
-    try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
-    setCotizaciones(nuevo)
-    avisarSiFallaSubida()
+    ;(async () => {
+      try { await pullState() } catch (e) {}
+      let fresco = null
+      try { fresco = JSON.parse(localStorage.getItem('serein_cotizaciones') || 'null') } catch (e) {}
+      const base = Array.isArray(fresco) ? fresco : cotizaciones
+      const nuevo = base.map(x => x.id === id ? { ...x, ...cambios } : x)
+      try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
+      setCotizaciones(nuevo)
+      avisarSiFallaSubida()
+    })()
   }
   const setEstadoCot = (c, nuevo) => { if (nuevo === 'Aprobada' && c.estado !== 'Aprobada') setAproCot(c); else updateCot(c.id, { estado: nuevo }) }
 
