@@ -387,6 +387,16 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
 
   const maxFolio = cotizaciones.reduce((m, c) => Math.max(m, parseInt(String(c.folio).replace(/\D/g, ''), 10) || 0), 792)
 
+  // pushState() ya devuelve si la subida a la nube falló o no, pero antes
+  // nada de este archivo revisaba esa respuesta — si fallaba (sin conexión,
+  // error de Supabase, etc.) la pantalla igual mostraba el cambio como
+  // hecho porque el estado local sí se actualizó, y la persona seguía
+  // trabajando sin saber que esa cotización nunca llegó a la nube ni a
+  // las demás sesiones. No se usa await (mismo motivo del comentario de
+  // arriba: no bloquear el clic), pero si la subida falla se avisa apenas
+  // se sabe.
+  const avisarSiFallaSubida = () => { pushState().then(r => { if (!r.ok) window.alert('Esto quedó guardado en este equipo, pero no se pudo subir a la nube todavía' + (r.error ? ':\n\n' + r.error : '') + '\n\nRevisa tu conexión e inténtalo de nuevo, o usa el botón de guardado en el menú lateral.') }) }
+
   // guardar/eliminar/aprobar escriben con lo que ya está cargado en memoria
   // (cotizaciones/ots, mantenidos al día por la sincronización en tiempo real
   // y el sondeo cada 15s de Dashboard.jsx) y suben el cambio de inmediato sin
@@ -416,7 +426,7 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
     const nuevo = existe ? base.map(c => c.id === cotFinal.id ? cotFinal : c) : [cotFinal, ...base]
     try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
     setCotizaciones(nuevo)
-    pushState()
+    avisarSiFallaSubida()
     setCreando(false); setEditId(null)
   }
   const eliminar = id => {
@@ -424,7 +434,7 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
     const nuevo = cotizaciones.filter(c => c.id !== id)
     try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
     setCotizaciones(nuevo)
-    pushState()
+    avisarSiFallaSubida()
   }
 
   function aprobar(cot, fechaEntrega = '', responsable = '') {
@@ -449,7 +459,7 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
     try { localStorage.setItem('serein_ots', JSON.stringify(nuevasOts)); localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevasCots)) } catch (e) {}
     setOts(nuevasOts)
     setCotizaciones(nuevasCots)
-    pushState()
+    avisarSiFallaSubida()
     window.alert('Cotización aprobada. Se generó la ' + numeroOT + ' en el módulo Órdenes de Trabajo. Ya puedes descargar la OT (sin valores).')
   }
 
