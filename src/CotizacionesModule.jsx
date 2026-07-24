@@ -3,7 +3,7 @@ import { Plus, Trash2, FileText, Download, CheckCircle2, Search, X } from 'lucid
 import * as XLSX from 'xlsx'
 import Paginador, { paginar } from './Paginador.jsx'
 import { PROVEEDORES_FICHA } from './proveedores-data.js'
-import { pushState, pullState, escribirConReintento, leerFresco } from './sync.js'
+import { pushState, pullState } from './sync.js'
 import { SEREIN } from './theme-serein.js'
 
 // ============================================================
@@ -397,57 +397,64 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
   // se sabe.
   const avisarSiFallaSubida = () => { pushState().then(r => { if (!r.ok) window.alert('Esto quedó guardado en este equipo, pero no se pudo subir a la nube todavía' + (r.error ? ':\n\n' + r.error : '') + '\n\nRevisa tu conexión e inténtalo de nuevo, o usa el botón de guardado en el menú lateral.') }) }
 
-  // Segundo intento de arreglo (el primero, pull-fresh-antes-de-escribir,
-  // no bastó — el caso real que lo probó: administración y Mario crearon
-  // la cotización N° 825 con casi 2 HORAS de diferencia, no al mismo
-  // tiempo, así que no era una carrera de segundos). Ahora se usa
-  // escribirConReintento() (src/sync.js): sube el cambio directo a la fila
-  // de Supabase con un compare-and-swap real — si nadie más la tocó desde
-  // que se leyó, sube; si alguien la tocó (aunque sea horas antes y este
-  // equipo nunca se enteró), reintenta solo AUTOMÁTICAMENTE trayendo lo
-  // más nuevo y aplicando el mismo cambio otra vez, hasta 6 veces. También
-  // aísla esta escritura del resto de las claves que pushState() sube
-  // juntas en un solo lote — si algo en otra clave bloqueaba ese lote
-  // completo, esto deja de depender de eso.
+  // Vuelta atrás urgente (24-jul): escribirConReintento() hace un viaje
+  // extra a Supabase (leer + escribir) por cada guardado, y con la base de
+  // datos saturada (timeouts hasta en el login) eso dejó de responder del
+  // todo — nadie podía ni crear una cotización. Se vuelve al patrón más
+  // liviano de antes (traer lo más fresco con pullState(), que de todas
+  // formas ya corre en la app por otros motivos, y subir con pushState()
+  // sin un viaje aparte por escritura). Sigue protegido contra choques
+  // salvo en el margen de milisegundos entre leer y escribir — peor que el
+  // compare-and-swap, pero la prioridad ahora es que la app vuelva a
+  // responder.
   const guardar = cot => {
     setCreando(false); setEditId(null)
     ;(async () => {
-      const r = await escribirConReintento('serein_cotizaciones', base => {
-        base = base || []
-        const existe = base.some(c => c.id === cot.id)
-        let cotFinal = cot
-        if (!existe) {
-          // Piso en 825 (no 792): el folio 825 falló al guardarse muchas
-          // veces seguidas por administración — se salta por completo para
-          // no reintentarlo justo con ese número mientras se sigue
-          // diagnosticando, aunque hoy no debería quedar ninguna cotización
-          // real con folio 825 en la nube (nunca llegó a guardarse).
-          let folioFresco = Math.max(825, base.reduce((m, c) => Math.max(m, parseInt(String(c.folio).replace(/\D/g, ''), 10) || 0), 792)) + 1
-          while (base.some(c => String(c.folio) === String(folioFresco))) folioFresco++
-          cotFinal = { ...cot, folio: String(folioFresco) }
-        }
-        return existe ? base.map(c => c.id === cotFinal.id ? cotFinal : c) : [cotFinal, ...base]
-      })
-      if (!r.ok) { window.alert('No se pudo guardar la cotización' + (r.error ? ':\n\n' + r.error : '') + '\n\nRevisa tu conexión e inténtalo de nuevo.'); return }
-      setCotizaciones(r.value)
+      try { await pullState() } catch (e) {}
+      let fresco = null
+      try { fresco = JSON.parse(localStorage.getItem('serein_cotizaciones') || 'null') } catch (e) {}
+      const base = Array.isArray(fresco) ? fresco : cotizaciones
+      const existe = base.some(c => c.id === cot.id)
+      let cotFinal = cot
+      if (!existe) {
+        // Piso en 825 (no 792): el folio 825 falló al guardarse muchas
+        // veces seguidas por administración — se salta por completo.
+        let folioFresco = Math.max(825, base.reduce((m, c) => Math.max(m, parseInt(String(c.folio).replace(/\D/g, ''), 10) || 0), 792)) + 1
+        while (base.some(c => String(c.folio) === String(folioFresco))) folioFresco++
+        cotFinal = { ...cot, folio: String(folioFresco) }
+      }
+      const nuevo = existe ? base.map(c => c.id === cotFinal.id ? cotFinal : c) : [cotFinal, ...base]
+      try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
+      setCotizaciones(nuevo)
+      avisarSiFallaSubida()
     })()
   }
   const eliminar = async id => {
     if (!window.confirm('¿Eliminar esta cotización?')) return
-    const r = await escribirConReintento('serein_cotizaciones', base => (base || []).filter(c => c.id !== id))
-    if (!r.ok) { window.alert('No se pudo eliminar la cotización' + (r.error ? ':\n\n' + r.error : '')); return }
-    setCotizaciones(r.value)
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_cotizaciones') || 'null') } catch (e) {}
+    const base = Array.isArray(fresco) ? fresco : cotizaciones
+    const nuevo = base.filter(c => c.id !== id)
+    try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
+    setCotizaciones(nuevo)
+    avisarSiFallaSubida()
   }
 
   function aprobar(cot, fechaEntrega = '', responsable = '') {
     ;(async () => {
-      const cotFresca = (await leerFresco('serein_cotizaciones') || []).find(c => c.id === cot.id) || cot
+      try { await pullState() } catch (e) {}
+      let frescoCots = null, frescoOts = null
+      try { frescoCots = JSON.parse(localStorage.getItem('serein_cotizaciones') || 'null') } catch (e) {}
+      try { frescoOts = JSON.parse(localStorage.getItem('serein_ots') || 'null') } catch (e) {}
+      const baseCots = Array.isArray(frescoCots) ? frescoCots : cotizaciones
+      const baseOts = Array.isArray(frescoOts) ? frescoOts : (ots || [])
+      const cotFresca = baseCots.find(c => c.id === cot.id) || cot
       if (cotFresca.estado === 'Aprobada') { window.alert('Esta cotización ya fue aprobada y su OT ya existe.'); return }
       const numeroOT = 'OT-' + cotFresca.folio
-      let yaExistiaOT = false
-      const rOts = await escribirConReintento('serein_ots', baseOts => {
-        baseOts = baseOts || []
-        if (baseOts.some(o => o.numero === numeroOT)) { yaExistiaOT = true; return baseOts }
+      let nuevasOts = baseOts
+      if (baseOts.some(o => o.numero === numeroOT)) { window.alert('Ya existe una OT creada para esta cotización (' + numeroOT + '). No se creó otra.') }
+      else {
         const t = totales(cotFresca)
         const nuevaOT = {
           id: 'ot' + Date.now(), numero: numeroOT, area: cotFresca.area || 'Santa Rosa', cliente: cotFresca.cliente, fecha: cotFresca.fecha,
@@ -455,14 +462,13 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
           procesos: [], preparacion: '—', esquema: (cotFresca.items || []).map(i => i.comentario).filter(Boolean).join(' · ') || '—',
           estado: 'Cotizada', fechaEntrega, responsable, ventas: [], costos: [], itemsCot: cotFresca.items, folioCot: cotFresca.folio, pinturaCotizada: (() => { const m = {}; (cotFresca.items || []).forEach(it => (it.comprasPintura || []).forEach(cp => { if (!m[cp.producto]) m[cp.producto] = { producto: cp.producto, litrosEnvase: cp.litrosEnvase, envases: 0, litros: 0 }; m[cp.producto].envases += cp.envases; m[cp.producto].litros += (cp.litrosComprados || 0) })); return Object.values(m) })(),
         }
-        return [nuevaOT, ...baseOts]
-      })
-      if (!rOts.ok) { window.alert('No se pudo crear la OT' + (rOts.error ? ':\n\n' + rOts.error : '')); return }
-      setOts(rOts.value)
-      if (yaExistiaOT) { window.alert('Ya existe una OT creada para esta cotización (' + numeroOT + '). No se creó otra.'); return }
-      const rCots = await escribirConReintento('serein_cotizaciones', baseCots => (baseCots || []).map(c => c.id === cotFresca.id ? { ...c, estado: 'Aprobada' } : c))
-      if (!rCots.ok) { window.alert('La OT se creó, pero no se pudo marcar la cotización como aprobada' + (rCots.error ? ':\n\n' + rCots.error : '') + '. Márcala manualmente desde el selector de estado.'); return }
-      setCotizaciones(rCots.value)
+        nuevasOts = [nuevaOT, ...baseOts]
+      }
+      const nuevasCots = baseCots.map(c => c.id === cotFresca.id ? { ...c, estado: 'Aprobada' } : c)
+      try { localStorage.setItem('serein_ots', JSON.stringify(nuevasOts)); localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevasCots)) } catch (e) {}
+      setOts(nuevasOts)
+      setCotizaciones(nuevasCots)
+      avisarSiFallaSubida()
       window.alert('Cotización aprobada. Se generó la ' + numeroOT + ' en el módulo Órdenes de Trabajo. Ya puedes descargar la OT (sin valores).')
     })()
   }
@@ -495,9 +501,14 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
 
   const updateCot = (id, cambios) => {
     ;(async () => {
-      const r = await escribirConReintento('serein_cotizaciones', base => (base || []).map(x => x.id === id ? { ...x, ...cambios } : x))
-      if (!r.ok) { window.alert('No se pudo guardar el cambio de estado' + (r.error ? ':\n\n' + r.error : '')); return }
-      setCotizaciones(r.value)
+      try { await pullState() } catch (e) {}
+      let fresco = null
+      try { fresco = JSON.parse(localStorage.getItem('serein_cotizaciones') || 'null') } catch (e) {}
+      const base = Array.isArray(fresco) ? fresco : cotizaciones
+      const nuevo = base.map(x => x.id === id ? { ...x, ...cambios } : x)
+      try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
+      setCotizaciones(nuevo)
+      avisarSiFallaSubida()
     })()
   }
   const setEstadoCot = (c, nuevo) => { if (nuevo === 'Aprobada' && c.estado !== 'Aprobada') setAproCot(c); else updateCot(c.id, { estado: nuevo }) }
