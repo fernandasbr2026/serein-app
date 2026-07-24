@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { ChevronDown, ChevronUp, Plus, Trash2, X, Ruler, Paintbrush, FileText, Receipt, ShoppingCart, CircleDollarSign, Download, Camera, Search, RotateCcw, Lock, Unlock, CalendarDays, Save } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { descargarOTDesdeOT } from './CotizacionesModule.jsx'
@@ -6,7 +6,7 @@ import { costoOCdeOT } from './OrdenesCompraModule.jsx'
 import { supabase } from './supabase.js'
 import { costoMOdeOT } from './ManoObraModule.jsx'
 import Paginador, { paginar } from './Paginador.jsx'
-import { pullState, pushState } from './sync.js'
+import { pushState, escribirConReintento } from './sync.js'
 import { SEREIN } from './theme-serein.js'
 import { KpiCard, Pill, Btn, TabsBar } from './ui.jsx'
 import { PILL_VARIANT } from './theme-serein.js'
@@ -1024,6 +1024,8 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   const [page, setPage] = useState(1)
   const [sel, setSel] = useState(null)
   const dragId = React.useRef(null)
+  const pendientesOTRef = useRef({})
+  const debounceOTRef = useRef(null)
   const mover = (fromId, toId) => { if (!fromId || fromId === toId) return; setOts(xs => { const arr = [...xs]; const from = arr.findIndex(x => x.id === fromId); const to = arr.findIndex(x => x.id === toId); if (from < 0 || to < 0) return xs; const [it] = arr.splice(from, 1); arr.splice(to, 0, it); return arr }) }
   const [rep, setRep] = useState(false)
   const [repDesde, setRepDesde] = useState('')
@@ -1068,11 +1070,33 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   // cortaba la conexión antes de que pasaran esos 800ms. Ahora usa el
   // mismo patrón ya probado en cerrar/reabrir OT y agregar factura:
   // localStorage sincrónico + pushState() inmediato.
+  // Igual que en Cotizaciones (mismo bug, misma causa): guardar solo con
+  // pushState() sube el arreglo entero basado en la copia local — si otra
+  // persona editó esta u otra OT mientras tanto (nada que ver con
+  // simultáneo: puede ser con horas de diferencia), esa edición ajena
+  // queda borrada sin ningún aviso. La edición local sigue siendo
+  // instantánea (no se espera a la nube para que se vea el cambio en
+  // pantalla ni para seguir tipeando), pero la subida real ahora usa
+  // escribirConReintento() (compare-and-swap contra Supabase, ver
+  // sync.js) en vez de pushState() — si alguien más escribió primero,
+  // reintenta solo, trayendo lo más nuevo y aplicando los mismos cambios
+  // encima. Los cambios de teclas seguidas sobre la misma OT se juntan en
+  // un solo envío (600ms de espera desde el último cambio) para no
+  // mandar una subida por cada letra escrita.
   const actualizar = (id, cambios) => {
     const nuevo = otsAll.map(o => o.id === id ? { ...o, ...cambios } : o)
     try { localStorage.setItem('serein_ots', JSON.stringify(nuevo)) } catch (e) {}
     setOts(nuevo)
-    pushState()
+    pendientesOTRef.current[id] = { ...(pendientesOTRef.current[id] || {}), ...cambios }
+    clearTimeout(debounceOTRef.current)
+    debounceOTRef.current = setTimeout(() => {
+      const aplicar = pendientesOTRef.current
+      pendientesOTRef.current = {}
+      escribirConReintento('serein_ots', base => {
+        base = Array.isArray(base) ? base : []
+        return base.map(o => aplicar[o.id] ? { ...o, ...aplicar[o.id] } : o)
+      })
+    }, 600)
   }
   // Un borrado normal (setOts local + el guardado/push general de 800ms)
   // se podía "revivir": si otra pestaña con una copia más vieja de las OT
@@ -1093,14 +1117,8 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   // para ver el resultado, y la sincronización entre usuarios sigue
   // ocurriendo (push inmediato en vez del debounce de 800ms general).
   const eliminar = async id => {
-    try { await pullState() } catch (e) {}
-    let fresco = null
-    try { fresco = JSON.parse(localStorage.getItem('serein_ots') || 'null') } catch (e) {}
-    const base = Array.isArray(fresco) ? fresco : otsAll
-    const nuevo = base.filter(o => o.id !== id)
-    try { localStorage.setItem('serein_ots', JSON.stringify(nuevo)) } catch (e) {}
-    setOts(nuevo)
-    pushState()
+    const r = await escribirConReintento('serein_ots', base => (Array.isArray(base) ? base : []).filter(o => o.id !== id))
+    if (r.ok) setOts(r.value)
   }
 
   // Agregar un ítem nuevo a un array de la OT (partidas/despachos: "Agregar
@@ -1113,14 +1131,8 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   // eliminar(): traer lo más fresco de la nube justo antes de agregar,
   // para achicar esa ventana de choque al mínimo.
   const agregarAArray = async (id, campo, item) => {
-    try { await pullState() } catch (e) {}
-    let fresco = null
-    try { fresco = JSON.parse(localStorage.getItem('serein_ots') || 'null') } catch (e) {}
-    const base = Array.isArray(fresco) ? fresco : otsAll
-    const nuevo = base.map(o => o.id === id ? { ...o, [campo]: [...(o[campo] || []), item] } : o)
-    try { localStorage.setItem('serein_ots', JSON.stringify(nuevo)) } catch (e) {}
-    setOts(nuevo)
-    pushState()
+    const r = await escribirConReintento('serein_ots', base => (Array.isArray(base) ? base : []).map(o => o.id === id ? { ...o, [campo]: [...(o[campo] || []), item] } : o))
+    if (r.ok) setOts(r.value)
   }
 
   // Escribe localStorage ANTES de pushState() de forma sincrónica (no
