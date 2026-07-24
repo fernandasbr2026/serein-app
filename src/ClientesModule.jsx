@@ -8,6 +8,7 @@ import { Plus, Trash2, ChevronDown, ChevronUp, Building2, Phone, Mail, User } fr
 // Versión en memoria.
 // ============================================================
 
+import { pullState, pushState } from './sync.js'
 import { SEREIN } from './theme-serein.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
 const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
@@ -138,9 +139,35 @@ export default function ClientesModule({ clientes: cExt, setClientes: setCExt, p
   const [nuevo, setNuevo] = useState({ nombre: '', rut: '', contacto: '', telefono: '', correo: '', obs: '' })
   const [busca, setBusca] = useState('')
 
-  const actualizar = (id, f) => setClientes(cs => cs.map(c => c.id === id ? { ...c, ...f } : c))
-  const eliminar = id => setClientes(cs => cs.filter(c => c.id !== id))
-  function crear() { if (!nuevo.nombre) return; setClientes(cs => [{ id: 'cl' + Date.now(), ...nuevo }, ...cs]); setNuevo({ nombre: '', rut: '', contacto: '', telefono: '', correo: '', obs: '' }); setCreando(false) }
+  const actualizar = (id, f) => {
+    const nuevoLista = clientes.map(c => c.id === id ? { ...c, ...f } : c)
+    try { localStorage.setItem('serein_clientes', JSON.stringify(nuevoLista)) } catch (e) {}
+    setClientes(nuevoLista)
+    pushState()
+  }
+  const eliminar = async id => {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_clientes') || 'null') } catch (e) {}
+    const base = Array.isArray(fresco) ? fresco : clientes
+    const nuevoLista = base.filter(c => c.id !== id)
+    try { localStorage.setItem('serein_clientes', JSON.stringify(nuevoLista)) } catch (e) {}
+    setClientes(nuevoLista)
+    pushState()
+  }
+  async function crear() {
+    if (!nuevo.nombre) return
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_clientes') || 'null') } catch (e) {}
+    const base = Array.isArray(fresco) ? fresco : clientes
+    const nuevoLista = [{ id: 'cl' + Date.now(), ...nuevo }, ...base]
+    try { localStorage.setItem('serein_clientes', JSON.stringify(nuevoLista)) } catch (e) {}
+    setClientes(nuevoLista)
+    pushState()
+    setNuevo({ nombre: '', rut: '', contacto: '', telefono: '', correo: '', obs: '' })
+    setCreando(false)
+  }
 
   const lista = clientes.filter(c => norm(c.nombre).includes(norm(busca)))
 

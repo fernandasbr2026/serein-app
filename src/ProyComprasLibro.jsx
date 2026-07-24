@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { supabase } from './supabase.js'
 import { CC_DEFS } from './proyectos-data.js'
+import { pullState, pushState } from './sync.js'
 
 // ============================================================
 // Compras SII -> Centro de costo (Proyectos)
@@ -60,19 +61,33 @@ export default function ProyComprasLibro({ proyectos = [], setProyectos = null }
     return t.includes(q.toLowerCase())
   }), [rows, q])
 
-  function imputar(r) {
+  async function imputar(r) {
     if (!setProyectos) { setMsg('Falta conexion con Proyectos.'); return }
     if (!otSel) { setMsg('Primero elige el proyecto/OT destino (arriba).'); return }
     const cc = ccSel[r.id]
     if (!cc) { setMsg('Elige el centro de costo para la factura ' + r.document_number + '.'); return }
     const compra = { proveedor: r.provider_name || '', folio: String(r.document_number || ''), rut: r.provider_rut || '', monto: Math.round(+(r.exenta ? (r.document_total || r.neto) : r.neto) || 0), cc, fecha: r.emission_date || '—', detalle: 'SII ' + (r.document_type || '') + (r.exenta ? ' (Exenta)' : ''), exento: !!r.exenta, origen: 'libro', libroId: String(r.id) }
-    setProyectos(prev => prev.map(p => p.id === otSel ? { ...p, compras: [...(p.compras || []), compra] } : p))
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_proyectos') || 'null') } catch (e) {}
+    const base = Array.isArray(fresco) ? fresco : proyectos
+    const nuevo = base.map(p => p.id === otSel ? { ...p, compras: [...(p.compras || []), compra] } : p)
+    try { localStorage.setItem('serein_proyectos', JSON.stringify(nuevo)) } catch (e) {}
+    setProyectos(nuevo)
+    pushState()
     setMsg('Factura ' + r.document_number + ' imputada a ' + cc + ' (' + nombreCC(proy, cc) + ').')
     setTimeout(() => setMsg(''), 3200)
   }
-  function quitar(libroId) {
+  async function quitar(libroId) {
     if (!setProyectos) return
-    setProyectos(prev => prev.map(p => ({ ...p, compras: (p.compras || []).filter(c => String(c.libroId) !== String(libroId)) })))
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_proyectos') || 'null') } catch (e) {}
+    const base = Array.isArray(fresco) ? fresco : proyectos
+    const nuevo = base.map(p => ({ ...p, compras: (p.compras || []).filter(c => String(c.libroId) !== String(libroId)) }))
+    try { localStorage.setItem('serein_proyectos', JSON.stringify(nuevo)) } catch (e) {}
+    setProyectos(nuevo)
+    pushState()
   }
 
   const card = { background: '#fff', border: '1px solid #DFE4EA', padding: 16, marginBottom: 16 }

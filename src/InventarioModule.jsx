@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react'
 import * as XLSX from 'xlsx'
 import { Plus, Minus, Trash2, Pencil, Download, Upload, History } from 'lucide-react'
 import { INVENTARIO_SEED } from './inventario-data.js'
+import { pullState, pushState } from './sync.js'
 
 import { SEREIN } from './theme-serein.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
@@ -82,21 +83,62 @@ export default function InventarioModule({ inventario = [], setInventario = () =
   const galonesTotal = inventario.reduce((a, p) => a + (p.saldo || 0), 0)
   const valorSede = s => inventario.filter(p => p.sede === s).reduce((a, p) => a + (p.saldo || 0) * (p.costo || 0), 0)
 
-  const actualizar = (id, cambios) => setInventario(xs => xs.map(p => p.id === id ? { ...p, ...cambios } : p))
-  const eliminar = id => { if (window.confirm('Eliminar este producto del inventario?')) setInventario(xs => xs.filter(p => p.id !== id)) }
+  const actualizar = (id, cambios) => {
+    const nuevo = inventario.map(p => p.id === id ? { ...p, ...cambios } : p)
+    try { localStorage.setItem('serein_inventario', JSON.stringify(nuevo)) } catch (e) {}
+    setInventario(nuevo)
+    pushState()
+  }
+  const eliminar = async id => {
+    if (!window.confirm('Eliminar este producto del inventario?')) return
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_inventario') || 'null') } catch (e) {}
+    const base = Array.isArray(fresco) ? fresco : inventario
+    const nuevo = base.filter(p => p.id !== id)
+    try { localStorage.setItem('serein_inventario', JSON.stringify(nuevo)) } catch (e) {}
+    setInventario(nuevo)
+    pushState()
+  }
 
-  function agregarMov(prod, tipo, m) {
+  async function agregarMov(prod, tipo, m) {
     const delta = tipo === 'entrada' ? m.cantidad : -m.cantidad
     const nuevoSaldo = (prod.saldo || 0) + delta
     if (nuevoSaldo < 0) { window.alert('La salida deja el saldo negativo.'); return }
-    actualizar(prod.id, { saldo: nuevoSaldo })
-    setMovimientos(ms => [{ id: uid(), productoId: prod.id, producto: prod.nombre, sede: prod.sede, fecha: hoy(), tipo, cantidad: m.cantidad, motivo: m.motivo, ot: m.ot, usuario, saldoResultante: nuevoSaldo }, ...(ms || [])])
+    try { await pullState() } catch (e) {}
+    let frescoInv = null
+    try { frescoInv = JSON.parse(localStorage.getItem('serein_inventario') || 'null') } catch (e) {}
+    const baseInv = Array.isArray(frescoInv) ? frescoInv : inventario
+    const nuevoInv = baseInv.map(p => p.id === prod.id ? { ...p, saldo: nuevoSaldo } : p)
+    try { localStorage.setItem('serein_inventario', JSON.stringify(nuevoInv)) } catch (e) {}
+    setInventario(nuevoInv)
+    let frescoMov = null
+    try { frescoMov = JSON.parse(localStorage.getItem('serein_invMov') || 'null') } catch (e) {}
+    const baseMov = Array.isArray(frescoMov) ? frescoMov : movimientos
+    const nuevoMov = [{ id: uid(), productoId: prod.id, producto: prod.nombre, sede: prod.sede, fecha: hoy(), tipo, cantidad: m.cantidad, motivo: m.motivo, ot: m.ot, usuario, saldoResultante: nuevoSaldo }, ...(baseMov || [])]
+    try { localStorage.setItem('serein_invMov', JSON.stringify(nuevoMov)) } catch (e) {}
+    setMovimientos(nuevoMov)
+    pushState()
     setMovFor(null)
   }
-  function crearProducto(d) {
+  async function crearProducto(d) {
     const p = { ...d, id: 'inv-' + Date.now(), descripcion: d.color + (d.proveedor ? ' (' + d.proveedor + ')' : '') }
-    setInventario(xs => [p, ...xs])
-    if ((d.saldo || 0) > 0) setMovimientos(ms => [{ id: uid(), productoId: p.id, producto: p.nombre, sede: p.sede, fecha: hoy(), tipo: 'entrada', cantidad: d.saldo, motivo: 'Carga inicial', ot: '', usuario, saldoResultante: d.saldo }, ...(ms || [])])
+    try { await pullState() } catch (e) {}
+    let frescoInv = null
+    try { frescoInv = JSON.parse(localStorage.getItem('serein_inventario') || 'null') } catch (e) {}
+    const baseInv = Array.isArray(frescoInv) ? frescoInv : inventario
+    const nuevoInv = [p, ...baseInv]
+    try { localStorage.setItem('serein_inventario', JSON.stringify(nuevoInv)) } catch (e) {}
+    setInventario(nuevoInv)
+    if ((d.saldo || 0) > 0) {
+      let frescoMov = null
+      try { frescoMov = JSON.parse(localStorage.getItem('serein_invMov') || 'null') } catch (e) {}
+      const baseMov = Array.isArray(frescoMov) ? frescoMov : movimientos
+      const nuevoMov = [{ id: uid(), productoId: p.id, producto: p.nombre, sede: p.sede, fecha: hoy(), tipo: 'entrada', cantidad: d.saldo, motivo: 'Carga inicial', ot: '', usuario, saldoResultante: d.saldo }, ...(baseMov || [])]
+      try { localStorage.setItem('serein_invMov', JSON.stringify(nuevoMov)) } catch (e) {}
+      setMovimientos(nuevoMov)
+    }
+    pushState()
     setCreando(false)
   }
   function exportarExcel() {
@@ -122,10 +164,22 @@ export default function InventarioModule({ inventario = [], setInventario = () =
     }
     rd.readAsArrayBuffer(file)
   }
-  function confirmarImport() {
+  async function confirmarImport() {
     const nuevos = importPrev.prods
-    setInventario(xs => [...nuevos, ...xs])
-    setMovimientos(ms => [...nuevos.filter(p => (p.saldo || 0) > 0).map(p => ({ id: uid(), productoId: p.id, producto: p.nombre, sede: p.sede, fecha: hoy(), tipo: 'entrada', cantidad: p.saldo, motivo: 'Importacion Excel', ot: '', usuario, saldoResultante: p.saldo })), ...(ms || [])])
+    try { await pullState() } catch (e) {}
+    let frescoInv = null
+    try { frescoInv = JSON.parse(localStorage.getItem('serein_inventario') || 'null') } catch (e) {}
+    const baseInv = Array.isArray(frescoInv) ? frescoInv : inventario
+    const nuevoInv = [...nuevos, ...baseInv]
+    try { localStorage.setItem('serein_inventario', JSON.stringify(nuevoInv)) } catch (e) {}
+    setInventario(nuevoInv)
+    let frescoMov = null
+    try { frescoMov = JSON.parse(localStorage.getItem('serein_invMov') || 'null') } catch (e) {}
+    const baseMov = Array.isArray(frescoMov) ? frescoMov : movimientos
+    const nuevoMov = [...nuevos.filter(p => (p.saldo || 0) > 0).map(p => ({ id: uid(), productoId: p.id, producto: p.nombre, sede: p.sede, fecha: hoy(), tipo: 'entrada', cantidad: p.saldo, motivo: 'Importacion Excel', ot: '', usuario, saldoResultante: p.saldo })), ...(baseMov || [])]
+    try { localStorage.setItem('serein_invMov', JSON.stringify(nuevoMov)) } catch (e) {}
+    setMovimientos(nuevoMov)
+    pushState()
     setImportPrev(null)
   }
 

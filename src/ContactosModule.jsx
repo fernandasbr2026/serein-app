@@ -3,6 +3,7 @@ import { Plus, Trash2, Users, Truck, Search } from 'lucide-react'
 import { CLIENTES_FICHA } from './clientes-data.js'
 import { PROVEEDORES_FICHA } from './proveedores-data.js'
 import Paginador, { paginar } from './Paginador.jsx'
+import { pullState, pushState } from './sync.js'
 
 // ============================================================
 // MÓDULO: Clientes y Proveedores
@@ -105,8 +106,34 @@ function Tabla({ titulo, icono, items, setItems, color, cols }) {
 
 export default function ContactosModule({ contactos = CONTACTOS_SEED, setContactos = () => {} }) {
   const [tab, setTab] = useState('clientes')
-  const setClientes = arr => setContactos({ ...contactos, clientes: arr })
-  const setProveedores = arr => setContactos({ ...contactos, proveedores: arr })
+  // Antes esto solo tocaba el estado de React y dependía del guardado
+  // general (localStorage + push recién 800ms después del último cambio de
+  // CUALQUIER parte del ERP) — si la persona refrescaba o cambiaba de
+  // pantalla antes de eso, la edición (o el borrado) podía quedar sin
+  // subir. Ahora, igual que en OTModule/FacturasModule, trae lo más
+  // fresco de la nube antes de escribir (para no partir de una copia
+  // vieja si alguien más editó contactos mientras tanto), guarda en
+  // localStorage y sube a la nube de inmediato.
+  const setClientes = async arr => {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_contactos') || 'null') } catch (e) {}
+    const base = fresco && typeof fresco === 'object' ? fresco : contactos
+    const nuevo = { ...base, clientes: arr }
+    try { localStorage.setItem('serein_contactos', JSON.stringify(nuevo)) } catch (e) {}
+    setContactos(nuevo)
+    pushState()
+  }
+  const setProveedores = async arr => {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_contactos') || 'null') } catch (e) {}
+    const base = fresco && typeof fresco === 'object' ? fresco : contactos
+    const nuevo = { ...base, proveedores: arr }
+    try { localStorage.setItem('serein_contactos', JSON.stringify(nuevo)) } catch (e) {}
+    setContactos(nuevo)
+    pushState()
+  }
   const btn = activo => ({ background: activo ? C.teal : 'transparent', color: activo ? '#fff' : C.carbon, border: '1px solid ' + (activo ? C.teal : '#DFE4EA'), padding: '7px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 600 })
   return (
     <div style={{ marginTop: 16 }}>

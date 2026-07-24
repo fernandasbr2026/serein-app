@@ -3,7 +3,7 @@ import { Plus, Trash2, FileText, Download, CheckCircle2, Search, X } from 'lucid
 import * as XLSX from 'xlsx'
 import Paginador, { paginar } from './Paginador.jsx'
 import { PROVEEDORES_FICHA } from './proveedores-data.js'
-import { pushState } from './sync.js'
+import { pushState, pullState } from './sync.js'
 import { SEREIN } from './theme-serein.js'
 
 // ============================================================
@@ -463,7 +463,7 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
     window.alert('Cotización aprobada. Se generó la ' + numeroOT + ' en el módulo Órdenes de Trabajo. Ya puedes descargar la OT (sin valores).')
   }
 
-  const generarOCPintura = (cot) => {
+  const generarOCPintura = async (cot) => {
   const prov = (cot.proveedorPintura || '').trim()
   if (!prov) { window.alert('Primero elige el proveedor de pintura en la cotizacion (boton Editar, o en el cotizador por calculo).'); return }
   const ocs = pp.ocs || []
@@ -478,11 +478,23 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
   const f0 = new Date().toISOString().slice(0, 10)
   const v0 = new Date(new Date(f0 + 'T12:00:00').getTime() + 30 * 86400000).toISOString().slice(0, 10)
   const oc = { id: 'oc' + Date.now(), numero, proveedor: prov, rut: ficha.rut || '', categoria: 'Pintura', detalle: 'Pintura cotizacion ' + cot.folio + (cot.cliente ? ' - ' + cot.cliente : ''), area: cot.area || 'Santa Rosa', fecha: f0, plazo: 30, vencimiento: v0, estadoPago: 'Pendiente', asignaciones: [], items: ocItems, direccion: ficha.direccion || '', despacho: 'Santa Rosa 70, Lampa', adjunto: '', obs: 'Generada desde la cotizacion ' + cot.folio, origenCot: cot.folio }
-  setPp({ ...pp, ocs: [oc, ...ocs] })
+  try { await pullState() } catch (e) {}
+  let fresco = null
+  try { fresco = JSON.parse(localStorage.getItem('serein_pp') || 'null') } catch (e) {}
+  const basePp = fresco && typeof fresco === 'object' ? fresco : pp
+  const nuevoPp = { ...basePp, ocs: [oc, ...(basePp.ocs || [])] }
+  try { localStorage.setItem('serein_pp', JSON.stringify(nuevoPp)) } catch (e) {}
+  setPp(nuevoPp)
+  avisarSiFallaSubida()
   window.alert('OC N ' + numero + ' creada en Ordenes de Compra (proveedor: ' + prov + '). Revisala y descarga su PDF en el modulo Ordenes de Compra.')
 }
 
-  const updateCot = (id, cambios) => setCotizaciones(cotizaciones.map(x => x.id === id ? { ...x, ...cambios } : x))
+  const updateCot = (id, cambios) => {
+    const nuevo = cotizaciones.map(x => x.id === id ? { ...x, ...cambios } : x)
+    try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
+    setCotizaciones(nuevo)
+    avisarSiFallaSubida()
+  }
   const setEstadoCot = (c, nuevo) => { if (nuevo === 'Aprobada' && c.estado !== 'Aprobada') setAproCot(c); else updateCot(c.id, { estado: nuevo }) }
 
   const mostradas = cotizaciones.filter(c => !busca || (String(c.folio) + ' ' + (c.cliente || '')).toLowerCase().includes(busca.toLowerCase()))
