@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { COTIZADOR_SEED, indexProductos, desgloseItem, valorM2Capa, rendimientoM2Gal, valorGalon } from './cotizador-data.js'
-import { pushState } from './sync.js'
+import { pushState, pullState } from './sync.js'
 import { THEME } from './ui.jsx'
 import { Plus, Trash2, ChevronLeft } from 'lucide-react'
 
@@ -91,24 +91,38 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
       const msg = 'La' + (sinM2.length > 1 ? 's piezas N\u00b0 ' : ' pieza N\u00b0 ') + sinM2.join(', ') + (sinM2.length > 1 ? ' est\u00e1n' : ' est\u00e1') + ' en 0 m\u00b2. Su total quedar\u00e1 en $0 y no sumar\u00e1 al total de la cotizaci\u00f3n.\n\n\u00bfGenerar la cotizaci\u00f3n de todas formas?'
       if (!window.confirm(msg)) return
     }
-    // Usa lo que ya est\u00e1 cargado en memoria (cotizaciones, mantenido al d\u00eda
-    // por la sincronizaci\u00f3n en tiempo real y el sondeo cada 15s de
-    // Dashboard.jsx) en vez de esperar (await) una nueva consulta a la nube
-    // justo antes de guardar \u2014 con conexi\u00f3n lenta o inestable ese await
-    // pod\u00eda demorar mucho o no resolver nunca, dejando el bot\u00f3n "Guardar"
-    // sin ning\u00fan efecto visible.
-    const base = cotizaciones || []
-    const numero = (inicial && (inicial.numero || inicial.folio)) || proximoNumero(base)
-    const cli = cliSel || { nombre: cliQuery }
-    const cot = { id: (inicial && inicial.id) || ('cot' + Date.now()), numero, folio: numero, area: sede, vencimiento: new Date().toISOString().slice(0, 10), tipo: 'calculo', origen: 'cotizador', estado: (inicial && inicial.estado) || 'Alta probabilidad de cierre', cliente: cli.nombre || '', rut: cli.rut || '', giro: cli.giro || '', direccion: cli.direccion || '', comuna: cli.comuna || '', ciudad: cli.ciudad || cli.comuna || '', condicionPago: 'CONTADO', vendedor: cli.vendedor || 'Venta general', sede, fecha: new Date().toISOString().slice(0, 10), margenVenta: +pct, porcentajeGanancia: +pct, proveedorPintura: provPintura,
-      items: items.map((it, i) => { const d = dg(it); const pm = precioMargen(d.costoM2, pct); const etiquetaGrado = it.sinGranallado ? 'sin granallado' : it.grado; return { codigo: it.sinGranallado ? '' : it.grado, detalle: (it.desc || 'Item ' + (i + 1)) + (it.ral ? ' - ' + it.ral : '') + ' - ' + (it.capas.filter(c => c.p).map(c => c.p).join(' + ') || (it.sinGranallado ? 'sin ítems' : 'solo granallado ' + it.grado)), cant: +it.m2 || 0, unidad: 'm²', pUnitario: Math.round(pm), descuento: 0, comentario: (it.capas.filter(c => c.p).map(c => c.p + ' ' + milsProm(c) + ' mils').join(' + ') || (it.sinGranallado ? 'Sin ítems' : 'Solo granallado')) + ' - ' + etiquetaGrado, descripcion: it.desc, ral: it.ral, m2: +it.m2 || 0, gradoSSPC: it.grado, sinGranallado: !!it.sinGranallado, factorDificultad: it.dif, limpiezaSP1: +it.limpieza || 0, capas: it.capas.filter(c => c.p), costoM2: Math.round(d.costoM2), precioM2: Math.round(pm), comprasPintura: d.comprasPintura || [], pinturaCompraTotal: (d.comprasPintura || []).reduce((a, cp) => a + (cp.costo || 0), 0), total: Math.round(pm * (+it.m2 || 0)), desglose: { granallado: Math.round(d.granallado), limpieza: Math.round(d.limpieza), diluyente: Math.round(d.diluyente), pintura: Math.round(d.pintura), fijos: Math.round(d.fijos) } } }),
-      total: Math.round(totalCot), montoCotizado: Math.round(totalCot), supuestos: { sueldosGranallado: +sg, sueldosPintores: +sp, totalFijos } }
-    const nuevo = inicial ? base.map(x => x.id === cot.id ? cot : x) : [...base, cot]
-    try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
-    setCotizaciones(nuevo)
-    pushState()
-    if (!cliSel && cliQuery.trim()) { try { onAddCliente(cliQuery.trim()) } catch (e) {} }
-    setGuardado('Borrador ' + numero + (inicial ? ' actualizado.' : ' guardado en Cotizaciones.'))
+    // Antes esta funcion calculaba el folio y escribia el arreglo completo
+    // de cotizaciones usando lo que ya estaba cargado en memoria (sin traer
+    // lo mas fresco de la nube antes) -- el mismo bug que se corrigio en
+    // CotizacionesModule.jsx (guardar/eliminar/aprobar): si esta copia local
+    // estaba un poco atrasada, el push de esta pantalla podia subir un
+    // arreglo que no incluia una cotizacion que otra persona acababa de
+    // crear, borrandola de la nube sin ningun error visible. Se aplica el
+    // mismo arreglo: traer lo fresco antes de calcular folio y resultado
+    // final, en segundo plano para no congelar el boton "Guardar".
+    setGuardado('Guardando...')
+    ;(async () => {
+      try { await pullState() } catch (e) {}
+      let fresco = null
+      try { fresco = JSON.parse(localStorage.getItem('serein_cotizaciones') || 'null') } catch (e) {}
+      const base = Array.isArray(fresco) ? fresco : (cotizaciones || [])
+      let numero = (inicial && (inicial.numero || inicial.folio)) || proximoNumero(base)
+      if (!inicial) {
+        let n = parseInt(numero, 10) || 0
+        while (base.some(c => String(c.numero || c.folio) === String(n))) n++
+        numero = String(n)
+      }
+      const cli = cliSel || { nombre: cliQuery }
+      const cot = { id: (inicial && inicial.id) || ('cot' + Date.now()), numero, folio: numero, area: sede, vencimiento: new Date().toISOString().slice(0, 10), tipo: 'calculo', origen: 'cotizador', estado: (inicial && inicial.estado) || 'Alta probabilidad de cierre', cliente: cli.nombre || '', rut: cli.rut || '', giro: cli.giro || '', direccion: cli.direccion || '', comuna: cli.comuna || '', ciudad: cli.ciudad || cli.comuna || '', condicionPago: 'CONTADO', vendedor: cli.vendedor || 'Venta general', sede, fecha: new Date().toISOString().slice(0, 10), margenVenta: +pct, porcentajeGanancia: +pct, proveedorPintura: provPintura,
+        items: items.map((it, i) => { const d = dg(it); const pm = precioMargen(d.costoM2, pct); const etiquetaGrado = it.sinGranallado ? 'sin granallado' : it.grado; return { codigo: it.sinGranallado ? '' : it.grado, detalle: (it.desc || 'Item ' + (i + 1)) + (it.ral ? ' - ' + it.ral : '') + ' - ' + (it.capas.filter(c => c.p).map(c => c.p).join(' + ') || (it.sinGranallado ? 'sin items' : 'solo granallado ' + it.grado)), cant: +it.m2 || 0, unidad: 'm2', pUnitario: Math.round(pm), descuento: 0, comentario: (it.capas.filter(c => c.p).map(c => c.p + ' ' + milsProm(c) + ' mils').join(' + ') || (it.sinGranallado ? 'Sin items' : 'Solo granallado')) + ' - ' + etiquetaGrado, descripcion: it.desc, ral: it.ral, m2: +it.m2 || 0, gradoSSPC: it.grado, sinGranallado: !!it.sinGranallado, factorDificultad: it.dif, limpiezaSP1: +it.limpieza || 0, capas: it.capas.filter(c => c.p), costoM2: Math.round(d.costoM2), precioM2: Math.round(pm), comprasPintura: d.comprasPintura || [], pinturaCompraTotal: (d.comprasPintura || []).reduce((a, cp) => a + (cp.costo || 0), 0), total: Math.round(pm * (+it.m2 || 0)), desglose: { granallado: Math.round(d.granallado), limpieza: Math.round(d.limpieza), diluyente: Math.round(d.diluyente), pintura: Math.round(d.pintura), fijos: Math.round(d.fijos) } } }),
+        total: Math.round(totalCot), montoCotizado: Math.round(totalCot), supuestos: { sueldosGranallado: +sg, sueldosPintores: +sp, totalFijos } }
+      const nuevo = inicial ? base.map(x => x.id === cot.id ? cot : x) : [...base, cot]
+      try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
+      setCotizaciones(nuevo)
+      pushState()
+      if (!cliSel && cliQuery.trim()) { try { onAddCliente(cliQuery.trim()) } catch (e) {} }
+      setGuardado('Borrador ' + numero + (inicial ? ' actualizado.' : ' guardado en Cotizaciones.'))
+    })()
   }
 
   const card = { background: '#fff', border: '1px solid ' + T.border, borderRadius: 12, boxShadow: T.shadow, padding: 16, marginBottom: 16 }
