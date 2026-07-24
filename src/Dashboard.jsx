@@ -5,13 +5,13 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { LogOut, TrendingUp, Wallet, AlertTriangle, Landmark, User } from 'lucide-react'
 import { DATA } from './data.js'
 import LogoSerein from './LogoSerein.jsx'
-import { Sidebar, PageHeader, THEME, GlobalStyles } from './ui.jsx'
+import { Sidebar, PageHeader, THEME, GlobalStyles, MontoNetoBruto } from './ui.jsx'
 import ProyectosModule from './ProyectosModule.jsx'
 import OTModule, { OTS_INICIALES } from './OTModule.jsx'
 import PipelineOT from './PipelineOT.jsx'
 import PipelineProyectos from './PipelineProyectos.jsx'
 import ManoObraModule from './ManoObraModule.jsx'
-import FinanzasModule, { FIN_SEED, calcularResumenFin } from './FinanzasModule.jsx'
+import FinanzasModule, { FIN_SEED, calcularResumenFin, resumenGastosPeriodoArea } from './FinanzasModule.jsx'
 import CotizadorModule from './CotizadorModule.jsx'
 import CotizacionesModule from './CotizacionesModule.jsx'
 import ProduccionModule, { AVANCES_SEED } from './ProduccionModule.jsx'
@@ -28,7 +28,7 @@ import ConsolidadoModule from './ConsolidadoModule.jsx'
 import OrganigramaModule from './OrganigramaModule.jsx'
 import CRMModule from './CRMModule.jsx'
 import ContactosModule, { CONTACTOS_SEED, nombresClientes } from './ContactosModule.jsx'
-import FacturasModule, { FACTURAS_SEED } from './FacturasModule.jsx'
+import FacturasModule, { FACTURAS_SEED, saldoPendienteDe, montoFacturaDe } from './FacturasModule.jsx'
 import { MO_SEED } from './ManoObraModule.jsx'
 import { PROYECTOS } from './proyectos-data.js'
 import InventarioModule from './InventarioModule.jsx'
@@ -85,6 +85,64 @@ function Panel({ title, children, right }) {
       </div>
       {children}
     </div>
+  )
+}
+
+// Gráfico "Venta neta y bruta por mes" con la línea del punto de
+// equilibrio, más la tabla desplegable con el detalle de cada mes —
+// af viene de analisisFinancieroDe(area) en Dashboard, así que este
+// gráfico siempre muestra exactamente los mismos números que el
+// resumen/análisis financiero de arriba.
+function GraficoVentaConEquilibrio({ af, area, color, clp }) {
+  const [verTabla, setVerTabla] = useState(false)
+  const eq = af.equilibrioNeto
+  return (
+    <Panel title={`Venta neta y bruta por mes · ${area}`}>
+      <ResponsiveContainer width="100%" height={260}>
+        <LineChart data={af.porMes} margin={{ left: 4, right: 8 }}>
+          <CartesianGrid stroke="#DFE4EA" vertical={false} />
+          <XAxis dataKey="mes" tick={{ fontSize: 12, fill: '#9AA3AD' }} />
+          <YAxis tickFormatter={v => `${Math.round(v / 1e6)}M`} tick={{ fontSize: 11, fill: '#9AA3AD' }} />
+          <Tooltip formatter={(v, n) => [clp(v), n]} />
+          <Line type="monotone" dataKey="neta" name="Venta neta" stroke={color || '#101315'} strokeWidth={3} dot={{ r: 4 }} />
+          <Line type="monotone" dataKey="bruta" name="Venta bruta" stroke="#9AA3AD" strokeWidth={2} strokeDasharray="4 3" dot={{ r: 3 }} />
+          {eq > 0 && <Line type="monotone" dataKey={() => eq} name="Punto de equilibrio" stroke={C.rojo} strokeWidth={1.5} strokeDasharray="6 4" dot={false} isAnimationActive={false} />}
+        </LineChart>
+      </ResponsiveContainer>
+      <button onClick={() => setVerTabla(v => !v)} style={{ marginTop: 10, background: 'none', border: '1px solid #DFE4EA', padding: '6px 12px', fontSize: 12.5, cursor: 'pointer', color: C.carbon }}>
+        {verTabla ? 'Ocultar detalle mensual' : 'Ver detalle mensual'}
+      </button>
+      {verTabla && (
+        <div style={{ overflowX: 'auto', marginTop: 10 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+            <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+              {['Mes', 'Venta neta', 'Venta bruta', 'Equilibrio neto', 'Diferencia', '% Cumplimiento', 'Estado'].map(h => (
+                <th key={h} style={{ textAlign: ['Mes', 'Estado'].includes(h) ? 'left' : 'right', padding: '5px 8px', fontSize: 10.5, color: '#9AA3AD', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {af.porMes.map(m => {
+                const dif = m.neta - eq
+                const pct = eq > 0 ? (m.neta / eq) * 100 : 0
+                const estado = eq <= 0 ? '—' : (dif >= 0 ? 'Sobre equilibrio' : (Math.abs(dif) / eq <= 0.10 ? 'Cerca del equilibrio' : 'Bajo equilibrio'))
+                const colEstado = estado === 'Sobre equilibrio' ? C.verde : estado === 'Cerca del equilibrio' ? C.ambar : estado === 'Bajo equilibrio' ? C.rojo : '#9AA3AD'
+                return (
+                  <tr key={m.mesKey} style={{ borderBottom: '1px solid #DFE4EA' }}>
+                    <td style={{ padding: '5px 8px' }}>{m.mes}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right' }}>{clp(m.neta)}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right' }}>{clp(m.bruta)}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right' }}>{clp(eq)}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', color: dif >= 0 ? C.verde : C.rojo }}>{(dif >= 0 ? '+' : '') + clp(dif)}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right' }}>{eq > 0 ? pct.toFixed(0) + '%' : '—'}</td>
+                    <td style={{ padding: '5px 8px', color: colEstado, fontWeight: 600 }}>{estado}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Panel>
   )
 }
 
@@ -480,21 +538,176 @@ export default function Dashboard({ perfil, email, onLogout }) {
     const cuo = (fin.obligaciones || []).flatMap(o => (o.cuotas || []).filter(c => c.estado !== 'Pagada').map(c => ({ c, o }))).reduce((s, { c, o }) => s + (c.total || 0) * (((o.dist || []).find(d => d.area === a) || {}).pct || 0) / 100, 0)
     return g + doc + cuo
   }
-  // Recuadro reutilizable: resumen financiero de un área
+  // ===== Filtro de periodo unificado (Resumen financiero Santa Rosa/Istria) =====
+  // Controla en conjunto: resumen financiero, análisis financiero, punto de
+  // equilibrio y el gráfico mensual con su tabla desplegable.
+  const [periodoModo, setPeriodoModo] = useState('anio') // 'anio' | 'mes' | 'rango' | 'todo'
+  const [periodoAnio, setPeriodoAnio] = useState(new Date().getFullYear())
+  const [periodoMesNum, setPeriodoMesNum] = useState(new Date().getMonth() + 1)
+  const [periodoDesde, setPeriodoDesde] = useState('')
+  const [periodoHasta, setPeriodoHasta] = useState('')
+  const NOMBRES_MES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+  const rangoMeses = (y0, m0, y1, m1) => { const out = []; for (let y = y0, m = m0; y < y1 || (y === y1 && m <= m1);) { out.push(y + '-' + String(m).padStart(2, '0')); if (++m > 12) { m = 1; y++ } } return out }
+  const mesesDelPeriodo = a => {
+    if (periodoModo === 'mes') return [periodoAnio + '-' + String(periodoMesNum).padStart(2, '0')]
+    if (periodoModo === 'rango') {
+      const d0 = (periodoDesde || '').slice(0, 7), d1 = (periodoHasta || '').slice(0, 7)
+      if (!/^\d{4}-\d{2}$/.test(d0) || !/^\d{4}-\d{2}$/.test(d1)) return []
+      const [y0, m0] = d0.split('-').map(Number), [y1, m1] = d1.split('-').map(Number)
+      return rangoMeses(y0, m0, y1, m1)
+    }
+    if (periodoModo === 'todo') {
+      const claves = new Set()
+      ;(facturas[a] || []).forEach(f => { const mk = (f.fecha_emision || '').slice(0, 7); if (/^\d{4}-\d{2}$/.test(mk)) claves.add(mk) })
+      ;(fin.gastos || []).forEach(g => { const mk = (g.vencimiento || '').slice(0, 7); if (/^\d{4}-\d{2}$/.test(mk)) claves.add(mk) })
+      const ord = [...claves].sort()
+      if (!ord.length) return [new Date().toISOString().slice(0, 7)]
+      const [y0, m0] = ord[0].split('-').map(Number), [y1, m1] = ord[ord.length - 1].split('-').map(Number)
+      return rangoMeses(y0, m0, y1, m1)
+    }
+    return rangoMeses(periodoAnio, 1, periodoAnio, 12)
+  }
+  const selPeriodo = { padding: '6px 8px', border: '1px solid #DFE4EA', fontSize: 12.5, borderRadius: 4, background: '#fff' }
+  const PeriodoSelector = () => (
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
+      <select value={periodoModo} onChange={e => setPeriodoModo(e.target.value)} style={selPeriodo}>
+        <option value="anio">Año</option>
+        <option value="mes">Mes</option>
+        <option value="rango">Rango personalizado</option>
+        <option value="todo">Todo el periodo</option>
+      </select>
+      {periodoModo === 'anio' && (
+        <select value={periodoAnio} onChange={e => setPeriodoAnio(Number(e.target.value))} style={selPeriodo}>
+          {[0, 1, 2, 3].map(k => { const y = new Date().getFullYear() - k; return <option key={y} value={y}>{y}</option> })}
+        </select>
+      )}
+      {periodoModo === 'mes' && (<>
+        <select value={periodoMesNum} onChange={e => setPeriodoMesNum(Number(e.target.value))} style={selPeriodo}>
+          {NOMBRES_MES.map((n, i) => <option key={n} value={i + 1}>{n}</option>)}
+        </select>
+        <select value={periodoAnio} onChange={e => setPeriodoAnio(Number(e.target.value))} style={selPeriodo}>
+          {[0, 1, 2, 3].map(k => { const y = new Date().getFullYear() - k; return <option key={y} value={y}>{y}</option> })}
+        </select>
+      </>)}
+      {periodoModo === 'rango' && (<>
+        <input type="month" value={periodoDesde} onChange={e => setPeriodoDesde(e.target.value)} style={selPeriodo} />
+        <span style={{ color: '#9AA3AD', fontSize: 12 }}>a</span>
+        <input type="month" value={periodoHasta} onChange={e => setPeriodoHasta(e.target.value)} style={selPeriodo} />
+      </>)}
+    </div>
+  )
+  const itemAnalisis = (label, valor, color) => (
+    <div><div style={{ fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>{label}</div><div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 17, fontWeight: 600, color: color || C.carbon, whiteSpace: 'nowrap' }}>{valor}</div></div>
+  )
+
+  // Único cálculo — resumen, análisis financiero, punto de equilibrio y el
+  // gráfico mensual leen todos de aquí, para no correr el riesgo de mostrar
+  // dos números distintos para lo mismo en la misma pantalla.
+  const analisisFinancieroDe = a => {
+    const meses = mesesDelPeriodo(a)
+    const nMeses = meses.length || 1
+    const facsArea = facturas[a] || []
+    const facsPeriodo = facsArea.filter(f => meses.includes((f.fecha_emision || '').slice(0, 7)) && f.estado !== 'Anulada')
+    const ventaNetaTot = facsPeriodo.reduce((s, f) => s + (f.neto || 0), 0)
+    const ventaBrutaTot = facsPeriodo.reduce((s, f) => s + montoFacturaDe(f), 0)
+    const saldoTot = facsPeriodo.reduce((acc, f) => { const s = saldoPendienteDe(f); return { neto: acc.neto + s.neto, bruto: acc.bruto + s.bruto } }, { neto: 0, bruto: 0 })
+    const porPercibirNeto = Math.max(0, saldoTot.neto), porPercibirBruto = Math.max(0, saldoTot.bruto)
+    const cobradoNeto = Math.max(0, ventaNetaTot - porPercibirNeto), cobradoBruto = Math.max(0, ventaBrutaTot - porPercibirBruto)
+    const { fijos: fijosTot, variables: varTot, sinClasificar } = resumenGastosPeriodoArea(fin, meses, a)
+    const fijosProm = fijosTot / nMeses, varProm = varTot / nMeses
+    const ventaNetaProm = ventaNetaTot / nMeses, ventaBrutaProm = ventaBrutaTot / nMeses
+    const hayDatos = ventaNetaProm > 0 && (fijosTot > 0 || varTot > 0)
+    const pctCostoVariable = ventaNetaProm > 0 ? (varProm / ventaNetaProm) : 0
+    const margenContribucion = 1 - pctCostoVariable
+    const equilibrioNeto = margenContribucion > 0 ? (fijosProm / margenContribucion) : 0
+    // Bruto del equilibrio: se usa la proporción neto/bruto real del
+    // periodo (no un 19% fijo) para no inventar el efecto de documentos
+    // exentos o una composición tributaria distinta.
+    const factorBruto = ventaNetaTot > 0 ? (ventaBrutaTot / ventaNetaTot) : 1.19
+    const equilibrioBruto = equilibrioNeto * factorBruto
+    const cumplimientoPct = equilibrioNeto > 0 ? (ventaNetaProm / equilibrioNeto) * 100 : 0
+    const resultadoEstimado = ventaNetaProm - varProm - fijosProm
+    const diferenciaEquilibrio = ventaNetaProm - equilibrioNeto
+    let semaforo = 'rojo'
+    if (hayDatos) {
+      if (ventaNetaProm > equilibrioNeto && resultadoEstimado > 0) semaforo = 'verde'
+      else if (equilibrioNeto > 0 && Math.abs(diferenciaEquilibrio) / equilibrioNeto <= 0.10) semaforo = 'amarillo'
+    }
+    const porMes = meses.map(mk => {
+      const [y, m] = mk.split('-')
+      const fMes = facsArea.filter(f => (f.fecha_emision || '').slice(0, 7) === mk && f.estado !== 'Anulada')
+      const neta = fMes.reduce((s, f) => s + (f.neto || 0), 0)
+      const bruta = fMes.reduce((s, f) => s + montoFacturaDe(f), 0)
+      return { mesKey: mk, mes: NOMBRES_MES[Number(m) - 1] + ' ' + y.slice(2), neta, bruta }
+    })
+    return { meses, nMeses, ventaNetaTot, ventaBrutaTot, cobradoNeto, cobradoBruto, porPercibirNeto, porPercibirBruto, fijosProm, varProm, ventaNetaProm, ventaBrutaProm, hayDatos, pctCostoVariable, margenContribucion, equilibrioNeto, equilibrioBruto, cumplimientoPct, resultadoEstimado, diferenciaEquilibrio, semaforo, sinClasificar, porMes }
+  }
+
+  const SEMAFORO_COLOR = { verde: C.verde, amarillo: C.ambar, rojo: C.rojo }
+  const SEMAFORO_TXT = { verde: 'Situación favorable', amarillo: 'Situación ajustada', rojo: 'Situación desfavorable' }
+
+  // Recuadro reutilizable: resumen financiero simplificado de un área +
+  // análisis financiero + punto de equilibrio, todo sobre el periodo
+  // elegido en PeriodoSelector.
   const resumenFinancieroArea = a => {
-    const venta = facNeto(a), ventaBruta = facBrutoArea(a, esPagada) + facBrutoArea(a, noPagada), cobradoNeto = facCobN(a), cobradoA = facBrutoArea(a, esPagada), porPagarA = pagarArea(a)
-    const pendienteNeto = Math.max(0, venta - cobradoNeto), pendienteBruto = Math.max(0, ventaBruta - cobradoA)
-    const _sinResultado = true
-    const it = (l, v, c, sub) => (<div><div style={{ fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>{l}</div><div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 20, fontWeight: 600, color: c || C.carbon, whiteSpace: 'nowrap' }}>{clp(v)}</div>{sub !== undefined && <div style={{ fontSize: 11, color: '#9AA3AD', whiteSpace: 'nowrap' }}>Bruto {clp(sub)}</div>}</div>)
+    const af = analisisFinancieroDe(a)
     return (
-      <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: `4px solid ${AREA_COLOR[a] || C.teal}`, marginBottom: 16 }}>
-        <div style={{ padding: '14px 18px 6px', fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Resumen financiero · {a}</div>
-        <div style={{ padding: '0 18px 16px', display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          {it('Venta neta', venta, C.azul, ventaBruta)}
-          {it('Cobrado', cobradoNeto, C.verde, cobradoA)}
-          {it('Pendiente por cobrar', pendienteNeto, pendienteNeto > 0 ? C.rojo : C.verde, pendienteBruto)}
-          {it('Por pagar', porPagarA, C.ambar)}
-          
+      <div>
+        <PeriodoSelector />
+        <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: `4px solid ${AREA_COLOR[a] || C.teal}`, marginBottom: 16 }}>
+          <div style={{ padding: '14px 18px 6px', fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Resumen financiero · {a}</div>
+          <div style={{ padding: '4px 18px 18px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
+            <MontoNetoBruto label="Venta total" neto={clp(af.ventaNetaTot)} bruto={clp(af.ventaBrutaTot)} icon={TrendingUp} iconColor={C.azul} iconBg="#E7EFFB" />
+            <MontoNetoBruto label="Total cobrado" neto={clp(af.cobradoNeto)} bruto={clp(af.cobradoBruto)} icon={Wallet} iconColor={C.verde} iconBg="#E6F7EE" />
+            <MontoNetoBruto label="Total por percibir" neto={clp(af.porPercibirNeto)} bruto={clp(af.porPercibirBruto)} icon={AlertTriangle} iconColor={af.porPercibirNeto > 0 ? C.rojo : C.verde} iconBg={af.porPercibirNeto > 0 ? '#FCEBEA' : '#E6F7EE'} />
+            <MontoNetoBruto label="Promedio gastos variables" neto={clp(af.varProm) + ' /mes'} icon={Landmark} iconColor={C.ambar} iconBg="#FDECDD" />
+            <MontoNetoBruto label="Promedio gastos fijos" neto={clp(af.fijosProm) + ' /mes'} icon={Landmark} iconColor={C.carbon} iconBg="#F2F4F7" />
+          </div>
+          {af.sinClasificar > 0 && <div style={{ padding: '0 18px 14px', fontSize: 12, color: C.ambar }}>⚠ Hay {clp(af.sinClasificar)} en gastos de este periodo sin clasificar como fijo/variable — no se incluyen en los promedios de arriba. Clasifícalos en Finanzas para un cálculo más preciso.</div>}
+        </div>
+
+        <div style={{ background: '#fff', border: '1px solid #DFE4EA', marginBottom: 16 }}>
+          <div style={{ padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+            <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Análisis financiero</span>
+            {af.hayDatos && <span style={{ background: SEMAFORO_COLOR[af.semaforo] + '22', color: SEMAFORO_COLOR[af.semaforo], padding: '4px 10px', borderRadius: 20, fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 8, background: SEMAFORO_COLOR[af.semaforo] }} />{SEMAFORO_TXT[af.semaforo]}</span>}
+          </div>
+          {!af.hayDatos ? (
+            <div style={{ padding: '0 18px 18px', fontSize: 13, color: '#9AA3AD' }}>No hay suficientes datos clasificados (venta y/o gastos fijos/variables) en este periodo para un análisis confiable. Registra gastos con tipo fijo/variable y ventas del periodo para verlo aquí.</div>
+          ) : (<>
+            <div style={{ padding: '0 18px 14px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 14 }}>
+              {itemAnalisis('Venta neta promedio', clp(af.ventaNetaProm) + '/mes')}
+              {itemAnalisis('Venta bruta promedio', clp(af.ventaBrutaProm) + '/mes')}
+              {itemAnalisis('Gastos fijos promedio', clp(af.fijosProm) + '/mes')}
+              {itemAnalisis('Gastos variables promedio', clp(af.varProm) + '/mes')}
+              {itemAnalisis('Gastos totales promedio', clp(af.fijosProm + af.varProm) + '/mes')}
+              {itemAnalisis('% costo variable', (af.pctCostoVariable * 100).toFixed(1) + '%')}
+              {itemAnalisis('Margen de contribución', (af.margenContribucion * 100).toFixed(1) + '%')}
+              {itemAnalisis('Punto de equilibrio mensual', clp(af.equilibrioNeto) + ' neto')}
+              {itemAnalisis('Diferencia vs. equilibrio', (af.diferenciaEquilibrio >= 0 ? '+' : '') + clp(af.diferenciaEquilibrio), af.diferenciaEquilibrio >= 0 ? C.verde : C.rojo)}
+              {itemAnalisis('Cumplimiento del equilibrio', af.cumplimientoPct.toFixed(0) + '%')}
+              {itemAnalisis('Resultado estimado mensual', (af.resultadoEstimado >= 0 ? '+' : '') + clp(af.resultadoEstimado), af.resultadoEstimado >= 0 ? C.verde : C.rojo)}
+            </div>
+            <div style={{ padding: '12px 18px 18px', fontSize: 13, color: C.carbon, borderTop: '1px solid #DFE4EA' }}>
+              {a} {af.diferenciaEquilibrio >= 0 ? 'se encuentra sobre' : 'se encuentra bajo'} su punto de equilibrio mensual en <b>{clp(Math.abs(af.diferenciaEquilibrio))}</b> netos, con un cumplimiento de <b>{af.cumplimientoPct.toFixed(0)}%</b>. La situación financiera del periodo es <b style={{ color: SEMAFORO_COLOR[af.semaforo] }}>{SEMAFORO_TXT[af.semaforo].toLowerCase()}</b>.
+            </div>
+          </>)}
+        </div>
+
+        <div style={{ background: '#fff', border: '1px solid #DFE4EA', marginBottom: 16 }}>
+          <div style={{ padding: '14px 18px 6px', fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Punto de equilibrio</div>
+          <div style={{ padding: '4px 18px 10px', display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            {itemAnalisis('Equilibrio neto mensual', clp(af.equilibrioNeto))}
+            {itemAnalisis('Equilibrio bruto mensual', clp(af.equilibrioBruto))}
+            {itemAnalisis('Venta neta promedio', clp(af.ventaNetaProm))}
+            {itemAnalisis('Venta bruta promedio', clp(af.ventaBrutaProm))}
+            {af.diferenciaEquilibrio >= 0 ? itemAnalisis('Excedente neto', clp(af.diferenciaEquilibrio), C.verde) : itemAnalisis('Falta para el equilibrio', clp(-af.diferenciaEquilibrio), C.rojo)}
+            {itemAnalisis('Cumplimiento', af.cumplimientoPct.toFixed(1) + '%')}
+          </div>
+          <div style={{ padding: '0 18px 18px' }}>
+            <div style={{ height: 10, background: '#DFE4EA', borderRadius: 6, overflow: 'hidden' }}>
+              <div style={{ width: Math.min(100, af.cumplimientoPct) + '%', height: '100%', background: af.cumplimientoPct >= 100 ? C.verde : af.cumplimientoPct >= 90 ? C.ambar : C.rojo }} />
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -576,6 +789,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
           />
         ) : (
         <>
+        {!(areaSel === 'Santa Rosa' || areaSel === 'Istria') && (
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
           <Kpi label="Venta Neta" valor={clp(kVenta)} sub={`Bruto ${clp(_lvR.length ? kVentaLibroBruto : kVentaBruto)} · ${_lvR.length ? kNFactLibro : kNFact} facturas`} color={C.azul} icon={TrendingUp} />
           <Kpi label="Cobrado" valor={clp(kCobrado)} sub={`Bruto ${clp(kCobradoBruto)} · ${((kCobrado / ((kCobrado + kPend) || 1)) * 100).toFixed(0)}% cartera`} color={C.verde} icon={Wallet} />
@@ -584,6 +798,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
           {esGerencia && <Kpi label="Carga financiera" valor={clp(calcularResumenFin(fin, new Date().toISOString().slice(0, 7)).deudaVigente)} sub="deuda total propia" color="#101315" icon={Landmark} />}
             {esTODAS && <Kpi label="% Factorizado" valor={`${pctFactorizado.toFixed(1)}%`} sub={`${clp(netoFactTotal)} de ${clp(netoTotalFact)}`} color={C.teal} icon={Landmark} />}
         </div>
+        )}
 
         {esGerencia && areaSel === 'TODAS' && (<ConsolidadoModule cc={{ caja, cxcTotal, cxpTotal, otEnCursoTotal, posicionFin, totalPagar, pagar7, totalEntrar, saldoProy, netoFactTotal, netoTotalFact, pctFactorizado, kVenta, kCobrado, kPend, kPerd, rentab, utilidad: vista.utilidad }} facturas={facturas} ots={ots} proyectos={proyectos} cotizaciones={cotizaciones} clientes={clientes} params={params} fin={fin} pp={pp} ppmPct={ppmPct} onIr={setAreaSel} />)}
             {false && esGerencia && areaSel === 'TODAS' && (
@@ -626,6 +841,9 @@ export default function Dashboard({ perfil, email, onLogout }) {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16, marginBottom: 16 }}>
           <div style={{ gridColumn: 'span 1' }}>
+            {(areaSel === 'Santa Rosa' || areaSel === 'Istria') ? (
+              <GraficoVentaConEquilibrio af={analisisFinancieroDe(areaSel)} area={areaSel} color={AREA_COLOR[areaSel]} clp={clp} />
+            ) : (
             <Panel title={`Venta neta por mes · ${areaSel === 'TODAS' ? 'consolidado' : areaSel}`}>
               <ResponsiveContainer width="100%" height={240}>
                 <LineChart data={mesesVista} margin={{ left: 4, right: 8 }}>
@@ -637,6 +855,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
                 </LineChart>
               </ResponsiveContainer>
             </Panel>
+            )}
           </div>
 
           <Panel title="Estado facturas">

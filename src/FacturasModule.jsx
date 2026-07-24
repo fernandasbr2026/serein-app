@@ -36,7 +36,37 @@ const ivaDe = n => Math.round((parseInt(String(n).replace(/\D/g, ''), 10) || 0) 
 const brutoDe = n => { const v = parseInt(String(n).replace(/\D/g, ''), 10) || 0; return v + Math.round(v * IVA) }
 // Versiones que respetan si la factura está marcada como exenta (sin IVA)
 const ivaFacturaDe = x => x.iva === 'exenta' ? 0 : ivaDe(x.neto)
-const montoFacturaDe = x => x.iva === 'exenta' ? (parseInt(String(x.neto).replace(/\D/g, ''), 10) || 0) : brutoDe(x.neto)
+export const montoFacturaDe = x => x.iva === 'exenta' ? (parseInt(String(x.neto).replace(/\D/g, ''), 10) || 0) : brutoDe(x.neto)
+
+// ————— Saldo pendiente real (neto/bruto) —————
+// Antes "cobrado"/"por cobrar" solo miraban el campo x.estado (Pagado o
+// no) — una factura con un abono parcial no tenía forma de reflejar
+// cuánto quedaba realmente pendiente. abonos[] guarda los pagos/abonos
+// reales registrados contra la factura (fecha, monto bruto, medio,
+// comentario). El saldo neto pendiente se prorratea sobre el saldo
+// bruto pendiente usando la misma proporción neto/bruto de la factura
+// completa — no se le pide a quien registra el abono que separe IVA a
+// mano.
+// Se mantiene la convención que ya usa el resto de la app: Pagado y
+// Factoring se consideran 100% cobrados de inmediato (el adelanto de
+// factoring ya se trata como cobro en el resto del sistema), Anulada
+// nunca aporta saldo.
+export function saldoPendienteDe(x) {
+  const bruto = montoFacturaDe(x)
+  if (x.estado === 'Anulada' || x.estado === 'Pagado' || x.estado === 'Factoring') return { neto: 0, bruto: 0 }
+  const pagadoBruto = (x.abonos || []).reduce((a, ab) => a + (Number(ab.monto) || 0), 0)
+  const saldoBruto = Math.max(0, bruto - pagadoBruto)
+  const saldoNeto = bruto > 0 ? Math.max(0, Math.round((x.neto || 0) * (saldoBruto / bruto))) : 0
+  return { neto: saldoNeto, bruto: saldoBruto }
+}
+// Estado de pago derivado — punto único de verdad, no se vuelve a
+// comparar x.estado === 'Pagado' suelto en ningún cálculo nuevo.
+export function estadoPagoDe(x) {
+  if (x.estado === 'Anulada') return 'Anulada'
+  const { bruto } = saldoPendienteDe(x)
+  if (bruto <= 0) return 'Pagada'
+  return (x.abonos || []).length > 0 ? 'Parcial' : (x.estado === 'Vencida' ? 'Vencida' : 'Pendiente')
+}
 
 export default function FacturasModule({ area, facturas, setFacturas, params = { factoring: [] }, comisionPct = 0, setComisionPct = () => {}, ppmPct = 2, setPpmPct = () => {}, clientesSugeridos = [], proyectos = [], ots = [] }) {
   const lista = (facturas && facturas[area]) || []
@@ -98,6 +128,28 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
   }
   // Al cambiar el neto, recalcula el bruto automáticamente (IVA 19%)
   const setNeto = (id, valor) => { const nt = num(valor); setLista(lista.map(x => x.id === id ? { ...x, neto: nt, monto: montoFacturaDe({ ...x, neto: nt }) } : x)) }
+  // Registrar/borrar un abono: trae lo más fresco de la nube antes de
+  // escribir (mismo patrón agregarAArray de OTModule.jsx) porque un abono
+  // es dinero real — no queremos partir de una copia vieja de la factura
+  // si alguien más la editó mientras tanto.
+  const [expandido, setExpandido] = useState(null)
+  const agregarAbono = async (id, abono) => {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_facturas') || 'null') } catch (e) {}
+    const baseFacturas = fresco && typeof fresco === 'object' ? fresco : (facturas || {})
+    const baseLista = baseFacturas[area] || []
+    setLista(baseLista.map(x => x.id === id ? { ...x, abonos: [...(x.abonos || []), abono] } : x))
+  }
+  const eliminarAbono = async (id, abonoId) => {
+    if (!window.confirm('¿Eliminar este abono?')) return
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_facturas') || 'null') } catch (e) {}
+    const baseFacturas = fresco && typeof fresco === 'object' ? fresco : (facturas || {})
+    const baseLista = baseFacturas[area] || []
+    setLista(baseLista.map(x => x.id === id ? { ...x, abonos: (x.abonos || []).filter(a => a.id !== abonoId) } : x))
+  }
   // Nombres para autocompletar el cliente: contactos + los ya usados en el área
   const sugerencias = [...new Set([...(clientesSugeridos || []), ...lista.map(x => x.cliente).filter(Boolean)])].sort((a, b) => a.localeCompare(b))
 
@@ -189,7 +241,8 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
     })))
   }
   const totalMonto = mostradas.reduce((a, x) => a + montoFacturaDe(x), 0)
-  const cobrado = mostradas.filter(x => x.estado === 'Pagado').reduce((a, x) => a + montoFacturaDe(x), 0)
+  const saldoPendienteTotal = mostradas.reduce((a, x) => a + saldoPendienteDe(x).bruto, 0)
+  const cobrado = totalMonto - saldoPendienteTotal
   const totalComision = mostradas.reduce((a, x) => a + comisionDe(x), 0)
   const totalNeto = mostradas.reduce((a, x) => a + (x.neto || 0), 0)
   const totalPPM = Math.round(totalNeto * (ppmPct / 100))
@@ -295,8 +348,8 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
             <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
               <th style={{ padding: '5px 6px', width: 30 }}><input type="checkbox" checked={mostradas.length > 0 && sel.size === mostradas.length} onChange={toggleTodas} /></th>
-              {['N° factura', 'Cliente', 'OT / OC', 'Centro de costo', ...(esIstria ? ['Proyecto', 'NV'] : []), 'Emisión', 'Neto', 'IVA', 'Total', `PPM ${ppmPct}%`, 'Estado', 'Fecha pago', 'Banco depósito', 'Comentarios', 'Vendedor', 'Comisión', ''].map((h, i) => (
-                <th key={i} style={{ textAlign: ['Neto', 'IVA', 'Total', 'Comisión'].includes(h) || h.startsWith('PPM') ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+              {['N° factura', 'Cliente', 'OT / OC', 'Centro de costo', ...(esIstria ? ['Proyecto', 'NV'] : []), 'Emisión', 'Neto', 'IVA', 'Total', `PPM ${ppmPct}%`, 'Estado', 'Saldo pendiente', 'Fecha pago', 'Banco depósito', 'Comentarios', 'Vendedor', 'Comisión', ''].map((h, i) => (
+                <th key={i} style={{ textAlign: ['Neto', 'IVA', 'Total', 'Comisión', 'Saldo pendiente'].includes(h) || h.startsWith('PPM') ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
@@ -324,6 +377,11 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                       {ESTADOS.map(s => <option key={s}>{s}</option>)}
                     </select>
                   </td>
+                  <td style={{ padding: '4px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    <button onClick={() => setExpandido(expandido === x.id ? null : x.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: saldoPendienteDe(x).bruto > 0 ? C.rojo : C.verde, fontWeight: 600, textDecoration: 'underline', fontSize: 12.5 }}>
+                      {clp(saldoPendienteDe(x).bruto)}
+                    </button>
+                  </td>
                   <td style={{ padding: '5px 6px' }}><input type="date" value={x.fecha_pago} onChange={e => actualizar(x.id, 'fecha_pago', e.target.value)} style={{ ...inp, width: 130 }} /></td>
                   <td style={{ padding: '5px 6px' }}>
                     <input value={x.banco} onChange={e => actualizar(x.id, 'banco', e.target.value)} placeholder="Banco…" style={{ ...inp, width: 130 }} />
@@ -339,7 +397,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                 </tr>
                 {x.estado === 'Factoring' && (
                   <tr style={{ background: '#FDECDD' }}>
-                    <td colSpan={esIstria ? 19 : 17} style={{ padding: '8px 10px' }}>
+                    <td colSpan={esIstria ? 20 : 18} style={{ padding: '8px 10px' }}>
                       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12 }}>
                         <span style={{ color: C.gris, fontWeight: 600 }}>Factoring:</span>
                         <select value={x.factoringId || (fSel ? fSel.id : '')} onChange={e => actualizar(x.id, 'factoringId', e.target.value)} style={inp}>
@@ -356,9 +414,16 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                     </td>
                   </tr>
                 )}
+                {expandido === x.id && (
+                  <tr style={{ background: '#F2F4F7' }}>
+                    <td colSpan={esIstria ? 20 : 18} style={{ padding: '8px 10px' }}>
+                      <FilaAbonos x={x} onAgregar={abono => agregarAbono(x.id, abono)} onEliminar={abonoId => eliminarAbono(x.id, abonoId)} />
+                    </td>
+                  </tr>
+                )}
                 </React.Fragment>
               ) })}
-              {mostradas.length === 0 && <tr><td colSpan={esIstria ? 19 : 17} style={{ padding: 14, textAlign: 'center', color: '#9AA3AD' }}>{busca ? 'Sin resultados para la búsqueda.' : 'Sin facturas en esta área.'}</td></tr>}
+              {mostradas.length === 0 && <tr><td colSpan={esIstria ? 20 : 18} style={{ padding: 14, textAlign: 'center', color: '#9AA3AD' }}>{busca ? 'Sin resultados para la búsqueda.' : 'Sin facturas en esta área.'}</td></tr>}
             </tbody>
           </table>
           <Paginador page={pg.page} paginas={pg.paginas} total={pg.total} setPage={setPage} />
@@ -368,6 +433,58 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
       </div>
       <div style={{ fontSize: 11, color: '#9AA3AD', marginTop: 6 }}>
         Estas facturas se llenarán automáticamente desde Defontana/SII cuando activemos la sincronización. Por ahora puedes cargarlas y editarlas a mano.
+      </div>
+    </div>
+  )
+}
+
+const MEDIOS_ABONO = ['Transferencia', 'Cheque', 'Efectivo', 'Otro']
+
+// Sub-fila desplegable con el historial de abonos de una factura y el
+// formulario para registrar uno nuevo — mismo patrón visual que la
+// sub-fila de Factoring de arriba.
+function FilaAbonos({ x, onAgregar, onEliminar }) {
+  const abonos = x.abonos || []
+  const [monto, setMonto] = useState('')
+  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10))
+  const [medio, setMedio] = useState('Transferencia')
+  const [comentario, setComentario] = useState('')
+  const guardar = () => {
+    const m = num(monto)
+    if (m <= 0) return
+    onAgregar({ id: 'ab' + Date.now(), monto: m, fecha, medio, comentario })
+    setMonto(''); setComentario('')
+  }
+  const { neto, bruto } = saldoPendienteDe(x)
+  return (
+    <div style={{ fontSize: 12 }}>
+      <div style={{ marginBottom: 6, color: C.carbon }}>
+        <b>Abonos de la factura {x.numero}</b> — saldo pendiente: <b style={{ color: bruto > 0 ? C.rojo : C.verde }}>{clp(bruto)}</b> bruto / {clp(neto)} neto
+      </div>
+      {abonos.length > 0 && (
+        <table style={{ width: '100%', marginBottom: 8, borderCollapse: 'collapse' }}>
+          <thead><tr style={{ color: C.gris, fontSize: 10.5, textTransform: 'uppercase' }}>
+            <th style={{ textAlign: 'left', padding: '2px 6px' }}>Fecha</th><th style={{ textAlign: 'right', padding: '2px 6px' }}>Monto</th><th style={{ textAlign: 'left', padding: '2px 6px' }}>Medio</th><th style={{ textAlign: 'left', padding: '2px 6px' }}>Comentario</th><th></th>
+          </tr></thead>
+          <tbody>
+            {abonos.map(a => (
+              <tr key={a.id} style={{ borderTop: '1px solid #DFE4EA' }}>
+                <td style={{ padding: '3px 6px' }}>{a.fecha}</td>
+                <td style={{ padding: '3px 6px', textAlign: 'right' }}>{clp(a.monto)}</td>
+                <td style={{ padding: '3px 6px' }}>{a.medio}</td>
+                <td style={{ padding: '3px 6px', color: C.gris }}>{a.comentario}</td>
+                <td style={{ padding: '3px 6px', textAlign: 'right' }}><button onClick={() => onEliminar(a.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={12} /></button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={{ ...inp, width: 130 }} />
+        <input placeholder="Monto abonado" value={monto} onChange={e => setMonto(e.target.value)} style={{ ...inp, width: 120, textAlign: 'right' }} />
+        <select value={medio} onChange={e => setMedio(e.target.value)} style={inp}>{MEDIOS_ABONO.map(m => <option key={m}>{m}</option>)}</select>
+        <input placeholder="Comentario (opcional)" value={comentario} onChange={e => setComentario(e.target.value)} style={{ ...inp, width: 180 }} />
+        <button onClick={guardar} style={{ background: C.verde, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12.5 }}>Registrar abono</button>
       </div>
     </div>
   )
