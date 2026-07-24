@@ -110,26 +110,35 @@ export async function pullState() {
 export async function escribirConReintento(key, mutar, intentos = 6) {
   for (let intento = 0; intento < intentos; intento++) {
     let actual = null
+    let updatedAtAnterior = null
     try {
-      const { data, error } = await supabase.from('app_state').select('value').eq('id', key).maybeSingle()
+      // Comparar por updated_at (un timestamp corto) en vez de por el
+      // value completo — con arreglos grandes (ej. todas las cotizaciones
+      // con sus ítems), meter el value entero en la condición de la
+      // consulta superaba el largo máximo permitido y Supabase rechazaba
+      // la petición completa con "Bad Request", justo la falla real que
+      // reportó el usuario.
+      const { data, error } = await supabase.from('app_state').select('value, updated_at').eq('id', key).maybeSingle()
       if (error) return { ok: false, error: error.message || String(error) }
-      if (data && data.value != null) { try { actual = JSON.parse(data.value) } catch (e) { actual = null } }
+      if (data) {
+        updatedAtAnterior = data.updated_at || null
+        if (data.value != null) { try { actual = JSON.parse(data.value) } catch (e) { actual = null } }
+      }
     } catch (e) {
       return { ok: false, error: (e && e.message) || String(e) }
     }
-    const valorAnteriorStr = actual == null ? null : JSON.stringify(actual)
     let nuevo
     try { nuevo = mutar(actual) } catch (e) { return { ok: false, error: 'Error al calcular el cambio: ' + ((e && e.message) || String(e)) } }
     const valorNuevoStr = JSON.stringify(nuevo)
     try {
-      if (valorAnteriorStr == null) {
+      if (updatedAtAnterior == null) {
         // Fila nueva: si alguien se adelanta a crearla, el insert falla por
         // llave duplicada y el siguiente intento del for la trata como
         // edición (compare-and-swap normal) sobre lo que esa persona subió.
         const { error } = await supabase.from('app_state').insert({ id: key, value: valorNuevoStr, updated_at: new Date().toISOString() })
         if (error) continue
       } else {
-        const { data: filas, error } = await supabase.from('app_state').update({ value: valorNuevoStr, updated_at: new Date().toISOString() }).eq('id', key).eq('value', valorAnteriorStr).select('id')
+        const { data: filas, error } = await supabase.from('app_state').update({ value: valorNuevoStr, updated_at: new Date().toISOString() }).eq('id', key).eq('updated_at', updatedAtAnterior).select('id')
         if (error) return { ok: false, error: error.message || String(error) }
         if (!filas || filas.length === 0) continue // alguien más escribió primero — reintentar sobre lo más nuevo
       }
