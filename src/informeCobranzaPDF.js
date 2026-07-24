@@ -45,9 +45,10 @@ table.items{width:100%;border-collapse:collapse;margin-top:6px}
 .items td{border:1px solid ${SEREIN.line};padding:5px 6px;font-size:10px;vertical-align:top}
 .items .r{text-align:right}
 .pill{display:inline-block;padding:2px 7px;border-radius:16px;font-size:9px;font-weight:700;white-space:nowrap}
-.criterio{margin-top:16px;border-top:1px solid ${SEREIN.line};padding-top:10px;font-size:10px;color:${SEREIN.textSoft};line-height:1.5}
-.criterio b{color:${SEREIN.ink}}
-.conclusion{margin-top:10px;border:1px solid ${SEREIN.line};border-radius:6px;padding:10px 12px;background:${SEREIN.fog};font-size:11px;line-height:1.55;color:${SEREIN.text}}
+.aviso{margin-top:16px;border-top:2px solid ${SEREIN.orange};padding-top:12px;font-size:11px;line-height:1.6;color:${SEREIN.text}}
+.aviso p{margin:0 0 8px}
+.datos{margin-top:10px;border:1px solid ${SEREIN.line};border-radius:6px;padding:10px 12px;background:${SEREIN.fog};font-size:10.5px;line-height:1.55}
+.datos b{color:${SEREIN.ink}}
 @page{ @bottom-center{ content:"Página " counter(page) " de " counter(pages) " · ${EMPRESA.nombre} · Emitido el ${fmtF(new Date().toISOString().slice(0, 10))}"; font-size:8.5px; color:${SEREIN.textSoft}; } }`
 }
 
@@ -62,22 +63,21 @@ function resumenGeneral(items) {
   return { n, saldoNeto, saldoBruto, n1a20, n21mas, nPendPub, nPublicadas }
 }
 
-// El texto se arma solo con los números ya calculados — nunca se
-// inventa una cifra ni un estado que no venga de resumenGeneral().
-function conclusionAutomatica(area, r) {
-  const hoyTxt = fmtF(new Date().toISOString().slice(0, 10))
-  if (r.n === 0) return `Al ${hoyTxt}, ${area} no registra facturas vencidas según los filtros aplicados.`
-  let txt = `Al ${hoyTxt}, ${area} mantiene ${r.n} factura${r.n === 1 ? '' : 's'} vencida${r.n === 1 ? '' : 's'}, con un saldo pendiente de ${clp(r.saldoNeto)} netos y ${clp(r.saldoBruto)} brutos.`
-  if (r.n21mas > 0) {
-    txt += ` ${r.n21mas} factura${r.n21mas === 1 ? '' : 's'} supera${r.n21mas === 1 ? '' : 'n'} los 20 días de mora.`
-    if (r.nPendPub > 0 || r.nPublicadas > 0) {
-      const partes = []
-      if (r.nPendPub > 0) partes.push(`${r.nPendPub} pendiente${r.nPendPub === 1 ? '' : 's'} de publicación`)
-      if (r.nPublicadas > 0) partes.push(`${r.nPublicadas} publicada${r.nPublicadas === 1 ? '' : 's'} en Boletín Comercial`)
-      txt += ` De ellas, ${partes.join(' y ')}.`
-    }
+// Este informe se envía directamente al cliente moroso, así que el pie
+// no explica la metodología interna (eso vivía antes en un bloque de
+// "Criterio de clasificación") — en su lugar, un aviso claro sobre qué
+// debe hacer. El texto se arma solo desde los estados ya calculados de
+// cada factura, nunca se inventa ni se asume: solo dice "publicada" si
+// alguna factura del informe ya está realmente registrada como tal.
+function avisoCliente(r) {
+  const partes = []
+  if (r.nPublicadas > 0) {
+    partes.push(`<p>Las facturas señaladas como <b>"Publicada en Boletín Comercial"</b> se encuentran actualmente publicadas en el registro de la Cámara de Comercio de Santiago. Si ya cuenta con el comprobante de pago correspondiente, le solicitamos enviarlo a la brevedad a <b>${EMPRESA.email}</b> para gestionar la baja de la publicación.</p>`)
   }
-  return txt
+  if (r.n - r.nPublicadas > 0) {
+    partes.push(`<p>Las facturas señaladas como <b>pendientes de publicación</b> aún no han sido incorporadas al Boletín Comercial. Le solicitamos regularizar su pago a la brevedad para evitar dicha publicación.</p>`)
+  }
+  return partes.join('')
 }
 
 function htmlInforme({ items, area, filtroDescripcion, periodoDescripcion, usuarioEmail }) {
@@ -118,7 +118,6 @@ function htmlInforme({ items, area, filtroDescripcion, periodoDescripcion, usuar
     </div>
     <div class="meta">
       <span>Periodo analizado: <b>${periodoDescripcion || 'Todas las fechas'}</b></span>
-      <span>Filtros aplicados: <b>${filtroDescripcion || 'Ninguno'}</b></span>
     </div>
     <div class="resumen">
       <div class="c"><div class="l">Facturas vencidas</div><div class="v">${r2.n}</div></div>
@@ -132,13 +131,13 @@ function htmlInforme({ items, area, filtroDescripcion, periodoDescripcion, usuar
     ${items.length ? `<table class="items"><thead><tr>
       <th>Factura</th><th>Cliente</th><th>Emisión</th><th>Vencimiento</th><th class="r">Total neto</th><th class="r">Total bruto</th><th class="r">Pagado</th><th class="r">Saldo bruto</th><th class="r">Días mora</th><th>Estado cobranza</th><th>Boletín Comercial</th><th>Fecha publicación</th>
     </tr></thead><tbody>${filas}</tbody></table>` : `<div style="padding:16px 0;color:${SEREIN.green};font-weight:600">Sin facturas vencidas para estos filtros.</div>`}
-    <div class="criterio">
-      <b>Criterio de clasificación:</b><br/>
-      De 1 a 20 días de mora: Cobranza atrasada.<br/>
-      Desde 21 días de mora: corresponde iniciar o revisar el proceso de publicación en Boletín Comercial.<br/>
-      El estado "Publicada en Boletín Comercial" se muestra solamente cuando la publicación fue registrada y confirmada en el sistema.
+    <div class="aviso">${avisoCliente(r)}</div>
+    <div class="datos"><b>Datos de transferencia</b><br/>
+      SERVICIOS REVESTIMIENTOS INDUSTRIALES SpA · RUT 76.860.656-0<br/>
+      Banco de Chile · Cuenta Corriente N° 532147409<br/>
+      ${EMPRESA.email} · Carolina Marillanca, Gerente Comercial<br/>
+      Dirección: Santa Rosa 70, Lampa · sereingroup.cl · Tel: 56 9 7647 1744
     </div>
-    <div class="conclusion">${conclusionAutomatica(area, r)}</div>
   </body></html>`
 }
 
