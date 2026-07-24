@@ -28,7 +28,7 @@ import ConsolidadoModule from './ConsolidadoModule.jsx'
 import OrganigramaModule from './OrganigramaModule.jsx'
 import CRMModule from './CRMModule.jsx'
 import ContactosModule, { CONTACTOS_SEED, nombresClientes } from './ContactosModule.jsx'
-import FacturasModule, { FACTURAS_SEED, saldoPendienteDe, montoFacturaDe } from './FacturasModule.jsx'
+import FacturasModule, { FACTURAS_SEED, saldoPendienteDe, montoFacturaDe, CobranzaAtrasadaModule } from './FacturasModule.jsx'
 import { MO_SEED } from './ManoObraModule.jsx'
 import { PROYECTOS } from './proyectos-data.js'
 import InventarioModule from './InventarioModule.jsx'
@@ -921,6 +921,9 @@ export default function Dashboard({ perfil, email, onLogout }) {
               </Panel>
             </div>
 
+            {(areaSel === 'Santa Rosa' || areaSel === 'Istria') ? (
+              <CobranzaAtrasadaModule area={areaSel} facturas={facturas} setFacturas={setFacturas} usuarioEmail={email} />
+            ) : (
             <Panel title="Cobranza atrasada" right={<span style={{ fontSize: 12, color: C.rojo }}>{vista.atrasadas.length} facturas</span>}>
               {vista.atrasadas.length === 0 ? (
                 <div style={{ color: C.verde, fontSize: 14, padding: '10px 0' }}>✓ Sin facturas atrasadas en esta área.</div>
@@ -949,6 +952,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
                 </div>
               )}
             </Panel>
+            )}
           </>
         )}
         {(areaSel === 'Santa Rosa' || areaSel === 'Istria') && (
