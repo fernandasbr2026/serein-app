@@ -417,7 +417,12 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
         const existe = base.some(c => c.id === cot.id)
         let cotFinal = cot
         if (!existe) {
-          let folioFresco = base.reduce((m, c) => Math.max(m, parseInt(String(c.folio).replace(/\D/g, ''), 10) || 0), 792) + 1
+          // Piso en 825 (no 792): el folio 825 falló al guardarse muchas
+          // veces seguidas por administración — se salta por completo para
+          // no reintentarlo justo con ese número mientras se sigue
+          // diagnosticando, aunque hoy no debería quedar ninguna cotización
+          // real con folio 825 en la nube (nunca llegó a guardarse).
+          let folioFresco = Math.max(825, base.reduce((m, c) => Math.max(m, parseInt(String(c.folio).replace(/\D/g, ''), 10) || 0), 792)) + 1
           while (base.some(c => String(c.folio) === String(folioFresco))) folioFresco++
           cotFinal = { ...cot, folio: String(folioFresco) }
         }
