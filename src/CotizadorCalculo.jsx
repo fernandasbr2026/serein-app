@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { COTIZADOR_SEED, indexProductos, desgloseItem, valorM2Capa, rendimientoM2Gal, valorGalon } from './cotizador-data.js'
-import { pushState, pullState } from './sync.js'
+import { escribirConReintento } from './sync.js'
 import { THEME } from './ui.jsx'
 import { Plus, Trash2, ChevronLeft } from 'lucide-react'
 
@@ -91,37 +91,36 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
       const msg = 'La' + (sinM2.length > 1 ? 's piezas N\u00b0 ' : ' pieza N\u00b0 ') + sinM2.join(', ') + (sinM2.length > 1 ? ' est\u00e1n' : ' est\u00e1') + ' en 0 m\u00b2. Su total quedar\u00e1 en $0 y no sumar\u00e1 al total de la cotizaci\u00f3n.\n\n\u00bfGenerar la cotizaci\u00f3n de todas formas?'
       if (!window.confirm(msg)) return
     }
-    // Antes esta funcion calculaba el folio y escribia el arreglo completo
-    // de cotizaciones usando lo que ya estaba cargado en memoria (sin traer
-    // lo mas fresco de la nube antes) -- el mismo bug que se corrigio en
-    // CotizacionesModule.jsx (guardar/eliminar/aprobar): si esta copia local
-    // estaba un poco atrasada, el push de esta pantalla podia subir un
-    // arreglo que no incluia una cotizacion que otra persona acababa de
-    // crear, borrandola de la nube sin ningun error visible. Se aplica el
-    // mismo arreglo: traer lo fresco antes de calcular folio y resultado
-    // final, en segundo plano para no congelar el boton "Guardar".
+    // Segundo intento (el primero, pull-fresh-antes-de-escribir, no basto
+    // -- el caso real que lo probo: dos cotizaciones con el mismo folio
+    // creadas con HORAS de diferencia, no al mismo tiempo). Ahora usa
+    // escribirConReintento() (src/sync.js): compare-and-swap real contra
+    // la fila de Supabase -- si nadie la toco desde que se leyo, sube; si
+    // alguien la toco (aunque haya sido horas antes), reintenta solo,
+    // automaticamente, trayendo lo mas nuevo y recalculando folio y
+    // resultado sobre esa base, hasta 6 veces.
     setGuardado('Guardando...')
+    let ultimoNumero = ''
     ;(async () => {
-      try { await pullState() } catch (e) {}
-      let fresco = null
-      try { fresco = JSON.parse(localStorage.getItem('serein_cotizaciones') || 'null') } catch (e) {}
-      const base = Array.isArray(fresco) ? fresco : (cotizaciones || [])
-      let numero = (inicial && (inicial.numero || inicial.folio)) || proximoNumero(base)
-      if (!inicial) {
-        let n = parseInt(numero, 10) || 0
-        while (base.some(c => String(c.numero || c.folio) === String(n))) n++
-        numero = String(n)
-      }
-      const cli = cliSel || { nombre: cliQuery }
-      const cot = { id: (inicial && inicial.id) || ('cot' + Date.now()), numero, folio: numero, area: sede, vencimiento: new Date().toISOString().slice(0, 10), tipo: 'calculo', origen: 'cotizador', estado: (inicial && inicial.estado) || 'Alta probabilidad de cierre', cliente: cli.nombre || '', rut: cli.rut || '', giro: cli.giro || '', direccion: cli.direccion || '', comuna: cli.comuna || '', ciudad: cli.ciudad || cli.comuna || '', condicionPago: 'CONTADO', vendedor: cli.vendedor || 'Venta general', sede, fecha: new Date().toISOString().slice(0, 10), margenVenta: +pct, porcentajeGanancia: +pct, proveedorPintura: provPintura,
-        items: items.map((it, i) => { const d = dg(it); const pm = precioMargen(d.costoM2, pct); const etiquetaGrado = it.sinGranallado ? 'sin granallado' : it.grado; return { codigo: it.sinGranallado ? '' : it.grado, detalle: (it.desc || 'Item ' + (i + 1)) + (it.ral ? ' - ' + it.ral : '') + ' - ' + (it.capas.filter(c => c.p).map(c => c.p).join(' + ') || (it.sinGranallado ? 'sin items' : 'solo granallado ' + it.grado)), cant: +it.m2 || 0, unidad: 'm2', pUnitario: Math.round(pm), descuento: 0, comentario: (it.capas.filter(c => c.p).map(c => c.p + ' ' + milsProm(c) + ' mils').join(' + ') || (it.sinGranallado ? 'Sin items' : 'Solo granallado')) + ' - ' + etiquetaGrado, descripcion: it.desc, ral: it.ral, m2: +it.m2 || 0, gradoSSPC: it.grado, sinGranallado: !!it.sinGranallado, factorDificultad: it.dif, limpiezaSP1: +it.limpieza || 0, capas: it.capas.filter(c => c.p), costoM2: Math.round(d.costoM2), precioM2: Math.round(pm), comprasPintura: d.comprasPintura || [], pinturaCompraTotal: (d.comprasPintura || []).reduce((a, cp) => a + (cp.costo || 0), 0), total: Math.round(pm * (+it.m2 || 0)), desglose: { granallado: Math.round(d.granallado), limpieza: Math.round(d.limpieza), diluyente: Math.round(d.diluyente), pintura: Math.round(d.pintura), fijos: Math.round(d.fijos) } } }),
-        total: Math.round(totalCot), montoCotizado: Math.round(totalCot), supuestos: { sueldosGranallado: +sg, sueldosPintores: +sp, totalFijos } }
-      const nuevo = inicial ? base.map(x => x.id === cot.id ? cot : x) : [...base, cot]
-      try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
-      setCotizaciones(nuevo)
-      pushState()
+      const r = await escribirConReintento('serein_cotizaciones', base => {
+        base = base || []
+        let numero = (inicial && (inicial.numero || inicial.folio)) || proximoNumero(base)
+        if (!inicial) {
+          let n = parseInt(numero, 10) || 0
+          while (base.some(c => String(c.numero || c.folio) === String(n))) n++
+          numero = String(n)
+        }
+        const cli = cliSel || { nombre: cliQuery }
+        const cot = { id: (inicial && inicial.id) || ('cot' + Date.now()), numero, folio: numero, area: sede, vencimiento: new Date().toISOString().slice(0, 10), tipo: 'calculo', origen: 'cotizador', estado: (inicial && inicial.estado) || 'Alta probabilidad de cierre', cliente: cli.nombre || '', rut: cli.rut || '', giro: cli.giro || '', direccion: cli.direccion || '', comuna: cli.comuna || '', ciudad: cli.ciudad || cli.comuna || '', condicionPago: 'CONTADO', vendedor: cli.vendedor || 'Venta general', sede, fecha: new Date().toISOString().slice(0, 10), margenVenta: +pct, porcentajeGanancia: +pct, proveedorPintura: provPintura,
+          items: items.map((it, i) => { const d = dg(it); const pm = precioMargen(d.costoM2, pct); const etiquetaGrado = it.sinGranallado ? 'sin granallado' : it.grado; return { codigo: it.sinGranallado ? '' : it.grado, detalle: (it.desc || 'Item ' + (i + 1)) + (it.ral ? ' - ' + it.ral : '') + ' - ' + (it.capas.filter(c => c.p).map(c => c.p).join(' + ') || (it.sinGranallado ? 'sin items' : 'solo granallado ' + it.grado)), cant: +it.m2 || 0, unidad: 'm2', pUnitario: Math.round(pm), descuento: 0, comentario: (it.capas.filter(c => c.p).map(c => c.p + ' ' + milsProm(c) + ' mils').join(' + ') || (it.sinGranallado ? 'Sin items' : 'Solo granallado')) + ' - ' + etiquetaGrado, descripcion: it.desc, ral: it.ral, m2: +it.m2 || 0, gradoSSPC: it.grado, sinGranallado: !!it.sinGranallado, factorDificultad: it.dif, limpiezaSP1: +it.limpieza || 0, capas: it.capas.filter(c => c.p), costoM2: Math.round(d.costoM2), precioM2: Math.round(pm), comprasPintura: d.comprasPintura || [], pinturaCompraTotal: (d.comprasPintura || []).reduce((a, cp) => a + (cp.costo || 0), 0), total: Math.round(pm * (+it.m2 || 0)), desglose: { granallado: Math.round(d.granallado), limpieza: Math.round(d.limpieza), diluyente: Math.round(d.diluyente), pintura: Math.round(d.pintura), fijos: Math.round(d.fijos) } } }),
+          total: Math.round(totalCot), montoCotizado: Math.round(totalCot), supuestos: { sueldosGranallado: +sg, sueldosPintores: +sp, totalFijos } }
+        ultimoNumero = numero
+        return inicial ? base.map(x => x.id === cot.id ? cot : x) : [...base, cot]
+      })
+      if (!r.ok) { setGuardado(''); window.alert('No se pudo guardar la cotizacion' + (r.error ? ': ' + r.error : '') + '. Revisa tu conexion e intentalo de nuevo.'); return }
+      setCotizaciones(r.value)
       if (!cliSel && cliQuery.trim()) { try { onAddCliente(cliQuery.trim()) } catch (e) {} }
-      setGuardado('Borrador ' + numero + (inicial ? ' actualizado.' : ' guardado en Cotizaciones.'))
+      setGuardado('Borrador ' + ultimoNumero + (inicial ? ' actualizado.' : ' guardado en Cotizaciones.'))
     })()
   }
 
