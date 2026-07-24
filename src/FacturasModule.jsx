@@ -6,6 +6,7 @@ import Paginador, { paginar } from './Paginador.jsx'
 import { pullState, pushState } from './sync.js'
 import { descargarInformeFacturas } from './informeFacturas.js'
 import { ocultarFacturasDeLibro } from './facturasOcultas.js'
+import { descargarInformeCobranza as descargarInformeCobranzaPDF } from './informeCobranzaPDF.js'
 export { FACTURAS_SEED } from './facturas-data.js'
 const CONDICIONES_DIAS = [{ label: '30 días', dias: 30 }, { label: '45 días', dias: 45 }, { label: '60 días', dias: 60 }, { label: '90 días', dias: 90 }]
 const norm = s => (s || '').toString().toLowerCase()
@@ -532,15 +533,48 @@ export function CobranzaAtrasadaModule({ area, facturas, setFacturas, usuarioEma
   const nEnCobranza = filtradas.filter(x => estadoCobranzaDe(x) === 'Cobranza atrasada').length
   const nCorrespondePublicar = filtradas.filter(x => estadoCobranzaDe(x) === 'Corresponde publicar').length
 
+  // El informe PDF reporta exactamente lo que está filtrado en pantalla —
+  // así "todas las vencidas", "solo 1-20 días", "por cliente", "por rango
+  // de fechas", "pendientes/publicadas en Boletín" son la misma acción,
+  // solo cambia qué filtros tenga aplicados la persona antes de descargar.
+  const descargarInformeCobranza = () => {
+    const partes = []
+    if (fCliente) partes.push('Cliente: ' + fCliente)
+    if (fFolio) partes.push('N° factura contiene "' + fFolio + '"')
+    if (fVencDesde || fVencHasta) partes.push('Vencimiento ' + (fVencDesde || '…') + ' a ' + (fVencHasta || '…'))
+    if (fDiasMin !== '' || fDiasMax !== '') partes.push('Días de mora ' + (fDiasMin || '0') + ' a ' + (fDiasMax || '∞'))
+    if (fEstadoPago) partes.push('Estado de pago: ' + fEstadoPago)
+    if (fEstadoPub) partes.push('Publicación: ' + fEstadoPub)
+    const filtroDescripcion = partes.length ? partes.join(' · ') : 'Todas las facturas vencidas'
+    const periodoDescripcion = (fEmisionDesde || fEmisionHasta) ? ('Emisión ' + (fEmisionDesde || '…') + ' a ' + (fEmisionHasta || '…')) : 'Todas las fechas'
+    descargarInformeCobranzaPDF({
+      area,
+      filtroDescripcion,
+      periodoDescripcion,
+      usuarioEmail,
+      items: filtradas.map(x => {
+        const saldo = saldoPendienteDe(x)
+        const bruto = montoFacturaDe(x)
+        return {
+          folio: x.numero, cliente: x.cliente, fechaEmision: x.fecha_emision, fechaVencimiento: x.vencimiento,
+          neto: x.neto, bruto, pagado: bruto - saldo.bruto, saldoNeto: saldo.neto, saldoBruto: saldo.bruto,
+          diasMora: diasMoraDe(x), estadoCobranza: estadoCobranzaDe(x), estadoPublicacion: estadoPublicacionDe(x),
+          fechaPublicacion: x.boletin && x.boletin.estado === 'publicada' ? x.boletin.fecha : '',
+        }
+      }),
+    })
+  }
+
   return (
     <div style={{ marginTop: 16 }}>
       <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: `3px solid ${C.rojo}` }}>
         <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, borderBottom: '1px solid #DFE4EA' }}>
           <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Cobranza atrasada · {area}</span>
-          <div style={{ display: 'flex', gap: 14, fontSize: 12, color: C.gris }}>
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center', fontSize: 12, color: C.gris, flexWrap: 'wrap' }}>
             <span>{filtradas.length} de {atrasadas.length} facturas</span>
             <span>1-20 días: <b style={{ color: C.ambar }}>{nEnCobranza}</b></span>
             <span>21+ días: <b style={{ color: C.rojo }}>{nCorrespondePublicar}</b></span>
+            <button onClick={descargarInformeCobranza} disabled={!filtradas.length} style={{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12, background: filtradas.length ? C.azul : '#DFE4EA', color: filtradas.length ? '#fff' : C.gris, cursor: filtradas.length ? 'pointer' : 'default' }}>Descargar informe PDF</button>
           </div>
         </div>
         <div style={{ padding: '10px 16px', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', borderBottom: '1px solid #DFE4EA', background: '#F2F4F7' }}>
