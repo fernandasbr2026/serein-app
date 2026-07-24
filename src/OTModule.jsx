@@ -1096,7 +1096,13 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
         base = Array.isArray(base) ? base : []
         return base.map(o => aplicar[o.id] ? { ...o, ...aplicar[o.id] } : o)
       })
-    }, 600)
+      // 2.5s (no 600ms): cada llamada hace un ida-y-vuelta real a Supabase
+      // (leer + escribir), a diferencia del pushState() de antes que
+      // juntaba TODOS los cambios pendientes en una sola subida. Con
+      // varias personas tipeando en distintas OT a la vez, un debounce
+      // corto multiplica muchas consultas pequeñas y puede saturar la
+      // base de datos (afecta a toda la app, no solo a esta pantalla).
+    }, 2500)
   }
   // Un borrado normal (setOts local + el guardado/push general de 800ms)
   // se podía "revivir": si otra pestaña con una copia más vieja de las OT
