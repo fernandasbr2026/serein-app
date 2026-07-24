@@ -68,6 +68,41 @@ export function estadoPagoDe(x) {
   return (x.abonos || []).length > 0 ? 'Parcial' : (x.estado === 'Vencida' ? 'Vencida' : 'Pendiente')
 }
 
+// ————— Cobranza atrasada / Boletín Comercial —————
+// Días de mora reales: solo cuentan mientras la factura mantenga saldo
+// pendiente y tenga fecha de vencimiento cargada. En cuanto el saldo
+// llega a 0 (por abono, pago total o anulación), deja de acumular días
+// y desaparece de cobranza atrasada — es consecuencia directa de estar
+// calculado, no un caso especial.
+export function diasMoraDe(x) {
+  if (!x.vencimiento || x.estado === 'Anulada') return null
+  const { bruto } = saldoPendienteDe(x)
+  if (bruto <= 0) return null
+  const venc = new Date(x.vencimiento + 'T00:00:00')
+  if (isNaN(venc.getTime())) return null
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
+  const dias = Math.floor((hoy - venc) / 86400000)
+  return dias >= 0 ? dias : null // aún no vence
+}
+// Estado de cobranza: puramente calculado desde los días de mora, nunca
+// se guarda. 1 a 20 días = Cobranza atrasada; 21+ = corresponde publicar.
+export function estadoCobranzaDe(x) {
+  const dias = diasMoraDe(x)
+  if (dias == null) return null
+  return dias <= 20 ? 'Cobranza atrasada' : 'Corresponde publicar'
+}
+// Estado de publicación: separado a propósito del estado de cobranza de
+// arriba — llegar a 21 días NUNCA marca sola una factura como publicada,
+// solo la deja "pendiente de publicación" hasta que alguien registre la
+// publicación real (fecha, usuario, observación).
+export function estadoPublicacionDe(x) {
+  const b = x.boletin
+  if (b && b.estado === 'publicada') return 'Publicada en Boletín Comercial'
+  if (b && b.estado === 'retirada') return 'Retirada del Boletín Comercial'
+  const dias = diasMoraDe(x)
+  return (dias != null && dias >= 21) ? 'Pendiente de publicación' : 'No publicada'
+}
+
 export default function FacturasModule({ area, facturas, setFacturas, params = { factoring: [] }, comisionPct = 0, setComisionPct = () => {}, ppmPct = 2, setPpmPct = () => {}, clientesSugeridos = [], proyectos = [], ots = [] }) {
   const lista = (facturas && facturas[area]) || []
   const esIstria = area === 'Istria'
@@ -82,7 +117,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
   const proyDeOT = n => (proyectos || []).find(p => otNumProy(p) === String(n || '').trim())
   const ccsDeOT = n => { const p = proyDeOT(n); if (!p) return []; const codes = [...new Set([...Object.keys(p.cc || {}), ...(p.compras || []).map(c => c.cc)])].filter(Boolean); return codes.map(c => ({ id: c, nombre: (p.ccNombres && p.ccNombres[c]) || c })) }
   const [creando, setCreando] = useState(false)
-  const nueva = () => ({ numero: '', cliente: '', ot: '', cc: '', proyecto: '', nv: '', fecha_emision: '', neto: '', monto: '', iva: 'afecta', estado: 'Pendiente', fecha_pago: '', banco: '', comentarios: '', vendedor: 'General' })
+  const nueva = () => ({ numero: '', cliente: '', ot: '', cc: '', proyecto: '', nv: '', fecha_emision: '', vencimiento: '', neto: '', monto: '', iva: 'afecta', estado: 'Pendiente', fecha_pago: '', banco: '', comentarios: '', vendedor: 'General' })
   const comisionDe = x => x.vendedor === 'Mario' ? Math.round((x.neto || x.monto || 0) * (comisionPct / 100)) : 0
   const [f, setF] = useState(nueva())
   const [busca, setBusca] = useState('')
@@ -326,6 +361,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
               {esIstria && <input style={inp} placeholder="Proyecto (nombre)" value={f.proyecto} onChange={e => setF({ ...f, proyecto: e.target.value })} />}
               {esIstria && <input style={inp} placeholder="NV (codigo)" value={f.nv} onChange={e => setF({ ...f, nv: e.target.value })} />}
               <label style={{ fontSize: 11, color: C.gris }}>Emisión<input type="date" style={{ ...inp, width: '100%' }} value={f.fecha_emision} onChange={e => setF({ ...f, fecha_emision: e.target.value })} /></label>
+              <label style={{ fontSize: 11, color: C.gris }}>Vencimiento<input type="date" style={{ ...inp, width: '100%' }} value={f.vencimiento} onChange={e => setF({ ...f, vencimiento: e.target.value })} /></label>
               <input style={inp} placeholder="Neto CLP *" value={f.neto} onChange={e => setF({ ...f, neto: e.target.value })} /><select style={inp} value={f.iva} onChange={e => setF({ ...f, iva: e.target.value })}><option value="afecta">Afecta (con IVA)</option><option value="exenta">Exenta (sin IVA)</option></select>
               <div style={{ ...inp, background: '#E2E7EC', color: C.gris, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>IVA {clp(f.iva === 'exenta' ? 0 : ivaDe(f.neto))} · Total <b style={{ color: C.carbon, marginLeft: 4 }}>{clp(f.iva === 'exenta' ? num(f.neto) : brutoDe(f.neto))}</b></div>
               <select style={inp} value={f.vendedor} onChange={e => setF({ ...f, vendedor: e.target.value })}>{VENDEDORES.map(v => <option key={v} value={v}>Vendedor: {v}</option>)}</select>
@@ -348,7 +384,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
             <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
               <th style={{ padding: '5px 6px', width: 30 }}><input type="checkbox" checked={mostradas.length > 0 && sel.size === mostradas.length} onChange={toggleTodas} /></th>
-              {['N° factura', 'Cliente', 'OT / OC', 'Centro de costo', ...(esIstria ? ['Proyecto', 'NV'] : []), 'Emisión', 'Neto', 'IVA', 'Total', `PPM ${ppmPct}%`, 'Estado', 'Saldo pendiente', 'Fecha pago', 'Banco depósito', 'Comentarios', 'Vendedor', 'Comisión', ''].map((h, i) => (
+              {['N° factura', 'Cliente', 'OT / OC', 'Centro de costo', ...(esIstria ? ['Proyecto', 'NV'] : []), 'Emisión', 'Vencimiento', 'Neto', 'IVA', 'Total', `PPM ${ppmPct}%`, 'Estado', 'Saldo pendiente', 'Fecha pago', 'Banco depósito', 'Comentarios', 'Vendedor', 'Comisión', ''].map((h, i) => (
                 <th key={i} style={{ textAlign: ['Neto', 'IVA', 'Total', 'Comisión', 'Saldo pendiente'].includes(h) || h.startsWith('PPM') ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr></thead>
@@ -368,6 +404,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                   {esIstria && <td style={{ padding: '4px 6px' }}><input value={x.proyecto || ''} onChange={e => actualizar(x.id, 'proyecto', e.target.value)} placeholder="Proyecto" style={{ ...inp, width: 130 }} /></td>}
                   {esIstria && <td style={{ padding: '4px 6px' }}><input value={x.nv || ''} onChange={e => actualizar(x.id, 'nv', e.target.value)} placeholder="NV" style={{ ...inp, width: 90 }} /></td>}
                   <td style={{ padding: '4px 6px' }}><input type="date" value={x.fecha_emision} onChange={e => actualizar(x.id, 'fecha_emision', e.target.value)} style={{ ...inp, width: 130 }} /></td>
+                  <td style={{ padding: '4px 6px' }}><input type="date" value={x.vencimiento || ''} onChange={e => actualizar(x.id, 'vencimiento', e.target.value)} style={{ ...inp, width: 130 }} /></td>
                   <td style={{ padding: '4px 6px', textAlign: 'right' }}><input value={x.neto} onChange={e => setNeto(x.id, e.target.value)} style={{ ...inp, width: 100, textAlign: 'right' }} /></td>
                   <td style={{ padding: '4px 6px', textAlign: 'right', color: C.gris, whiteSpace: 'nowrap' }}>{clp(ivaFacturaDe(x))}</td>
                   <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }}>{clp(montoFacturaDe(x))}</td>
@@ -397,7 +434,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                 </tr>
                 {x.estado === 'Factoring' && (
                   <tr style={{ background: '#FDECDD' }}>
-                    <td colSpan={esIstria ? 20 : 18} style={{ padding: '8px 10px' }}>
+                    <td colSpan={esIstria ? 21 : 19} style={{ padding: '8px 10px' }}>
                       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12 }}>
                         <span style={{ color: C.gris, fontWeight: 600 }}>Factoring:</span>
                         <select value={x.factoringId || (fSel ? fSel.id : '')} onChange={e => actualizar(x.id, 'factoringId', e.target.value)} style={inp}>
@@ -416,14 +453,14 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                 )}
                 {expandido === x.id && (
                   <tr style={{ background: '#F2F4F7' }}>
-                    <td colSpan={esIstria ? 20 : 18} style={{ padding: '8px 10px' }}>
+                    <td colSpan={esIstria ? 21 : 19} style={{ padding: '8px 10px' }}>
                       <FilaAbonos x={x} onAgregar={abono => agregarAbono(x.id, abono)} onEliminar={abonoId => eliminarAbono(x.id, abonoId)} />
                     </td>
                   </tr>
                 )}
                 </React.Fragment>
               ) })}
-              {mostradas.length === 0 && <tr><td colSpan={esIstria ? 20 : 18} style={{ padding: 14, textAlign: 'center', color: '#9AA3AD' }}>{busca ? 'Sin resultados para la búsqueda.' : 'Sin facturas en esta área.'}</td></tr>}
+              {mostradas.length === 0 && <tr><td colSpan={esIstria ? 21 : 19} style={{ padding: 14, textAlign: 'center', color: '#9AA3AD' }}>{busca ? 'Sin resultados para la búsqueda.' : 'Sin facturas en esta área.'}</td></tr>}
             </tbody>
           </table>
           <Paginador page={pg.page} paginas={pg.paginas} total={pg.total} setPage={setPage} />
@@ -433,6 +470,169 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
       </div>
       <div style={{ fontSize: 11, color: '#9AA3AD', marginTop: 6 }}>
         Estas facturas se llenarán automáticamente desde Defontana/SII cuando activemos la sincronización. Por ahora puedes cargarlas y editarlas a mano.
+      </div>
+    </div>
+  )
+}
+
+// ————— Cobranza atrasada en vivo, con Boletín Comercial —————
+const ESTADOS_PUBLICACION_FILTRO = ['No publicada', 'Pendiente de publicación', 'Publicada en Boletín Comercial', 'Retirada del Boletín Comercial']
+
+export function CobranzaAtrasadaModule({ area, facturas, setFacturas, usuarioEmail = '' }) {
+  const lista = (facturas && facturas[area]) || []
+  const [fCliente, setFCliente] = useState('')
+  const [fFolio, setFFolio] = useState('')
+  const [fEmisionDesde, setFEmisionDesde] = useState('')
+  const [fEmisionHasta, setFEmisionHasta] = useState('')
+  const [fVencDesde, setFVencDesde] = useState('')
+  const [fVencHasta, setFVencHasta] = useState('')
+  const [fDiasMin, setFDiasMin] = useState('')
+  const [fDiasMax, setFDiasMax] = useState('')
+  const [fEstadoPago, setFEstadoPago] = useState('')
+  const [fEstadoPub, setFEstadoPub] = useState('')
+  const [publicando, setPublicando] = useState(null)
+
+  // Único criterio de inclusión (spec): vencida, con saldo real pendiente,
+  // no anulada — diasMoraDe() ya encapsula exactamente eso, devolviendo
+  // null para cualquier factura que no deba aparecer aquí.
+  const atrasadas = lista.filter(x => diasMoraDe(x) != null)
+  const filtradas = atrasadas.filter(x => {
+    const dias = diasMoraDe(x)
+    if (fCliente && x.cliente !== fCliente) return false
+    if (fFolio && !norm(x.numero).includes(norm(fFolio))) return false
+    if (fEmisionDesde && (x.fecha_emision || '') < fEmisionDesde) return false
+    if (fEmisionHasta && (x.fecha_emision || '') > fEmisionHasta) return false
+    if (fVencDesde && (x.vencimiento || '') < fVencDesde) return false
+    if (fVencHasta && (x.vencimiento || '') > fVencHasta) return false
+    if (fDiasMin !== '' && dias < Number(fDiasMin)) return false
+    if (fDiasMax !== '' && dias > Number(fDiasMax)) return false
+    if (fEstadoPago && estadoPagoDe(x) !== fEstadoPago) return false
+    if (fEstadoPub && estadoPublicacionDe(x) !== fEstadoPub) return false
+    return true
+  }).sort((a, b) => diasMoraDe(b) - diasMoraDe(a))
+
+  const clientesUnicos = [...new Set(atrasadas.map(x => x.cliente).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  const hayFiltro = fCliente || fFolio || fEmisionDesde || fEmisionHasta || fVencDesde || fVencHasta || fDiasMin !== '' || fDiasMax !== '' || fEstadoPago || fEstadoPub
+  const limpiarFiltros = () => { setFCliente(''); setFFolio(''); setFEmisionDesde(''); setFEmisionHasta(''); setFVencDesde(''); setFVencHasta(''); setFDiasMin(''); setFDiasMax(''); setFEstadoPago(''); setFEstadoPub('') }
+
+  // Trae lo más fresco antes de guardar la publicación — es un registro
+  // legal/administrativo, no queremos pisar una edición concurrente.
+  const escribirBoletin = async (id, boletin) => {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_facturas') || 'null') } catch (e) {}
+    const baseFacturas = fresco && typeof fresco === 'object' ? fresco : (facturas || {})
+    const baseLista = baseFacturas[area] || []
+    const nuevo = { ...(facturas || {}), [area]: baseLista.map(x => x.id === id ? { ...x, boletin } : x) }
+    try { localStorage.setItem('serein_facturas', JSON.stringify(nuevo)) } catch (e) {}
+    setFacturas(nuevo)
+    pushState()
+  }
+
+  const nEnCobranza = filtradas.filter(x => estadoCobranzaDe(x) === 'Cobranza atrasada').length
+  const nCorrespondePublicar = filtradas.filter(x => estadoCobranzaDe(x) === 'Corresponde publicar').length
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: `3px solid ${C.rojo}` }}>
+        <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, borderBottom: '1px solid #DFE4EA' }}>
+          <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Cobranza atrasada · {area}</span>
+          <div style={{ display: 'flex', gap: 14, fontSize: 12, color: C.gris }}>
+            <span>{filtradas.length} de {atrasadas.length} facturas</span>
+            <span>1-20 días: <b style={{ color: C.ambar }}>{nEnCobranza}</b></span>
+            <span>21+ días: <b style={{ color: C.rojo }}>{nCorrespondePublicar}</b></span>
+          </div>
+        </div>
+        <div style={{ padding: '10px 16px', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', borderBottom: '1px solid #DFE4EA', background: '#F2F4F7' }}>
+          <select value={fCliente} onChange={e => setFCliente(e.target.value)} style={inp}><option value="">Todos los clientes</option>{clientesUnicos.map(c => <option key={c} value={c}>{c}</option>)}</select>
+          <input placeholder="N° factura" value={fFolio} onChange={e => setFFolio(e.target.value)} style={{ ...inp, width: 100 }} />
+          <label style={{ fontSize: 11, color: C.gris }}>Emisión desde <input type="date" value={fEmisionDesde} onChange={e => setFEmisionDesde(e.target.value)} style={inp} /></label>
+          <label style={{ fontSize: 11, color: C.gris }}>hasta <input type="date" value={fEmisionHasta} onChange={e => setFEmisionHasta(e.target.value)} style={inp} /></label>
+          <label style={{ fontSize: 11, color: C.gris }}>Vence desde <input type="date" value={fVencDesde} onChange={e => setFVencDesde(e.target.value)} style={inp} /></label>
+          <label style={{ fontSize: 11, color: C.gris }}>hasta <input type="date" value={fVencHasta} onChange={e => setFVencHasta(e.target.value)} style={inp} /></label>
+          <input placeholder="Días mora desde" value={fDiasMin} onChange={e => setFDiasMin(e.target.value.replace(/\D/g, ''))} style={{ ...inp, width: 100 }} />
+          <input placeholder="Días mora hasta" value={fDiasMax} onChange={e => setFDiasMax(e.target.value.replace(/\D/g, ''))} style={{ ...inp, width: 100 }} />
+          <select value={fEstadoPago} onChange={e => setFEstadoPago(e.target.value)} style={inp}><option value="">Todos los estados de pago</option>{['Pendiente', 'Parcial', 'Vencida'].map(s => <option key={s} value={s}>{s}</option>)}</select>
+          <select value={fEstadoPub} onChange={e => setFEstadoPub(e.target.value)} style={inp}><option value="">Toda publicación</option>{ESTADOS_PUBLICACION_FILTRO.map(s => <option key={s} value={s}>{s}</option>)}</select>
+          {hayFiltro && <button onClick={limpiarFiltros} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '5px 8px', cursor: 'pointer', fontSize: 12 }}>Limpiar</button>}
+        </div>
+        <div style={{ overflowX: 'auto', padding: 12 }}>
+          {filtradas.length === 0 ? (
+            <div style={{ color: C.verde, fontSize: 14, padding: '14px 4px' }}>✓ Sin facturas atrasadas{hayFiltro ? ' para este filtro' : ''} en {area}.</div>
+          ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+            <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+              {['N° factura', 'Cliente', 'Emisión', 'Vencimiento', 'Neto original', 'Bruto original', 'Pagado', 'Saldo neto', 'Saldo bruto', 'Días mora', 'Estado cobranza', 'Publicación', ''].map(h => (
+                <th key={h} style={{ textAlign: ['Neto original', 'Bruto original', 'Pagado', 'Saldo neto', 'Saldo bruto', 'Días mora'].includes(h) ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {filtradas.map(x => {
+                const dias = diasMoraDe(x)
+                const saldo = saldoPendienteDe(x)
+                const bruto = montoFacturaDe(x)
+                const pagado = bruto - saldo.bruto
+                const estCobranza = estadoCobranzaDe(x)
+                const estPub = estadoPublicacionDe(x)
+                const colCobranza = estCobranza === 'Corresponde publicar' ? C.rojo : C.ambar
+                const colPub = estPub === 'Publicada en Boletín Comercial' ? C.verde : estPub === 'Pendiente de publicación' ? C.teal : C.gris
+                const puedePublicar = estCobranza === 'Corresponde publicar' && estPub !== 'Publicada en Boletín Comercial'
+                return (
+                  <React.Fragment key={x.id}>
+                  <tr style={{ borderBottom: '1px solid #DFE4EA' }}>
+                    <td style={{ padding: '5px 6px', fontWeight: 600 }}>{x.numero}</td>
+                    <td style={{ padding: '5px 6px' }}>{x.cliente}</td>
+                    <td style={{ padding: '5px 6px', whiteSpace: 'nowrap' }}>{x.fecha_emision}</td>
+                    <td style={{ padding: '5px 6px', whiteSpace: 'nowrap' }}>{x.vencimiento}</td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right' }}>{clp(x.neto)}</td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right' }}>{clp(bruto)}</td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right', color: C.verde }}>{clp(pagado)}</td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right', fontWeight: 600 }}>{clp(saldo.neto)}</td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right', fontWeight: 600 }}>{clp(saldo.bruto)}</td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right' }}><span style={{ background: dias > 20 ? '#FCEBEA' : '#FDECDD', color: colCobranza, padding: '2px 8px', fontWeight: 700 }}>{dias}d</span></td>
+                    <td style={{ padding: '5px 6px', color: colCobranza, fontWeight: 600 }}>{estCobranza}</td>
+                    <td style={{ padding: '5px 6px', color: colPub, fontWeight: 600 }}>{estPub}</td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      {estPub === 'Publicada en Boletín Comercial' ? (
+                        <button onClick={() => escribirBoletin(x.id, { ...x.boletin, estado: 'retirada' })} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '4px 8px', fontSize: 11.5, cursor: 'pointer' }}>Retirar</button>
+                      ) : (
+                        <button onClick={() => setPublicando(publicando === x.id ? null : x.id)} disabled={!puedePublicar} style={{ background: puedePublicar ? C.teal : '#DFE4EA', color: puedePublicar ? '#fff' : C.gris, border: 'none', padding: '4px 8px', fontSize: 11.5, cursor: puedePublicar ? 'pointer' : 'default' }}>Registrar publicación</button>
+                      )}
+                    </td>
+                  </tr>
+                  {publicando === x.id && (
+                    <tr style={{ background: '#F2F4F7' }}>
+                      <td colSpan={13} style={{ padding: '8px 10px' }}>
+                        <FormPublicacion x={x} usuarioEmail={usuarioEmail} onGuardar={datos => { escribirBoletin(x.id, { estado: 'publicada', ...datos }); setPublicando(null) }} />
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
+                )
+              })}
+            </tbody>
+          </table>
+          )}
+        </div>
+      </div>
+      <div style={{ fontSize: 11, color: '#9AA3AD', marginTop: 6 }}>
+        1 a 20 días de mora: cobranza atrasada. Desde 21 días: corresponde iniciar o revisar el proceso de publicación en Boletín Comercial. "Publicada en Boletín Comercial" solo se muestra cuando la publicación fue registrada y confirmada aquí — nunca solo por haber cumplido los 21 días.
+      </div>
+    </div>
+  )
+}
+
+function FormPublicacion({ x, usuarioEmail, onGuardar }) {
+  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10))
+  const [observacion, setObservacion] = useState('')
+  return (
+    <div style={{ fontSize: 12 }}>
+      <div style={{ marginBottom: 6 }}><b>Registrar publicación en Boletín Comercial — factura {x.numero}</b></div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <label style={{ color: C.gris }}>Fecha<input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={{ ...inp, marginLeft: 6 }} /></label>
+        <span style={{ color: C.gris }}>Usuario: <b>{usuarioEmail || '—'}</b></span>
+        <input placeholder="Observación (opcional)" value={observacion} onChange={e => setObservacion(e.target.value)} style={{ ...inp, width: 220 }} />
+        <button onClick={() => onGuardar({ fecha, usuario: usuarioEmail, observacion })} style={{ background: C.verde, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12.5 }}>Confirmar publicación</button>
       </div>
     </div>
   )
