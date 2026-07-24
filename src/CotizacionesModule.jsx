@@ -410,39 +410,53 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
   const guardar = cot => {
     setCreando(false); setEditId(null)
     ;(async () => {
-      try { await pullState() } catch (e) {}
-      let fresco = null
-      try { fresco = JSON.parse(localStorage.getItem('serein_cotizaciones') || 'null') } catch (e) {}
-      const base = Array.isArray(fresco) ? fresco : cotizaciones
-      const existe = base.some(c => c.id === cot.id)
-      let cotFinal = cot
-      if (!existe) {
-        // Piso en 825 (no 792): el folio 825 falló al guardarse muchas
-        // veces seguidas por administración — se salta por completo.
-        let folioFresco = Math.max(825, base.reduce((m, c) => Math.max(m, parseInt(String(c.folio).replace(/\D/g, ''), 10) || 0), 792)) + 1
-        while (base.some(c => String(c.folio) === String(folioFresco))) folioFresco++
-        cotFinal = { ...cot, folio: String(folioFresco) }
+      try {
+        try { await pullState() } catch (e) {}
+        let fresco = null
+        try { fresco = JSON.parse(localStorage.getItem('serein_cotizaciones') || 'null') } catch (e) {}
+        const base = Array.isArray(fresco) ? fresco : (Array.isArray(cotizaciones) ? cotizaciones : [])
+        const existe = base.some(c => c.id === cot.id)
+        let cotFinal = cot
+        if (!existe) {
+          // Piso en 825 (no 792): el folio 825 falló al guardarse muchas
+          // veces seguidas por administración — se salta por completo.
+          let folioFresco = Math.max(825, base.reduce((m, c) => Math.max(m, parseInt(String(c.folio).replace(/\D/g, ''), 10) || 0), 792)) + 1
+          while (base.some(c => String(c.folio) === String(folioFresco))) folioFresco++
+          cotFinal = { ...cot, folio: String(folioFresco) }
+        }
+        const nuevo = existe ? base.map(c => c.id === cotFinal.id ? cotFinal : c) : [cotFinal, ...base]
+        try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
+        setCotizaciones(nuevo)
+        avisarSiFallaSubida()
+      } catch (e) {
+        // Antes, cualquier excepción acá (ej. datos inesperados en la base
+        // "fresca") detenía la función en silencio: el formulario se
+        // cerraba (por el setCreando(false) de más arriba) pero la
+        // cotización nunca se agregaba — parecía que "no hacía nada". Ahora
+        // se avisa con el error real en vez de fallar callado.
+        window.alert('No se pudo guardar la cotización. Detalle técnico: ' + ((e && e.message) || String(e)))
       }
-      const nuevo = existe ? base.map(c => c.id === cotFinal.id ? cotFinal : c) : [cotFinal, ...base]
-      try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
-      setCotizaciones(nuevo)
-      avisarSiFallaSubida()
     })()
   }
   const eliminar = async id => {
     if (!window.confirm('¿Eliminar esta cotización?')) return
-    try { await pullState() } catch (e) {}
-    let fresco = null
-    try { fresco = JSON.parse(localStorage.getItem('serein_cotizaciones') || 'null') } catch (e) {}
-    const base = Array.isArray(fresco) ? fresco : cotizaciones
-    const nuevo = base.filter(c => c.id !== id)
-    try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
-    setCotizaciones(nuevo)
-    avisarSiFallaSubida()
+    try {
+      try { await pullState() } catch (e) {}
+      let fresco = null
+      try { fresco = JSON.parse(localStorage.getItem('serein_cotizaciones') || 'null') } catch (e) {}
+      const base = Array.isArray(fresco) ? fresco : (Array.isArray(cotizaciones) ? cotizaciones : [])
+      const nuevo = base.filter(c => c.id !== id)
+      try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
+      setCotizaciones(nuevo)
+      avisarSiFallaSubida()
+    } catch (e) {
+      window.alert('No se pudo eliminar la cotización. Detalle técnico: ' + ((e && e.message) || String(e)))
+    }
   }
 
   function aprobar(cot, fechaEntrega = '', responsable = '') {
     ;(async () => {
+     try {
       try { await pullState() } catch (e) {}
       let frescoCots = null, frescoOts = null
       try { frescoCots = JSON.parse(localStorage.getItem('serein_cotizaciones') || 'null') } catch (e) {}
@@ -480,6 +494,9 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
       setCotizaciones(nuevasCots)
       avisarSiFallaSubida()
       window.alert('Cotización aprobada. Se generó la ' + numeroOT + ' en el módulo Órdenes de Trabajo. Ya puedes descargar la OT (sin valores).')
+     } catch (e) {
+      window.alert('No se pudo aprobar la cotización. Detalle técnico: ' + ((e && e.message) || String(e)))
+     }
     })()
   }
 
@@ -511,14 +528,18 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
 
   const updateCot = (id, cambios) => {
     ;(async () => {
-      try { await pullState() } catch (e) {}
-      let fresco = null
-      try { fresco = JSON.parse(localStorage.getItem('serein_cotizaciones') || 'null') } catch (e) {}
-      const base = Array.isArray(fresco) ? fresco : cotizaciones
-      const nuevo = base.map(x => x.id === id ? { ...x, ...cambios } : x)
-      try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
-      setCotizaciones(nuevo)
-      avisarSiFallaSubida()
+      try {
+        try { await pullState() } catch (e) {}
+        let fresco = null
+        try { fresco = JSON.parse(localStorage.getItem('serein_cotizaciones') || 'null') } catch (e) {}
+        const base = Array.isArray(fresco) ? fresco : (Array.isArray(cotizaciones) ? cotizaciones : [])
+        const nuevo = base.map(x => x.id === id ? { ...x, ...cambios } : x)
+        try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
+        setCotizaciones(nuevo)
+        avisarSiFallaSubida()
+      } catch (e) {
+        window.alert('No se pudo actualizar la cotización. Detalle técnico: ' + ((e && e.message) || String(e)))
+      }
     })()
   }
   const setEstadoCot = (c, nuevo) => { if (nuevo === 'Aprobada' && c.estado !== 'Aprobada') setAproCot(c); else updateCot(c.id, { estado: nuevo }) }
