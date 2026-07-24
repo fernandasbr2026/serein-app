@@ -34,6 +34,7 @@ export default function App() {
   const [perfil, setPerfil] = useState(null)
   const [cargando, setCargando] = useState(true)
   const [errorPerfil, setErrorPerfil] = useState(null)
+  const [reintentoPerfil, setReintentoPerfil] = useState(0)
   const [sincronizado, setSincronizado] = useState(false)
   const [recovery, setRecovery] = useState(false)
   const [hayVersionNueva, setHayVersionNueva] = useState(false)
@@ -80,28 +81,36 @@ export default function App() {
 
   useEffect(() => {
     if (!session) { setPerfil(null); setErrorPerfil(null); return }
+    let vivo = true
     supabase
       .from('perfiles')
       .select('nombre, rol, areas, tipo, modulos, sin_valores')
       .eq('id', session.user.id)
       .single()
       .then(({ data, error }) => {
+        if (!vivo) return
         if (error) setErrorPerfil('No pude leer tu perfil. Detalle técnico: ' + error.message + (error.code ? ' [código ' + error.code + ']' : '') + '\n\nUsuario: ' + (session.user.email || '') + ' · id: ' + session.user.id)
         else if (!data) setErrorPerfil('Tu cuenta existe pero no tiene perfil asignado. Pide al administrador que te asigne un área.')
         else { setErrorPerfil(null); setPerfil(data) }
       })
-      .catch(e => setErrorPerfil('Error de conexión al leer el perfil: ' + (e && e.message ? e.message : String(e))))
-  }, [session])
+      .catch(e => { if (vivo) setErrorPerfil('Error de conexión al leer el perfil: ' + (e && e.message ? e.message : String(e))) })
+    return () => { vivo = false }
+  }, [session, reintentoPerfil])
 
-  // Trae lo inicial y sigue empujando los cambios locales cada 2s. Traer de
-  // vuelta lo que cambian OTROS usuarios (en vivo + respaldo periodico) ya
-  // no pasa aca — pasa dentro de Dashboard.jsx, pieza por pieza, para poder
-  // aplicarlo sin remontar nada ni interrumpir a nadie a mitad de una tarea.
+  // Trae lo inicial y sigue empujando los cambios locales. Antes cada 2s —
+  // eso multiplicaba las escrituras contra Supabase (una por pestaña abierta,
+  // sin contar el push inmediato que ya dispara cada cambio real vía
+  // Dashboard.jsx) y contribuyó a la saturación que dejó a Mario sin poder
+  // ni leer su perfil (ver commit 0d1e8fa). 5s sigue siendo un respaldo más
+  // que suficiente. Traer de vuelta lo que cambian OTROS usuarios (en vivo +
+  // respaldo periodico) ya no pasa aca — pasa dentro de Dashboard.jsx, pieza
+  // por pieza, para poder aplicarlo sin remontar nada ni interrumpir a nadie
+  // a mitad de una tarea.
   useEffect(() => {
     if (!perfil) return
     let vivo = true
     pullState().then(res => { if (res.ok && res.n === 0) pushState() }).finally(() => { if (vivo) setSincronizado(true) })
-    const id = setInterval(() => { pushState() }, 2000)
+    const id = setInterval(() => { pushState() }, 5000)
     const onHide = () => { pushState() }
     const onVisible = () => { if (document.visibilityState !== 'visible') pushState() }
     window.addEventListener('beforeunload', onHide)
@@ -123,7 +132,15 @@ export default function App() {
   if (cargando) return <Pantalla msg="Cargando…" />
   if (recovery && session) return <NuevaClave onListo={() => setRecovery(false)} />
   if (!session) return <Login />
-  if (errorPerfil) return <Pantalla msg={errorPerfil} accion={salir} accionTxt="Cerrar sesión" />
+  if (errorPerfil) return (
+    <Pantalla
+      msg={errorPerfil}
+      accion={() => setReintentoPerfil(n => n + 1)}
+      accionTxt="Reintentar"
+      accionSecundaria={salir}
+      accionSecundariaTxt="Cerrar sesión de todas formas"
+    />
+  )
   if (!perfil) return <Pantalla msg="Verificando tu perfil…" />
   if (!sincronizado) return <Pantalla msg="Sincronizando datos con la nube..." />
   return (
@@ -142,13 +159,18 @@ export default function App() {
   )
 }
 
-function Pantalla({ msg, accion, accionTxt }) {
+function Pantalla({ msg, accion, accionTxt, accionSecundaria, accionSecundariaTxt }) {
   return (
     <div style={{ minHeight: '100vh', background: '#101315', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16, fontFamily: "'Inter',sans-serif", padding: 20, textAlign: 'center' }}>
       <div style={{ color: '#9AA3AD', fontSize: 15, maxWidth: 620, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg}</div>
       {accion && (
         <button onClick={accion} style={{ background: '#F77716', border: 'none', padding: '10px 20px', cursor: 'pointer', fontWeight: 600 }}>
           {accionTxt}
+        </button>
+      )}
+      {accionSecundaria && (
+        <button onClick={accionSecundaria} style={{ background: 'transparent', color: '#9AA3AD', border: '1px solid #444', padding: '8px 16px', cursor: 'pointer', fontSize: 13 }}>
+          {accionSecundariaTxt}
         </button>
       )}
     </div>

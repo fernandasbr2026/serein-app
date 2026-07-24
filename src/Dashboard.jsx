@@ -384,7 +384,14 @@ export default function Dashboard({ perfil, email, onLogout }) {
       if (!r.ok) return
       Object.keys(setters).forEach(clave => aplicar(clave, localStorage.getItem('serein_' + clave)))
     }
-    const id = setInterval(refrescar, 15000)
+    // 60s, no 15s: el canal en tiempo real ya cubre la sincronización
+    // instantánea entre usuarios — este intervalo es solo respaldo por si
+    // el canal muere en silencio (ver comentario abajo). A 15s, con varias
+    // pestañas abiertas, cada una traía la tabla app_state COMPLETA
+    // (incluye imágenes base64 de parámetros) cuatro veces por minuto,
+    // contribuyendo a la saturación de Supabase que dejó a un usuario sin
+    // poder ni leer su perfil (ver commit 0d1e8fa).
+    const id = setInterval(refrescar, 60000)
     // Si la pestaña estuvo minimizada, con la pantalla bloqueada o en
     // segundo plano un buen rato (celular, wifi inestable de planta), el
     // canal en tiempo real puede quedar muerto EN SILENCIO — Supabase no
