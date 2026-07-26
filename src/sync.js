@@ -18,6 +18,23 @@ const PROT_DESDE_PREFIX = '__protdesde_'
 const PROTECCION_MAX_MS = 90 * 1000
 let lastPushed = {}
 
+// Huella liviana de un string (FNV-1a, no criptográfico — solo para
+// detectar si el valor cambió). Antes OK_PREFIX guardaba una copia
+// COMPLETA de cada valor confirmado, duplicando de facto el uso de
+// localStorage de cada clave serein_* (cotizaciones, OTs con fotos, etc.).
+// Con serein_ots pesando ~4.2MB, esa duplicación por sí sola sumaba otros
+// ~4.2MB, empujando el total cerca del límite típico de localStorage
+// (5-10MB por sitio) y provocando que localStorage.setItem() fallara en
+// silencio (QuotaExceededError, descartado por los try/catch de todo el
+// código) — el dato se veía guardado en la sesión pero nunca llegaba a
+// persistir. Con una huella de unos bytes en vez de una copia completa,
+// el mismo chequeo de "¿cambió?" ocupa una fracción mínima del espacio.
+function huella(str) {
+  let h = 0x811c9dc5
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) }
+  return str.length + ':' + (h >>> 0).toString(36)
+}
+
 // ————— Estado de guardado observable —————
 // Antes no había forma honesta de saber, desde la pantalla, si un cambio
 // realmente llegó a la nube o no — la app asumía que sí. Este estado
@@ -54,7 +71,7 @@ export function aplicarSiSeguro(id, value) {
   try {
     const local = localStorage.getItem(id)
     const confirmado = localStorage.getItem(OK_PREFIX + id)
-    if (local != null && confirmado != null && local !== confirmado) {
+    if (local != null && confirmado != null && huella(local) !== confirmado) {
       const protKey = PROT_DESDE_PREFIX + id
       const ahora = Date.now()
       let desde = Number(localStorage.getItem(protKey))
@@ -67,7 +84,7 @@ export function aplicarSiSeguro(id, value) {
     }
     localStorage.removeItem(PROT_DESDE_PREFIX + id)
     localStorage.setItem(id, value)
-    localStorage.setItem(OK_PREFIX + id, value)
+    localStorage.setItem(OK_PREFIX + id, huella(value))
     lastPushed[id] = value
     return true
   } catch (e) { return false }
@@ -143,7 +160,7 @@ export async function escribirConReintento(key, mutar, intentos = 6) {
         if (!filas || filas.length === 0) continue // alguien más escribió primero — reintentar sobre lo más nuevo
       }
     } catch (e) { return { ok: false, error: (e && e.message) || String(e) } }
-    try { localStorage.setItem(key, valorNuevoStr); localStorage.setItem(OK_PREFIX + key, valorNuevoStr); localStorage.removeItem(PROT_DESDE_PREFIX + key) } catch (e) {}
+    try { localStorage.setItem(key, valorNuevoStr); localStorage.setItem(OK_PREFIX + key, huella(valorNuevoStr)); localStorage.removeItem(PROT_DESDE_PREFIX + key) } catch (e) {}
     lastPushed[key] = valorNuevoStr
     emitirEstado({ fase: 'guardado', ultimoOk: Date.now(), ultimoError: null })
     return { ok: true, value: nuevo }
@@ -210,7 +227,7 @@ export async function pushState() {
       }
       rows.forEach(r => {
         lastPushed[r.id] = r.value
-        try { localStorage.setItem(OK_PREFIX + r.id, r.value); localStorage.removeItem(PROT_DESDE_PREFIX + r.id) } catch (e) {}
+        try { localStorage.setItem(OK_PREFIX + r.id, huella(r.value)); localStorage.removeItem(PROT_DESDE_PREFIX + r.id) } catch (e) {}
       })
       emitirEstado({ fase: 'guardado', ultimoOk: Date.now(), ultimoError: null })
     }
