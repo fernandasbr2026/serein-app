@@ -36,6 +36,46 @@ export const ventaNetaDeOT = ot => (ot.ventas && ot.ventas.length)
 // (folio) registrada — no se guarda en ot.estado, se calcula al vuelo, asi
 // que si se borra la unica factura vuelve sola a "Pendiente de facturacion".
 export const tieneFactura = ot => (ot.ventas || []).some(v => (v.folio || '').trim() && v.folio !== 's/f')
+
+// ===== Fuentes únicas para clasificación financiera de OT (aditivo — no
+// se guarda nada nuevo, todo se calcula de ot.ventas/ot.abonos que ya
+// existen). Antes "saldo por facturar" y "saldo por percibir" eran el
+// mismo número (saldoPendiente = venta neta - abonado), mezclando dos
+// cosas distintas: cuánto falta por RESPALDAR con una factura real, y
+// cuánto de lo YA facturado falta por COBRAR. Separados acá una sola vez
+// para que la ficha, las tarjetas y los KPI usen siempre el mismo cálculo.
+const facturasRealesDeOT = ot => (ot.ventas || []).filter(v => (v.folio || '').trim() && v.folio !== 's/f')
+export const totalFacturadoDeOT = ot => facturasRealesDeOT(ot).reduce((a, v) => a + (v.neta || 0), 0)
+export const abonoTotalDeOT = ot => (ot.abonos || []).reduce((a, x) => a + (x.monto || 0), 0)
+// Nunca negativo: si se facturó/abonó de más, el excedente no resta de
+// otra OT ni se muestra como saldo pendiente inexistente.
+export const saldoPorFacturarDeOT = ot => Math.max(0, ventaNetaDeOT(ot) - totalFacturadoDeOT(ot))
+export const saldoPorPercibirDeOT = ot => Math.max(0, totalFacturadoDeOT(ot) - abonoTotalDeOT(ot))
+export const estadoFacturacionDeOT = ot => {
+  const facturado = totalFacturadoDeOT(ot)
+  if (facturado <= 0) return 'Sin facturar'
+  return saldoPorFacturarDeOT(ot) > 0 ? 'Parcialmente facturada' : 'Totalmente facturada'
+}
+export const estadoPagoOTDeOT = ot => {
+  const facturado = totalFacturadoDeOT(ot)
+  if (facturado <= 0) return 'Sin pago'
+  const percibir = saldoPorPercibirDeOT(ot)
+  if (percibir <= 0) return 'Pagada'
+  return percibir < facturado ? 'Pago parcial' : 'Sin pago'
+}
+// El "monto naranja" del KPI "Venta en proceso": si la OT tiene abonos
+// registrados, aporta el saldo real (venta neta - abonado, nunca
+// negativo, respeta un saldo explícitamente $0 sin reemplazarlo por la
+// venta neta). Si NO tiene ningún abono, no hay nada que descontar
+// todavía — aporta la venta neta completa. Una OT sin venta neta y sin
+// abonos aporta $0 con advertencia, en vez de romper la suma.
+export const saldoActivoDeOT = ot => {
+  const venta = ventaNetaDeOT(ot)
+  const abonado = abonoTotalDeOT(ot)
+  if (venta <= 0 && abonado <= 0) return { monto: 0, advertencia: 'OT sin monto de venta registrado' }
+  if (abonado > 0) return { monto: Math.max(0, venta - abonado) }
+  return { monto: venta }
+}
 // Etiqueta de presentacion para el estado — el valor guardado en ot.estado
 // no cambia, solo cambia como se muestra (para no afectar a ningun otro
 // modulo que ya depende de los strings reales).
@@ -136,6 +176,23 @@ function Barra({ pct, color, alto = 8 }) {
   )
 }
 
+// Tarjeta de KPI propia de este módulo (no se toca ui.jsx: es un
+// componente compartido con el resto de la app, y esta tarjeta necesita
+// cosas que las otras pantallas no piden — clic para navegar, una cifra
+// secundaria, una advertencia y una explicación breve del cálculo).
+function KpiCardOT({ icon: Icon, iconBg, iconColor, value, label, secundario, advertencia, explicacion, onClick }) {
+  return (
+    <div onClick={onClick} title={explicacion} role={onClick ? 'button' : undefined}
+      style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: SEREIN.radius, padding: 20, cursor: onClick ? 'pointer' : 'default' }}>
+      {Icon && <div style={{ width: 38, height: 38, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: iconBg || SEREIN.orangeSoft, color: iconColor || SEREIN.orangeDark, marginBottom: 14 }}><Icon size={19} /></div>}
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 800, fontSize: 26, color: '#101315', lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 13, color: '#9AA3AD', marginTop: 6 }}>{label}</div>
+      {secundario && <div style={{ fontSize: 11.5, color: '#9AA3AD', marginTop: 3 }}>{secundario}</div>}
+      {advertencia && <div style={{ fontSize: 11.5, color: C.rojo, marginTop: 4 }}>⚠ {advertencia}</div>}
+    </div>
+  )
+}
+
 function ChipEstado({ ot }) {
   const estado = ot.estado
   // Para 'Cerrada' el color depende de si ya tiene factura o no (calculado,
@@ -151,8 +208,9 @@ function ChipEstado({ ot }) {
 
 // ---------- Formularios inline ----------
 function FormVenta({ onAdd, onCancel, abonoTotal = 0, ventaTotalActual = 0 }) {
-  const [f, setF] = useState({ folio: '', fecha: '', neta: '', estadoPago: 'Pendiente' })
+  const [f, setF] = useState({ folio: '', fecha: '', neta: '', estadoPago: 'Pendiente', observacion: '' })
   const iva = Math.round(num(f.neta) * 0.19)
+  const totalBruto = num(f.neta) + iva
   const ventaTrasFactura = ventaTotalActual + num(f.neta)
   const saldoTrasFactura = ventaTrasFactura - abonoTotal
   return (
@@ -164,11 +222,12 @@ function FormVenta({ onAdd, onCancel, abonoTotal = 0, ventaTotalActual = 0 }) {
         <select style={inp} value={f.estadoPago} onChange={e => setF({ ...f, estadoPago: e.target.value })}>
           <option>Pendiente</option><option>Pagado</option><option>Factoring</option>
         </select>
-        <button onClick={() => num(f.neta) > 0 && onAdd({ folio: f.folio || 's/f', fecha: f.fecha || '—', neta: num(f.neta), estadoPago: f.estadoPago })}
+        <input style={{ ...inp, width: 180 }} placeholder="Observación (opcional)" value={f.observacion} onChange={e => setF({ ...f, observacion: e.target.value })} />
+        <button onClick={() => num(f.neta) > 0 && onAdd({ folio: f.folio || 's/f', fecha: f.fecha || '—', neta: num(f.neta), iva, totalBruto, estadoPago: f.estadoPago, observacion: f.observacion || '' })}
           style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Agregar</button>
         <button onClick={onCancel} style={{ ...btnMini, color: '#9AA3AD' }}><X size={16} /></button>
       </div>
-      {num(f.neta) > 0 && <div style={{ fontSize: 12, color: '#9AA3AD', marginTop: 6 }}>IVA 19%: {clp(iva)} · Total factura: {clp(num(f.neta) + iva)}</div>}
+      {num(f.neta) > 0 && <div style={{ fontSize: 12, color: '#9AA3AD', marginTop: 6 }}>IVA 19%: {clp(iva)} · Total factura: {clp(totalBruto)}</div>}
       {abonoTotal > 0 && (
         <div style={{ fontSize: 12, marginTop: 6, padding: '6px 8px', background: '#fff', border: '1px solid #DFE4EA' }}>
           Cliente ya abonó <b style={{ color: C.verde }}>{clp(abonoTotal)}</b> en esta OT.{' '}
@@ -348,8 +407,16 @@ function descargarOT(ot) {
 // sigue disponible al abrir la ficha (TarjetaOT), esto no lo reemplaza.
 function TileOT({ ot, onOpen, onDragStart, onDropOn, verValores }) {
   const monto = ventaNetaDeOT(ot)
-  const abonoTot = (ot.abonos || []).reduce((a, x) => a + (x.monto || 0), 0)
+  const abonoTot = abonoTotalDeOT(ot)
   const saldoPend = monto - abonoTot
+  const facturaReal = tieneFactura(ot)
+  const saldoFacturar = saldoPorFacturarDeOT(ot)
+  const saldoPercibir = saldoPorPercibirDeOT(ot)
+  const avanceFact = monto > 0 ? Math.round((totalFacturadoDeOT(ot) / monto) * 1000) / 10 : null
+  const alertas = []
+  if (ot.estado !== 'Cerrada' && monto <= 0) alertas.push('OT activa sin monto de venta')
+  if (ot.estado === 'Cerrada' && !ot.fechaCierre) alertas.push('OT cerrada sin fecha de cierre')
+  if (ot.estado === 'Cerrada' && saldoFacturar > 0 && !facturaReal) alertas.push('OT cerrada con saldo pendiente de facturación')
   const obs = (ot.servicios || '').trim()
   const obsResumen = obs.length > 90 ? obs.slice(0, 87) + '…' : obs
   const esquemaResumen = (ot.esquema && ot.esquema !== '—') ? (ot.esquema.length > 70 ? ot.esquema.slice(0, 67) + '…' : ot.esquema) : ''
@@ -376,8 +443,8 @@ function TileOT({ ot, onOpen, onDragStart, onDropOn, verValores }) {
         {esquemaResumen && <span title={ot.esquema}>{esquemaResumen}</span>}
       </div>
       {cerrada && (
-        <div style={{ fontSize: 11, color: tieneFactura(ot) ? C.verde : '#5B4E8C', fontWeight: 600 }}>
-          {tieneFactura(ot) ? `Factura(s): ${(ot.ventas || []).map(v => v.folio).join(', ')}` : 'Sin factura registrada'}
+        <div style={{ fontSize: 11, color: facturaReal ? C.verde : '#5B4E8C', fontWeight: 600 }}>
+          {facturaReal ? `Factura(s): ${(ot.ventas || []).filter(v => (v.folio || '').trim() && v.folio !== 's/f').map(v => v.folio).join(', ')} · ${estadoPagoOTDeOT(ot)}` : 'Sin factura registrada'}
           {ot.fechaCierre ? ` · Cerrada ${ot.fechaCierre}` : ''}
         </div>
       )}
@@ -387,10 +454,34 @@ function TileOT({ ot, onOpen, onDragStart, onDropOn, verValores }) {
           <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, color: '#101315' }}>{clp(monto)}</span>
         </div>
       )}
-      {verValores && abonoTot > 0 && (
+      {verValores && !facturaReal && abonoTot > 0 && (
         <div style={{ marginTop: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
           <span style={{ fontSize: 10.5, color: '#9AA3AD', textTransform: 'uppercase' }}>{saldoPend > 0 ? 'Saldo por facturar/percibir' : saldoPend < 0 ? 'Saldo a favor cliente' : 'Saldo'}</span>
           <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, color: saldoPend > 0 ? C.ambar : saldoPend < 0 ? '#5B4E8C' : C.verde }}>{clp(Math.abs(saldoPend))}</span>
+        </div>
+      )}
+      {verValores && facturaReal && (
+        <>
+          {saldoFacturar > 0 && (
+            <div style={{ marginTop: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <span style={{ fontSize: 10.5, color: '#9AA3AD', textTransform: 'uppercase' }}>Saldo por facturar</span>
+              <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, color: C.ambar }}>{clp(saldoFacturar)}</span>
+            </div>
+          )}
+          {saldoPercibir > 0 && (
+            <div style={{ marginTop: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <span style={{ fontSize: 10.5, color: '#9AA3AD', textTransform: 'uppercase' }}>Saldo por percibir</span>
+              <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, color: C.rojo }}>{clp(saldoPercibir)}</span>
+            </div>
+          )}
+          {avanceFact != null && (
+            <div style={{ fontSize: 10.5, color: '#9AA3AD' }}>Avance facturado: {avanceFact}%</div>
+          )}
+        </>
+      )}
+      {alertas.length > 0 && (
+        <div style={{ marginTop: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {alertas.map((a, i) => <span key={i} style={{ fontSize: 10.5, color: C.rojo }}>⚠ {a}</span>)}
         </div>
       )}
     </div>
@@ -425,6 +516,21 @@ function TarjetaOT({ ot, onUpdate, onDelete, onCambiarEstado, onAgregarVenta, on
   // fuente única que usan la tarjeta y los KPI) menos lo ya abonado. Si el
   // abono supera la venta, el excedente queda a favor del cliente (negativo).
   const saldoPendiente = ventaNetaDeOT(ot) - abonoTotal
+  const facturaReal = tieneFactura(ot)
+  const saldoFacturarOT = saldoPorFacturarDeOT(ot)
+  const saldoPercibirOT = saldoPorPercibirDeOT(ot)
+  const avanceFacturado = ventaNetaDeOT(ot) > 0 ? Math.round((totalFacturadoDeOT(ot) / ventaNetaDeOT(ot)) * 1000) / 10 : null
+  const diasDesde = f => { if (!f || f === '—') return null; const d = Math.floor((Date.now() - new Date(f + 'T00:00:00').getTime()) / 86400000); return d >= 0 ? d : null }
+  const diasActiva = ot.estado !== 'Cerrada' ? diasDesde(ot.fecha) : null
+  const diasCerradaSinFacturar = (ot.estado === 'Cerrada' && !facturaReal) ? diasDesde(ot.fechaCierre) : null
+  const primeraFacturaFecha = facturaReal ? (ot.ventas || []).find(v => (v.folio || '').trim() && v.folio !== 's/f' && v.fecha && v.fecha !== '—')?.fecha : null
+  const diasFacturadaSinPago = (facturaReal && saldoPercibirOT > 0) ? diasDesde(primeraFacturaFecha) : null
+  const alertasOT = []
+  if (ot.estado !== 'Cerrada' && ventaNetaDeOT(ot) <= 0) alertasOT.push('OT activa sin monto de venta')
+  if (ot.estado === 'Cerrada' && !ot.fechaCierre) alertasOT.push('OT cerrada sin fecha de cierre')
+  if (ot.estado === 'Cerrada' && saldoFacturarOT > 0 && !facturaReal) alertasOT.push('OT cerrada con saldo pendiente de facturación')
+  if (facturaReal && (ot.ventas || []).some(v => !((v.folio || '').trim()))) alertasOT.push('Factura registrada sin número de folio')
+  if (facturaReal && saldoPercibirOT > 0) alertasOT.push('Factura con saldo pendiente de cobro')
   const costoTotal = (ot.costos || []).reduce((a, c) => a + c.monto, 0) + costoOC + costoMO
   const utilidad = ventaTotal - costoTotal
   const margen = ventaTotal > 0 ? (utilidad / ventaTotal) * 100 : 0
@@ -824,17 +930,32 @@ function TarjetaOT({ ot, onUpdate, onDelete, onCambiarEstado, onAgregarVenta, on
                 <CircleDollarSign size={16} color={margen >= 30 ? C.verde : C.ambar} />
                 <span>Venta neta: <b>{clp(ventaTotal)}</b></span>
                 {abonoTotal > 0 && <span>Abonado: <b style={{ color: C.verde }}>{clp(abonoTotal)}</b></span>}
-                {abonoTotal > 0 && (
+                {!facturaReal && abonoTotal > 0 && (
                   saldoPendiente > 0
                     ? <span>Saldo pendiente por facturar/percibir: <b style={{ color: C.ambar }}>{clp(saldoPendiente)}</b></span>
                     : saldoPendiente < 0
                       ? <span>Saldo a favor del cliente: <b style={{ color: '#5B4E8C' }}>{clp(-saldoPendiente)}</b></span>
                       : <span>Saldo pendiente: <b style={{ color: C.verde }}>$0</b></span>
                 )}
+                {facturaReal && saldoFacturarOT > 0 && <span>Saldo por facturar: <b style={{ color: C.ambar }}>{clp(saldoFacturarOT)}</b></span>}
+                {facturaReal && saldoPercibirOT > 0 && <span>Saldo por percibir: <b style={{ color: C.rojo }}>{clp(saldoPercibirOT)}</b></span>}
                 <span>Costos: <b>{clp(costoTotal)}</b></span>{costoMO > 0 && <span style={{ color: '#9AA3AD' }}>(incluye {clp(costoMO)} de mano de obra)</span>}
                 {costoOC > 0 && <span style={{ color: C.teal }}>(incluye {clp(costoOC)} de OC proveedores)</span>}
                 <span>Utilidad real: <b style={{ color: margen >= 30 ? C.verde : margen >= 15 ? C.ambar : C.rojo }}>{clp(utilidad)} ({margen.toFixed(1)}%)</b></span>
               </div>
+              <div style={{ marginTop: 8, padding: '10px 14px', background: '#fff', border: '1px dashed #DFE4EA', fontSize: 12, display: 'flex', gap: 18, flexWrap: 'wrap', color: '#9AA3AD' }}>
+                <span>Facturación: <b style={{ color: C.carbon }}>{estadoFacturacionDeOT(ot)}</b></span>
+                <span>Pago: <b style={{ color: C.carbon }}>{estadoPagoOTDeOT(ot)}</b></span>
+                {avanceFacturado != null && <span>Avance facturado: <b style={{ color: C.carbon }}>{avanceFacturado}%</b></span>}
+                {diasActiva != null && <span>Días activa: <b style={{ color: C.carbon }}>{diasActiva}</b></span>}
+                {diasCerradaSinFacturar != null && <span>Días cerrada sin facturar: <b style={{ color: C.ambar }}>{diasCerradaSinFacturar}</b></span>}
+                {diasFacturadaSinPago != null && <span>Días facturada sin pago: <b style={{ color: C.rojo }}>{diasFacturadaSinPago}</b></span>}
+              </div>
+              {alertasOT.length > 0 && (
+                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {alertasOT.map((a, i) => <span key={i} style={{ fontSize: 12, color: C.rojo }}>⚠ {a}</span>)}
+                </div>
+              )}
             </>
           )}
 
@@ -1166,17 +1287,23 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
     if (fEstado && o.estado !== fEstado) return false
     if (fDesde && (!otFecha(o) || otFecha(o) < fDesde)) return false
     if (fHasta && (!otFecha(o) || otFecha(o) > fHasta)) return false
-    if (vista === 'cerradas' && fFactura) {
-      const fact = tieneFactura(o) ? 'Facturada' : 'Pendiente'
-      if (fact !== fFactura) return false
-    }
+    if (vista === 'cerradas' && fFactura && estadoFacturacionDeOT(o) !== fFactura) return false
+    if (vista === 'facturadas' && fFactura && estadoPagoOTDeOT(o) !== fFactura) return false
     return true
   }
 
   const delArea = ots.filter(o => o.area === areaSel && (!fCliente || _norm(o.cliente) === _norm(fCliente)))
   const activasArea = delArea.filter(o => o.estado !== 'Cerrada')
-  const cerradasArea = delArea.filter(o => o.estado === 'Cerrada')
-  const visibles = (vista === 'cerradas' ? cerradasArea : activasArea).filter(o => coincideBusqueda(o) && coincideFiltros(o))
+  // Una OT cerrada se queda en "OT Cerradas" mientras le falte algo por
+  // facturar (sin facturar o parcialmente facturada) — recién pasa a "OT
+  // Facturadas" cuando el saldo por facturar llega a $0. No se guarda en
+  // ningún campo nuevo: se recalcula siempre desde ot.ventas, así que si
+  // se borra la única factura la OT vuelve sola a Cerradas.
+  const cerradasTodas = delArea.filter(o => o.estado === 'Cerrada')
+  const cerradasArea = cerradasTodas.filter(o => estadoFacturacionDeOT(o) !== 'Totalmente facturada')
+  const facturadasArea = cerradasTodas.filter(o => estadoFacturacionDeOT(o) === 'Totalmente facturada')
+  const porVista = { activas: activasArea, cerradas: cerradasArea, facturadas: facturadasArea }[vista] || activasArea
+  const visibles = porVista.filter(o => coincideBusqueda(o) && coincideFiltros(o))
 
   // Solo se considera el correlativo de OTs con el formato propio de este módulo (OT-AAAA-NNN).
   // Las OT creadas al aprobar una cotización usan 'OT-<folio>' (sin año) y no deben mezclarse con esta secuencia.
@@ -1185,11 +1312,28 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   const siguiente = `OT-${anioActual}-${String(Math.max(100, ...nums) + 1).padStart(3, '0')}`
 
   const nOTs = { activas: activasArea.length }
-  const ventaEnProceso = activasArea.reduce((a, o) => a + ventaNetaDeOT(o), 0)
-  const cerradasSinFactura = cerradasArea.filter(o => !tieneFactura(o))
-  const cerradasConFactura = cerradasArea.filter(o => tieneFactura(o))
-  const cerradasPorFacturarMonto = cerradasSinFactura.reduce((a, o) => a + ventaNetaDeOT(o), 0)
-  const facturadasMonto = cerradasConFactura.reduce((a, o) => a + ventaNetaDeOT(o), 0)
+  // "Venta en proceso": suma el saldo real de cada OT activa (monto
+  // naranja si hay abonos, venta neta completa si no) — no la venta neta
+  // completa siempre, que era el bug reportado (una OT con abonos ya
+  // hechos no debe aportar el 100% de su venta al indicador de "lo que
+  // falta por cerrar").
+  const ventaEnProcesoDetalle = activasArea.map(o => ({ ot: o, ...saldoActivoDeOT(o) }))
+  const ventaEnProceso = ventaEnProcesoDetalle.reduce((a, x) => a + x.monto, 0)
+  const ventaTotalContratada = activasArea.reduce((a, o) => a + ventaNetaDeOT(o), 0)
+  const cerradasPorFacturarMonto = cerradasArea.reduce((a, o) => a + saldoPorFacturarDeOT(o), 0)
+  // "Facturado por percibir": de las OT ya totalmente facturadas, cuánto
+  // de lo facturado sigue sin cobrarse. Las que ya están 100% pagadas
+  // quedan en $0 y no suman acá, pero siguen visibles como historial en
+  // "OT Facturadas".
+  const facturadoPorPercibirCandidatas = facturadasArea.filter(o => saldoPorPercibirDeOT(o) > 0)
+  const facturadoPorPercibirMonto = facturadoPorPercibirCandidatas.reduce((a, o) => a + saldoPorPercibirDeOT(o), 0)
+  // "Cobrado del periodo": usa el mismo rango Ingreso desde/hasta que ya
+  // existe como filtro (aplicado a la fecha del abono, no a la fecha de
+  // ingreso de la OT) — sin fechas, es el histórico completo del área.
+  const abonosPeriodo = delArea.flatMap(o => (o.abonos || []).map(ab => ({ ...ab, otNumero: o.numero })))
+    .filter(ab => (!fDesde || (ab.fecha && ab.fecha !== '—' && ab.fecha >= fDesde)) && (!fHasta || (ab.fecha && ab.fecha !== '—' && ab.fecha <= fHasta)))
+  const cobradoPeriodo = abonosPeriodo.reduce((a, ab) => a + (ab.monto || 0), 0)
+  const [verDesgloseCobrado, setVerDesgloseCobrado] = useState(false)
 
   return (
     <div>
@@ -1205,19 +1349,56 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
         </div>
       )}
 
-      {/* KPIs del área (fuente única: ventaNetaDeOT / tieneFactura) */}
+      {/* KPIs del área — fuente única (ventaNetaDeOT/tieneFactura/saldoPorFacturarDeOT/
+          saldoPorPercibirDeOT), clickeables: cada uno abre la pestaña que
+          contiene exactamente las OT que componen su total. */}
       {verValores ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 18 }}>
-          <KpiCard icon={FileText} iconBg={SEREIN.blueSoft} iconColor={SEREIN.blue} value={nOTs.activas} label="OT activas" />
-          <KpiCard icon={CircleDollarSign} iconBg={SEREIN.orangeSoft} iconColor={SEREIN.orangeDark} value={clp(ventaEnProceso)} label={`Venta en proceso · ${activasArea.length} OT`} />
-          <KpiCard icon={Receipt} iconBg={PILL_VARIANT.naranja.bg} iconColor={PILL_VARIANT.naranja.fg} value={clp(cerradasPorFacturarMonto)} label={`Cerradas por facturar · ${cerradasSinFactura.length} OT`} />
-          <KpiCard icon={ShoppingCart} iconBg={SEREIN.greenSoft} iconColor={SEREIN.green} value={clp(facturadasMonto)} label={`OT facturadas · ${cerradasConFactura.length} OT`} />
+          <KpiCardOT icon={FileText} iconBg={SEREIN.blueSoft} iconColor={SEREIN.blue} value={nOTs.activas} label="OT activas"
+            explicacion="Cantidad de OT con estado operativo activo (no cerradas)." onClick={() => { setVista('activas'); setPage(1) }} />
+          <KpiCardOT icon={CircleDollarSign} iconBg={SEREIN.orangeSoft} iconColor={SEREIN.orangeDark} value={clp(ventaEnProceso)}
+            label={`Venta en proceso · ${activasArea.length} OT`} secundario={`Venta total contratada: ${clp(ventaTotalContratada)}`}
+            advertencia={ventaEnProcesoDetalle.some(x => x.advertencia) ? `${ventaEnProcesoDetalle.filter(x => x.advertencia).length} OT sin monto de venta registrado` : null}
+            explicacion="Por cada OT activa: si ya tiene abonos, se usa el saldo real (venta neta − abonado); si no tiene abonos, se usa la venta neta completa."
+            onClick={() => { setVista('activas'); setPage(1) }} />
+          <KpiCardOT icon={Receipt} iconBg={PILL_VARIANT.naranja.bg} iconColor={PILL_VARIANT.naranja.fg} value={clp(cerradasPorFacturarMonto)}
+            label={`Cerradas por facturar · ${cerradasArea.length} OT`}
+            explicacion="OT cerradas con saldo por facturar mayor a $0 (venta neta menos lo ya facturado con factura real)."
+            onClick={() => { setVista('cerradas'); setPage(1) }} />
+          <KpiCardOT icon={ShoppingCart} iconBg={SEREIN.greenSoft} iconColor={SEREIN.green} value={clp(facturadoPorPercibirMonto)}
+            label={`Facturado por percibir · ${facturadoPorPercibirCandidatas.length} OT`}
+            explicacion="De las OT totalmente facturadas, lo que el cliente todavía no pagó (total facturado menos abonos)."
+            onClick={() => { setVista('facturadas'); setPage(1) }} />
+          <KpiCardOT icon={CircleDollarSign} iconBg={SEREIN.greenSoft} iconColor={SEREIN.green} value={clp(cobradoPeriodo)}
+            label={`Cobrado del periodo · ${abonosPeriodo.length} pagos`}
+            explicacion="Suma de abonos/pagos registrados en el rango de fechas del filtro (o histórico completo si no hay fechas)."
+            onClick={() => setVerDesgloseCobrado(v => !v)} />
         </div>
       ) : (
-        <div style={{ marginBottom: 18 }}><KpiCard icon={FileText} value={nOTs.activas} label="OT activas" /></div>
+        <div style={{ marginBottom: 18 }}><KpiCardOT icon={FileText} value={nOTs.activas} label="OT activas" onClick={() => { setVista('activas'); setPage(1) }} /></div>
+      )}
+      {verDesgloseCobrado && verValores && (
+        <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 12, marginBottom: 14 }}>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Desglose de pagos del periodo ({abonosPeriodo.length})</div>
+          {abonosPeriodo.length === 0 ? <div style={{ fontSize: 12.5, color: '#9AA3AD' }}>Sin pagos registrados en el rango seleccionado.</div> : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+              <thead><tr style={{ textAlign: 'left', color: '#9AA3AD' }}><th style={{ padding: '4px 6px' }}>OT</th><th style={{ padding: '4px 6px' }}>Fecha</th><th style={{ padding: '4px 6px' }}>Medio</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>Monto</th></tr></thead>
+              <tbody>{abonosPeriodo.map((ab, i) => (
+                <tr key={i} style={{ borderTop: '1px solid #F2F4F7' }}>
+                  <td style={{ padding: '4px 6px' }}>{ab.otNumero}</td><td style={{ padding: '4px 6px' }}>{ab.fecha}</td><td style={{ padding: '4px 6px' }}>{ab.medio || '—'}</td>
+                  <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600 }}>{clp(ab.monto || 0)}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          )}
+        </div>
       )}
 
-      <TabsBar tabs={[{ key: 'activas', label: `OT activas (${activasArea.length})` }, { key: 'cerradas', label: `OT cerradas (${cerradasArea.length})` }]} active={vista} onChange={v => { setVista(v); setPage(1) }} />
+      <TabsBar tabs={[
+        { key: 'activas', label: `OT activas (${activasArea.length})` },
+        { key: 'cerradas', label: `OT cerradas (${cerradasArea.length})` },
+        { key: 'facturadas', label: `OT facturadas (${facturadasArea.length})` },
+      ]} active={vista} onChange={v => { setVista(v); setPage(1) }} />
 
       {/* Buscador y filtros (aditivos, sobre lo ya existente) */}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
@@ -1234,15 +1415,25 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
         <label style={{ fontSize: 12, color: '#9AA3AD', display: 'flex', alignItems: 'center', gap: 6 }}>Estado
           <select value={fEstado} onChange={e => { setFEstado(e.target.value); setPage(1) }} style={inp}>
             <option value="">Todos</option>
-            {(vista === 'cerradas' ? ['Cerrada'] : ['Cotizada', 'En ejecución', 'Terminada']).map(es => <option key={es} value={es}>{etiquetaEstado({ estado: es })}</option>)}
+            {(vista === 'activas' ? ['Cotizada', 'En ejecución', 'Terminada'] : ['Cerrada']).map(es => <option key={es} value={es}>{etiquetaEstado({ estado: es })}</option>)}
           </select>
         </label>
         {vista === 'cerradas' && (
           <label style={{ fontSize: 12, color: '#9AA3AD', display: 'flex', alignItems: 'center', gap: 6 }}>Facturación
             <select value={fFactura} onChange={e => { setFFactura(e.target.value); setPage(1) }} style={inp}>
               <option value="">Todas</option>
-              <option value="Pendiente">Pendiente de facturación</option>
-              <option value="Facturada">Facturada</option>
+              <option value="Sin facturar">Sin facturar</option>
+              <option value="Parcialmente facturada">Parcialmente facturada</option>
+            </select>
+          </label>
+        )}
+        {vista === 'facturadas' && (
+          <label style={{ fontSize: 12, color: '#9AA3AD', display: 'flex', alignItems: 'center', gap: 6 }}>Estado de pago
+            <select value={fFactura} onChange={e => { setFFactura(e.target.value); setPage(1) }} style={inp}>
+              <option value="">Todos</option>
+              <option value="Sin pago">Sin pago</option>
+              <option value="Pago parcial">Pago parcial</option>
+              <option value="Pagada">Pagada</option>
             </select>
           </label>
         )}
@@ -1269,7 +1460,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
       )}
       {creando && <FormOT area={areaSel} siguienteNumero={siguiente} clientesActivos={clientesActivos} onAdd={o => { setOts(xs => [o, ...xs]); setCreando(false) }} onCancel={() => setCreando(false)} />}
 
-      {visibles.length === 0 && <div style={{ color: '#9AA3AD', fontSize: 14, padding: 20, textAlign: 'center', background: '#fff', border: '1px dashed #DFE4EA' }}>{vista === 'cerradas' ? `Sin OT cerradas en ${areaSel} con estos filtros.` : `Sin OT activas en ${areaSel} con estos filtros.`}</div>}
+      {visibles.length === 0 && <div style={{ color: '#9AA3AD', fontSize: 14, padding: 20, textAlign: 'center', background: '#fff', border: '1px dashed #DFE4EA' }}>{{ activas: `Sin OT activas en ${areaSel} con estos filtros.`, cerradas: `Sin OT cerradas en ${areaSel} con estos filtros.`, facturadas: `Sin OT facturadas en ${areaSel} con estos filtros.` }[vista]}</div>}
       {(<>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
           {paginar(visibles, page).items.map(o => <TileOT key={o.id} ot={o} verValores={verValores} onOpen={() => setSel(o.id)} onDragStart={() => { dragId.current = o.id }} onDropOn={() => { mover(dragId.current, o.id); dragId.current = null }} />)}
