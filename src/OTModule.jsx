@@ -1040,7 +1040,41 @@ const promArr = arr => { const v = (arr || []).map(x => parseFloat(String(x).rep
 const acumRango = (capas, idx) => { var accMin = 0, accMax = 0; for (var i = 0; i <= idx; i++) { var r = parseRango(capas[i].solicitado); if (i === 0) { accMin = r[0]; accMax = r[1] } else { var pm = accMax; accMin = pm + r[0]; accMax = pm + r[1] } } return [accMin, accMax] }
 const autoFila = (vals, lo, hi) => { const n = vals.length; const idxE = []; const entered = []; vals.forEach((v, i) => { if (v === '' || v == null) idxE.push(i); else { const nn = parseFloat(String(v).replace(',', '.')); if (!isNaN(nn)) entered.push(nn) } }); if (idxE.length === 0) return vals.slice(); const desired = lo + Math.random() * ((hi - lo) + 0.6); const sumE = entered.reduce((a, b) => a + b, 0); const meanEmpty = (desired * n - sumE) / idxE.length; const res = vals.slice(); idxE.forEach(i => { let val = meanEmpty + (Math.random() * 1.6 - 0.7); val = Math.max(lo - 1, Math.min(hi + 1.8, val)); res[i] = (Math.round(val * 100) / 100).toFixed(2) }); return res }
 const FOTO_W = 800, FOTO_H = 600
-const imgToData = (file, cb) => { const r = new FileReader(); r.onload = e => { const img = new Image(); img.onload = () => { var max = 1200; var w = img.width, h = img.height; if (w > h && w > max) { h = Math.round(h * max / w); w = max } else if (h >= w && h > max) { w = Math.round(w * max / h); h = max } const cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.getContext('2d').drawImage(img, 0, 0, w, h); cb(cv.toDataURL('image/jpeg', 0.78)) }; img.src = e.target.result }; r.readAsDataURL(file) }
+// Antes esta función solo comprimía la foto y devolvía un data-URL base64
+// para guardar embebido en la OT — eso es justo lo que hacía crecer
+// serein_ots a 4.2MB con solo 12 OTs. Ahora, tras comprimir, sube la foto
+// directo al bucket "fotos-ot" de Storage y entrega la URL en su lugar —
+// una sola función, usada por FotoSlots/partidas/despachos, así que
+// arregla los 3 puntos de captura a la vez. Si el bucket todavía no
+// existe o falla la subida por cualquier motivo, cae de vuelta al
+// comportamiento anterior (guardar el base64 igual) para no perder la
+// foto — nunca se cae el flujo por un problema de Storage.
+const imgToData = (file, cb) => {
+  const r = new FileReader()
+  r.onload = e => {
+    const img = new Image()
+    img.onload = () => {
+      var max = 1200; var w = img.width, h = img.height
+      if (w > h && w > max) { h = Math.round(h * max / w); w = max } else if (h >= w && h > max) { w = Math.round(w * max / h); h = max }
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h
+      cv.getContext('2d').drawImage(img, 0, 0, w, h)
+      const dataUrlRespaldo = () => cv.toDataURL('image/jpeg', 0.78)
+      if (!cv.toBlob) { cb(dataUrlRespaldo()); return }
+      cv.toBlob(async blob => {
+        if (!blob) { cb(dataUrlRespaldo()); return }
+        try {
+          const nombre = `subidas/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`
+          const { error } = await supabase.storage.from('fotos-ot').upload(nombre, blob, { contentType: 'image/jpeg', upsert: false })
+          if (error) { cb(dataUrlRespaldo()); return }
+          const { data } = await supabase.storage.from('fotos-ot').createSignedUrl(nombre, 60 * 60 * 24 * 365 * 5)
+          cb(data?.signedUrl || dataUrlRespaldo())
+        } catch (e) { cb(dataUrlRespaldo()) }
+      }, 'image/jpeg', 0.78)
+    }
+    img.src = e.target.result
+  }
+  r.readAsDataURL(file)
+}
 const nuevaCapa = nombre => ({ id: 'cap' + Date.now() + Math.floor(Math.random() * 999), nombre: nombre || 'Capa', producto: 'REZINC', solicitado: '2 a 3 Mils', filas: [['', '', '', '', '', '', ''], ['', '', '', '', '', '', ''], ['', '', '', '', '', '', ''], ['', '', '', '', '', '', ''], ['', '', '', '', '', '', '']], fotos: [] })
 function nuevoProtocolo(tipo, ot, correlativo, instrumentos) {
   const cod = correlativo + '-' + new Date().getFullYear(); const h = new Date().toISOString().slice(0, 10)
