@@ -1146,6 +1146,67 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   const [sel, setSel] = useState(null)
   const dragId = React.useRef(null)
   const mover = (fromId, toId) => { if (!fromId || fromId === toId) return; setOts(xs => { const arr = [...xs]; const from = arr.findIndex(x => x.id === fromId); const to = arr.findIndex(x => x.id === toId); if (from < 0 || to < 0) return xs; const [it] = arr.splice(from, 1); arr.splice(to, 0, it); return arr }) }
+  const [migrando, setMigrando] = useState(false)
+  const [migProgreso, setMigProgreso] = useState('')
+  // Migración manual (un botón, un solo uso esperado): mueve las
+  // fotos/protocolos guardados como base64 dentro de cada OT al bucket de
+  // Storage "fotos-ot", dejando solo el link en su lugar. serein_ots pesa
+  // hoy ~4.2MB en la base de datos, casi todo son imágenes embebidas —
+  // eso duplicado en localStorage (dato real + copia de confirmación)
+  // empuja el uso del navegador cerca de su límite y puede hacer fallar
+  // el guardado en silencio. Corre con la sesión YA autenticada de quien
+  // hace clic (necesita el bucket creado — Storage → bucket "fotos-ot" —
+  // y sus políticas de lectura/escritura para "authenticated").
+  const migrarFotosAStorage = async () => {
+    if (!window.confirm('Esto va a mover todas las fotos y protocolos de las OT de esta área a almacenamiento en la nube, dejando solo el link en su lugar. Puede tardar varios minutos y no se debe cerrar esta pestaña mientras corre. ¿Continuar?')) return
+    setMigrando(true)
+    setMigProgreso('Preparando...')
+    try {
+      await pullState()
+      let fresco = null
+      try { fresco = JSON.parse(localStorage.getItem('serein_ots') || 'null') } catch (e) {}
+      const base = Array.isArray(fresco) ? fresco : otsAll
+      const RE_DATA_URI = /^data:image\/([a-zA-Z0-9.+-]+);base64,/
+      const subirFoto = async (dataUri, carpeta) => {
+        const m = dataUri.match(RE_DATA_URI)
+        if (!m) return dataUri
+        const ext = m[1].split('+')[0].replace('jpeg', 'jpg')
+        const b64 = dataUri.slice(m[0].length)
+        const bin = atob(b64)
+        const bytes = new Uint8Array(bin.length)
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+        const blob = new Blob([bytes], { type: 'image/' + ext })
+        const nombre = `${carpeta}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+        const { error } = await supabase.storage.from('fotos-ot').upload(nombre, blob, { contentType: 'image/' + ext, upsert: false })
+        if (error) { console.error('migrarFotosAStorage: fallo al subir', nombre, error); return dataUri }
+        const { data } = await supabase.storage.from('fotos-ot').createSignedUrl(nombre, 60 * 60 * 24 * 365 * 5)
+        return data?.signedUrl || dataUri
+      }
+      const recorrer = async (nodo, carpeta) => {
+        if (typeof nodo === 'string') return RE_DATA_URI.test(nodo) ? subirFoto(nodo, carpeta) : nodo
+        if (Array.isArray(nodo)) { const out = []; for (const x of nodo) out.push(await recorrer(x, carpeta)); return out }
+        if (nodo && typeof nodo === 'object') { const out = {}; for (const k of Object.keys(nodo)) out[k] = await recorrer(nodo[k], carpeta + '/' + k); return out }
+        return nodo
+      }
+      const pesoAntes = JSON.stringify(base).length
+      const nuevo = []
+      for (let i = 0; i < base.length; i++) {
+        setMigProgreso(`Procesando ${base[i].numero || base[i].id} (${i + 1}/${base.length})...`)
+        nuevo.push(await recorrer(base[i], `OT-${base[i].numero || base[i].id}`))
+      }
+      const pesoDespues = JSON.stringify(nuevo).length
+      try { localStorage.setItem('serein_ots', JSON.stringify(nuevo)) } catch (e) {}
+      setOts(nuevo)
+      const r = await pushState()
+      if (r.ok) window.alert(`Listo. Peso de las OT: ${(pesoAntes / 1024 / 1024).toFixed(2)}MB → ${(pesoDespues / 1024 / 1024).toFixed(2)}MB. Las fotos ahora viven en Storage.`)
+      else window.alert('Las fotos se subieron a Storage pero el guardado final del listado de OT falló: ' + (r.error || '') + '. Usa el botón "Guardar ahora" del menú lateral para reintentar — las fotos ya subidas no se pierden ni se duplican si vuelves a correr esta migración.')
+    } catch (e) {
+      window.alert('Error durante la migración: ' + ((e && e.message) || String(e)))
+    } finally {
+      setMigrando(false)
+      setMigProgreso('')
+    }
+  }
   const [rep, setRep] = useState(false)
   const [repDesde, setRepDesde] = useState('')
   const [repHasta, setRepHasta] = useState('')
@@ -1441,6 +1502,11 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
         <label style={{ fontSize: 11, color: '#9AA3AD' }}>hasta<input type="date" value={fHasta} onChange={e => { setFHasta(e.target.value); setPage(1) }} style={{ ...inp, display: 'block', marginTop: 3 }} /></label>
         <Btn variant="outline" icon={RotateCcw} onClick={() => { limpiarFiltros(); setPage(1) }}>Limpiar filtros</Btn>
         <Btn variant="dark" icon={Download} onClick={() => { setRep(v => !v); setRepCliente(fCliente) }}>Informe Excel</Btn>
+        {verValores && (
+          <Btn variant="outline" onClick={migrarFotosAStorage} disabled={migrando}>
+            {migrando ? (migProgreso || 'Migrando...') : 'Optimizar fotos de OT (una vez)'}
+          </Btn>
+        )}
       </div>
       {rep && (
         <div style={{ background: '#FAF7F3', border: '1px solid #DFE4EA', padding: 12, marginBottom: 14, display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
