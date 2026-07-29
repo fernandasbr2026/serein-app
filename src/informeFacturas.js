@@ -4,7 +4,10 @@ import { EMPRESA } from './CotizacionesModule.jsx'
 // ============================================================
 // Informe PDF de facturas seleccionadas (Facturas / Libro de Ventas).
 // Recibe una lista ya normalizada: { folio, cliente, fechaEmision,
-// ventaNeta, iva, total, fechaVencimiento, estado }.
+// ventaNeta, iva, total, fechaVencimiento, estado, abonos,
+// saldoPendiente }. abonos/saldoPendiente son opcionales — si no vienen
+// (ej. otro llamador que aún no los calcula), se tratan como 0 en vez
+// de romper el informe.
 // ============================================================
 
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
@@ -53,7 +56,9 @@ function htmlInforme(items) {
     neta: a.neta + (Number(f.ventaNeta) || 0),
     iva: a.iva + (Number(f.iva) || 0),
     total: a.total + (Number(f.total) || 0),
-  }), { neta: 0, iva: 0, total: 0 })
+    abonos: a.abonos + (Number(f.abonos) || 0),
+    saldoPendiente: a.saldoPendiente + (Number(f.saldoPendiente) || 0),
+  }), { neta: 0, iva: 0, total: 0, abonos: 0, saldoPendiente: 0 })
   const filasHtml = filas.map(f => {
     const mora = diasMoraDe(f)
     const [bg, fg] = colorEstado(f.estado)
@@ -67,6 +72,8 @@ function htmlInforme(items) {
       <td><span class="pill" style="background:${bg};color:${fg}">${f.estado || '-'}</span></td>
       <td>${fmtF(f.fechaVencimiento)}</td>
       <td class="r${mora ? ' mora' : ''}">${mora == null ? '-' : mora}</td>
+      <td class="r">${clp(f.abonos)}</td>
+      <td class="r">${clp(f.saldoPendiente)}</td>
     </tr>`
   }).join('')
   const logo = (function () { try { return localStorage.getItem('serein_logo') || '' } catch (e) { return '' } })()
@@ -81,10 +88,10 @@ function htmlInforme(items) {
       <div class="doc"><div class="t">Informe de facturas</div><div class="f">${filas.length} documento(s) · Emitido el ${fmtF(new Date().toISOString().slice(0, 10))}</div></div>
     </div>
     <table class="items"><thead><tr>
-      <th>Fecha emisión</th><th>Folio</th><th>Cliente</th><th class="r">Venta neta</th><th class="r">IVA</th><th class="r">Total</th><th>Estado</th><th>Vencimiento</th><th class="r">Días mora</th>
+      <th>Fecha emisión</th><th>Folio</th><th>Cliente</th><th class="r">Venta neta</th><th class="r">IVA</th><th class="r">Total</th><th>Estado</th><th>Vencimiento</th><th class="r">Días mora</th><th class="r">Abonos</th><th class="r">Saldo pendiente</th>
     </tr></thead>
     <tbody>${filasHtml}</tbody>
-    <tfoot><tr><td colspan="3">Totales</td><td class="r">${clp(tot.neta)}</td><td class="r">${clp(tot.iva)}</td><td class="r">${clp(tot.total)}</td><td></td><td></td><td></td></tr></tfoot>
+    <tfoot><tr><td colspan="3">Totales</td><td class="r">${clp(tot.neta)}</td><td class="r">${clp(tot.iva)}</td><td class="r">${clp(tot.total)}</td><td></td><td></td><td></td><td class="r">${clp(tot.abonos)}</td><td class="r">${clp(tot.saldoPendiente)}</td></tr></tfoot>
     </table>
     <div class="datos"><b>Datos de transferencia</b><br>
       SERVICIOS REVESTIMIENTOS INDUSTRIALES SpA · RUT 76.860.656-0<br>

@@ -52,6 +52,12 @@ export const montoFacturaDe = x => x.iva === 'exenta' ? (parseInt(String(x.neto)
 // Factoring se consideran 100% cobrados de inmediato (el adelanto de
 // factoring ya se trata como cobro en el resto del sistema), Anulada
 // nunca aporta saldo.
+// Total abonado (bruto) contra una factura — mismo criterio que usa
+// saldoPendienteDe() para descontar, expuesto aparte para poder
+// mostrarlo como columna propia en la tabla y en el informe PDF.
+export function abonoTotalDe(x) {
+  return (x.abonos || []).reduce((a, ab) => a + (Number(ab.monto) || 0), 0)
+}
 export function saldoPendienteDe(x) {
   const bruto = montoFacturaDe(x)
   if (x.estado === 'Anulada' || x.estado === 'Pagado' || x.estado === 'Factoring') return { neto: 0, bruto: 0 }
@@ -274,6 +280,8 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
       total: montoFacturaDe(x),
       fechaVencimiento: x.vencimiento,
       estado: x.estado,
+      abonos: abonoTotalDe(x),
+      saldoPendiente: saldoPendienteDe(x).bruto,
     })))
   }
   const totalMonto = mostradas.reduce((a, x) => a + montoFacturaDe(x), 0)
@@ -385,8 +393,8 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
             <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
               <th style={{ padding: '5px 6px', width: 30 }}><input type="checkbox" checked={mostradas.length > 0 && sel.size === mostradas.length} onChange={toggleTodas} /></th>
-              {['N° factura', 'Cliente', 'OT / OC', 'Centro de costo', ...(esIstria ? ['Proyecto', 'NV'] : []), 'Emisión', 'Vencimiento', 'Neto', 'IVA', 'Total', `PPM ${ppmPct}%`, 'Estado', 'Saldo pendiente', 'Fecha pago', 'Banco depósito', 'Comentarios', 'Vendedor', 'Comisión', ''].map((h, i) => (
-                <th key={i} style={{ textAlign: ['Neto', 'IVA', 'Total', 'Comisión', 'Saldo pendiente'].includes(h) || h.startsWith('PPM') ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+              {['N° factura', 'Cliente', 'OT / OC', 'Centro de costo', ...(esIstria ? ['Proyecto', 'NV'] : []), 'Emisión', 'Vencimiento', 'Neto', 'IVA', 'Total', `PPM ${ppmPct}%`, 'Estado', 'Abonos', 'Saldo pendiente', 'Fecha pago', 'Banco depósito', 'Comentarios', 'Vendedor', 'Comisión', ''].map((h, i) => (
+                <th key={i} style={{ textAlign: ['Neto', 'IVA', 'Total', 'Comisión', 'Abonos', 'Saldo pendiente'].includes(h) || h.startsWith('PPM') ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
@@ -416,6 +424,11 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                     </select>
                   </td>
                   <td style={{ padding: '4px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    <button onClick={() => setExpandido(expandido === x.id ? null : x.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: abonoTotalDe(x) > 0 ? C.verde : C.gris, fontWeight: 600, textDecoration: 'underline', fontSize: 12.5 }}>
+                      {clp(abonoTotalDe(x))}
+                    </button>
+                  </td>
+                  <td style={{ padding: '4px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                     <button onClick={() => setExpandido(expandido === x.id ? null : x.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: saldoPendienteDe(x).bruto > 0 ? C.rojo : C.verde, fontWeight: 600, textDecoration: 'underline', fontSize: 12.5 }}>
                       {clp(saldoPendienteDe(x).bruto)}
                     </button>
@@ -435,7 +448,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                 </tr>
                 {x.estado === 'Factoring' && (
                   <tr style={{ background: '#FDECDD' }}>
-                    <td colSpan={esIstria ? 21 : 19} style={{ padding: '8px 10px' }}>
+                    <td colSpan={esIstria ? 22 : 20} style={{ padding: '8px 10px' }}>
                       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12 }}>
                         <span style={{ color: C.gris, fontWeight: 600 }}>Factoring:</span>
                         <select value={x.factoringId || (fSel ? fSel.id : '')} onChange={e => actualizar(x.id, 'factoringId', e.target.value)} style={inp}>
@@ -454,14 +467,14 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                 )}
                 {expandido === x.id && (
                   <tr style={{ background: '#F2F4F7' }}>
-                    <td colSpan={esIstria ? 21 : 19} style={{ padding: '8px 10px' }}>
+                    <td colSpan={esIstria ? 22 : 20} style={{ padding: '8px 10px' }}>
                       <FilaAbonos x={x} onAgregar={abono => agregarAbono(x.id, abono)} onEliminar={abonoId => eliminarAbono(x.id, abonoId)} />
                     </td>
                   </tr>
                 )}
                 </React.Fragment>
               ) })}
-              {mostradas.length === 0 && <tr><td colSpan={esIstria ? 21 : 19} style={{ padding: 14, textAlign: 'center', color: '#9AA3AD' }}>{busca ? 'Sin resultados para la búsqueda.' : 'Sin facturas en esta área.'}</td></tr>}
+              {mostradas.length === 0 && <tr><td colSpan={esIstria ? 22 : 20} style={{ padding: 14, textAlign: 'center', color: '#9AA3AD' }}>{busca ? 'Sin resultados para la búsqueda.' : 'Sin facturas en esta área.'}</td></tr>}
             </tbody>
           </table>
           <Paginador page={pg.page} paginas={pg.paginas} total={pg.total} setPage={setPage} />
