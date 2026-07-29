@@ -434,7 +434,7 @@ function TileOT({ ot, onOpen, onDragStart, onDropOn, verValores }) {
           <span draggable onDragStart={e => { e.stopPropagation(); onDragStart() }} onClick={e => e.stopPropagation()} title="Arrastrar para reordenar" style={{ cursor: 'grab', color: '#B9C0C6', fontSize: 15, userSelect: 'none', lineHeight: 1, letterSpacing: '-1px' }}>::</span>
         </div>
       </div>
-      {ot.nv && ot.nv !== '—' ? <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, fontWeight: 700, color: '#D9600A' }}>NV {ot.nv}</div> : null}
+      {ot.nv && ot.nv !== '—' ? <div><span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 11.5, background: '#F77716', color: '#fff', padding: '2px 7px', borderRadius: 3, whiteSpace: 'nowrap' }}>NV {ot.nv}</span></div> : null}
       <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, color: '#101315', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ot.cliente}</div>
       <div style={{ fontSize: 11.5, color: '#9AA3AD', display: 'flex', flexDirection: 'column', gap: 2 }}>
         {ot.cotizacion && ot.cotizacion !== '—' && <span>Cotización: {ot.cotizacion}</span>}
