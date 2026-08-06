@@ -212,12 +212,16 @@ function ListaAvances({ avances, setAvances, ots, esGerencia, usuario, mo }) {
     pushState()
   }
 
-  // Cruce con asistencia: trabajadores presentes por fecha+planta
+  // Cruce con asistencia: trabajadores presentes por fecha+planta.
+  // mo.asistencias mezcla dos formatos: el nuevo (un registro por
+  // trabajador, con trabajadorId + tipo — 'Trabajó'/'Falta'/etc) y el
+  // viejo (un registro por grupo, con trabajadorIds, siempre "trabajó").
+  // Acá solo cuentan como "presentes" quienes de verdad trabajaron ese día.
   const presentes = (fecha, planta) => {
     if (!mo || !mo.asistencias) return null
     const del = mo.asistencias.filter(x => x.fecha === fecha && x.area === planta)
     if (del.length === 0) return null
-    const ids = new Set(del.flatMap(x => x.trabajadorIds))
+    const ids = new Set(del.flatMap(x => x.trabajadorId ? (x.tipo && x.tipo !== 'Trabajó' ? [] : [x.trabajadorId]) : (x.trabajadorIds || [])))
     return ids.size
   }
 
@@ -361,7 +365,7 @@ function Reportes({ avances, ots, mo }) {
 
   const presentesPlanta = pl => {
     if (!mo || !mo.asistencias) return '—'
-    const ids = new Set(mo.asistencias.filter(x => x.area === pl && x.fecha >= desde && x.fecha <= hasta).flatMap(x => x.trabajadorIds))
+    const ids = new Set(mo.asistencias.filter(x => x.area === pl && x.fecha >= desde && x.fecha <= hasta).flatMap(x => x.trabajadorId ? (x.tipo && x.tipo !== 'Trabajó' ? [] : [x.trabajadorId]) : (x.trabajadorIds || [])))
     return ids.size
   }
 

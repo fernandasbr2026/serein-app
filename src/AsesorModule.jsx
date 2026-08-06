@@ -350,7 +350,15 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
         const retra = ots.filter(o => o.fechaEntrega && o.fechaEntrega < h && !cerr(o.estado)).length
         const conPlan = ots.filter(o => ((o.esquema || '').trim() || (o.preparacion || '').trim())).length
         const calidadPct = ots.length ? Math.round(conPlan / ots.length * 100) : null
-        const HH = asist.reduce((sm, a) => sm + (a.trabajadorIds || []).length * (/media/i.test(a.jornada || '') ? 4.5 : 9), 0)
+        // mo.asistencias mezcla formato nuevo (un registro por trabajador,
+        // con trabajadorId + tipo) y formato viejo (un registro por grupo,
+        // con trabajadorIds, siempre "trabajó"). Solo cuentan HH quienes de
+        // verdad trabajaron ese día (no faltas/permisos/vacaciones/licencia).
+        const HH = asist.reduce((sm, a) => {
+          const horasDia = /media/i.test(a.jornada || '') ? 4.5 : 9
+          if (a.trabajadorId) return sm + ((!a.tipo || a.tipo === 'Trabajó') ? horasDia : 0)
+          return sm + (a.trabajadorIds || []).length * horasDia
+        }, 0)
         const dias = new Set(asist.map(a => a.fecha)).size
         const dotacion = trab.length; const capDia = dotacion * 9
         const util = (dias > 0 && capDia > 0) ? Math.round(HH / (capDia * dias) * 100) : null
