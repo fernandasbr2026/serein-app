@@ -1,15 +1,15 @@
 import React, { useState, useMemo, useEffect } from 'react'
-import { Plus, Trash2, CalendarDays, Clock3, Users, Wallet, Table2, EyeOff, Download, FileText, FileSpreadsheet } from 'lucide-react'
+import { Plus, Trash2, CalendarDays, Clock3, Users, Wallet, Table2, EyeOff, Download, FileText, FileSpreadsheet, Moon, Sun, AlertTriangle } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 import { SEREIN } from './theme-serein.js'
 import { pullState, pushState } from './sync.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
-const C = { naranja: SEREIN.orange, carbon: SEREIN.text, verde: SEREIN.green, rojo: SEREIN.red, gris: SEREIN.textFaint }
+const C = { naranja: SEREIN.orange, carbon: SEREIN.text, verde: SEREIN.green, rojo: SEREIN.red, gris: SEREIN.textFaint, azul: '#0E7A8F', morado: '#5B4E8C' }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
 const hoy = () => new Date().toISOString().slice(0, 10)
-const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
+const inp = { padding: '8px 10px', border: '1px solid #DFE4EA', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }
 
 // ============================================================
 // NÓMINA / ASISTENCIA · SEREIN 2026
@@ -21,25 +21,46 @@ const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, box
 //     Valor hora              = Valor día bruto / 9
 //     Valor hora extra        = Valor hora × 1,5
 //     Valor Sábado y Domingo  = se ingresan a mano
+//     Valor Feriado trabajado = igual a Domingo (100%)
+//     Valor Turno noche       = se ingresa a mano por trabajador
+// - Horario Santa Rosa e Istria: L-J 08:00-13:00 / 13:30-17:30,
+//   Viernes 08:00-14:00. Atraso se mide siempre contra las 08:00.
 // - Grupos: Istria / Planta / Administrativos
 // - SOLO GERENCIA ve valores. Los supervisores solo ven la
 //   lista de trabajadores (nombre, cargo, grupo, nacionalidad).
 // ============================================================
 
+// IMPORTANTE: no subir MO_VER — el módulo descarta los datos guardados y
+// vuelve a MO_SEED si mo.ver no coincide con esta constante (ver el
+// useEffect al fondo del archivo). Los campos nuevos de esta versión
+// (turnoNoche, vacacionesDisponibles, valorColacion, tipo de asistencia)
+// son ADITIVOS: se leen con valores por defecto si no existen, para no
+// tener que tocar MO_VER ni arriesgar los registros ya guardados.
 export const MO_VER = 'nomina-real-2026-07'
 export const GRUPOS = ['Istria', 'Planta', 'Administrativos']
+export const TIPOS_DIA = ['Trabajó', 'Falta', 'Permiso', 'Vacaciones', 'Licencia/Accidente']
+const TIPO_COLOR = { 'Trabajó': C.verde, 'Falta': C.rojo, 'Permiso': C.morado, 'Vacaciones': C.azul, 'Licencia/Accidente': C.naranja }
+const TIPO_DESCRIPCION = {
+  'Trabajó': 'Se paga el día completo (menos descuento por atraso si llega después de las 08:00).',
+  'Falta': 'No se paga el día.',
+  'Permiso': 'No se paga el día.',
+  'Vacaciones': 'Se paga el día completo y se descuenta 1 día del saldo de vacaciones del trabajador.',
+  'Licencia/Accidente': 'No lo paga la empresa ese día — lo cubre Fonasa/Isapre según corresponda. No afecta el saldo de vacaciones.',
+}
+const HORA_ENTRADA_ESTANDAR = '08:00'
 
 // Datos reales cargados desde la planilla (editables en pantalla).
 // Complete/ajuste los que falten directamente en la tabla de Nómina.
 export const MO_SEED = {
   ver: MO_VER,
   cargos: [], // se conserva por compatibilidad; ya no se usa
+  valorColacion: 0, // valor fijo que paga la empresa por colación — solo informativo, no afecta el pago del trabajador
   trabajadores: [
-    { id: 't1', grupo: 'Istria', nombre: 'Daniel Matos', cargo: 'Supervisor', nacionalidad: 'Chilena', sueldo: 800000, imposiciones: 270981, sabado: 60000, domingo: 0 },
-    { id: 't2', grupo: 'Istria', nombre: 'Dario Daza', cargo: 'Maestro Granallador', nacionalidad: 'Chilena', sueldo: 900000, imposiciones: 207675, sabado: 60000, domingo: 0 },
-    { id: 't3', grupo: 'Administrativos', nombre: 'Fernanda Soto', cargo: 'Gerente administrativa', nacionalidad: 'Chilena', sueldo: 2000000, imposiciones: 0, sabado: 0, domingo: 0 },
-    { id: 't4', grupo: 'Administrativos', nombre: 'Mario Vidal', cargo: 'Gerente de Proyectos', nacionalidad: 'Chilena', sueldo: 3200000, imposiciones: 0, sabado: 0, domingo: 0 },
-    { id: 't5', grupo: 'Administrativos', nombre: 'Carolina Marillanca', cargo: 'Gerente comercial', nacionalidad: 'Chilena', sueldo: 3200000, imposiciones: 0, sabado: 0, domingo: 0 },
+    { id: 't1', grupo: 'Istria', nombre: 'Daniel Matos', cargo: 'Supervisor', nacionalidad: 'Chilena', sueldo: 800000, imposiciones: 270981, sabado: 60000, domingo: 0, turnoNoche: 0, vacacionesDisponibles: 15 },
+    { id: 't2', grupo: 'Istria', nombre: 'Dario Daza', cargo: 'Maestro Granallador', nacionalidad: 'Chilena', sueldo: 900000, imposiciones: 207675, sabado: 60000, domingo: 0, turnoNoche: 0, vacacionesDisponibles: 15 },
+    { id: 't3', grupo: 'Administrativos', nombre: 'Fernanda Soto', cargo: 'Gerente administrativa', nacionalidad: 'Chilena', sueldo: 2000000, imposiciones: 0, sabado: 0, domingo: 0, turnoNoche: 0, vacacionesDisponibles: 15 },
+    { id: 't4', grupo: 'Administrativos', nombre: 'Mario Vidal', cargo: 'Gerente de Proyectos', nacionalidad: 'Chilena', sueldo: 3200000, imposiciones: 0, sabado: 0, domingo: 0, turnoNoche: 0, vacacionesDisponibles: 15 },
+    { id: 't5', grupo: 'Administrativos', nombre: 'Carolina Marillanca', cargo: 'Gerente comercial', nacionalidad: 'Chilena', sueldo: 3200000, imposiciones: 0, sabado: 0, domingo: 0, turnoNoche: 0, vacacionesDisponibles: 15 },
   ],
   asistencias: [],
   horasExtras: [],
@@ -59,11 +80,62 @@ export function calc(t) {
     horaExtra: Math.round(hexRaw),
     sabado: num(t.sabado),
     domingo: num(t.domingo),
+    turnoNoche: num(t.turnoNoche),
   }
 }
 const valorDiarioDe = t => calc(t).diaBruto
 const valorHexDe = t => calc(t).horaExtra
 const cargoDe = t => t.cargo || ''
+const vacacionesDe = t => t.vacacionesDisponibles ?? 15
+
+// ----- Atraso -----
+const minutosDesde = hhmm => { const p = String(hhmm || '').split(':'); const h = parseInt(p[0], 10), m = parseInt(p[1], 10); return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m) }
+export const calcAtrasoMin = horaLlegada => horaLlegada ? Math.max(0, minutosDesde(horaLlegada) - minutosDesde(HORA_ENTRADA_ESTANDAR)) : 0
+const esViernes = fecha => { try { return new Date(fecha + 'T12:00:00').getDay() === 5 } catch (e) { return false } }
+
+// Calcula el costo de UN día para UN trabajador, según el tipo elegido.
+// No se guarda nada acá — es pura función, se usa tanto al guardar como
+// para mostrar la vista previa del descuento antes de guardar.
+export function costoDia(t, tipo, horaLlegada, factorJornada) {
+  const c = calc(t)
+  const valorDia = Math.round(c.diaBruto * (factorJornada || 1))
+  if (tipo === 'Trabajó') {
+    const atrasoMin = calcAtrasoMin(horaLlegada)
+    const descuentoAtraso = Math.round((atrasoMin / 60) * c.hora)
+    return { valorDia, atrasoMin, descuentoAtraso, descuentoDia: 0, pago: Math.max(0, valorDia - descuentoAtraso), usaVacacion: false }
+  }
+  if (tipo === 'Falta' || tipo === 'Permiso') {
+    return { valorDia, atrasoMin: 0, descuentoAtraso: 0, descuentoDia: valorDia, pago: 0, usaVacacion: false }
+  }
+  if (tipo === 'Vacaciones') {
+    return { valorDia, atrasoMin: 0, descuentoAtraso: 0, descuentoDia: 0, pago: valorDia, usaVacacion: true }
+  }
+  // Licencia/Accidente
+  return { valorDia, atrasoMin: 0, descuentoAtraso: 0, descuentoDia: 0, pago: 0, usaVacacion: false }
+}
+
+// Normaliza un registro de asistencia — formato nuevo (un registro = un
+// trabajador, con tipo/horaLlegada/atraso) o formato viejo (un registro =
+// grupo de trabajadores, todos "Trabajó", sin atraso) — a una lista plana
+// de filas por trabajador. Así el resto del módulo (costos, informes,
+// resumen) no necesita saber cuál formato es cada registro, y los
+// registros históricos siguen viéndose y contando igual que antes.
+export function filasDeAsistencia(a) {
+  if (a.trabajadorId) {
+    return [{
+      regId: a.id, fecha: a.fecha, trabajadorId: a.trabajadorId, tipo: a.tipo || 'Trabajó',
+      horaLlegada: a.horaLlegada || '', atrasoMin: (a.costo && a.costo.atrasoMin) || 0,
+      descuento: (a.costo && (a.costo.descuentoAtraso || a.costo.descuentoDia)) || 0,
+      pago: (a.costo && a.costo.total) || 0, ots: a.ots || [], area: a.area, supervisor: a.supervisor, obs: a.obs || '',
+    }]
+  }
+  return (a.trabajadorIds || []).map(tId => ({
+    regId: a.id, fecha: a.fecha, trabajadorId: tId, tipo: 'Trabajó', horaLlegada: '', atrasoMin: 0, descuento: 0,
+    pago: (a.costo && a.costo.detalle && a.costo.detalle.find(d => d.tId === tId)?.valor) || 0,
+    ots: a.ots || [], area: a.area, supervisor: a.supervisor, obs: a.obs || '',
+  }))
+}
+
 export const costoMOdeOT = (mo, numOT) => {
   if (!mo) return 0
   const asis = (mo.asistencias || []).reduce((a, x) => a + ((x.costo && x.costo.porOT && x.costo.porOT[numOT]) || 0), 0)
@@ -71,14 +143,14 @@ export const costoMOdeOT = (mo, numOT) => {
   return asis + hex
 }
 
-function Aviso({ hijo }) { return <div style={{ background: '#FDECDD', color: '#D9600A', padding: '8px 12px', fontSize: 12, marginTop: 8 }}>{hijo}</div> }
+function Aviso({ hijo }) { return <div style={{ background: '#FDECDD', color: '#D9600A', padding: '8px 12px', borderRadius: 6, fontSize: 12, marginTop: 8 }}>{hijo}</div> }
 
 function TabsInternos({ tabs, sel, onSel }) {
   return (
-    <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap', borderBottom: '1px solid #E7E2D8', paddingBottom: 10 }}>
       {tabs.map(t => (
         <button key={t.id} onClick={() => onSel(t.id)}
-          style={{ background: sel === t.id ? C.carbon : '#fff', color: sel === t.id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
+          style={{ background: sel === t.id ? C.carbon : '#fff', color: sel === t.id ? '#fff' : C.carbon, border: '1px solid ' + (sel === t.id ? C.carbon : '#DFE4EA'), borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6, transition: 'background .15s' }}>
           {t.icono}{t.label}
         </button>
       ))}
@@ -86,113 +158,209 @@ function TabsInternos({ tabs, sel, onSel }) {
   )
 }
 
-// ================= REGISTRO DIARIO =================
-function RegistroDiario({ mo, setMo, otsDisponibles, esGerencia, usuario, areas }) {
-  const [f, setF] = useState({ fecha: hoy(), area: areas[0] || 'Santa Rosa', jornada: 'Completa', trabajadorIds: [], ots: [], otManual: '', obs: '' })
-  const [guardado, setGuardado] = useState(false)
-  const toggle = (lista, v) => lista.includes(v) ? lista.filter(x => x !== v) : [...lista, v]
-
-  async function guardar() {
-    if (f.trabajadorIds.length === 0 || (f.ots.length === 0 && !f.otManual.trim())) return
-    const ots = [...f.ots, ...f.otManual.split(',').map(s => s.trim()).filter(Boolean)]
-    const factor = f.jornada === 'Media' ? 0.5 : 1
-    const detalle = f.trabajadorIds.map(tid => {
-      const t = (mo.trabajadores || []).find(x => x.id === tid)
-      return { tId: tid, valor: Math.round(valorDiarioDe(t) * factor) }
-    })
-    const total = detalle.reduce((a, d) => a + d.valor, 0)
-    const porOT = Object.fromEntries(ots.map(o => [o, Math.round(total / ots.length)]))
-    const reg = { id: 'a' + Date.now(), fecha: f.fecha, supervisor: usuario, area: f.area, jornada: f.jornada, trabajadorIds: f.trabajadorIds, ots, obs: f.obs, costo: { total, detalle, porOT } }
-    try { await pullState() } catch (e) {}
-    let fresco = null
-    try { fresco = JSON.parse(localStorage.getItem('serein_mo') || 'null') } catch (e) {}
-    const baseMo = fresco && typeof fresco === 'object' ? fresco : mo
-    const nuevo = { ...baseMo, asistencias: [reg, ...(baseMo.asistencias || [])] }
-    try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
-    setMo(nuevo)
-    pushState()
-    setF({ ...f, trabajadorIds: [], ots: [], otManual: '', obs: '' })
-    setGuardado(true); setTimeout(() => setGuardado(false), 3500)
-  }
-
+// Tarjeta resumen chica, mismo lenguaje visual que KpiCard del resto de la
+// app pero local a este módulo (no se toca ui.jsx).
+function StatCard({ icon: Icon, color, bg, valor, label }) {
   return (
-    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, marginBottom: 14 }}>
-        <label style={{ fontSize: 12, color: C.gris }}>Fecha
-          <input type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }} />
-        </label>
-        <label style={{ fontSize: 12, color: C.gris }}>Área / planta
-          <select value={f.area} onChange={e => setF({ ...f, area: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }}>
-            {areas.map(a => <option key={a}>{a}</option>)}
-          </select>
-        </label>
-        <label style={{ fontSize: 12, color: C.gris }}>Jornada
-          <select value={f.jornada} onChange={e => setF({ ...f, jornada: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }}>
-            <option>Completa</option><option>Media</option>
-          </select>
-        </label>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 10, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, minWidth: 150 }}>
+      <div style={{ width: 36, height: 36, borderRadius: 8, background: bg, color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Icon size={17} /></div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 800, fontSize: 18, color: C.carbon, lineHeight: 1.1 }}>{valor}</div>
+        <div style={{ fontSize: 11, color: C.gris, marginTop: 2 }}>{label}</div>
       </div>
-
-      <div style={{ fontSize: 12, color: C.gris, marginBottom: 6 }}>Trabajadores presentes (cargo entre paréntesis)</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
-        {(mo.trabajadores || []).map(t => {
-          const sel = f.trabajadorIds.includes(t.id)
-          return (
-            <button key={t.id} onClick={() => setF({ ...f, trabajadorIds: toggle(f.trabajadorIds, t.id) })}
-              style={{ background: sel ? C.naranja : '#fff', color: sel ? '#fff' : C.carbon, border: `1px solid ${sel ? C.naranja : '#DFE4EA'}`, padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>
-              {t.nombre}{cargoDe(t) ? ` (${cargoDe(t)})` : ''}
-            </button>
-          )
-        })}
-      </div>
-
-      <div style={{ fontSize: 12, color: C.gris, marginBottom: 6 }}>OT / OC trabajadas hoy (puedes marcar varias)</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-        {otsDisponibles.map(o => {
-          const sel = f.ots.includes(o)
-          return (
-            <button key={o} onClick={() => setF({ ...f, ots: toggle(f.ots, o) })}
-              style={{ background: sel ? C.carbon : '#fff', color: sel ? '#fff' : C.carbon, border: `1px solid ${sel ? C.carbon : '#DFE4EA'}`, padding: '7px 12px', cursor: 'pointer', fontSize: 13, fontFamily: "'JetBrains Mono',monospace" }}>
-              {o}
-            </button>
-          )
-        })}
-      </div>
-      <input placeholder="Otra OT/OC no listada (ej: OT 385, OC 5312 — separa con coma)" value={f.otManual}
-        onChange={e => setF({ ...f, otManual: e.target.value })} style={{ ...inp, width: '100%', marginBottom: 14 }} />
-
-      <label style={{ fontSize: 12, color: C.gris }}>Observaciones
-        <textarea value={f.obs} onChange={e => setF({ ...f, obs: e.target.value })} rows={2} style={{ ...inp, width: '100%', marginTop: 4, resize: 'vertical' }} />
-      </label>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14 }}>
-        <button onClick={guardar}
-          style={{ background: C.naranja, color: '#fff', border: 'none', padding: '10px 22px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-          Guardar registro
-        </button>
-        {guardado && <span style={{ color: C.verde, fontSize: 13 }}>✓ Registro guardado correctamente</span>}
-      </div>
-      {!esGerencia && <Aviso hijo={<><EyeOff size={12} style={{ verticalAlign: -2 }} /> Los valores y costos de mano de obra los calcula el sistema y solo son visibles para Gerencia.</>} />}
     </div>
   )
 }
 
-// ================= HORAS EXTRAS =================
-function HorasExtras({ mo, setMo, otsDisponibles, esGerencia, usuario }) {
-  const [f, setF] = useState({ fecha: hoy(), trabajadorId: mo.trabajadores[0]?.id, horas: '', ot: '', otManual: '', obs: '' })
+// ================= REGISTRO DIARIO =================
+function RegistroDiario({ mo, setMo, otsDisponibles, esGerencia, usuario, areas }) {
+  const [f, setF] = useState({ fecha: hoy(), area: areas[0] || 'Santa Rosa', jornada: 'Completa', ots: [], otManual: '', obs: '', estados: {} })
   const [guardado, setGuardado] = useState(false)
+  const [busca, setBusca] = useState('')
+  const toggle = (lista, v) => lista.includes(v) ? lista.filter(x => x !== v) : [...lista, v]
+  const setEstado = (tid, cambios) => setF(s => ({ ...s, estados: { ...s.estados, [tid]: { ...(s.estados[tid] || {}), ...cambios } } }))
+  const factor = f.jornada === 'Media' ? 0.5 : 1
+
+  const trabajadores = (mo.trabajadores || []).filter(t => !busca.trim() || (t.nombre || '').toLowerCase().includes(busca.trim().toLowerCase()))
+  const entradas = Object.entries(f.estados).filter(([, e]) => e && e.tipo)
+  const trabajaronHoy = entradas.filter(([, e]) => e.tipo === 'Trabajó')
 
   async function guardar() {
-    const ot = f.otManual.trim() || f.ot
-    const horas = parseFloat(f.horas)
-    if (!ot || !horas || horas <= 0) return
-    const t = (mo.trabajadores || []).find(x => x.id === f.trabajadorId)
-    const valorHex = valorHexDe(t)
-    const reg = { id: 'h' + Date.now(), fecha: f.fecha, trabajadorId: f.trabajadorId, horas, ot, obs: f.obs, costo: { valorHex, total: Math.round(valorHex * horas) } }
+    if (entradas.length === 0) return
+    if (trabajaronHoy.length > 0 && f.ots.length === 0 && !f.otManual.trim()) { window.alert('Marca al menos una OT/OC para quienes trabajaron hoy.'); return }
+    const ots = [...f.ots, ...f.otManual.split(',').map(s => s.trim()).filter(Boolean)]
     try { await pullState() } catch (e) {}
     let fresco = null
     try { fresco = JSON.parse(localStorage.getItem('serein_mo') || 'null') } catch (e) {}
-    const baseMo = fresco && typeof fresco === 'object' ? fresco : mo
+    const baseMo = (fresco && fresco.ver === MO_VER) ? fresco : mo
+    let trabajadoresActualizados = baseMo.trabajadores || []
+    const nuevosRegistros = []
+    entradas.forEach(([tid, e]) => {
+      const t = trabajadoresActualizados.find(x => x.id === tid)
+      if (!t) return
+      const d = costoDia(t, e.tipo, e.horaLlegada, factor)
+      const esTrabajo = e.tipo === 'Trabajó'
+      const reg = {
+        id: 'a' + Date.now() + Math.random().toString(36).slice(2, 7),
+        fecha: f.fecha, trabajadorId: tid, area: f.area, tipo: e.tipo,
+        horaLlegada: esTrabajo ? (e.horaLlegada || '') : '',
+        jornada: f.jornada, ots: esTrabajo ? ots : [], obs: f.obs, supervisor: usuario,
+        costo: esTrabajo
+          ? { valorDia: d.valorDia, atrasoMin: d.atrasoMin, descuentoAtraso: d.descuentoAtraso, total: d.pago, porOT: Object.fromEntries(ots.map(o => [o, ots.length ? Math.round(d.pago / ots.length) : 0])) }
+          : { valorDia: d.valorDia, descuentoDia: d.descuentoDia, total: d.pago },
+      }
+      nuevosRegistros.push(reg)
+      if (e.tipo === 'Vacaciones') {
+        trabajadoresActualizados = trabajadoresActualizados.map(x => x.id === tid ? { ...x, vacacionesDisponibles: Math.max(0, vacacionesDe(x) - 1) } : x)
+      }
+    })
+    const nuevo = { ...baseMo, trabajadores: trabajadoresActualizados, asistencias: [...nuevosRegistros, ...(baseMo.asistencias || [])] }
+    try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
+    setMo(nuevo)
+    pushState()
+    setF({ fecha: f.fecha, area: f.area, jornada: 'Completa', ots: [], otManual: '', obs: '', estados: {} })
+    setGuardado(true); setTimeout(() => setGuardado(false), 3500)
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+        <StatCard icon={Users} color={C.naranja} bg="#FDECDD" valor={entradas.length} label="Trabajadores con estado marcado hoy" />
+        <StatCard icon={AlertTriangle} color={C.rojo} bg="#FBE4E2" valor={entradas.filter(([, e]) => e.tipo && e.tipo !== 'Trabajó').length} label="Inasistencias registradas hoy" />
+      </div>
+
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 10, padding: 18, marginBottom: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, marginBottom: 14 }}>
+          <label style={{ fontSize: 12, color: C.gris }}>Fecha
+            <input type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }} />
+          </label>
+          <label style={{ fontSize: 12, color: C.gris }}>Área / planta
+            <select value={f.area} onChange={e => setF({ ...f, area: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }}>
+              {areas.map(a => <option key={a}>{a}</option>)}
+            </select>
+          </label>
+          <label style={{ fontSize: 12, color: C.gris }}>Jornada (para quienes trabajaron)
+            <select value={f.jornada} onChange={e => setF({ ...f, jornada: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }}>
+              <option>Completa</option><option>Media</option>
+            </select>
+          </label>
+        </div>
+
+        <div style={{ fontSize: 12, color: C.gris, marginBottom: 6 }}>OT / OC trabajadas hoy (aplica a quienes marques "Trabajó")</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+          {otsDisponibles.map(o => {
+            const sel = f.ots.includes(o)
+            return (
+              <button key={o} onClick={() => setF({ ...f, ots: toggle(f.ots, o) })}
+                style={{ background: sel ? C.carbon : '#fff', color: sel ? '#fff' : C.carbon, border: `1px solid ${sel ? C.carbon : '#DFE4EA'}`, borderRadius: 6, padding: '7px 12px', cursor: 'pointer', fontSize: 13, fontFamily: "'JetBrains Mono',monospace" }}>
+                {o}
+              </button>
+            )
+          })}
+        </div>
+        <input placeholder="Otra OT/OC no listada (ej: OT 385, OC 5312 — separa con coma)" value={f.otManual}
+          onChange={e => setF({ ...f, otManual: e.target.value })} style={{ ...inp, width: '100%', marginBottom: 8 }} />
+        <label style={{ fontSize: 12, color: C.gris }}>Observaciones (opcional, aplica a todo el registro del día)
+          <textarea value={f.obs} onChange={e => setF({ ...f, obs: e.target.value })} rows={2} style={{ ...inp, width: '100%', marginTop: 4, resize: 'vertical' }} />
+        </label>
+      </div>
+
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 10, padding: 18 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Estado de cada trabajador</div>
+          <input placeholder="Buscar trabajador…" value={busca} onChange={e => setBusca(e.target.value)} style={{ ...inp, width: 220 }} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {trabajadores.map(t => {
+            const e = f.estados[t.id] || {}
+            const d = e.tipo ? costoDia(t, e.tipo, e.horaLlegada, factor) : null
+            return (
+              <div key={t.id} style={{ border: '1px solid #EEE9DF', borderRadius: 8, padding: 12, background: e.tipo ? '#FAF9F6' : '#fff' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13.5 }}>{t.nombre}{cargoDe(t) ? <span style={{ fontWeight: 400, color: C.gris }}> — {cargoDe(t)}</span> : ''}</div>
+                  <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                    {TIPOS_DIA.map(tipo => (
+                      <button key={tipo} title={TIPO_DESCRIPCION[tipo]} onClick={() => setEstado(t.id, { tipo: e.tipo === tipo ? undefined : tipo })}
+                        style={{ background: e.tipo === tipo ? TIPO_COLOR[tipo] : '#fff', color: e.tipo === tipo ? '#fff' : C.carbon, border: `1px solid ${e.tipo === tipo ? TIPO_COLOR[tipo] : '#DFE4EA'}`, borderRadius: 20, padding: '5px 11px', cursor: 'pointer', fontSize: 11.5, fontWeight: 600 }}>
+                        {tipo}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {e.tipo === 'Trabajó' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+                    <label style={{ fontSize: 11.5, color: C.gris }}>Hora de llegada
+                      <input type="time" value={e.horaLlegada || ''} onChange={ev => setEstado(t.id, { horaLlegada: ev.target.value })} style={{ ...inp, marginLeft: 6, padding: '5px 8px' }} />
+                    </label>
+                    {d && d.atrasoMin > 0 && (
+                      <span style={{ fontSize: 11.5, color: C.rojo, fontWeight: 600 }}>
+                        ⚠ {d.atrasoMin} min de atraso{esGerencia ? ` — descuento ${clp(d.descuentoAtraso)}` : ''}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {e.tipo && e.tipo !== 'Trabajó' && esGerencia && (
+                  <div style={{ fontSize: 11.5, color: C.gris, marginTop: 6 }}>
+                    {TIPO_DESCRIPCION[e.tipo]}{d && d.descuentoDia > 0 ? ` Descuento del día: ${clp(d.descuentoDia)}.` : ''}
+                    {e.tipo === 'Vacaciones' && ` Saldo actual: ${vacacionesDe(t)} días.`}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+          {trabajadores.length === 0 && <div style={{ fontSize: 13, color: '#9AA3AD', textAlign: 'center', padding: 16 }}>Sin trabajadores que coincidan con la búsqueda.</div>}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16 }}>
+          <button onClick={guardar} disabled={entradas.length === 0}
+            style={{ background: entradas.length === 0 ? '#CBD2D6' : C.naranja, color: '#fff', border: 'none', borderRadius: 8, padding: '11px 22px', cursor: entradas.length === 0 ? 'default' : 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+            Guardar registro del día ({entradas.length})
+          </button>
+          {guardado && <span style={{ color: C.verde, fontSize: 13 }}>✓ Registro guardado correctamente</span>}
+        </div>
+        {!esGerencia && <Aviso hijo={<><EyeOff size={12} style={{ verticalAlign: -2 }} /> Los valores y descuentos los calcula el sistema y solo son visibles para Gerencia.</>} />}
+      </div>
+    </div>
+  )
+}
+
+// ================= EXTRAS: HORAS SEMANA / FERIADOS / TURNO NOCHE =================
+const TIPOS_EXTRA = [
+  { id: 'Semana', label: 'Horas extra semana', icono: <Clock3 size={13} /> },
+  { id: 'Feriado', label: 'Feriado / fin de semana', icono: <Sun size={13} /> },
+  { id: 'TurnoNoche', label: 'Turno de noche', icono: <Moon size={13} /> },
+]
+
+function HorasExtras({ mo, setMo, otsDisponibles, esGerencia, usuario }) {
+  const [tipo, setTipo] = useState('Semana')
+  const [f, setF] = useState({ fecha: hoy(), trabajadorId: mo.trabajadores[0]?.id, horas: '', ot: '', otManual: '', obs: '', colacion: false })
+  const [guardado, setGuardado] = useState(false)
+  const esFeriado = tipo === 'Feriado'
+  useEffect(() => { if (esFeriado) setF(s => ({ ...s, colacion: true })) }, [esFeriado])
+
+  async function guardar() {
+    const ot = f.otManual.trim() || f.ot
+    if (!ot) { window.alert('Indica la OT/OC a la que se carga este extra.'); return }
+    const t = (mo.trabajadores || []).find(x => x.id === f.trabajadorId)
+    if (!t) return
+    let costo, horas = null
+    if (tipo === 'Semana') {
+      horas = parseFloat(f.horas)
+      if (!horas || horas <= 0) return
+      const valorHex = valorHexDe(t)
+      costo = { valorHex, total: Math.round(valorHex * horas), colacion: f.colacion ? num(mo.valorColacion) : 0 }
+    } else if (tipo === 'Feriado') {
+      const valorFeriado = calc(t).domingo
+      costo = { valorFeriado, total: valorFeriado, colacion: num(mo.valorColacion) }
+    } else {
+      const valorTurno = calc(t).turnoNoche
+      costo = { valorTurno, total: valorTurno, colacion: f.colacion ? num(mo.valorColacion) : 0 }
+    }
+    const reg = { id: 'h' + Date.now() + Math.random().toString(36).slice(2, 7), tipo, fecha: f.fecha, trabajadorId: f.trabajadorId, horas, ot, obs: f.obs, costo }
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_mo') || 'null') } catch (e) {}
+    const baseMo = (fresco && fresco.ver === MO_VER) ? fresco : mo
     const nuevo = { ...baseMo, horasExtras: [reg, ...(baseMo.horasExtras || [])] }
     try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
     setMo(nuevo)
@@ -202,54 +370,84 @@ function HorasExtras({ mo, setMo, otsDisponibles, esGerencia, usuario }) {
   }
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, marginBottom: 14 }}>
-        <label style={{ fontSize: 12, color: C.gris }}>Fecha
-          <input type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }} />
-        </label>
-        <label style={{ fontSize: 12, color: C.gris }}>Trabajador
-          <select value={f.trabajadorId} onChange={e => setF({ ...f, trabajadorId: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }}>
-            {(mo.trabajadores || []).map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-          </select>
-        </label>
-        <label style={{ fontSize: 12, color: C.gris }}>Horas extras
-          <input type="number" min="0.5" step="0.5" value={f.horas} onChange={e => setF({ ...f, horas: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }} />
-        </label>
-        <label style={{ fontSize: 12, color: C.gris }}>OT / OC asociada
-          <select value={f.ot} onChange={e => setF({ ...f, ot: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }}>
-            <option value="">— seleccionar —</option>
-            {otsDisponibles.map(o => <option key={o}>{o}</option>)}
-          </select>
-        </label>
+    <div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+        {TIPOS_EXTRA.map(te => (
+          <button key={te.id} onClick={() => setTipo(te.id)}
+            style={{ background: tipo === te.id ? C.naranja : '#fff', color: tipo === te.id ? '#fff' : C.carbon, border: `1px solid ${tipo === te.id ? C.naranja : '#DFE4EA'}`, borderRadius: 20, padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+            {te.icono}{te.label}
+          </button>
+        ))}
       </div>
-      <input placeholder="U otra OT/OC no listada (ej: OT 385)" value={f.otManual} onChange={e => setF({ ...f, otManual: e.target.value })} style={{ ...inp, width: '100%', marginBottom: 10 }} />
-      <label style={{ fontSize: 12, color: C.gris }}>Observación
-        <input value={f.obs} onChange={e => setF({ ...f, obs: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }} />
-      </label>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14 }}>
-        <button onClick={guardar}
-          style={{ background: C.naranja, color: '#fff', border: 'none', padding: '10px 22px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-          Guardar horas extras
-        </button>
-        {guardado && <span style={{ color: C.verde, fontSize: 13 }}>✓ Registro guardado correctamente</span>}
+
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 10, padding: 18 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, marginBottom: 14 }}>
+          <label style={{ fontSize: 12, color: C.gris }}>Fecha
+            <input type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }} />
+          </label>
+          <label style={{ fontSize: 12, color: C.gris }}>Trabajador
+            <select value={f.trabajadorId} onChange={e => setF({ ...f, trabajadorId: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }}>
+              {(mo.trabajadores || []).map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+            </select>
+          </label>
+          {tipo === 'Semana' && (
+            <label style={{ fontSize: 12, color: C.gris }}>Horas extras
+              <input type="number" min="0.5" step="0.5" value={f.horas} onChange={e => setF({ ...f, horas: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }} />
+            </label>
+          )}
+          <label style={{ fontSize: 12, color: C.gris }}>OT / OC asociada
+            <select value={f.ot} onChange={e => setF({ ...f, ot: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }}>
+              <option value="">— seleccionar —</option>
+              {otsDisponibles.map(o => <option key={o}>{o}</option>)}
+            </select>
+          </label>
+        </div>
+        <input placeholder="U otra OT/OC no listada (ej: OT 385)" value={f.otManual} onChange={e => setF({ ...f, otManual: e.target.value })} style={{ ...inp, width: '100%', marginBottom: 10 }} />
+
+        {tipo === 'Semana' && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: C.carbon, marginBottom: 10 }}>
+            <input type="checkbox" checked={f.colacion} onChange={e => setF({ ...f, colacion: e.target.checked })} />
+            Corresponde colación <span style={{ color: C.gris }}>(el turno sigue después de las 19:00 de lunes a jueves, o los viernes cuando sigue de largo pasadas las 14:30 — solo tu registro, no afecta el pago del trabajador)</span>
+          </label>
+        )}
+        {tipo === 'Feriado' && (
+          <div style={{ fontSize: 12, color: C.gris, marginBottom: 10 }}>Se paga al 100% (igual que un domingo) y la colación aplica siempre — no requiere marcarla.</div>
+        )}
+        {tipo === 'TurnoNoche' && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: C.carbon, marginBottom: 10 }}>
+            <input type="checkbox" checked={f.colacion} onChange={e => setF({ ...f, colacion: e.target.checked })} />
+            Corresponde colación <span style={{ color: C.gris }}>(solo tu registro, no afecta el pago del trabajador)</span>
+          </label>
+        )}
+
+        <label style={{ fontSize: 12, color: C.gris }}>Observación
+          <input value={f.obs} onChange={e => setF({ ...f, obs: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }} />
+        </label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14 }}>
+          <button onClick={guardar}
+            style={{ background: C.naranja, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+            Guardar
+          </button>
+          {guardado && <span style={{ color: C.verde, fontSize: 13 }}>✓ Registro guardado correctamente</span>}
+        </div>
+        {!esGerencia && <Aviso hijo="El costo de estos extras se calcula internamente y se carga a la OT indicada. Solo Gerencia ve los montos." />}
       </div>
-      {!esGerencia && <Aviso hijo="El costo de las horas extras se calcula internamente y se carga a la OT indicada. Solo Gerencia ve los montos." />}
     </div>
   )
 }
 
 // ================= LISTA DE REGISTROS =================
 function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
-  const visibles = esGerencia ? mo.asistencias : (mo.asistencias || []).filter(a => a.supervisor === usuario)
-  const hexVisibles = mo.horasExtras
+  const filas = useMemo(() => (mo.asistencias || []).flatMap(filasDeAsistencia).filter(x => esGerencia || x.supervisor === usuario), [mo, esGerencia, usuario])
+  const hexVisibles = mo.horasExtras || []
   const nombreDe = id => (mo.trabajadores || []).find(t => t.id === id)?.nombre || id
 
-  async function borrarAsistencia(id) {
+  async function borrarAsistencia(regId) {
     try { await pullState() } catch (e) {}
     let fresco = null
     try { fresco = JSON.parse(localStorage.getItem('serein_mo') || 'null') } catch (e) {}
-    const baseMo = fresco && typeof fresco === 'object' ? fresco : mo
-    const nuevo = { ...baseMo, asistencias: (baseMo.asistencias || []).filter(x => x.id !== id) }
+    const baseMo = (fresco && fresco.ver === MO_VER) ? fresco : mo
+    const nuevo = { ...baseMo, asistencias: (baseMo.asistencias || []).filter(x => x.id !== regId) }
     try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
     setMo(nuevo)
     pushState()
@@ -259,7 +457,7 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
     try { await pullState() } catch (e) {}
     let fresco = null
     try { fresco = JSON.parse(localStorage.getItem('serein_mo') || 'null') } catch (e) {}
-    const baseMo = fresco && typeof fresco === 'object' ? fresco : mo
+    const baseMo = (fresco && fresco.ver === MO_VER) ? fresco : mo
     const nuevo = { ...baseMo, horasExtras: (baseMo.horasExtras || []).filter(x => x.id !== id) }
     try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
     setMo(nuevo)
@@ -268,30 +466,29 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
 
   return (
     <div>
-      <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18, marginBottom: 14 }}>
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 10, padding: 18, marginBottom: 14 }}>
         <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Asistencias registradas</div>
-        {visibles.length === 0 ? <div style={{ fontSize: 13, color: '#9AA3AD' }}>Sin registros aún.</div> : (
+        {filas.length === 0 ? <div style={{ fontSize: 13, color: '#9AA3AD' }}>Sin registros aún.</div> : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-                  {['Fecha', 'Área', 'Supervisor', 'Trabajadores', 'OT/OC', esGerencia ? 'Costo día' : null, esGerencia ? 'Por OT' : null, ''].filter(x => x !== null).map((h, i) => (
+                  {['Fecha', 'Trabajador', 'Estado', 'Hora / Atraso', 'OT/OC', esGerencia ? 'Costo' : null, ''].filter(x => x !== null).map((h, i) => (
                     <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {visibles.map(a => (
-                  <tr key={a.id} style={{ borderBottom: '1px solid #DFE4EA', verticalAlign: 'top' }}>
-                    <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>{a.fecha}{a.jornada === 'Media' && <span style={{ fontSize: 11, color: C.gris }}> (½)</span>}</td>
-                    <td style={{ padding: '8px' }}>{a.area}</td>
-                    <td style={{ padding: '8px', color: C.gris, fontSize: 12 }}>{a.supervisor}</td>
-                    <td style={{ padding: '8px' }}>{a.trabajadorIds.map(nombreDe).join(', ')}</td>
+                {filas.map((a, i) => (
+                  <tr key={a.regId + '-' + a.trabajadorId + '-' + i} style={{ borderBottom: '1px solid #DFE4EA', verticalAlign: 'top' }}>
+                    <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>{a.fecha}</td>
+                    <td style={{ padding: '8px' }}>{nombreDe(a.trabajadorId)}</td>
+                    <td style={{ padding: '8px' }}><span style={{ color: TIPO_COLOR[a.tipo] || C.carbon, fontWeight: 600, fontSize: 12 }}>{a.tipo}</span></td>
+                    <td style={{ padding: '8px', fontSize: 12 }}>{a.tipo === 'Trabajó' ? (a.horaLlegada || '—') : '—'}{a.atrasoMin > 0 && <span style={{ color: C.rojo }}> · {a.atrasoMin} min atraso</span>}</td>
                     <td style={{ padding: '8px', fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{a.ots.join(', ')}</td>
-                    {esGerencia && <td style={{ padding: '8px', fontWeight: 600 }}>{clp(a.costo.total)}</td>}
-                    {esGerencia && <td style={{ padding: '8px', fontSize: 12 }}>{Object.entries(a.costo.porOT).map(([o, m]) => <div key={o}>{o}: {clp(m)}</div>)}</td>}
+                    {esGerencia && <td style={{ padding: '8px', fontWeight: 600 }}>{clp(a.pago)}{a.descuento > 0 && <div style={{ fontSize: 11, color: C.rojo, fontWeight: 400 }}>−{clp(a.descuento)}</div>}</td>}
                     <td style={{ padding: '8px', textAlign: 'right' }}>
-                      {esGerencia && <button onClick={() => window.confirm('¿Eliminar este registro de asistencia?') && borrarAsistencia(a.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
+                      {esGerencia && <button onClick={() => window.confirm('¿Eliminar este registro de asistencia?') && borrarAsistencia(a.regId)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
                     </td>
                   </tr>
                 ))}
@@ -301,32 +498,36 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
         )}
       </div>
 
-      <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
-        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Horas extras registradas</div>
-        {hexVisibles.length === 0 ? <div style={{ fontSize: 13, color: '#9AA3AD' }}>Sin horas extras.</div> : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-                {['Fecha', 'Trabajador', 'Horas', 'OT/OC', esGerencia ? 'Costo' : null, ''].filter(x => x !== null).map((h, i) => (
-                  <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {hexVisibles.map(h => (
-                <tr key={h.id} style={{ borderBottom: '1px solid #DFE4EA' }}>
-                  <td style={{ padding: '8px' }}>{h.fecha}</td>
-                  <td style={{ padding: '8px' }}>{nombreDe(h.trabajadorId)}</td>
-                  <td style={{ padding: '8px' }}>{h.horas} h</td>
-                  <td style={{ padding: '8px', fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{h.ot}</td>
-                  {esGerencia && <td style={{ padding: '8px', fontWeight: 600 }}>{clp(h.costo.total)}</td>}
-                  <td style={{ padding: '8px', textAlign: 'right' }}>
-                    {esGerencia && <button onClick={() => window.confirm('¿Eliminar estas horas extras?') && borrarHorasExtras(h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
-                  </td>
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 10, padding: 18 }}>
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Extras registrados (horas semana / feriados / turno noche)</div>
+        {hexVisibles.length === 0 ? <div style={{ fontSize: 13, color: '#9AA3AD' }}>Sin extras.</div> : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                  {['Fecha', 'Tipo', 'Trabajador', 'Horas', 'OT/OC', esGerencia ? 'Costo' : null, esGerencia ? 'Colación' : null, ''].filter(x => x !== null).map((h, i) => (
+                    <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {hexVisibles.map(h => (
+                  <tr key={h.id} style={{ borderBottom: '1px solid #DFE4EA' }}>
+                    <td style={{ padding: '8px' }}>{h.fecha}</td>
+                    <td style={{ padding: '8px' }}>{TIPOS_EXTRA.find(x => x.id === (h.tipo || 'Semana'))?.label || 'Horas extra semana'}</td>
+                    <td style={{ padding: '8px' }}>{nombreDe(h.trabajadorId)}</td>
+                    <td style={{ padding: '8px' }}>{h.horas ? h.horas + ' h' : '—'}</td>
+                    <td style={{ padding: '8px', fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{h.ot}</td>
+                    {esGerencia && <td style={{ padding: '8px', fontWeight: 600 }}>{clp(h.costo.total)}</td>}
+                    {esGerencia && <td style={{ padding: '8px', fontSize: 12, color: C.gris }}>{h.costo.colacion > 0 ? clp(h.costo.colacion) : '—'}</td>}
+                    <td style={{ padding: '8px', textAlign: 'right' }}>
+                      {esGerencia && <button onClick={() => window.confirm('¿Eliminar este extra?') && borrarHorasExtras(h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
@@ -336,7 +537,7 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
 // ================= TRABAJADORES (VISTA SUPERVISOR, SIN VALORES) =================
 function TrabajadoresView({ mo }) {
   return (
-    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 10, padding: 18 }}>
       <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Trabajadores</div>
       <div style={{ fontSize: 12, color: C.gris, marginBottom: 12 }}>Listado del personal. Los valores de sueldo y asistencia solo son visibles para Gerencia.</div>
       {GRUPOS.map(g => {
@@ -374,15 +575,15 @@ function TrabajadoresView({ mo }) {
 function CostosPorOT({ mo }) {
   const acumulado = useMemo(() => {
     const m = {}
-    (mo.asistencias || []).forEach(a => Object.entries(a.costo.porOT).forEach(([ot, monto]) => {
+    ;(mo.asistencias || []).forEach(a => Object.entries((a.costo && a.costo.porOT) || {}).forEach(([ot, monto]) => {
       m[ot] = m[ot] || { normal: 0, hex: 0, fechas: new Set(), trabajadores: new Set() }
       m[ot].normal += monto
       m[ot].fechas.add(a.fecha)
-      a.trabajadorIds.forEach(t => m[ot].trabajadores.add(t))
+      ;(a.trabajadorIds || (a.trabajadorId ? [a.trabajadorId] : [])).forEach(t => m[ot].trabajadores.add(t))
     }))
-    (mo.horasExtras || []).forEach(h => {
+    ;(mo.horasExtras || []).forEach(h => {
       m[h.ot] = m[h.ot] || { normal: 0, hex: 0, fechas: new Set(), trabajadores: new Set() }
-      m[h.ot].hex += h.costo.total
+      m[h.ot].hex += (h.costo && h.costo.total) || 0
       m[h.ot].fechas.add(h.fecha)
       m[h.ot].trabajadores.add(h.trabajadorId)
     })
@@ -391,15 +592,15 @@ function CostosPorOT({ mo }) {
   const nombreDe = id => (mo.trabajadores || []).find(t => t.id === id)?.nombre || id
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 10, padding: 18 }}>
       <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Mano de obra acumulada por OT / OC</div>
       {Object.keys(acumulado).length === 0 ? <div style={{ fontSize: 13, color: '#9AA3AD' }}>Sin costos registrados.</div> : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-                {['OT / OC', 'MO normal', 'Horas extras', 'Total MO', 'Días trabajados', 'Trabajadores'].map(h => (
-                  <th key={h} style={{ textAlign: h.includes('MO') || h.includes('extras') || h === 'Total MO' ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
+                {['OT / OC', 'MO normal', 'Extras', 'Total MO', 'Días con registro', 'Trabajadores'].map(h => (
+                  <th key={h} style={{ textAlign: h.includes('MO') || h === 'Extras' || h === 'Total MO' ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -431,12 +632,18 @@ function NominaMO({ mo, setMo }) {
     pushState()
   }
   const setNum = (id, campo, valor) => setTrab(id, campo, num(valor))
+  const setColacion = valor => {
+    const nuevo = { ...mo, valorColacion: num(valor) }
+    try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
+    setMo(nuevo)
+    pushState()
+  }
   const addTrab = async grupo => {
-    const t = { id: 't' + Date.now(), grupo, nombre: '', cargo: '', nacionalidad: 'Chilena', sueldo: 0, imposiciones: 0, sabado: 0, domingo: 0 }
+    const t = { id: 't' + Date.now(), grupo, nombre: '', cargo: '', nacionalidad: 'Chilena', sueldo: 0, imposiciones: 0, sabado: 0, domingo: 0, turnoNoche: 0, vacacionesDisponibles: 15 }
     try { await pullState() } catch (e) {}
     let fresco = null
     try { fresco = JSON.parse(localStorage.getItem('serein_mo') || 'null') } catch (e) {}
-    const baseMo = fresco && typeof fresco === 'object' ? fresco : mo
+    const baseMo = (fresco && fresco.ver === MO_VER) ? fresco : mo
     const nuevo = { ...baseMo, trabajadores: [...(baseMo.trabajadores || []), t] }
     try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
     setMo(nuevo)
@@ -447,7 +654,7 @@ function NominaMO({ mo, setMo }) {
     try { await pullState() } catch (e) {}
     let fresco = null
     try { fresco = JSON.parse(localStorage.getItem('serein_mo') || 'null') } catch (e) {}
-    const baseMo = fresco && typeof fresco === 'object' ? fresco : mo
+    const baseMo = (fresco && fresco.ver === MO_VER) ? fresco : mo
     const nuevo = { ...baseMo, trabajadores: (baseMo.trabajadores || []).filter(t => t.id !== id) }
     try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
     setMo(nuevo)
@@ -459,23 +666,31 @@ function NominaMO({ mo, setMo }) {
 
   return (
     <div>
-      <div style={{ background: '#F2F4F7', border: '1px solid #DFE4EA', padding: '10px 14px', fontSize: 12.5, color: '#5A5148', marginBottom: 14 }}>
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 10, padding: 16, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase' }}>Valor colación</div>
+          <div style={{ fontSize: 11.5, color: C.gris, marginTop: 2 }}>Monto fijo que paga la empresa cuando corresponde colación en horas extra, feriados o turno noche. Solo informativo — no se descuenta ni se suma al pago del trabajador.</div>
+        </div>
+        <input value={mo.valorColacion || ''} onChange={e => setColacion(e.target.value)} placeholder="0" style={{ ...inp, width: 140, textAlign: 'right', fontWeight: 600 }} />
+      </div>
+
+      <div style={{ background: '#F2F4F7', border: '1px solid #DFE4EA', borderRadius: 10, padding: '10px 14px', fontSize: 12.5, color: '#5A5148', marginBottom: 14 }}>
         Todos los campos en blanco son editables. Las columnas en gris (día bruto, día sin imposiciones, hora, hora extra) se calculan solas:
-        <b> día bruto = (sueldo + imposiciones) ÷ 30</b>, <b>día s/imp = sueldo ÷ 30</b>, <b>hora = día bruto ÷ 9</b>, <b>hora extra = hora × 1,5</b>. Sábado y Domingo se ingresan a mano.
+        <b> día bruto = (sueldo + imposiciones) ÷ 30</b>, <b>día s/imp = sueldo ÷ 30</b>, <b>hora = día bruto ÷ 9</b>, <b>hora extra = hora × 1,5</b>. Sábado, Domingo y Turno noche se ingresan a mano. Feriado trabajado se paga igual que Domingo.
       </div>
       {GRUPOS.map(g => {
         const lista = (mo.trabajadores || []).filter(t => t.grupo === g)
         return (
-          <div key={g} style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 16, marginBottom: 14 }}>
+          <div key={g} style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 10, padding: 16, marginBottom: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>{g} <span style={{ color: C.gris, fontWeight: 400 }}>· {lista.length}</span></span>
-              <button onClick={() => addTrab(g)} style={{ background: C.carbon, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Agregar trabajador</button>
+              <button onClick={() => addTrab(g)} style={{ background: C.carbon, color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Agregar trabajador</button>
             </div>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                 <thead>
                   <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-                    {th('Nombre')}{th('Cargo')}{th('Nacionalidad')}{th('Sueldo')}{th('Imposiciones')}{th('Día bruto')}{th('Día s/imp')}{th('Hora')}{th('Hora extra')}{th('Sábado')}{th('Domingo')}<th></th>
+                    {th('Nombre')}{th('Cargo')}{th('Nacionalidad')}{th('Sueldo')}{th('Imposiciones')}{th('Día bruto')}{th('Día s/imp')}{th('Hora')}{th('Hora extra')}{th('Sábado')}{th('Domingo')}{th('Turno noche')}{th('Vacaciones (días)')}<th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -494,11 +709,13 @@ function NominaMO({ mo, setMo }) {
                         <td style={{ padding: '6px 8px', textAlign: 'right', ...auto }}>{clp(c.horaExtra)}</td>
                         <td style={{ padding: '4px 6px' }}><input value={t.sabado || ''} onChange={e => setNum(t.id, 'sabado', e.target.value)} style={{ ...inp, width: 90, textAlign: 'right' }} /></td>
                         <td style={{ padding: '4px 6px' }}><input value={t.domingo || ''} onChange={e => setNum(t.id, 'domingo', e.target.value)} style={{ ...inp, width: 90, textAlign: 'right' }} /></td>
+                        <td style={{ padding: '4px 6px' }}><input value={t.turnoNoche || ''} onChange={e => setNum(t.id, 'turnoNoche', e.target.value)} style={{ ...inp, width: 90, textAlign: 'right' }} /></td>
+                        <td style={{ padding: '4px 6px' }}><input value={vacacionesDe(t)} onChange={e => setNum(t.id, 'vacacionesDisponibles', e.target.value)} style={{ ...inp, width: 70, textAlign: 'right' }} /></td>
                         <td style={{ padding: '4px 4px', textAlign: 'right' }}><button onClick={() => delTrab(t.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button></td>
                       </tr>
                     )
                   })}
-                  {lista.length === 0 && <tr><td colSpan={12} style={{ padding: 14, textAlign: 'center', color: '#9AA3AD' }}>Sin trabajadores en este grupo. Usa “Agregar trabajador”.</td></tr>}
+                  {lista.length === 0 && <tr><td colSpan={14} style={{ padding: 14, textAlign: 'center', color: '#9AA3AD' }}>Sin trabajadores en este grupo. Usa "Agregar trabajador".</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -509,75 +726,129 @@ function NominaMO({ mo, setMo }) {
   )
 }
 
-// ================= PAGO MENSUAL (GERENCIA) =================
-function diasHabilesDelMes(anioMes) {
-  const [a, m] = anioMes.split('-').map(Number)
-  const ult = new Date(a, m, 0).getDate()
-  let n = 0
-  for (let d = 1; d <= ult; d++) {
-    const dia = new Date(a, m - 1, d).getDay()
-    if (dia >= 1 && dia <= 5) n++
-  }
-  return n
-}
-
-function PagoMensual({ mo }) {
+// ================= RESUMEN MENSUAL POR TRABAJADOR (GERENCIA) =================
+// Reemplaza a la antigua "Pago mensual": ahora el desglose completo pedido
+// — faltas/permisos (con su descuento), horas de atraso (con su
+// descuento), vacaciones tomadas, licencias, y los adicionales (horas
+// extra, feriados, turno noche) — para que al descargar el detalle del mes
+// se vea todo lo que hay que descontar o sumar antes de pagar.
+function ResumenMensual({ mo }) {
   const [mes, setMes] = useState(hoy().slice(0, 7))
+  const [abierto, setAbierto] = useState(null)
+
   const resumen = useMemo(() => {
-    const habiles = diasHabilesDelMes(mes)
     return (mo.trabajadores || []).map(t => {
-      const asis = (mo.asistencias || []).filter(a => a.fecha.startsWith(mes) && a.trabajadorIds.includes(t.id))
-      const fechas = [...new Set(asis.map(a => a.fecha))]
-      const pagoDias = asis.reduce((s, a) => s + (a.costo.detalle.find(d => d.tId === t.id)?.valor || 0), 0)
-      const hex = (mo.horasExtras || []).filter(h => h.fecha.startsWith(mes) && h.trabajadorId === t.id)
-      const horasHex = hex.reduce((s, h) => s + h.horas, 0)
-      const pagoHex = hex.reduce((s, h) => s + h.costo.total, 0)
-      return { nombre: t.nombre, cargo: cargoDe(t), diasTrabajados: fechas.length, inasistencias: Math.max(0, habiles - fechas.length), horasExtras: horasHex, pagoDias, pagoHex, total: pagoDias + pagoHex, fechas }
+      const filasMes = (mo.asistencias || []).flatMap(filasDeAsistencia).filter(f => f.trabajadorId === t.id && f.fecha.startsWith(mes))
+      const trabajados = filasMes.filter(f => f.tipo === 'Trabajó')
+      const faltas = filasMes.filter(f => f.tipo === 'Falta')
+      const permisos = filasMes.filter(f => f.tipo === 'Permiso')
+      const vacaciones = filasMes.filter(f => f.tipo === 'Vacaciones')
+      const licencias = filasMes.filter(f => f.tipo === 'Licencia/Accidente')
+      const minutosAtraso = trabajados.reduce((s, f) => s + (f.atrasoMin || 0), 0)
+      const descuentoAtraso = trabajados.reduce((s, f) => s + (f.descuento || 0), 0)
+      const descuentoFaltas = faltas.reduce((s, f) => s + (f.descuento || 0), 0)
+      const descuentoPermisos = permisos.reduce((s, f) => s + (f.descuento || 0), 0)
+      const totalDescuentos = descuentoAtraso + descuentoFaltas + descuentoPermisos
+
+      const extrasMes = (mo.horasExtras || []).filter(h => h.trabajadorId === t.id && h.fecha.startsWith(mes))
+      const hexSemana = extrasMes.filter(h => (h.tipo || 'Semana') === 'Semana')
+      const feriados = extrasMes.filter(h => h.tipo === 'Feriado')
+      const turnoNoche = extrasMes.filter(h => h.tipo === 'TurnoNoche')
+      const pagoHex = hexSemana.reduce((s, h) => s + h.costo.total, 0)
+      const pagoFeriados = feriados.reduce((s, h) => s + h.costo.total, 0)
+      const pagoTurnoNoche = turnoNoche.reduce((s, h) => s + h.costo.total, 0)
+      const totalAdicionales = pagoHex + pagoFeriados + pagoTurnoNoche
+      const colacionMes = extrasMes.reduce((s, h) => s + (h.costo.colacion || 0), 0)
+
+      const pagoDiasTrabajados = trabajados.reduce((s, f) => s + f.pago, 0) + vacaciones.reduce((s, f) => s + f.pago, 0)
+      const totalNeto = pagoDiasTrabajados + totalAdicionales
+
+      return {
+        t, diasTrabajados: trabajados.length, faltas: faltas.length, permisos: permisos.length, vacacionesTomadas: vacaciones.length, licencias: licencias.length,
+        minutosAtraso, descuentoAtraso, descuentoFaltas, descuentoPermisos, totalDescuentos,
+        horasExtraSemana: hexSemana.reduce((s, h) => s + (h.horas || 0), 0), pagoHex, feriadosTrabajados: feriados.length, pagoFeriados, turnosNoche: turnoNoche.length, pagoTurnoNoche, totalAdicionales,
+        colacionMes, pagoDiasTrabajados, totalNeto, saldoVacaciones: vacacionesDe(t),
+      }
     })
   }, [mo, mes])
 
-  const habiles = diasHabilesDelMes(mes)
-  const totalGeneral = resumen.reduce((s, r) => s + r.total, 0)
+  const totalGeneral = resumen.reduce((s, r) => s + r.totalNeto, 0)
+  const totalDescuentosGeneral = resumen.reduce((s, r) => s + r.totalDescuentos, 0)
+  const totalColacionGeneral = resumen.reduce((s, r) => s + r.colacionMes, 0)
+
+  function exportarExcel() {
+    const filas = resumen.map(r => ({
+      Trabajador: r.t.nombre, Cargo: cargoDe(r.t), 'Días trabajados': r.diasTrabajados,
+      Faltas: r.faltas, Permisos: r.permisos, 'Minutos de atraso': r.minutosAtraso,
+      'Descuento atraso': r.descuentoAtraso, 'Descuento faltas': r.descuentoFaltas, 'Descuento permisos': r.descuentoPermisos, 'Total descuentos': r.totalDescuentos,
+      'Días de vacaciones tomados': r.vacacionesTomadas, 'Saldo vacaciones': r.saldoVacaciones, 'Días de licencia': r.licencias,
+      'Horas extra semana': r.horasExtraSemana, 'Pago horas extra': r.pagoHex, 'Feriados trabajados': r.feriadosTrabajados, 'Pago feriados': r.pagoFeriados, 'Turnos de noche': r.turnosNoche, 'Pago turno noche': r.pagoTurnoNoche,
+      'Colación (informativo, no descuenta)': r.colacionMes, 'Total a pagar (estimado)': r.totalNeto,
+    }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filas), 'Resumen ' + mes)
+    XLSX.writeFile(wb, `Resumen_Mensual_${mes}.xlsx`)
+  }
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
+    <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
-        <div>
-          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Planilla de pago mensual</div>
-          <div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>{habiles} días hábiles (lun–vie) en el mes seleccionado · feriados no descontados</div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <StatCard icon={Table2} color={C.naranja} bg="#FDECDD" valor={clp(totalGeneral)} label="Total estimado a pagar del mes" />
+          <StatCard icon={AlertTriangle} color={C.rojo} bg="#FBE4E2" valor={clp(totalDescuentosGeneral)} label="Total descuentos del mes" />
+          <StatCard icon={Sun} color={C.azul} bg="#E5F1F3" valor={clp(totalColacionGeneral)} label="Colación del mes (informativo)" />
         </div>
-        <input type="month" value={mes} onChange={e => setMes(e.target.value)} style={inp} />
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input type="month" value={mes} onChange={e => setMes(e.target.value)} style={inp} />
+          <button onClick={exportarExcel} style={{ background: C.verde, color: '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}><FileSpreadsheet size={15} /> Exportar Excel</button>
+        </div>
       </div>
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-              {['Trabajador', 'Cargo', 'Días trab.', 'Inasistencias', 'Hrs. extras', 'Pago días', 'Pago hrs. extras', 'Total a pagar'].map((h, i) => (
-                <th key={h} style={{ textAlign: i >= 2 ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {resumen.map(r => (
-              <tr key={r.nombre} style={{ borderBottom: '1px solid #DFE4EA' }}>
-                <td style={{ padding: '8px', fontWeight: 500 }}>{r.nombre}</td>
-                <td style={{ padding: '8px', color: C.gris }}>{r.cargo}</td>
-                <td style={{ padding: '8px', textAlign: 'right' }}>{r.diasTrabajados}</td>
-                <td style={{ padding: '8px', textAlign: 'right', color: r.inasistencias > 0 ? C.rojo : C.verde }}>{r.inasistencias}</td>
-                <td style={{ padding: '8px', textAlign: 'right' }}>{r.horasExtras}</td>
-                <td style={{ padding: '8px', textAlign: 'right' }}>{clp(r.pagoDias)}</td>
-                <td style={{ padding: '8px', textAlign: 'right' }}>{clp(r.pagoHex)}</td>
-                <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700, color: C.naranja }}>{clp(r.total)}</td>
-              </tr>
-            ))}
-            <tr style={{ borderTop: `2px solid ${C.carbon}` }}>
-              <td colSpan={7} style={{ padding: '8px', fontWeight: 700, textAlign: 'right' }}>TOTAL GENERAL</td>
-              <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700, fontSize: 15, color: C.naranja }}>{clp(totalGeneral)}</td>
-            </tr>
-          </tbody>
-        </table>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {resumen.map(r => (
+          <div key={r.t.id} style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 10, overflow: 'hidden' }}>
+            <div onClick={() => setAbierto(abierto === r.t.id ? null : r.t.id)} style={{ padding: '14px 16px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{r.t.nombre}</div>
+                <div style={{ fontSize: 11.5, color: C.gris }}>{cargoDe(r.t)} · {r.diasTrabajados} días trabajados{r.faltas + r.permisos > 0 ? ` · ${r.faltas + r.permisos} inasistencia(s)` : ''}{r.minutosAtraso > 0 ? ` · ${r.minutosAtraso} min de atraso` : ''}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                {r.totalDescuentos > 0 && <span style={{ fontSize: 12.5, color: C.rojo, fontWeight: 600 }}>−{clp(r.totalDescuentos)}</span>}
+                <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 15, color: C.naranja }}>{clp(r.totalNeto)}</span>
+              </div>
+            </div>
+            {abierto === r.t.id && (
+              <div style={{ padding: '0 16px 16px', borderTop: '1px solid #F2F0EB', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px,1fr))', gap: 14, fontSize: 12.5 }}>
+                <div style={{ paddingTop: 12 }}>
+                  <div style={{ fontWeight: 700, color: C.rojo, marginBottom: 4, textTransform: 'uppercase', fontSize: 11 }}>Descuentos</div>
+                  <div>Faltas: {r.faltas} día(s) — {clp(r.descuentoFaltas)}</div>
+                  <div>Permisos: {r.permisos} día(s) — {clp(r.descuentoPermisos)}</div>
+                  <div>Atraso: {r.minutosAtraso} min — {clp(r.descuentoAtraso)}</div>
+                  <div style={{ fontWeight: 700, marginTop: 4 }}>Total descuentos: {clp(r.totalDescuentos)}</div>
+                </div>
+                <div style={{ paddingTop: 12 }}>
+                  <div style={{ fontWeight: 700, color: C.azul, marginBottom: 4, textTransform: 'uppercase', fontSize: 11 }}>Sin descuento (informativo)</div>
+                  <div>Vacaciones tomadas: {r.vacacionesTomadas} día(s) — se paga</div>
+                  <div>Saldo de vacaciones: {r.saldoVacaciones} día(s)</div>
+                  <div>Licencia/accidente: {r.licencias} día(s) — no lo paga la empresa</div>
+                </div>
+                <div style={{ paddingTop: 12 }}>
+                  <div style={{ fontWeight: 700, color: C.verde, marginBottom: 4, textTransform: 'uppercase', fontSize: 11 }}>Adicionales</div>
+                  <div>Horas extra: {r.horasExtraSemana} h — {clp(r.pagoHex)}</div>
+                  <div>Feriados trabajados: {r.feriadosTrabajados} — {clp(r.pagoFeriados)}</div>
+                  <div>Turnos de noche: {r.turnosNoche} — {clp(r.pagoTurnoNoche)}</div>
+                  <div style={{ fontWeight: 700, marginTop: 4 }}>Total adicionales: {clp(r.totalAdicionales)}</div>
+                </div>
+                <div style={{ paddingTop: 12 }}>
+                  <div style={{ fontWeight: 700, color: C.gris, marginBottom: 4, textTransform: 'uppercase', fontSize: 11 }}>Colación (no afecta el pago)</div>
+                  <div>Gasto de colación del mes: {clp(r.colacionMes)}</div>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
-      <Aviso hijo="Los montos usan el valor día bruto vigente de cada trabajador y las asistencias registradas. Para descargar informes usa la pestaña “Informes”." />
+      <Aviso hijo="El total a pagar es una estimación: suma los días trabajados (con descuento de atraso), vacaciones, y los adicionales del mes. No incluye imposiciones ni otros descuentos legales." />
     </div>
   )
 }
@@ -623,36 +894,32 @@ function Informes({ mo }) {
         Sueldo: num(t.sueldo), Imposiciones: num(t.imposiciones),
         'Valor día bruto': c.diaBruto, 'Valor día s/imp': c.diaSinImp,
         'Valor hora': c.hora, 'Valor hora extra': c.horaExtra,
-        'Valor sábado': c.sabado, 'Valor domingo': c.domingo,
+        'Valor sábado': c.sabado, 'Valor domingo': c.domingo, 'Valor turno noche': c.turnoNoche,
       }
     })
 
-    const asis = (mo.asistencias || []).filter(a => a.fecha >= desde && a.fecha <= hasta)
-    const detalle = []
-    asis.forEach(a => a.trabajadorIds.filter(id => idSet.has(id)).forEach(id => {
-      detalle.push({
-        Fecha: a.fecha, Trabajador: nombreDe(id), Área: a.area, Jornada: a.jornada,
-        'OT/OC': a.ots.join(', '),
-        'Valor día aplicado': a.costo.detalle.find(d => d.tId === id)?.valor || 0,
-        Supervisor: a.supervisor, Observación: a.obs || '',
-      })
+    const filasPeriodo = (mo.asistencias || []).flatMap(filasDeAsistencia).filter(f => f.fecha >= desde && f.fecha <= hasta && idSet.has(f.trabajadorId))
+    const detalle = filasPeriodo.map(f => ({
+      Fecha: f.fecha, Trabajador: nombreDe(f.trabajadorId), Estado: f.tipo, 'Hora llegada': f.horaLlegada || '', 'Minutos atraso': f.atrasoMin,
+      'OT/OC': f.ots.join(', '), 'Descuento': f.descuento, 'Pago': f.pago, Supervisor: f.supervisor, Observación: f.obs || '',
     }))
 
     const hexRows = (mo.horasExtras || []).filter(h => h.fecha >= desde && h.fecha <= hasta && idSet.has(h.trabajadorId)).map(h => ({
-      Fecha: h.fecha, Trabajador: nombreDe(h.trabajadorId), Horas: h.horas, 'OT/OC': h.ot,
-      'Valor hora extra': h.costo.valorHex, 'Costo total': h.costo.total, Observación: h.obs || '',
+      Fecha: h.fecha, Tipo: h.tipo || 'Semana', Trabajador: nombreDe(h.trabajadorId), Horas: h.horas || '', 'OT/OC': h.ot,
+      'Costo total': h.costo.total, Colación: h.costo.colacion || 0, Observación: h.obs || '',
     }))
 
     const resumen = trabsSel.map(t => {
-      const a = asis.filter(x => x.trabajadorIds.includes(t.id))
-      const fechas = [...new Set(a.map(x => x.fecha))]
-      const pagoDias = a.reduce((s, x) => s + (x.costo.detalle.find(d => d.tId === t.id)?.valor || 0), 0)
+      const f = filasPeriodo.filter(x => x.trabajadorId === t.id)
+      const trabajados = f.filter(x => x.tipo === 'Trabajó')
+      const inasistencias = f.filter(x => x.tipo === 'Falta' || x.tipo === 'Permiso')
       const hx = (mo.horasExtras || []).filter(h => h.fecha >= desde && h.fecha <= hasta && h.trabajadorId === t.id)
+      const pagoDias = f.reduce((s, x) => s + x.pago, 0)
       const pagoHex = hx.reduce((s, h) => s + h.costo.total, 0)
       return {
         Grupo: t.grupo, Trabajador: t.nombre, Cargo: cargoDe(t),
-        'Días trabajados': fechas.length, 'Horas extras': hx.reduce((s, h) => s + h.horas, 0),
-        'Pago días': pagoDias, 'Pago horas extras': pagoHex, 'Total período': pagoDias + pagoHex,
+        'Días trabajados': trabajados.length, Inasistencias: inasistencias.length, 'Horas extras': hx.reduce((s, h) => s + (h.horas || 0), 0),
+        'Pago días': pagoDias, 'Pago extras': pagoHex, 'Total período': pagoDias + pagoHex,
       }
     })
 
@@ -666,7 +933,7 @@ function Informes({ mo }) {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(nomina.length ? nomina : [{ Nota: 'Sin trabajadores' }]), 'Nómina')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumen.length ? resumen : [{ Nota: 'Sin datos' }]), 'Resumen período')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalle.length ? detalle : [{ Nota: 'Sin asistencias en el período' }]), 'Asistencia')
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hexRows.length ? hexRows : [{ Nota: 'Sin horas extras en el período' }]), 'Horas extras')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hexRows.length ? hexRows : [{ Nota: 'Sin extras en el período' }]), 'Extras')
     XLSX.writeFile(wb, `Informe_Asistencia_${tipo}_${desde}.xlsx`)
   }
 
@@ -675,7 +942,7 @@ function Informes({ mo }) {
     const { nomina, resumen } = construirDatos()
     const money = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
     const filasNom = nomina.map(r => `<tr><td>${r.Grupo}</td><td>${r.Nombre}</td><td>${r.Cargo}</td><td style="text-align:right">${money(r.Sueldo)}</td><td style="text-align:right">${money(r.Imposiciones)}</td><td style="text-align:right">${money(r['Valor día bruto'])}</td><td style="text-align:right">${money(r['Valor día s/imp'])}</td><td style="text-align:right">${money(r['Valor hora'])}</td><td style="text-align:right">${money(r['Valor hora extra'])}</td><td style="text-align:right">${money(r['Valor sábado'])}</td><td style="text-align:right">${money(r['Valor domingo'])}</td></tr>`).join('')
-    const filasRes = resumen.map(r => `<tr><td>${r.Trabajador}</td><td>${r.Cargo}</td><td style="text-align:right">${r['Días trabajados']}</td><td style="text-align:right">${r['Horas extras']}</td><td style="text-align:right">${money(r['Pago días'])}</td><td style="text-align:right">${money(r['Pago horas extras'])}</td><td style="text-align:right"><b>${money(r['Total período'])}</b></td></tr>`).join('')
+    const filasRes = resumen.map(r => `<tr><td>${r.Trabajador}</td><td>${r.Cargo}</td><td style="text-align:right">${r['Días trabajados']}</td><td style="text-align:right">${r.Inasistencias}</td><td style="text-align:right">${r['Horas extras']}</td><td style="text-align:right">${money(r['Pago días'])}</td><td style="text-align:right">${money(r['Pago extras'])}</td><td style="text-align:right"><b>${money(r['Total período'])}</b></td></tr>`).join('')
     const totalPeriodo = resumen.reduce((s, r) => s + r['Total período'], 0)
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Informe Asistencia SEREIN</title>
       <style>body{font-family:Arial,Helvetica,sans-serif;color:#161616;padding:26px;font-size:12px}
@@ -690,7 +957,7 @@ function Informes({ mo }) {
       <h2>Nómina y valores</h2>
       <table><thead><tr><th>Grupo</th><th>Nombre</th><th>Cargo</th><th>Sueldo</th><th>Imposic.</th><th>Día bruto</th><th>Día s/imp</th><th>Hora</th><th>H. extra</th><th>Sábado</th><th>Domingo</th></tr></thead><tbody>${filasNom || '<tr><td colspan="11">Sin datos</td></tr>'}</tbody></table>
       <h2>Resumen del período</h2>
-      <table><thead><tr><th>Trabajador</th><th>Cargo</th><th>Días trab.</th><th>Hrs. extra</th><th>Pago días</th><th>Pago hrs. extra</th><th>Total</th></tr></thead><tbody>${filasRes || '<tr><td colspan="7">Sin asistencias en el período</td></tr>'}</tbody></table>
+      <table><thead><tr><th>Trabajador</th><th>Cargo</th><th>Días trab.</th><th>Inasist.</th><th>Hrs. extra</th><th>Pago días</th><th>Pago extras</th><th>Total</th></tr></thead><tbody>${filasRes || '<tr><td colspan="8">Sin asistencias en el período</td></tr>'}</tbody></table>
       <div class="tot">Total del período: ${money(totalPeriodo)}</div>
       <script>window.onload=function(){window.print()}</script>
       </body></html>`
@@ -699,10 +966,10 @@ function Informes({ mo }) {
     w.document.open(); w.document.write(html); w.document.close()
   }
 
-  const btnP = activo => ({ background: activo ? C.carbon : '#fff', color: activo ? '#fff' : C.carbon, border: '1px solid #CBD2D6', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 })
+  const btnP = activo => ({ background: activo ? C.carbon : '#fff', color: activo ? '#fff' : C.carbon, border: '1px solid #CBD2D6', borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 })
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', padding: 18 }}>
+    <div style={{ background: '#fff', border: '1px solid #E2DED4', borderRadius: 10, padding: 18 }}>
       <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Informes de asistencia y nómina</div>
       <div style={{ fontSize: 12, color: C.gris, marginBottom: 14 }}>Elige período, áreas y trabajadores, y descarga en Excel o PDF.</div>
 
@@ -730,21 +997,21 @@ function Informes({ mo }) {
         <button onClick={() => setTodos(false)} style={btnP(!todos)}>Seleccionar…</button>
       </div>
       {!todos && (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8, padding: 10, background: '#FAF7F3' }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8, padding: 10, background: '#FAF7F3', borderRadius: 8 }}>
           {trabsDeGrupos.length === 0 && <span style={{ fontSize: 12, color: C.gris }}>No hay trabajadores en las áreas elegidas.</span>}
           {trabsDeGrupos.map(t => {
             const on = sel.includes(t.id)
-            return <button key={t.id} onClick={() => toggle(sel, t.id, setSel)} style={{ background: on ? C.naranja : '#fff', color: on ? '#fff' : C.carbon, border: `1px solid ${on ? C.naranja : '#CBD2D6'}`, padding: '5px 10px', cursor: 'pointer', fontSize: 12.5 }}>{t.nombre}</button>
+            return <button key={t.id} onClick={() => toggle(sel, t.id, setSel)} style={{ background: on ? C.naranja : '#fff', color: on ? '#fff' : C.carbon, border: `1px solid ${on ? C.naranja : '#CBD2D6'}`, borderRadius: 20, padding: '5px 10px', cursor: 'pointer', fontSize: 12.5 }}>{t.nombre}</button>
           })}
         </div>
       )}
       <div style={{ fontSize: 12, color: C.gris, marginBottom: 14 }}>{trabsSel.length} trabajador(es) en el informe.</div>
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        <button onClick={descargarExcel} style={{ background: C.verde, color: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <button onClick={descargarExcel} style={{ background: C.verde, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 18px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
           <FileSpreadsheet size={16} /> Descargar Excel
         </button>
-        <button onClick={descargarPDF} style={{ background: C.carbon, color: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <button onClick={descargarPDF} style={{ background: C.carbon, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 18px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
           <FileText size={16} /> Descargar PDF
         </button>
       </div>
@@ -765,15 +1032,15 @@ export default function ManoObraModule({ esGerencia, otsDisponibles = [], usuari
 
   const tabs = esGerencia ? [
     { id: 'registro', label: 'Registro diario', icono: <CalendarDays size={13} /> },
-    { id: 'hex', label: 'Horas extras', icono: <Clock3 size={13} /> },
+    { id: 'hex', label: 'Extras', icono: <Clock3 size={13} /> },
     { id: 'lista', label: 'Todos los registros', icono: <Users size={13} /> },
+    { id: 'resumen', label: 'Resumen mensual', icono: <Table2 size={13} /> },
     { id: 'costos', label: 'Costos por OT', icono: <Wallet size={13} /> },
-    { id: 'pago', label: 'Pago mensual', icono: <Table2 size={13} /> },
     { id: 'nomina', label: 'Nómina / Valores', icono: <Table2 size={13} /> },
     { id: 'informes', label: 'Informes', icono: <Download size={13} /> },
   ] : [
     { id: 'registro', label: 'Registro diario', icono: <CalendarDays size={13} /> },
-    { id: 'hex', label: 'Horas extras', icono: <Clock3 size={13} /> },
+    { id: 'hex', label: 'Extras', icono: <Clock3 size={13} /> },
     { id: 'lista', label: 'Mis registros', icono: <Users size={13} /> },
     { id: 'trabajadores', label: 'Trabajadores', icono: <Users size={13} /> },
   ]
@@ -787,7 +1054,7 @@ export default function ManoObraModule({ esGerencia, otsDisponibles = [], usuari
       {tab === 'lista' && <ListaRegistros mo={mo} setMo={setMo} esGerencia={esGerencia} usuario={usuario} />}
       {tab === 'trabajadores' && !esGerencia && <TrabajadoresView mo={mo} />}
       {tab === 'costos' && esGerencia && <CostosPorOT mo={mo} />}
-      {tab === 'pago' && esGerencia && <PagoMensual mo={mo} />}
+      {tab === 'resumen' && esGerencia && <ResumenMensual mo={mo} />}
       {tab === 'nomina' && esGerencia && <NominaMO mo={mo} setMo={setMo} />}
       {tab === 'informes' && esGerencia && <Informes mo={mo} />}
     </div>
