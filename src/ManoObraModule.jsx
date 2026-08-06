@@ -136,10 +136,19 @@ export function filasDeAsistencia(a) {
   }))
 }
 
+// Un extra puede cargarse a varias OT a la vez — se reparte el costo en
+// partes iguales entre ellas (costo.porOT). Los registros viejos (una
+// sola OT en `ot`, sin `ots`) se siguen leyendo igual, con el costo
+// completo en esa única OT.
+const otsDeExtra = h => (h.ots && h.ots.length) ? h.ots : (h.ot ? [h.ot] : [])
+
 export const costoMOdeOT = (mo, numOT) => {
   if (!mo) return 0
   const asis = (mo.asistencias || []).reduce((a, x) => a + ((x.costo && x.costo.porOT && x.costo.porOT[numOT]) || 0), 0)
-  const hex = (mo.horasExtras || []).filter(h => h.ot === numOT).reduce((a, h) => a + ((h.costo && h.costo.total) || 0), 0)
+  const hex = (mo.horasExtras || []).reduce((a, h) => {
+    if (h.costo && h.costo.porOT) return a + (h.costo.porOT[numOT] || 0)
+    return a + (h.ot === numOT ? ((h.costo && h.costo.total) || 0) : 0)
+  }, 0)
   return asis + hex
 }
 
@@ -353,7 +362,7 @@ function sugerirColacion(fecha, horaFin) {
 
 function HorasExtras({ mo, setMo, otsDisponibles, esGerencia, usuario }) {
   const [tipo, setTipo] = useState('Semana')
-  const [f, setF] = useState({ fecha: hoy(), trabajadorIds: [], horaInicio: '', horaFin: '', ot: '', otManual: '', obs: '', colacion: false, colacionTocada: false })
+  const [f, setF] = useState({ fecha: hoy(), trabajadorIds: [], horaInicio: '', horaFin: '', ots: [], otManual: '', obs: '', colacion: false, colacionTocada: false })
   const [guardado, setGuardado] = useState(false)
   const esFeriado = tipo === 'Feriado'
   useEffect(() => { if (esFeriado) setF(s => ({ ...s, colacion: true })) }, [esFeriado])
@@ -364,11 +373,12 @@ function HorasExtras({ mo, setMo, otsDisponibles, esGerencia, usuario }) {
   }, [tipo, f.fecha, f.horaFin, f.colacionTocada])
 
   const toggleTrab = id => setF(s => ({ ...s, trabajadorIds: s.trabajadorIds.includes(id) ? s.trabajadorIds.filter(x => x !== id) : [...s.trabajadorIds, id] }))
+  const toggleOt = o => setF(s => ({ ...s, ots: s.ots.includes(o) ? s.ots.filter(x => x !== o) : [...s.ots, o] }))
   const horas = tipo === 'Semana' ? horasEntre(f.horaInicio, f.horaFin) : null
 
   async function guardar() {
-    const ot = f.otManual.trim() || f.ot
-    if (!ot) { window.alert('Indica la OT/OC a la que se carga este extra.'); return }
+    const ots = [...f.ots, ...f.otManual.split(',').map(s => s.trim()).filter(Boolean)]
+    if (ots.length === 0) { window.alert('Indica al menos una OT/OC a la que se carga este extra.'); return }
     if (f.trabajadorIds.length === 0) { window.alert('Marca a los trabajadores que corresponden.'); return }
     if (tipo === 'Semana' && (!horas || horas <= 0)) { window.alert('Indica hora de inicio y de término para calcular las horas extra.'); return }
     try { await pullState() } catch (e) {}
@@ -377,24 +387,31 @@ function HorasExtras({ mo, setMo, otsDisponibles, esGerencia, usuario }) {
     const baseMo = (fresco && fresco.ver === MO_VER) ? fresco : mo
     const nuevosRegistros = f.trabajadorIds.map(tid => {
       const t = (baseMo.trabajadores || []).find(x => x.id === tid)
+      let total
       let costo
       if (tipo === 'Semana') {
         const valorHex = valorHexDe(t)
-        costo = { valorHex, total: Math.round(valorHex * horas), colacion: f.colacion ? num(mo.valorColacion) : 0 }
+        total = Math.round(valorHex * horas)
+        costo = { valorHex, total, colacion: f.colacion ? num(mo.valorColacion) : 0 }
       } else if (tipo === 'Feriado') {
-        const valorFeriado = calc(t).domingo
-        costo = { valorFeriado, total: valorFeriado, colacion: num(mo.valorColacion) }
+        total = calc(t).domingo
+        costo = { valorFeriado: total, total, colacion: num(mo.valorColacion) }
       } else {
-        const valorTurno = calc(t).turnoNoche
-        costo = { valorTurno, total: valorTurno, colacion: f.colacion ? num(mo.valorColacion) : 0 }
+        total = calc(t).turnoNoche
+        costo = { valorTurno: total, total, colacion: f.colacion ? num(mo.valorColacion) : 0 }
       }
-      return { id: 'h' + Date.now() + Math.random().toString(36).slice(2, 7), tipo, fecha: f.fecha, trabajadorId: tid, horas, horaInicio: tipo === 'Semana' ? f.horaInicio : '', horaFin: tipo === 'Semana' ? f.horaFin : '', ot, obs: f.obs, costo }
+      // El valor de colación (gasto real de la empresa por ese trabajo) se
+      // reparte entre las mismas OT, sumado al costo de mano de obra —
+      // no afecta el pago del trabajador, pero sí es un costo real de la
+      // OT que la generó.
+      costo.porOT = Object.fromEntries(ots.map(o => [o, Math.round(total / ots.length) + Math.round((costo.colacion || 0) / ots.length)]))
+      return { id: 'h' + Date.now() + Math.random().toString(36).slice(2, 7), tipo, fecha: f.fecha, trabajadorId: tid, horas, horaInicio: tipo === 'Semana' ? f.horaInicio : '', horaFin: tipo === 'Semana' ? f.horaFin : '', ots, obs: f.obs, costo }
     })
     const nuevo = { ...baseMo, horasExtras: [...nuevosRegistros, ...(baseMo.horasExtras || [])] }
     try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
     setMo(nuevo)
     pushState()
-    setF({ fecha: f.fecha, trabajadorIds: [], horaInicio: '', horaFin: '', ot: '', otManual: '', obs: '', colacion: false, colacionTocada: false })
+    setF({ fecha: f.fecha, trabajadorIds: [], horaInicio: '', horaFin: '', ots: [], otManual: '', obs: '', colacion: false, colacionTocada: false })
     setGuardado(true); setTimeout(() => setGuardado(false), 3500)
   }
 
@@ -424,19 +441,26 @@ function HorasExtras({ mo, setMo, otsDisponibles, esGerencia, usuario }) {
               </label>
             </>
           )}
-          <label style={{ fontSize: 12, color: C.gris }}>OT / OC asociada
-            <select value={f.ot} onChange={e => setF({ ...f, ot: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }}>
-              <option value="">— seleccionar —</option>
-              {otsDisponibles.map(o => <option key={o}>{o}</option>)}
-            </select>
-          </label>
         </div>
         {tipo === 'Semana' && f.horaInicio && f.horaFin && (
           <div style={{ fontSize: 12.5, color: C.carbon, marginBottom: 10 }}>
             {f.horaInicio} a {f.horaFin} horas → <b>{horas} h extra</b> por trabajador seleccionado.
           </div>
         )}
-        <input placeholder="U otra OT/OC no listada (ej: OT 385)" value={f.otManual} onChange={e => setF({ ...f, otManual: e.target.value })} style={{ ...inp, width: '100%', marginBottom: 10 }} />
+
+        <div style={{ fontSize: 12, color: C.gris, marginBottom: 6 }}>OT / OC asociada (puedes marcar varias — el costo se reparte en partes iguales entre todas)</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+          {otsDisponibles.map(o => {
+            const sel = f.ots.includes(o)
+            return (
+              <button key={o} onClick={() => toggleOt(o)}
+                style={{ background: sel ? C.carbon : '#fff', color: sel ? '#fff' : C.carbon, border: `1px solid ${sel ? C.carbon : '#DFE4EA'}`, borderRadius: 6, padding: '7px 12px', cursor: 'pointer', fontSize: 13, fontFamily: "'JetBrains Mono',monospace" }}>
+                {o}
+              </button>
+            )
+          })}
+        </div>
+        <input placeholder="U otras OT/OC no listadas (ej: OT 385, OC 5312 — separa con coma)" value={f.otManual} onChange={e => setF({ ...f, otManual: e.target.value })} style={{ ...inp, width: '100%', marginBottom: 10 }} />
 
         <div style={{ fontSize: 12, color: C.gris, marginBottom: 6 }}>Trabajadores que corresponden (marca todos los que se quedaron)</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
@@ -559,7 +583,7 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
                     <td style={{ padding: '8px' }}>{TIPOS_EXTRA.find(x => x.id === (h.tipo || 'Semana'))?.label || 'Horas extra semana'}</td>
                     <td style={{ padding: '8px' }}>{nombreDe(h.trabajadorId)}</td>
                     <td style={{ padding: '8px' }}>{h.horas ? h.horas + ' h' : '—'}</td>
-                    <td style={{ padding: '8px', fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{h.ot}</td>
+                    <td style={{ padding: '8px', fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{otsDeExtra(h).join(', ')}</td>
                     {esGerencia && <td style={{ padding: '8px', fontWeight: 600 }}>{clp(h.costo.total)}</td>}
                     {esGerencia && <td style={{ padding: '8px', fontSize: 12, color: C.gris }}>{h.costo.colacion > 0 ? clp(h.costo.colacion) : '—'}</td>}
                     <td style={{ padding: '8px', textAlign: 'right' }}>
@@ -624,10 +648,14 @@ function CostosPorOT({ mo }) {
       ;(a.trabajadorIds || (a.trabajadorId ? [a.trabajadorId] : [])).forEach(t => m[ot].trabajadores.add(t))
     }))
     ;(mo.horasExtras || []).forEach(h => {
-      m[h.ot] = m[h.ot] || { normal: 0, hex: 0, fechas: new Set(), trabajadores: new Set() }
-      m[h.ot].hex += (h.costo && h.costo.total) || 0
-      m[h.ot].fechas.add(h.fecha)
-      m[h.ot].trabajadores.add(h.trabajadorId)
+      const porOT = (h.costo && h.costo.porOT) || {}
+      const ots = Object.keys(porOT).length ? Object.keys(porOT) : otsDeExtra(h)
+      ots.forEach(ot => {
+        m[ot] = m[ot] || { normal: 0, hex: 0, fechas: new Set(), trabajadores: new Set() }
+        m[ot].hex += porOT[ot] != null ? porOT[ot] : Math.round(((h.costo && h.costo.total) || 0) / ots.length)
+        m[ot].fechas.add(h.fecha)
+        m[ot].trabajadores.add(h.trabajadorId)
+      })
     })
     return m
   }, [mo])
@@ -947,7 +975,7 @@ function Informes({ mo }) {
     }))
 
     const hexRows = (mo.horasExtras || []).filter(h => h.fecha >= desde && h.fecha <= hasta && idSet.has(h.trabajadorId)).map(h => ({
-      Fecha: h.fecha, Tipo: h.tipo || 'Semana', Trabajador: nombreDe(h.trabajadorId), Horas: h.horas || '', 'OT/OC': h.ot,
+      Fecha: h.fecha, Tipo: h.tipo || 'Semana', Trabajador: nombreDe(h.trabajadorId), Horas: h.horas || '', 'OT/OC': otsDeExtra(h).join(', '),
       'Costo total': h.costo.total, Colación: h.costo.colacion || 0, Observación: h.obs || '',
     }))
 
