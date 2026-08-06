@@ -331,41 +331,70 @@ const TIPOS_EXTRA = [
   { id: 'TurnoNoche', label: 'Turno de noche', icono: <Moon size={13} /> },
 ]
 
+// Horas extra a partir de hora inicio/fin (ej. 15:30 a 19:10 -> 3,67 h).
+// Si fin queda antes o igual que inicio se asume que cruzó medianoche.
+function horasEntre(inicio, fin) {
+  if (!inicio || !fin) return 0
+  let min = minutosDesde(fin) - minutosDesde(inicio)
+  if (min <= 0) min += 24 * 60
+  return Math.round((min / 60) * 100) / 100
+}
+// Sugerencia automática de colación según la regla acordada — el
+// checkbox queda editable igual, esto solo lo pre-marca.
+function sugerirColacion(fecha, horaFin) {
+  if (!fecha || !horaFin) return false
+  let dow
+  try { dow = new Date(fecha + 'T12:00:00').getDay() } catch (e) { return false }
+  const minFin = minutosDesde(horaFin)
+  if (dow >= 1 && dow <= 4) return minFin > minutosDesde('19:00')
+  if (dow === 5) return minFin > minutosDesde('14:30')
+  return false
+}
+
 function HorasExtras({ mo, setMo, otsDisponibles, esGerencia, usuario }) {
   const [tipo, setTipo] = useState('Semana')
-  const [f, setF] = useState({ fecha: hoy(), trabajadorId: mo.trabajadores[0]?.id, horas: '', ot: '', otManual: '', obs: '', colacion: false })
+  const [f, setF] = useState({ fecha: hoy(), trabajadorIds: [], horaInicio: '', horaFin: '', ot: '', otManual: '', obs: '', colacion: false, colacionTocada: false })
   const [guardado, setGuardado] = useState(false)
   const esFeriado = tipo === 'Feriado'
   useEffect(() => { if (esFeriado) setF(s => ({ ...s, colacion: true })) }, [esFeriado])
+  // Auto-sugiere colación en Horas extra semana según la regla, salvo que
+  // la persona ya la haya tocado a mano para este registro.
+  useEffect(() => {
+    if (tipo === 'Semana' && !f.colacionTocada) setF(s => ({ ...s, colacion: sugerirColacion(s.fecha, s.horaFin) }))
+  }, [tipo, f.fecha, f.horaFin, f.colacionTocada])
+
+  const toggleTrab = id => setF(s => ({ ...s, trabajadorIds: s.trabajadorIds.includes(id) ? s.trabajadorIds.filter(x => x !== id) : [...s.trabajadorIds, id] }))
+  const horas = tipo === 'Semana' ? horasEntre(f.horaInicio, f.horaFin) : null
 
   async function guardar() {
     const ot = f.otManual.trim() || f.ot
     if (!ot) { window.alert('Indica la OT/OC a la que se carga este extra.'); return }
-    const t = (mo.trabajadores || []).find(x => x.id === f.trabajadorId)
-    if (!t) return
-    let costo, horas = null
-    if (tipo === 'Semana') {
-      horas = parseFloat(f.horas)
-      if (!horas || horas <= 0) return
-      const valorHex = valorHexDe(t)
-      costo = { valorHex, total: Math.round(valorHex * horas), colacion: f.colacion ? num(mo.valorColacion) : 0 }
-    } else if (tipo === 'Feriado') {
-      const valorFeriado = calc(t).domingo
-      costo = { valorFeriado, total: valorFeriado, colacion: num(mo.valorColacion) }
-    } else {
-      const valorTurno = calc(t).turnoNoche
-      costo = { valorTurno, total: valorTurno, colacion: f.colacion ? num(mo.valorColacion) : 0 }
-    }
-    const reg = { id: 'h' + Date.now() + Math.random().toString(36).slice(2, 7), tipo, fecha: f.fecha, trabajadorId: f.trabajadorId, horas, ot, obs: f.obs, costo }
+    if (f.trabajadorIds.length === 0) { window.alert('Marca a los trabajadores que corresponden.'); return }
+    if (tipo === 'Semana' && (!horas || horas <= 0)) { window.alert('Indica hora de inicio y de término para calcular las horas extra.'); return }
     try { await pullState() } catch (e) {}
     let fresco = null
     try { fresco = JSON.parse(localStorage.getItem('serein_mo') || 'null') } catch (e) {}
     const baseMo = (fresco && fresco.ver === MO_VER) ? fresco : mo
-    const nuevo = { ...baseMo, horasExtras: [reg, ...(baseMo.horasExtras || [])] }
+    const nuevosRegistros = f.trabajadorIds.map(tid => {
+      const t = (baseMo.trabajadores || []).find(x => x.id === tid)
+      let costo
+      if (tipo === 'Semana') {
+        const valorHex = valorHexDe(t)
+        costo = { valorHex, total: Math.round(valorHex * horas), colacion: f.colacion ? num(mo.valorColacion) : 0 }
+      } else if (tipo === 'Feriado') {
+        const valorFeriado = calc(t).domingo
+        costo = { valorFeriado, total: valorFeriado, colacion: num(mo.valorColacion) }
+      } else {
+        const valorTurno = calc(t).turnoNoche
+        costo = { valorTurno, total: valorTurno, colacion: f.colacion ? num(mo.valorColacion) : 0 }
+      }
+      return { id: 'h' + Date.now() + Math.random().toString(36).slice(2, 7), tipo, fecha: f.fecha, trabajadorId: tid, horas, horaInicio: tipo === 'Semana' ? f.horaInicio : '', horaFin: tipo === 'Semana' ? f.horaFin : '', ot, obs: f.obs, costo }
+    })
+    const nuevo = { ...baseMo, horasExtras: [...nuevosRegistros, ...(baseMo.horasExtras || [])] }
     try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
     setMo(nuevo)
     pushState()
-    setF({ ...f, horas: '', ot: '', otManual: '', obs: '' })
+    setF({ fecha: f.fecha, trabajadorIds: [], horaInicio: '', horaFin: '', ot: '', otManual: '', obs: '', colacion: false, colacionTocada: false })
     setGuardado(true); setTimeout(() => setGuardado(false), 3500)
   }
 
@@ -385,15 +414,15 @@ function HorasExtras({ mo, setMo, otsDisponibles, esGerencia, usuario }) {
           <label style={{ fontSize: 12, color: C.gris }}>Fecha
             <input type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }} />
           </label>
-          <label style={{ fontSize: 12, color: C.gris }}>Trabajador
-            <select value={f.trabajadorId} onChange={e => setF({ ...f, trabajadorId: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }}>
-              {(mo.trabajadores || []).map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-            </select>
-          </label>
           {tipo === 'Semana' && (
-            <label style={{ fontSize: 12, color: C.gris }}>Horas extras
-              <input type="number" min="0.5" step="0.5" value={f.horas} onChange={e => setF({ ...f, horas: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }} />
-            </label>
+            <>
+              <label style={{ fontSize: 12, color: C.gris }}>Hora inicio
+                <input type="time" value={f.horaInicio} onChange={e => setF({ ...f, horaInicio: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }} />
+              </label>
+              <label style={{ fontSize: 12, color: C.gris }}>Hora término
+                <input type="time" value={f.horaFin} onChange={e => setF({ ...f, horaFin: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }} />
+              </label>
+            </>
           )}
           <label style={{ fontSize: 12, color: C.gris }}>OT / OC asociada
             <select value={f.ot} onChange={e => setF({ ...f, ot: e.target.value })} style={{ ...inp, width: '100%', marginTop: 4 }}>
@@ -402,22 +431,35 @@ function HorasExtras({ mo, setMo, otsDisponibles, esGerencia, usuario }) {
             </select>
           </label>
         </div>
+        {tipo === 'Semana' && f.horaInicio && f.horaFin && (
+          <div style={{ fontSize: 12.5, color: C.carbon, marginBottom: 10 }}>
+            {f.horaInicio} a {f.horaFin} horas → <b>{horas} h extra</b> por trabajador seleccionado.
+          </div>
+        )}
         <input placeholder="U otra OT/OC no listada (ej: OT 385)" value={f.otManual} onChange={e => setF({ ...f, otManual: e.target.value })} style={{ ...inp, width: '100%', marginBottom: 10 }} />
 
-        {tipo === 'Semana' && (
+        <div style={{ fontSize: 12, color: C.gris, marginBottom: 6 }}>Trabajadores que corresponden (marca todos los que se quedaron)</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+          {(mo.trabajadores || []).map(t => {
+            const sel = f.trabajadorIds.includes(t.id)
+            return (
+              <button key={t.id} onClick={() => toggleTrab(t.id)}
+                style={{ background: sel ? C.naranja : '#fff', color: sel ? '#fff' : C.carbon, border: `1px solid ${sel ? C.naranja : '#DFE4EA'}`, borderRadius: 20, padding: '7px 12px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>
+                {t.nombre}
+              </button>
+            )
+          })}
+        </div>
+
+        {(tipo === 'Semana' || tipo === 'TurnoNoche') && (
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: C.carbon, marginBottom: 10 }}>
-            <input type="checkbox" checked={f.colacion} onChange={e => setF({ ...f, colacion: e.target.checked })} />
-            Corresponde colación <span style={{ color: C.gris }}>(el turno sigue después de las 19:00 de lunes a jueves, o los viernes cuando sigue de largo pasadas las 14:30 — solo tu registro, no afecta el pago del trabajador)</span>
+            <input type="checkbox" checked={f.colacion} onChange={e => setF({ ...f, colacion: e.target.checked, colacionTocada: true })} />
+            Corresponde colación {tipo === 'Semana' && <span style={{ color: C.gris }}>(sugerido automático: turno pasadas las 19:00 de lunes a jueves, o los viernes pasadas las 14:30 — puedes corregirlo)</span>}
+            {tipo === 'TurnoNoche' && <span style={{ color: C.gris }}>(solo tu registro, no afecta el pago del trabajador)</span>}
           </label>
         )}
         {tipo === 'Feriado' && (
           <div style={{ fontSize: 12, color: C.gris, marginBottom: 10 }}>Se paga al 100% (igual que un domingo) y la colación aplica siempre — no requiere marcarla.</div>
-        )}
-        {tipo === 'TurnoNoche' && (
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: C.carbon, marginBottom: 10 }}>
-            <input type="checkbox" checked={f.colacion} onChange={e => setF({ ...f, colacion: e.target.checked })} />
-            Corresponde colación <span style={{ color: C.gris }}>(solo tu registro, no afecta el pago del trabajador)</span>
-          </label>
         )}
 
         <label style={{ fontSize: 12, color: C.gris }}>Observación
@@ -426,7 +468,7 @@ function HorasExtras({ mo, setMo, otsDisponibles, esGerencia, usuario }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14 }}>
           <button onClick={guardar}
             style={{ background: C.naranja, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-            Guardar
+            Guardar ({f.trabajadorIds.length})
           </button>
           {guardado && <span style={{ color: C.verde, fontSize: 13 }}>✓ Registro guardado correctamente</span>}
         </div>
