@@ -23,6 +23,7 @@ import ParametrosModule, { PARAMS_SEED, perdidaFactoringFactura } from './Parame
 import ClientesModule, { CLIENTES_SEED } from './ClientesModule.jsx'
 import LibroComprasModule from './LibroComprasModule.jsx'
 import LibroVentasModule from './LibroVentasModule.jsx'
+import CartolasBancariasModule from './CartolasBancariasModule.jsx'
 import AsesorModule from './AsesorModule.jsx'
 import ConsolidadoModule from './ConsolidadoModule.jsx'
 import OrganigramaModule from './OrganigramaModule.jsx'
@@ -254,6 +255,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     ...(esGerencia ? ['ORDENES_COMPRA'] : []),
       ...(esGerencia ? ['LIBRO_COMPRAS'] : []),
       ...(esGerencia ? ['LIBRO_VENTAS'] : []),
+      ...(esGerencia ? ['CARTOLAS_BANCARIAS'] : []),
     ...(esGerencia ? ['TRAZABILIDAD'] : []),
     ...(esGerencia ? ['FINANZAS'] : []),
     'CLIENTES',
@@ -266,7 +268,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     'INVENTARIO',
     ...(esGerencia ? ['PARAMETROS'] : []),
   ]
-  const ORDEN_MODULOS = ['TODAS', 'ORGANIGRAMA', 'CRM', 'ASESOR', 'Santa Rosa', 'Istria', 'GESTION_PROYECTOS', 'FINANZAS', 'ORDENES_COMPRA', 'PAGOS', 'LIBRO_COMPRAS', 'LIBRO_VENTAS', 'TRAZABILIDAD', 'COTIZADOR', 'CLIENTES', 'CONTACTOS', 'COMPRAS_OP', 'PRODUCCION', 'GESTION_OT', 'ASISTENCIA', 'INVENTARIO', 'PARAMETROS']
+  const ORDEN_MODULOS = ['TODAS', 'ORGANIGRAMA', 'CRM', 'ASESOR', 'Santa Rosa', 'Istria', 'GESTION_PROYECTOS', 'FINANZAS', 'ORDENES_COMPRA', 'PAGOS', 'LIBRO_COMPRAS', 'LIBRO_VENTAS', 'CARTOLAS_BANCARIAS', 'TRAZABILIDAD', 'COTIZADOR', 'CLIENTES', 'CONTACTOS', 'COMPRAS_OP', 'PRODUCCION', 'GESTION_OT', 'ASISTENCIA', 'INVENTARIO', 'PARAMETROS']
   if (modulosPerfil) tabs = ORDEN_MODULOS.filter(c => c === 'INVENTARIO' || modulosPerfil.includes(c))
   // Recuerda la ultima pestana usada para que, si el panel se remonta por
   // algo ajeno (ej. un parpadeo de sesion al cambiar de pestana del navegador),
@@ -297,6 +299,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const esModuloComprasOp = areaSel === 'COMPRAS_OP'
   const esModuloLibroCompras = areaSel === 'LIBRO_COMPRAS'
   const esModuloLibroVentas = areaSel === 'LIBRO_VENTAS'
+  const esModuloCartolas = areaSel === 'CARTOLAS_BANCARIAS'
   const esModuloAsesor = areaSel === 'ASESOR'
   const [comprasOp, setComprasOp] = useState(() => LS('comprasOp', COMPRAS_OP_SEED))
   const [configCompras, setConfigCompras] = useState(() => LS('configCompras', CONFIG_COMPRAS_DEFAULT))
@@ -778,6 +781,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
           <OrdenesCompraModule pp={pp} setPp={setPp} ots={ots} />
         ) : esModuloTraza && puedeVer('TRAZABILIDAD') ? (
           <TrazabilidadModule cotizaciones={cotizaciones} ots={ots} ordenesCompra={pp.ocs || []} />
+        ) : esModuloCartolas && puedeVer('CARTOLAS_BANCARIAS') ? (
+          <CartolasBancariasModule esGerencia={esGerencia} />
         ) : (areaSel === 'INVENTARIO') ? (
           <InventarioModule inventario={inventario} setInventario={setInventario} movimientos={invMov} setMovimientos={setInvMov} usuario={email} />
         ) : esModuloParams && puedeVer('PARAMETROS') ? (
