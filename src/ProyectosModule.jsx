@@ -31,6 +31,7 @@ import { SEREIN } from './theme-serein.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
 const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
+const clpSigned = n => (n || 0) < 0 ? '-' + clp(-n) : clp(n)
 const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
 const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 const btnMini = { background: 'none', border: 'none', cursor: 'pointer', color: C.rojo, padding: 4 }
@@ -395,16 +396,18 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
   const [addCompra, setAddCompra] = useState(false)
   const [editFicha, setEditFicha] = useState(false)
   const [addFactManual, setAddFactManual] = useState(false)
-  const [fFactManual, setFFactManual] = useState({ numero: '', fecha: '', neto: '' })
+  const [fFactManual, setFFactManual] = useState({ numero: '', fecha: '', neto: '', tipo: 'Factura', refNumero: '' })
   const updEdp = (i, cambios) => onUpdate(p.id, { edps: p.edps.map((x, j) => j === i ? { ...x, ...cambios } : x) })
   const updCompra = (i, cambios) => onUpdate(p.id, { compras: p.compras.map((x, j) => j === i ? { ...x, ...cambios } : x) })
   const updFac = (numero, cambios) => onUpdate(p.id, { facEdp: { ...(p.facEdp || {}), [numero]: { ...((p.facEdp || {})[numero] || {}), ...cambios } } })
   const agregarFacturaManual = () => {
     const numero = fFactManual.numero.trim()
-    const neto = num(fFactManual.neto)
-    if (!numero || !neto) { window.alert('Ingresa al menos el N° de factura y el monto neto.'); return }
-    onUpdate(p.id, { facturasManuales: [...(p.facturasManuales || []), { id: 'fm' + Date.now(), numero, fecha_emision: fFactManual.fecha || '', neto }] })
-    setFFactManual({ numero: '', fecha: '', neto: '' })
+    const montoIngresado = num(fFactManual.neto) // siempre se ingresa en positivo — el signo lo decide el tipo
+    const esNC = fFactManual.tipo === 'Nota de crédito'
+    if (!numero || !montoIngresado) { window.alert('Ingresa al menos el N° de ' + (esNC ? 'nota de crédito' : 'factura') + ' y el monto neto.'); return }
+    const neto = esNC ? -montoIngresado : montoIngresado
+    onUpdate(p.id, { facturasManuales: [...(p.facturasManuales || []), { id: 'fm' + Date.now(), numero, fecha_emision: fFactManual.fecha || '', neto, notaCredito: esNC, refNumero: esNC ? fFactManual.refNumero.trim() : '' }] })
+    setFFactManual({ numero: '', fecha: '', neto: '', tipo: 'Factura', refNumero: '' })
     setAddFactManual(false)
   }
   const eliminarFacturaManual = id => { if (window.confirm('¿Eliminar esta factura manual?')) onUpdate(p.id, { facturasManuales: (p.facturasManuales || []).filter(x => x.id !== id) }) }
@@ -490,12 +493,25 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
               <button onClick={() => setAddFactManual(v => !v)} style={{ background: C.teal, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={12} /> Agregar factura manual</button>
             </div>
             {addFactManual && (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 10, padding: 10, background: '#F2F4F7' }}>
-                <label style={{ fontSize: 11, color: C.gris }}>N° factura<input value={fFactManual.numero} onChange={e => setFFactManual({ ...fFactManual, numero: e.target.value })} style={{ ...inp, display: 'block', marginTop: 3, width: 110 }} /></label>
-                <label style={{ fontSize: 11, color: C.gris }}>Fecha<input type="date" value={fFactManual.fecha} onChange={e => setFFactManual({ ...fFactManual, fecha: e.target.value })} style={{ ...inp, display: 'block', marginTop: 3 }} /></label>
-                <label style={{ fontSize: 11, color: C.gris }}>Neto<input value={fFactManual.neto} onChange={e => setFFactManual({ ...fFactManual, neto: e.target.value })} style={{ ...inp, display: 'block', marginTop: 3, width: 130, textAlign: 'right' }} /></label>
-                <button onClick={agregarFacturaManual} style={{ background: C.verde, color: '#fff', border: 'none', padding: '8px 14px', cursor: 'pointer', fontSize: 12.5 }}>Agregar</button>
-                <button onClick={() => setAddFactManual(false)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '8px 12px', cursor: 'pointer', fontSize: 12.5, color: C.gris }}>Cancelar</button>
+              <div style={{ marginBottom: 10, padding: 10, background: '#F2F4F7' }}>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                  {['Factura', 'Nota de crédito'].map(tp => (
+                    <button key={tp} onClick={() => setFFactManual({ ...fFactManual, tipo: tp })}
+                      style={{ background: fFactManual.tipo === tp ? (tp === 'Nota de crédito' ? C.rojo : C.teal) : '#fff', color: fFactManual.tipo === tp ? '#fff' : C.carbon, border: `1px solid ${fFactManual.tipo === tp ? (tp === 'Nota de crédito' ? C.rojo : C.teal) : '#DFE4EA'}`, padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                      {tp}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <label style={{ fontSize: 11, color: C.gris }}>{fFactManual.tipo === 'Nota de crédito' ? 'N° nota de crédito' : 'N° factura'}<input value={fFactManual.numero} onChange={e => setFFactManual({ ...fFactManual, numero: e.target.value })} style={{ ...inp, display: 'block', marginTop: 3, width: 130 }} /></label>
+                  {fFactManual.tipo === 'Nota de crédito' && (
+                    <label style={{ fontSize: 11, color: C.gris }}>Factura que rebaja/anula (opcional)<input value={fFactManual.refNumero} onChange={e => setFFactManual({ ...fFactManual, refNumero: e.target.value })} placeholder="N° factura" style={{ ...inp, display: 'block', marginTop: 3, width: 140 }} /></label>
+                  )}
+                  <label style={{ fontSize: 11, color: C.gris }}>Fecha<input type="date" value={fFactManual.fecha} onChange={e => setFFactManual({ ...fFactManual, fecha: e.target.value })} style={{ ...inp, display: 'block', marginTop: 3 }} /></label>
+                  <label style={{ fontSize: 11, color: C.gris }}>Monto neto {fFactManual.tipo === 'Nota de crédito' && <span style={{ color: C.rojo }}>(se descuenta)</span>}<input value={fFactManual.neto} onChange={e => setFFactManual({ ...fFactManual, neto: e.target.value })} placeholder="Ingresa el monto en positivo" style={{ ...inp, display: 'block', marginTop: 3, width: 160, textAlign: 'right' }} /></label>
+                  <button onClick={agregarFacturaManual} style={{ background: fFactManual.tipo === 'Nota de crédito' ? C.rojo : C.verde, color: '#fff', border: 'none', padding: '8px 14px', cursor: 'pointer', fontSize: 12.5 }}>Agregar</button>
+                  <button onClick={() => setAddFactManual(false)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '8px 12px', cursor: 'pointer', fontSize: 12.5, color: C.gris }}>Cancelar</button>
+                </div>
               </div>
             )}
             {facturasOT.length > 0 && (
@@ -506,12 +522,16 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
                   <tbody>
                     {facturasOT.map(fx => { const ov = (p.facEdp || {})[fx.numero] || {}; const est = ov.estado || fx.estado || 'Pendiente'; const esFact = /factor/i.test(est); const ppmF = Math.round((fx.neto || 0) * (ppmPct / 100)); const facs = (params && params.factoring) || []; const fcSel = facs.find(x => x.id === ov.factoringId) || facs.find(x => (fx.banco || '').toLowerCase().includes((x.nombre || '').toLowerCase().split(' ')[0])) || facs[0]; const baseF = fx.monto || Math.round((fx.neto || 0) * 1.19); const perdF = esFact && fcSel ? calcularPerdidaFactoring(baseF, ov.plazo != null ? ov.plazo : (fx.plazo || fx.dias || 30), ov.diasMora || fx.diasMora || 0, fcSel).total : 0; return (
                       <React.Fragment key={fx.id}>
-                      <tr style={{ borderBottom: esFact ? 'none' : '1px solid #DFE4EA' }}>
-                        <td style={{ padding: '4px 6px', fontWeight: 600 }}>{fx.numero}{fx._manual && <span title="Agregada manualmente" style={{ marginLeft: 5, fontSize: 10, fontWeight: 700, color: C.teal, background: '#E5F1F3', padding: '1px 5px', borderRadius: 3 }}>MANUAL</span>}</td>
+                      <tr style={{ borderBottom: esFact ? 'none' : '1px solid #DFE4EA', background: fx.notaCredito ? '#FCEBEA' : 'transparent' }}>
+                        <td style={{ padding: '4px 6px', fontWeight: 600 }}>
+                          {fx.numero}
+                          {fx.notaCredito && <span title={fx.refNumero ? `Rebaja/anula la factura ${fx.refNumero}` : 'Nota de crédito'} style={{ marginLeft: 5, fontSize: 10, fontWeight: 700, color: '#fff', background: C.rojo, padding: '1px 5px', borderRadius: 3 }}>NC{fx.refNumero ? ' → ' + fx.refNumero : ''}</span>}
+                          {fx._manual && !fx.notaCredito && <span title="Agregada manualmente" style={{ marginLeft: 5, fontSize: 10, fontWeight: 700, color: C.teal, background: '#E5F1F3', padding: '1px 5px', borderRadius: 3 }}>MANUAL</span>}
+                        </td>
                         <td style={{ padding: '4px 6px', color: C.gris }}>{fx.fecha_emision || '—'}</td>
                         <td style={{ padding: '4px 6px' }}><input value={ov.edp || ''} onChange={ev => updFac(fx.numero, { edp: ev.target.value })} placeholder="EDP" style={{ ...inp, width: 90, padding: '4px 6px' }} /></td>
-                        <td style={{ padding: '4px 6px', textAlign: 'right' }}>{clp(fx.neto)}</td>
-                        <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600 }}>{clp(baseF)}</td>
+                        <td style={{ padding: '4px 6px', textAlign: 'right', color: fx.neto < 0 ? C.rojo : 'inherit' }}>{clpSigned(fx.neto)}</td>
+                        <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600, color: baseF < 0 ? C.rojo : 'inherit' }}>{clpSigned(baseF)}</td>
                         <td style={{ padding: '4px 6px', textAlign: 'right', color: C.teal }}>{clp(ppmF)}</td>
                         <td style={{ padding: '4px 6px' }}><select value={est} onChange={ev => updFac(fx.numero, { estado: ev.target.value })} style={{ border: 'none', background: est === 'Pagado' ? '#E6F7EE' : est === 'Factoring' ? '#FDECDD' : '#FCEBEA', color: est === 'Pagado' ? C.verde : est === 'Factoring' ? C.ambar : '#D9600A', padding: '3px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}><option>Pendiente</option><option>Pagado</option><option>Factoring</option></select></td>
                         <td style={{ padding: '4px 6px' }}><input type="date" value={ov.fechaPago && ov.fechaPago !== '—' ? ov.fechaPago : ''} onChange={ev => updFac(fx.numero, { fechaPago: ev.target.value || '' })} style={{ ...inp, width: 140, padding: '4px 6px' }} /></td>
