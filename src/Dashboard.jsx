@@ -60,6 +60,28 @@ const LS = (k, fb) => {
 const guardarSerein = obj => {
   try { Object.entries(obj).forEach(([k, v]) => localStorage.setItem('serein_' + k, JSON.stringify(v))) } catch (e) {}
 }
+// Repara/descarta clientes corruptos (ej. un string que se esparció letra
+// por letra en vez de guardarse como {nombre: '...'} — pasó el 2026-08-07
+// y tumbó toda la app con un error de React al intentar mostrar el objeto
+// sin campo "nombre"). Se aplica en cada punto donde clientes puede
+// llegar del navegador o de la nube, así un dato corrupto que haya
+// quedado guardado (local o en otra sesión vieja) no vuelve a caer la app.
+function sanearCliente(c) {
+  if (c == null) return null
+  if (typeof c === 'string') return { nombre: c }
+  if (typeof c !== 'object') return null
+  if (typeof c.nombre === 'string' && c.nombre.trim()) return c
+  // Reconstruye el nombre si quedó esparcido en claves numéricas "0","1",...
+  const claves = Object.keys(c).filter(k => /^\d+$/.test(k)).sort((a, b) => +a - +b)
+  if (claves.length) {
+    const nombre = claves.map(k => c[k]).join('')
+    const limpio = { ...c }
+    claves.forEach(k => delete limpio[k])
+    return { ...limpio, nombre: nombre.trim() || '(cliente sin nombre)' }
+  }
+  return { ...c, nombre: c.nombre || '(cliente sin nombre)' }
+}
+const sanearClientesArr = arr => Array.isArray(arr) ? arr.map(sanearCliente).filter(Boolean) : arr
 export function borrarDatosLocales() {
   try { Object.keys(localStorage).filter(k => k.startsWith('serein_')).forEach(k => localStorage.removeItem(k)); location.reload() } catch (e) {}
 }
@@ -307,8 +329,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const [pp, setPp] = useState(() => { const s = LS('pp', null); if (!s) return PP_SEED; return (s.ocsVer === PP_SEED.ocsVer) ? s : { ...s, ocs: PP_SEED.ocs, ocsVer: PP_SEED.ocsVer } })
   const [params, setParams] = useState(() => LS('params', PARAMS_SEED))
   useEffect(() => { const uv = (params.uf && params.uf.valor) || 0; if ((fin.ufValor || 0) !== uv) setFin(f => ({ ...f, ufValor: uv })) }, [params.uf && params.uf.valor])
-  const [clientes, setClientes] = useState(() => LS('clientes', CLIENTES_SEED))
-  const [contactos, setContactos] = useState(() => { const s = LS('contactos', null); return (s && s.ver === CONTACTOS_SEED.ver) ? s : CONTACTOS_SEED })
+  const [clientes, setClientes] = useState(() => sanearClientesArr(LS('clientes', CLIENTES_SEED)))
+  const [contactos, setContactos] = useState(() => { const s = LS('contactos', null); const base = (s && s.ver === CONTACTOS_SEED.ver) ? s : CONTACTOS_SEED; return { ...base, clientes: sanearClientesArr(base.clientes) } })
   const [facturas, setFacturas] = useState(() => LS('facturas', FACTURAS_SEED))
   const [cotizaciones, setCotizaciones] = useState(() => LS('cotizaciones', []))
   // Valores de las OT visibles solo para Gerencia, Caro y Mario
@@ -371,7 +393,12 @@ export default function Dashboard({ perfil, email, onLogout }) {
       // guardar podía borrarse apenas cualquier otra persona guardara
       // cualquier cosa, sin necesidad de refrescar ni esperar nada.
       if (!aplicarSiSeguro(key, valorStr)) return
-      try { setter(JSON.parse(valorStr)) } catch (e) {}
+      try {
+        const valor = JSON.parse(valorStr)
+        if (clave === 'clientes') setter(sanearClientesArr(valor))
+        else if (clave === 'contactos') setter({ ...valor, clientes: sanearClientesArr(valor.clientes) })
+        else setter(valor)
+      } catch (e) {}
     }
     let canal = null
     const suscribir = () => {
