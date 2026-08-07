@@ -117,7 +117,13 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
       try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
       setCotizaciones(nuevo)
       pushState()
-      if (!cliSel && cliQuery.trim()) { try { onAddCliente(cliQuery.trim()) } catch (e) {} }
+      // onAddCliente espera un objeto {nombre, rut, giro, ...} — pasarle
+      // el string suelto (como se hacía antes) hacía que Dashboard.jsx lo
+      // desarmara letra por letra al mezclarlo con "...cli" (spread de un
+      // string), corrompiendo el cliente y tumbando toda la app con un
+      // error de React al intentar mostrarlo. Mismo objeto que ya arma el
+      // botón "Guardar cliente" más abajo.
+      if (!cliSel && cliQuery.trim()) { try { onAddCliente({ nombre: cliQuery.trim() }) } catch (e) {} }
       setGuardado('Borrador ' + numero + (inicial ? ' actualizado.' : ' guardado en Cotizaciones.'))
     })()
   }
