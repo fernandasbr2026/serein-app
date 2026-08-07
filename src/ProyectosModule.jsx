@@ -15,7 +15,17 @@ const COTIZADOR_PROY_EMAILS = ['administracion@sereinspa.com', 'mario@sereinspa.
 // Engancha una factura de Proyectos a su OT comparando los números (≥3 dígitos) de OT/OC
 const _toks = x => (String(x || '').match(/\d{3,}/g) || [])
 const otMatch = (p, f) => { const pt = new Set([..._toks(p.ot), ..._toks(p.oc)]); return [..._toks(f.ot), ..._toks(f.oc)].some(t => pt.has(t)) }
-const facturasDeOT = (facturasProy, p) => (facturasProy || []).filter(f => otMatch(p, f))
+// Las facturas reales llegan solas desde el Libro de Ventas (calzando por
+// N° de OT/OC). Además de esas, cada proyecto puede tener facturas
+// agregadas a mano (p.facturasManuales) — para una factura que todavía no
+// está en el Libro de Ventas, o que nunca va a estar ahí. Se mezclan acá,
+// en el mismo punto que usan todos los cálculos de esta pantalla
+// (venta/facturado/cobrado/pérdida factoring), así que no hace falta
+// tocar nada más para que cuenten igual que una factura real.
+const facturasDeOT = (facturasProy, p) => [
+  ...(facturasProy || []).filter(f => otMatch(p, f)),
+  ...(p.facturasManuales || []).map(m => ({ ...m, _manual: true })),
+]
 
 import { SEREIN } from './theme-serein.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
@@ -384,9 +394,20 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
   const [addEdp, setAddEdp] = useState(false)
   const [addCompra, setAddCompra] = useState(false)
   const [editFicha, setEditFicha] = useState(false)
+  const [addFactManual, setAddFactManual] = useState(false)
+  const [fFactManual, setFFactManual] = useState({ numero: '', fecha: '', neto: '' })
   const updEdp = (i, cambios) => onUpdate(p.id, { edps: p.edps.map((x, j) => j === i ? { ...x, ...cambios } : x) })
   const updCompra = (i, cambios) => onUpdate(p.id, { compras: p.compras.map((x, j) => j === i ? { ...x, ...cambios } : x) })
   const updFac = (numero, cambios) => onUpdate(p.id, { facEdp: { ...(p.facEdp || {}), [numero]: { ...((p.facEdp || {})[numero] || {}), ...cambios } } })
+  const agregarFacturaManual = () => {
+    const numero = fFactManual.numero.trim()
+    const neto = num(fFactManual.neto)
+    if (!numero || !neto) { window.alert('Ingresa al menos el N° de factura y el monto neto.'); return }
+    onUpdate(p.id, { facturasManuales: [...(p.facturasManuales || []), { id: 'fm' + Date.now(), numero, fecha_emision: fFactManual.fecha || '', neto }] })
+    setFFactManual({ numero: '', fecha: '', neto: '' })
+    setAddFactManual(false)
+  }
+  const eliminarFacturaManual = id => { if (window.confirm('¿Eliminar esta factura manual?')) onUpdate(p.id, { facturasManuales: (p.facturasManuales || []).filter(x => x.id !== id) }) }
 
   const facturado = facturadoDe(p, facturasProy), cobrado = cobradoDe(p, facturasProy), pendiente = facturado - cobrado
   const venta = ventaDe(p, facturasProy), porFacturar = porFacturarDe(p, facturasProy)
@@ -463,17 +484,30 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
         <div style={{ borderTop: '1px solid #DFE4EA', padding: 18 }}>
           <div style={{ background: remIva >= 0 ? '#F2F4F7' : '#E6F7EE', border: '1px solid ' + (remIva >= 0 ? '#FF9D5C' : '#1B9E5D'), borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}><div><div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: C.gris, letterSpacing: '.03em' }}>Remanente de IVA del proyecto</div><div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>IVA ventas {clp(remIvaVenta)} - IVA compras {clp(remIvaCompra)}</div></div><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 22, color: remIva >= 0 ? '#D9600A' : C.verde }}>{clp(remIva)}</div></div>
           <div style={{ background: '#E7EFFB', border: '1px solid #E7EFFB', borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}><div><div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: C.gris, letterSpacing: '.03em' }}>Disponible del bruto (venta c/IVA − compras)</div><div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>Bruto {clp(Math.round(venta * 1.19))} − compras {clp(costoReal)}</div></div><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 22, color: (Math.round(venta * 1.19) - costoReal) >= 0 ? C.verde : C.rojo }}>{clp(Math.round(venta * 1.19) - costoReal)}</div></div>
-          {facturasOT.length > 0 && (
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.teal, marginBottom: 6 }}>🧾 Facturas de esta OT · Estados de pago (EDP)</div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.teal }}>🧾 Facturas de esta OT · Estados de pago (EDP)</div>
+              <button onClick={() => setAddFactManual(v => !v)} style={{ background: C.teal, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={12} /> Agregar factura manual</button>
+            </div>
+            {addFactManual && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 10, padding: 10, background: '#F2F4F7' }}>
+                <label style={{ fontSize: 11, color: C.gris }}>N° factura<input value={fFactManual.numero} onChange={e => setFFactManual({ ...fFactManual, numero: e.target.value })} style={{ ...inp, display: 'block', marginTop: 3, width: 110 }} /></label>
+                <label style={{ fontSize: 11, color: C.gris }}>Fecha<input type="date" value={fFactManual.fecha} onChange={e => setFFactManual({ ...fFactManual, fecha: e.target.value })} style={{ ...inp, display: 'block', marginTop: 3 }} /></label>
+                <label style={{ fontSize: 11, color: C.gris }}>Neto<input value={fFactManual.neto} onChange={e => setFFactManual({ ...fFactManual, neto: e.target.value })} style={{ ...inp, display: 'block', marginTop: 3, width: 130, textAlign: 'right' }} /></label>
+                <button onClick={agregarFacturaManual} style={{ background: C.verde, color: '#fff', border: 'none', padding: '8px 14px', cursor: 'pointer', fontSize: 12.5 }}>Agregar</button>
+                <button onClick={() => setAddFactManual(false)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '8px 12px', cursor: 'pointer', fontSize: 12.5, color: C.gris }}>Cancelar</button>
+              </div>
+            )}
+            {facturasOT.length > 0 && (
+              <>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                  <thead><tr style={{ borderBottom: `1px solid ${C.carbon}` }}>{['N° factura', 'Fecha', 'EDP', 'Neto', 'Total c/IVA', 'PPM ' + ppmPct + '%', 'Estado pago', 'Fecha pago', 'Banco'].map(h => <th key={h} style={{ textAlign: (h === 'Neto' || h === 'Total c/IVA' || h.indexOf('PPM') === 0) ? 'right' : 'left', padding: '4px 6px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+                  <thead><tr style={{ borderBottom: `1px solid ${C.carbon}` }}>{['N° factura', 'Fecha', 'EDP', 'Neto', 'Total c/IVA', 'PPM ' + ppmPct + '%', 'Estado pago', 'Fecha pago', 'Banco', ''].map(h => <th key={h} style={{ textAlign: (h === 'Neto' || h === 'Total c/IVA' || h.indexOf('PPM') === 0) ? 'right' : 'left', padding: '4px 6px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
                   <tbody>
                     {facturasOT.map(fx => { const ov = (p.facEdp || {})[fx.numero] || {}; const est = ov.estado || fx.estado || 'Pendiente'; const esFact = /factor/i.test(est); const ppmF = Math.round((fx.neto || 0) * (ppmPct / 100)); const facs = (params && params.factoring) || []; const fcSel = facs.find(x => x.id === ov.factoringId) || facs.find(x => (fx.banco || '').toLowerCase().includes((x.nombre || '').toLowerCase().split(' ')[0])) || facs[0]; const baseF = fx.monto || Math.round((fx.neto || 0) * 1.19); const perdF = esFact && fcSel ? calcularPerdidaFactoring(baseF, ov.plazo != null ? ov.plazo : (fx.plazo || fx.dias || 30), ov.diasMora || fx.diasMora || 0, fcSel).total : 0; return (
                       <React.Fragment key={fx.id}>
                       <tr style={{ borderBottom: esFact ? 'none' : '1px solid #DFE4EA' }}>
-                        <td style={{ padding: '4px 6px', fontWeight: 600 }}>{fx.numero}</td>
+                        <td style={{ padding: '4px 6px', fontWeight: 600 }}>{fx.numero}{fx._manual && <span title="Agregada manualmente" style={{ marginLeft: 5, fontSize: 10, fontWeight: 700, color: C.teal, background: '#E5F1F3', padding: '1px 5px', borderRadius: 3 }}>MANUAL</span>}</td>
                         <td style={{ padding: '4px 6px', color: C.gris }}>{fx.fecha_emision || '—'}</td>
                         <td style={{ padding: '4px 6px' }}><input value={ov.edp || ''} onChange={ev => updFac(fx.numero, { edp: ev.target.value })} placeholder="EDP" style={{ ...inp, width: 90, padding: '4px 6px' }} /></td>
                         <td style={{ padding: '4px 6px', textAlign: 'right' }}>{clp(fx.neto)}</td>
@@ -482,10 +516,11 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
                         <td style={{ padding: '4px 6px' }}><select value={est} onChange={ev => updFac(fx.numero, { estado: ev.target.value })} style={{ border: 'none', background: est === 'Pagado' ? '#E6F7EE' : est === 'Factoring' ? '#FDECDD' : '#FCEBEA', color: est === 'Pagado' ? C.verde : est === 'Factoring' ? C.ambar : '#D9600A', padding: '3px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}><option>Pendiente</option><option>Pagado</option><option>Factoring</option></select></td>
                         <td style={{ padding: '4px 6px' }}><input type="date" value={ov.fechaPago && ov.fechaPago !== '—' ? ov.fechaPago : ''} onChange={ev => updFac(fx.numero, { fechaPago: ev.target.value || '' })} style={{ ...inp, width: 140, padding: '4px 6px' }} /></td>
                         <td style={{ padding: '4px 6px' }}><input list="serein-bancos" value={ov.banco || ''} onChange={ev => updFac(fx.numero, { banco: ev.target.value })} placeholder="Banco..." style={{ ...inp, width: 120, padding: '4px 6px' }} /></td>
+                        <td style={{ padding: '4px 6px' }}>{fx._manual && <button onClick={() => eliminarFacturaManual(fx.id)} title="Eliminar factura manual" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button>}</td>
                       </tr>
                       {esFact && (
                       <tr style={{ borderBottom: '1px solid #DFE4EA', background: '#F2F4F7' }}>
-                        <td colSpan={9} style={{ padding: '2px 8px 8px' }}>
+                        <td colSpan={10} style={{ padding: '2px 8px 8px' }}>
                           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', fontSize: 11.5, color: '#D9600A' }}>
                             <span style={{ fontWeight: 700 }}>Factoring:</span>
                             <select value={ov.factoringId || (fcSel ? fcSel.id : '')} onChange={ev => updFac(fx.numero, { factoringId: ev.target.value })} style={{ ...inp, padding: '3px 6px' }}>{facs.length === 0 && <option value="">(define en Parámetros)</option>}{facs.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}</select>
@@ -501,9 +536,10 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
                   </tbody>
                 </table>
               </div>
-              <div style={{ fontSize: 12, color: C.gris, marginTop: 4 }}>Facturado (facturas): <b>{clp(factNetoOT)}</b> · Cobrado: <b style={{ color: C.verde }}>{clp(cobrado)}</b> — las facturas se cargan solas desde la pestaña Facturas.</div>
-            </div>
-          )}
+              <div style={{ fontSize: 12, color: C.gris, marginTop: 4 }}>Facturado (facturas): <b>{clp(factNetoOT)}</b> · Cobrado: <b style={{ color: C.verde }}>{clp(cobrado)}</b> — las facturas reales se cargan solas desde la pestaña Facturas; las que agregues acá quedan marcadas como "Manual".</div>
+              </>
+            )}
+          </div>
           <AbonosOT p={p} facturasOT={facturasOT} onUpdate={onUpdate} />
           <datalist id="serein-bancos"><option value="Banco de Chile" /><option value="BancoEstado" /><option value="BCI" /><option value="Santander" /><option value="Scotiabank" /><option value="Itaú" /><option value="BICE" /><option value="Security" /><option value="Banco Falabella" /><option value="Banco Ripley" /><option value="Consorcio" /><option value="Internacional" /><option value="HSBC" /></datalist>
 
