@@ -245,7 +245,8 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
     if (fArea && (r.area || '') !== fArea) return false
     if (q) { const t = ((r.client_name || '') + ' ' + (r.client_rut || '') + ' ' + (r.document_number || '') + ' ' + (r.ot_id || '')).toLowerCase(); if (!t.includes(q.toLowerCase())) return false }
     return true
-  }), [todas, mes, tipo, fArea, q, verOcultas])
+  // De más reciente a más antigua: fecha de emisión, y a igual fecha, N° de documento.
+  }).sort((a, b) => String(b.emission_date || '').localeCompare(String(a.emission_date || '')) || String(b.document_number || '').localeCompare(String(a.document_number || ''), undefined, { numeric: true })), [todas, mes, tipo, fArea, q, verOcultas])
   const toggleSel = id => setSel(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const toggleTodas = () => setSel(s => s.size === filtradas.length ? new Set() : new Set(filtradas.map(r => r.id)))
   const eliminarSel = async () => {

@@ -231,13 +231,18 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
 
   const clientesUnicos = [...new Set(lista.map(x => x.cliente).filter(Boolean))].sort((a, b) => a.localeCompare(b))
   const proyectosUnicos = [...new Set(lista.map(x => (x.proyecto || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  // De más reciente a más antigua: primero por fecha de emisión, y a
+  // igual fecha, por N° de factura (el que tenga el folio más alto es el
+  // que se ingresó al final) — así las últimas facturas cargadas quedan
+  // siempre arriba, sin importar si llegaron manuales o desde el Libro de
+  // Ventas.
   const mostradas = lista.filter(x =>
     (!busca || (norm(x.numero) + ' ' + norm(x.cliente) + ' ' + norm(x.ot)).includes(norm(busca))) &&
     (!fCli || x.cliente === fCli) &&
     (!fEst || x.estado === fEst) &&
     (!fMes || (x.fecha_emision || '').slice(0, 7) === fMes) &&
     (!fProy || (x.proyecto || '').trim() === fProy)
-  )
+  ).sort((a, b) => String(b.fecha_emision || '').localeCompare(String(a.fecha_emision || '')) || String(b.numero || '').localeCompare(String(a.numero || ''), undefined, { numeric: true }))
   const hayFiltro = busca || fCli || fEst || fMes || fProy
   const pg = paginar(mostradas, page)
   const [sel, setSel] = useState(() => new Set())
