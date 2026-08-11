@@ -1099,7 +1099,19 @@ function rptSection(t) { return '<div class="sec-title">' + t + '</div>' }
 function rptTable(headers, rows) { var h = ''; for (var i = 0; i < headers.length; i++) h += '<th>' + headers[i] + '</th>'; var b = ''; for (var r = 0; r < rows.length; r++) { b += '<tr>'; for (var c = 0; c < rows[r].length; c++) b += '<td>' + rows[r][c] + '</td>'; b += '</tr>' } return '<table class="dt"><thead><tr>' + h + '</tr></thead><tbody>' + b + '</tbody></table>' }
 function rptImageGrid(fotos) { var imgs = fotos || []; var g = imgs.length === 1 ? 'g1' : (imgs.length === 2 ? 'g2' : (imgs.length === 3 ? 'g3' : 'g4')); var ig = ''; for (var i = 0; i < imgs.length; i++) ig += '<div class="imgframe"><img src="' + imgs[i] + '"/></div>'; return '<div class="ev-right ' + g + '">' + ig + '</div>' }
 function rptEvidence(num, titulo, obs, fotos) { return '<div class="evcard"><div class="ev-left"><div class="ev-title">EVIDENCIA ' + num + ':</div><div class="ev-desc">' + esc(titulo) + '</div>' + (obs ? '<div class="ev-obs"><b>OBS.:</b> ' + esc(obs) + '</div>' : '') + '</div>' + rptImageGrid(fotos) + '</div>' }
-function rptMarcas(marcas) { var arr = (marcas || []).filter(function (m) { return m && String(m).trim() }).slice().sort(function (a, b) { return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' }) }); if (!arr.length) return ''; var items = ''; arr.forEach(function (m) { items += '<li>' + esc(m) + '</li>' }); return rptSection('Detalle marcas de pieza') + '<ul class="marcas-list">' + items + '</ul>' }
+// Si alguien pegó varias marcas separadas por ";" (o "," o salto de
+// línea) dentro de un mismo campo, se separan igual acá — así cada marca
+// queda en su propia línea de la lista, aunque se hayan cargado todas
+// juntas en un solo campo de texto.
+function rptMarcas(marcas) {
+  var arr = (marcas || []).reduce(function (acc, m) { return acc.concat(String(m || '').split(/[;,\n]+/)) }, [])
+    .map(function (m) { return m.trim() }).filter(Boolean)
+  arr = arr.filter(function (v, i) { return arr.indexOf(v) === i })
+  arr.sort(function (a, b) { return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' }) })
+  if (!arr.length) return ''
+  var items = ''; arr.forEach(function (m) { items += '<li>' + esc(m) + '</li>' })
+  return rptSection('Detalle marcas de pieza') + '<ul class="marcas-list">' + items + '</ul>'
+}
 function rptSign(firmas) { var r = ''; (firmas || []).forEach(function (f) { r += '<tr><td>' + esc(f.rol) + '</td><td>' + esc(f.quien) + '</td><td class="sign-cell"></td><td>' + esc(f.fecha) + '</td></tr>' }); return '<table class="dt"><thead><tr><th>Rol</th><th>Nombre</th><th>Firma</th><th>Fecha</th></tr></thead><tbody>' + r + '</tbody></table>' }
 function rptFooter() { return '<div class="rfooter"><div class="rf-navy"><span>Compromiso con la calidad</span><span>Seguridad en cada proceso</span><span>Excelencia en resultados</span></div>' + ((typeof window !== 'undefined' && window.__sereinProtoIstria) ? '' : '<div class="rf-web">www.sereingroup.cl</div>') + '</div>' }
 function tablaMedHTML(filas) { var nc = (filas && filas[0] ? filas[0].length : 5); var th = ['Item']; for (var a = 1; a <= nc; a++) th.push('' + a); th.push('Prom.'); var rows = []; for (var i = 0; i < filas.length; i++) { var f = filas[i]; var row = ['' + (i + 1)]; for (var j = 0; j < f.length; j++) row.push(esc(f[j] || '')); var pr = promArr(f); row.push('<span class="prom-badge">' + (pr ? pr.toFixed(2) : '') + '</span>'); rows.push(row) } return rptTable(th, rows) }
