@@ -658,65 +658,73 @@ function SeccionCheques({ pp, setPp }) {
     pushState()
   }
 
-  const Lista = ({ tipo, titulo, colorTitulo }) => {
-    const items = (pp.cheques || []).filter(c => c.tipo === tipo).slice().sort((a, b) => (a.fechaCobro || '').localeCompare(b.fechaCobro || ''))
-    return (
-      <div style={{ flex: '1 1 380px', minWidth: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', color: colorTitulo }}>{titulo}</div>
-          <button onClick={() => { setF(nuevo(tipo)); setCreando(tipo) }} style={{ background: colorTitulo, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Nuevo cheque</button>
-        </div>
-        {creando === tipo && (
-          <div style={{ background: '#fff', border: `2px solid ${colorTitulo}`, padding: 14, marginBottom: 10 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
-              <input style={inp} placeholder={tipo === 'por_pagar' ? 'A quién se lo pagamos *' : 'Quién nos lo dio *'} value={f.contraparte} onChange={e => setF({ ...f, contraparte: e.target.value })} />
-              <input style={inp} placeholder="Monto CLP *" value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} />
-              <label style={{ fontSize: 12, color: C.gris }}>Fecha de cobro<input type="date" style={{ ...inp, width: '100%' }} value={f.fechaCobro} onChange={e => setF({ ...f, fechaCobro: e.target.value })} /></label>
-              <input style={inp} placeholder="Banco" value={f.banco} onChange={e => setF({ ...f, banco: e.target.value })} />
-              <input style={inp} placeholder="Observación (opcional)" value={f.obs} onChange={e => setF({ ...f, obs: e.target.value })} />
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-              <button onClick={guardar} disabled={!f.contraparte.trim() || num(f.monto) <= 0} style={{ background: (f.contraparte.trim() && num(f.monto) > 0) ? colorTitulo : '#DFE4EA', color: '#fff', border: 'none', padding: '9px 18px', cursor: 'pointer', fontSize: 13 }}>Guardar cheque</button>
-              <button onClick={() => setCreando(null)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
-            </div>
-          </div>
-        )}
-        <Caja>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-              {[tipo === 'por_pagar' ? 'A quién' : 'De quién', 'Banco', 'Fecha cobro', 'Monto', 'Estado', ''].map(h => <th key={h} style={{ textAlign: h === 'Monto' ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}
-            </tr></thead>
-            <tbody>
-              {items.map(c => {
-                const vencido = chequeVencido(c, hoyStr)
-                const proximo = !vencido && chequeProximo(c, hoyStr, en7)
-                return (
-                  <tr key={c.id} style={{ borderBottom: '1px solid #DFE4EA', background: vencido ? '#FCEBEA' : proximo ? '#FDECDD' : 'transparent' }}>
-                    <td style={{ padding: 8, fontWeight: 500 }}>{c.contraparte}</td>
-                    <td style={{ padding: 8, color: C.gris }}>{c.banco || '—'}</td>
-                    <td style={{ padding: 8, color: vencido ? C.rojo : proximo ? '#D9600A' : C.gris, fontWeight: (vencido || proximo) ? 700 : 400 }}>{c.fechaCobro}{vencido ? ' · VENCIDO' : proximo ? ' · pronto' : ''}</td>
-                    <td style={{ padding: 8, textAlign: 'right', fontWeight: 600 }}>{clp(c.monto)}</td>
-                    <td style={{ padding: 8 }}>
-                      <select value={c.estado} onChange={e => actualizar(c.id, { estado: e.target.value })} style={{ border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '3px 6px', background: fondoEstado(c.estado === 'Cobrado' ? 'Pagado' : c.estado === 'Rechazado' ? 'Vencido' : 'Pendiente'), color: colorEstado(c.estado === 'Cobrado' ? 'Pagado' : c.estado === 'Rechazado' ? 'Vencido' : 'Pendiente') }}>
-                        {ESTADOS_CHEQUE.map(x => <option key={x}>{x}</option>)}
-                      </select>
-                    </td>
-                    <td style={{ padding: 8 }}><button onClick={() => eliminar(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button></td>
-                  </tr>
-                )
-              })}
-              {items.length === 0 && <tr><td colSpan={6} style={{ padding: 16, textAlign: 'center', color: '#9AA3AD' }}>Sin cheques {tipo === 'por_pagar' ? 'por pagar' : 'por cobrar'}.</td></tr>}
-            </tbody>
-          </table>
-        </Caja>
-      </div>
-    )
-  }
-
   return (
     <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
-      <Lista tipo="por_pagar" titulo="Cheques por pagar (nos los van a cobrar)" colorTitulo={C.rojo} />
-      <Lista tipo="por_cobrar" titulo="Cheques por cobrar (los tenemos nosotros)" colorTitulo={C.verde} />
+      <ListaCheques tipo="por_pagar" titulo="Cheques por pagar (nos los van a cobrar)" colorTitulo={C.rojo}
+        pp={pp} f={f} setF={setF} nuevo={nuevo} creando={creando} setCreando={setCreando} guardar={guardar} actualizar={actualizar} eliminar={eliminar} hoyStr={hoyStr} en7={en7} />
+      <ListaCheques tipo="por_cobrar" titulo="Cheques por cobrar (los tenemos nosotros)" colorTitulo={C.verde}
+        pp={pp} f={f} setF={setF} nuevo={nuevo} creando={creando} setCreando={setCreando} guardar={guardar} actualizar={actualizar} eliminar={eliminar} hoyStr={hoyStr} en7={en7} />
+    </div>
+  )
+}
+
+// Componente propio (no anidado dentro de SeccionCheques): definirlo
+// adentro hacía que React lo tratara como un componente NUEVO en cada
+// tecla escrita (se recrea la función en cada render), así que el input
+// se remontaba solo y perdía el foco después de cada letra. Como
+// componente de verdad, con los mismos props cada vez, React reutiliza
+// el mismo nodo del DOM y el input deja de perder el foco.
+function ListaCheques({ tipo, titulo, colorTitulo, pp, f, setF, nuevo, creando, setCreando, guardar, actualizar, eliminar, hoyStr, en7 }) {
+  const items = (pp.cheques || []).filter(c => c.tipo === tipo).slice().sort((a, b) => (a.fechaCobro || '').localeCompare(b.fechaCobro || ''))
+  return (
+    <div style={{ flex: '1 1 380px', minWidth: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', color: colorTitulo }}>{titulo}</div>
+        <button onClick={() => { setF(nuevo(tipo)); setCreando(tipo) }} style={{ background: colorTitulo, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Nuevo cheque</button>
+      </div>
+      {creando === tipo && (
+        <div style={{ background: '#fff', border: `2px solid ${colorTitulo}`, padding: 14, marginBottom: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
+            <input style={inp} placeholder={tipo === 'por_pagar' ? 'A quién se lo pagamos *' : 'Quién nos lo dio *'} value={f.contraparte} onChange={e => setF({ ...f, contraparte: e.target.value })} />
+            <input style={inp} placeholder="Monto CLP *" value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} />
+            <label style={{ fontSize: 12, color: C.gris }}>Fecha de cobro<input type="date" style={{ ...inp, width: '100%' }} value={f.fechaCobro} onChange={e => setF({ ...f, fechaCobro: e.target.value })} /></label>
+            <input style={inp} placeholder="Banco" value={f.banco} onChange={e => setF({ ...f, banco: e.target.value })} />
+            <input style={inp} placeholder="Observación (opcional)" value={f.obs} onChange={e => setF({ ...f, obs: e.target.value })} />
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button onClick={guardar} disabled={!f.contraparte.trim() || num(f.monto) <= 0} style={{ background: (f.contraparte.trim() && num(f.monto) > 0) ? colorTitulo : '#DFE4EA', color: '#fff', border: 'none', padding: '9px 18px', cursor: 'pointer', fontSize: 13 }}>Guardar cheque</button>
+            <button onClick={() => setCreando(null)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+          </div>
+        </div>
+      )}
+      <Caja>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+            {[tipo === 'por_pagar' ? 'A quién' : 'De quién', 'Banco', 'Fecha cobro', 'Monto', 'Estado', ''].map(h => <th key={h} style={{ textAlign: h === 'Monto' ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {items.map(c => {
+              const vencido = chequeVencido(c, hoyStr)
+              const proximo = !vencido && chequeProximo(c, hoyStr, en7)
+              return (
+                <tr key={c.id} style={{ borderBottom: '1px solid #DFE4EA', background: vencido ? '#FCEBEA' : proximo ? '#FDECDD' : 'transparent' }}>
+                  <td style={{ padding: 8, fontWeight: 500 }}>{c.contraparte}</td>
+                  <td style={{ padding: 8, color: C.gris }}>{c.banco || '—'}</td>
+                  <td style={{ padding: 8, color: vencido ? C.rojo : proximo ? '#D9600A' : C.gris, fontWeight: (vencido || proximo) ? 700 : 400 }}>{c.fechaCobro}{vencido ? ' · VENCIDO' : proximo ? ' · pronto' : ''}</td>
+                  <td style={{ padding: 8, textAlign: 'right', fontWeight: 600 }}>{clp(c.monto)}</td>
+                  <td style={{ padding: 8 }}>
+                    <select value={c.estado} onChange={e => actualizar(c.id, { estado: e.target.value })} style={{ border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '3px 6px', background: fondoEstado(c.estado === 'Cobrado' ? 'Pagado' : c.estado === 'Rechazado' ? 'Vencido' : 'Pendiente'), color: colorEstado(c.estado === 'Cobrado' ? 'Pagado' : c.estado === 'Rechazado' ? 'Vencido' : 'Pendiente') }}>
+                      {ESTADOS_CHEQUE.map(x => <option key={x}>{x}</option>)}
+                    </select>
+                  </td>
+                  <td style={{ padding: 8 }}><button onClick={() => eliminar(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button></td>
+                </tr>
+              )
+            })}
+            {items.length === 0 && <tr><td colSpan={6} style={{ padding: 16, textAlign: 'center', color: '#9AA3AD' }}>Sin cheques {tipo === 'por_pagar' ? 'por pagar' : 'por cobrar'}.</td></tr>}
+          </tbody>
+        </table>
+      </Caja>
     </div>
   )
 }
