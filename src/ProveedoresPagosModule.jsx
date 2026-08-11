@@ -77,7 +77,19 @@ export const PP_SEED = {
     { id: 'c1', cliente: 'Howden', factura: '1650', oc_cliente: '', fecha_emision: '2026-07-01', condicion: '30 días', fecha_estimada: '2026-07-31', neto: 4369748, iva: 830252, total: 5200000, estado: 'Pendiente', fecha_real: '', obs: '' },
     { id: 'c2', cliente: 'TTM', factura: '1651', oc_cliente: '', fecha_emision: '2026-07-03', condicion: '45 días', fecha_estimada: '2026-08-17', neto: 7310924, iva: 1389076, total: 8700000, estado: 'Pendiente', fecha_real: '', obs: '' },
   ],
+  cheques: [],
 }
+
+// ============================================================
+// CHEQUES — dos tipos: "por_pagar" (cheques que emitimos y nos van a
+// cobrar) y "por_cobrar" (cheques que tenemos en nuestro poder y
+// debemos cobrar). Campos básicos: monto, fecha de cobro, contraparte
+// (quién lo cobra / quién nos lo dio), banco. Estado aparte para poder
+// sacarlo de la alerta una vez cobrado, sin borrar el historial.
+// ============================================================
+const ESTADOS_CHEQUE = ['Pendiente', 'Cobrado', 'Rechazado']
+const chequeVencido = (c, hoyStr) => c.estado === 'Pendiente' && c.fechaCobro && c.fechaCobro < hoyStr
+const chequeProximo = (c, hoyStr, en7) => c.estado === 'Pendiente' && c.fechaCobro && c.fechaCobro >= hoyStr && c.fechaCobro <= en7
 
 // ============================================================
 // Componentes auxiliares de layout
@@ -604,6 +616,112 @@ function SeccionCobros({ pp, setPp }) {
 }
 
 // ============================================================
+// 5b) CHEQUES — por pagar (los emitimos, nos los van a cobrar) y por
+// cobrar (los tenemos nosotros, hay que depositarlos/cobrarlos).
+// ============================================================
+function SeccionCheques({ pp, setPp }) {
+  const [creando, setCreando] = useState(null) // 'por_pagar' | 'por_cobrar' | null
+  const nuevo = tipo => ({ tipo, monto: '', fechaCobro: hoy(), contraparte: '', banco: '', estado: 'Pendiente', obs: '' })
+  const [f, setF] = useState(nuevo('por_pagar'))
+  const hoyStr = hoy()
+  const en7 = sumarDias(hoyStr, 7)
+
+  async function guardar() {
+    const monto = num(f.monto)
+    if (!f.contraparte.trim() || monto <= 0 || !f.fechaCobro) return
+    const c = { id: 'ch' + Date.now(), ...f, monto }
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_pp') || 'null') } catch (e) {}
+    const basePp = fresco && typeof fresco === 'object' ? fresco : pp
+    const nuevoPp = { ...basePp, cheques: [c, ...(basePp.cheques || [])] }
+    try { localStorage.setItem('serein_pp', JSON.stringify(nuevoPp)) } catch (e) {}
+    setPp(nuevoPp)
+    pushState()
+    setF(nuevo(f.tipo)); setCreando(null)
+  }
+  const actualizar = (id, cambios) => {
+    const nuevo = { ...pp, cheques: (pp.cheques || []).map(c => c.id === id ? { ...c, ...cambios } : c) }
+    try { localStorage.setItem('serein_pp', JSON.stringify(nuevo)) } catch (e) {}
+    setPp(nuevo)
+    pushState()
+  }
+  const eliminar = async id => {
+    if (!window.confirm('¿Eliminar este cheque?')) return
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_pp') || 'null') } catch (e) {}
+    const basePp = fresco && typeof fresco === 'object' ? fresco : pp
+    const nuevoPp = { ...basePp, cheques: (basePp.cheques || []).filter(x => x.id !== id) }
+    try { localStorage.setItem('serein_pp', JSON.stringify(nuevoPp)) } catch (e) {}
+    setPp(nuevoPp)
+    pushState()
+  }
+
+  const Lista = ({ tipo, titulo, colorTitulo }) => {
+    const items = (pp.cheques || []).filter(c => c.tipo === tipo).slice().sort((a, b) => (a.fechaCobro || '').localeCompare(b.fechaCobro || ''))
+    return (
+      <div style={{ flex: '1 1 380px', minWidth: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', color: colorTitulo }}>{titulo}</div>
+          <button onClick={() => { setF(nuevo(tipo)); setCreando(tipo) }} style={{ background: colorTitulo, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Nuevo cheque</button>
+        </div>
+        {creando === tipo && (
+          <div style={{ background: '#fff', border: `2px solid ${colorTitulo}`, padding: 14, marginBottom: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
+              <input style={inp} placeholder={tipo === 'por_pagar' ? 'A quién se lo pagamos *' : 'Quién nos lo dio *'} value={f.contraparte} onChange={e => setF({ ...f, contraparte: e.target.value })} />
+              <input style={inp} placeholder="Monto CLP *" value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} />
+              <label style={{ fontSize: 12, color: C.gris }}>Fecha de cobro<input type="date" style={{ ...inp, width: '100%' }} value={f.fechaCobro} onChange={e => setF({ ...f, fechaCobro: e.target.value })} /></label>
+              <input style={inp} placeholder="Banco" value={f.banco} onChange={e => setF({ ...f, banco: e.target.value })} />
+              <input style={inp} placeholder="Observación (opcional)" value={f.obs} onChange={e => setF({ ...f, obs: e.target.value })} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              <button onClick={guardar} disabled={!f.contraparte.trim() || num(f.monto) <= 0} style={{ background: (f.contraparte.trim() && num(f.monto) > 0) ? colorTitulo : '#DFE4EA', color: '#fff', border: 'none', padding: '9px 18px', cursor: 'pointer', fontSize: 13 }}>Guardar cheque</button>
+              <button onClick={() => setCreando(null)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+            </div>
+          </div>
+        )}
+        <Caja>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+              {[tipo === 'por_pagar' ? 'A quién' : 'De quién', 'Banco', 'Fecha cobro', 'Monto', 'Estado', ''].map(h => <th key={h} style={{ textAlign: h === 'Monto' ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {items.map(c => {
+                const vencido = chequeVencido(c, hoyStr)
+                const proximo = !vencido && chequeProximo(c, hoyStr, en7)
+                return (
+                  <tr key={c.id} style={{ borderBottom: '1px solid #DFE4EA', background: vencido ? '#FCEBEA' : proximo ? '#FDECDD' : 'transparent' }}>
+                    <td style={{ padding: 8, fontWeight: 500 }}>{c.contraparte}</td>
+                    <td style={{ padding: 8, color: C.gris }}>{c.banco || '—'}</td>
+                    <td style={{ padding: 8, color: vencido ? C.rojo : proximo ? '#D9600A' : C.gris, fontWeight: (vencido || proximo) ? 700 : 400 }}>{c.fechaCobro}{vencido ? ' · VENCIDO' : proximo ? ' · pronto' : ''}</td>
+                    <td style={{ padding: 8, textAlign: 'right', fontWeight: 600 }}>{clp(c.monto)}</td>
+                    <td style={{ padding: 8 }}>
+                      <select value={c.estado} onChange={e => actualizar(c.id, { estado: e.target.value })} style={{ border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '3px 6px', background: fondoEstado(c.estado === 'Cobrado' ? 'Pagado' : c.estado === 'Rechazado' ? 'Vencido' : 'Pendiente'), color: colorEstado(c.estado === 'Cobrado' ? 'Pagado' : c.estado === 'Rechazado' ? 'Vencido' : 'Pendiente') }}>
+                        {ESTADOS_CHEQUE.map(x => <option key={x}>{x}</option>)}
+                      </select>
+                    </td>
+                    <td style={{ padding: 8 }}><button onClick={() => eliminar(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button></td>
+                  </tr>
+                )
+              })}
+              {items.length === 0 && <tr><td colSpan={6} style={{ padding: 16, textAlign: 'center', color: '#9AA3AD' }}>Sin cheques {tipo === 'por_pagar' ? 'por pagar' : 'por cobrar'}.</td></tr>}
+            </tbody>
+          </table>
+        </Caja>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+      <Lista tipo="por_pagar" titulo="Cheques por pagar (nos los van a cobrar)" colorTitulo={C.rojo} />
+      <Lista tipo="por_cobrar" titulo="Cheques por cobrar (los tenemos nosotros)" colorTitulo={C.verde} />
+    </div>
+  )
+}
+
+// ============================================================
 // 6) FLUJO DE CAJA PROYECTADO (día / semana / mes)
 // ============================================================
 export function calcularFlujo(pp, mes) {
@@ -800,6 +918,7 @@ export default function ProveedoresPagosModule({ pp: ppExt, setPp: setPpExt, gas
     { id: 'porpagar', label: 'Por pagar', icono: <ReceiptText size={13} /> },
     { id: 'calpagos', label: 'Calendario de pagos', icono: <CalendarClock size={13} /> },
     { id: 'cobros', label: 'Cobros esperados', icono: <Wallet size={13} /> },
+    { id: 'cheques', label: 'Cheques', icono: <ReceiptText size={13} /> },
     { id: 'flujo', label: 'Flujo de caja', icono: <CalendarDays size={13} /> },
     { id: 'reportes', label: 'Reportes', icono: <TrendingUp size={13} /> },
   ]
@@ -839,10 +958,32 @@ export default function ProveedoresPagosModule({ pp: ppExt, setPp: setPpExt, gas
           </tbody></table>
         </div>);
       })()}
+      {(() => {
+        const hoyStr = hoy(); const en7 = sumarDias(hoyStr, 7)
+        const cheques = (pp.cheques || []).filter(c => chequeVencido(c, hoyStr) || chequeProximo(c, hoyStr, en7))
+        if (!cheques.length) return null
+        const hayVencido = cheques.some(c => chequeVencido(c, hoyStr))
+        return (<div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: '3px solid ' + (hayVencido ? '#C5453D' : '#F77716'), marginBottom: 16, padding: 14 }}>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 8 }}>Cheques por vencer o vencidos ({cheques.length})</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}><tbody>
+          {cheques.slice().sort((a, b) => (a.fechaCobro || '').localeCompare(b.fechaCobro || '')).map(c => {
+            const vencido = chequeVencido(c, hoyStr)
+            const color = vencido ? '#C5453D' : '#F77716'
+            return (<tr key={c.id} style={{ borderBottom: '1px solid #DFE4EA' }}>
+              <td style={{ padding: '6px 8px', fontWeight: 600 }}>{c.tipo === 'por_pagar' ? 'Por pagar' : 'Por cobrar'}</td>
+              <td style={{ padding: '6px 8px', color: '#9AA3AD' }}>{c.contraparte}{c.banco ? ' · ' + c.banco : ''}</td>
+              <td style={{ padding: '6px 8px', textAlign: 'right' }}>{clp(c.monto)}</td>
+              <td style={{ padding: '6px 8px', color, fontWeight: 700, whiteSpace: 'nowrap' }}>{c.fechaCobro}{vencido ? ' - VENCIDO' : ' - vence pronto'}</td>
+            </tr>);
+          })}
+          </tbody></table>
+        </div>);
+      })()}
       {tab === 'resumen' && <SeccionResumen pp={pp} />}
       {tab === 'porpagar' && <SeccionPorPagar pp={pp} setPp={setPp} />}
       {tab === 'calpagos' && <SeccionCalendarioPagos pp={pp} />}
       {tab === 'cobros' && <SeccionCobros pp={pp} setPp={setPp} />}
+      {tab === 'cheques' && <SeccionCheques pp={pp} setPp={setPp} />}
       {tab === 'flujo' && <SeccionFlujo pp={pp} setPp={setPp} />}
       {tab === 'reportes' && <SeccionReportes pp={pp} />}
     </div>
