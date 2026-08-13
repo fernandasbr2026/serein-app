@@ -280,6 +280,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
       folio: x.numero,
       cliente: x.cliente,
       fechaEmision: x.fecha_emision,
+      otOc: x.ot,
       ventaNeta: parseInt(String(x.neto).replace(/\D/g, ''), 10) || 0,
       iva: ivaFacturaDe(x),
       total: montoFacturaDe(x),
@@ -287,6 +288,9 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
       estado: x.estado,
       abonos: abonoTotalDe(x),
       saldoPendiente: saldoPendienteDe(x).bruto,
+      banco: x.banco,
+      factoringEntidad: x.estado === 'Factoring' ? ((params.factoring || []).find(ff => ff.id === x.factoringId) || {}).nombre : '',
+      factoringPlazo: x.estado === 'Factoring' ? x.dias : null,
     })))
   }
   const totalMonto = mostradas.reduce((a, x) => a + montoFacturaDe(x), 0)

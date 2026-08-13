@@ -276,11 +276,15 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
       folio: r.document_number,
       cliente: r.client_name,
       fechaEmision: r.emission_date,
+      otOc: r.ot_id,
       ventaNeta: sgn(r) * (Number(r.neto) || 0),
       iva: sgn(r) * (Number(r.iva) || 0),
       total: sgn(r) * (Number(r.total) || 0),
       fechaVencimiento: r.vencimiento,
       estado: r.estado_pago,
+      banco: r.banco,
+      factoringEntidad: r.estado_pago === 'Factoring' ? (facs.find(ff => ff.id === r.factoring_id) || {}).nombre : '',
+      factoringPlazo: r.estado_pago === 'Factoring' ? r.dias : null,
     })))
   }
 
