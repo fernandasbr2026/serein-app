@@ -5,9 +5,10 @@ import { EMPRESA } from './CotizacionesModule.jsx'
 // Informe PDF de facturas seleccionadas (Facturas / Libro de Ventas).
 // Recibe una lista ya normalizada: { folio, cliente, fechaEmision,
 // ventaNeta, iva, total, fechaVencimiento, estado, abonos,
-// saldoPendiente }. abonos/saldoPendiente son opcionales — si no vienen
-// (ej. otro llamador que aún no los calcula), se tratan como 0 en vez
-// de romper el informe.
+// saldoPendiente, otOc, banco, factoringEntidad, factoringPlazo }.
+// abonos/saldoPendiente/otOc/banco/factoringEntidad/factoringPlazo son
+// opcionales — si un llamador no los tiene disponibles, se muestran en
+// blanco en vez de romper el informe.
 // ============================================================
 
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
@@ -35,7 +36,7 @@ function diasMoraDe(f) {
 }
 
 function estilosInforme() {
-  return `@page{size:A4;margin:16mm 14mm}:root{color-scheme:light}body{font-family:Inter,Arial,Helvetica,sans-serif;color:${SEREIN.text};background:#fff;font-size:12px;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  return `@page{size:A4 landscape;margin:14mm 12mm}:root{color-scheme:light}body{font-family:Inter,Arial,Helvetica,sans-serif;color:${SEREIN.text};background:#fff;font-size:12px;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .head{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid ${SEREIN.orange};padding-bottom:10px}
 .emp b{color:${SEREIN.ink};font-size:15px}.emp div{color:${SEREIN.textSoft};line-height:1.45;font-size:10.5px}
 .doc{text-align:right}.doc .t{font-size:20px;font-weight:800;color:${SEREIN.orangeDark}}.doc .f{font-size:11.5px;color:${SEREIN.textSoft};margin-top:2px}
@@ -62,18 +63,25 @@ function htmlInforme(items) {
   const filasHtml = filas.map(f => {
     const mora = diasMoraDe(f)
     const [bg, fg] = colorEstado(f.estado)
+    const esFactoring = String(f.estado || '').toLowerCase() === 'factoring'
+    const factoringTxt = esFactoring && f.factoringEntidad
+      ? f.factoringEntidad + (f.factoringPlazo ? ` · ${f.factoringPlazo} días` : '')
+      : (esFactoring ? '-' : '')
     return `<tr>
       <td>${fmtF(f.fechaEmision)}</td>
       <td>${f.folio || ''}</td>
       <td>${f.cliente || ''}</td>
+      <td>${f.otOc || ''}</td>
       <td class="r">${clp(f.ventaNeta)}</td>
       <td class="r">${clp(f.iva)}</td>
       <td class="r">${clp(f.total)}</td>
       <td><span class="pill" style="background:${bg};color:${fg}">${f.estado || '-'}</span></td>
+      <td>${factoringTxt}</td>
       <td>${fmtF(f.fechaVencimiento)}</td>
       <td class="r${mora ? ' mora' : ''}">${mora == null ? '-' : mora}</td>
       <td class="r">${clp(f.abonos)}</td>
       <td class="r">${clp(f.saldoPendiente)}</td>
+      <td>${f.banco || ''}</td>
     </tr>`
   }).join('')
   const logo = (function () { try { return localStorage.getItem('serein_logo') || '' } catch (e) { return '' } })()
@@ -88,10 +96,10 @@ function htmlInforme(items) {
       <div class="doc"><div class="t">Informe de facturas</div><div class="f">${filas.length} documento(s) · Emitido el ${fmtF(new Date().toISOString().slice(0, 10))}</div></div>
     </div>
     <table class="items"><thead><tr>
-      <th>Fecha emisión</th><th>Folio</th><th>Cliente</th><th class="r">Venta neta</th><th class="r">IVA</th><th class="r">Total</th><th>Estado</th><th>Vencimiento</th><th class="r">Días mora</th><th class="r">Abonos</th><th class="r">Saldo pendiente</th>
+      <th>Fecha emisión</th><th>Folio</th><th>Cliente</th><th>OT / OC</th><th class="r">Venta neta</th><th class="r">IVA</th><th class="r">Total</th><th>Estado</th><th>Factoring</th><th>Vencimiento</th><th class="r">Días mora</th><th class="r">Abonos</th><th class="r">Saldo pendiente</th><th>Banco depósito</th>
     </tr></thead>
     <tbody>${filasHtml}</tbody>
-    <tfoot><tr><td colspan="3">Totales</td><td class="r">${clp(tot.neta)}</td><td class="r">${clp(tot.iva)}</td><td class="r">${clp(tot.total)}</td><td></td><td></td><td></td><td class="r">${clp(tot.abonos)}</td><td class="r">${clp(tot.saldoPendiente)}</td></tr></tfoot>
+    <tfoot><tr><td colspan="4">Totales</td><td class="r">${clp(tot.neta)}</td><td class="r">${clp(tot.iva)}</td><td class="r">${clp(tot.total)}</td><td></td><td></td><td></td><td></td><td class="r">${clp(tot.abonos)}</td><td class="r">${clp(tot.saldoPendiente)}</td><td></td></tr></tfoot>
     </table>
     <div class="datos"><b>Datos de transferencia</b><br>
       SERVICIOS REVESTIMIENTOS INDUSTRIALES SpA · RUT 76.860.656-0<br>
