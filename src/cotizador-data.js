@@ -61,6 +61,28 @@ export function diluyenteCapaM2(sede) { const mes = ((+sede.diluyenteLitros || 0
 export function diluyenteM2(sede, nCapas) { return diluyenteCapaM2(sede) * (+nCapas || 0) }
 export function depreciacionesMes(sede) { return (sede.inversiones || []).reduce((s, i) => s + ((+i.valor || 0) / (+i.vidaMeses || 1)), 0) }
 export function fijosM2(sede, totalFijosSede, sueldosProduccion) { const tf = totalFijosSede != null ? +totalFijosSede : (+sede.totalFijosFallback || 0); const prorr = Math.max(0, tf - (+sueldosProduccion || 0)) + depreciacionesMes(sede); return prorr / (+sede.m2TotalesPlantaMes || 1) }
+// Mano de obra + energia + consumibles + EPP de la aplicacion de pintura —
+// espejo de granalladoDirectoMes()/granalladoM2(), que si sumaba estos
+// mismos rubros para el lado de granallado. sueldosPintores llegaba hasta
+// ctx (se resta del pool de fijosM2 para no contarlo dos veces) pero nunca
+// se volvia a sumar en ningun costo por m2 — quedaba perdido. energiaEquipo/
+// consumiblesPint/eppPint son campos que ya existen en Parametros pero
+// tampoco los leia ninguna formula. Se multiplica por nCapas: una pieza de
+// 3 capas paga 3 veces esta mano de obra, una de 1 capa paga 1 vez.
+export function aplicacionPinturaDirectoMes(sede, sueldosPintores) { return (+sueldosPintores || 0) + (+sede.energiaEquipo || 0) + (+sede.consumiblesPint || 0) + (+sede.eppPint || 0) }
+export function aplicacionPinturaM2(sede, sueldosPintores, nCapas) { const dm = aplicacionPinturaDirectoMes(sede, sueldosPintores); const m2 = +sede.m2PintadosEfectivosMes || 1; return (dm / m2) * (+nCapas || 0) }
+// Recargo por material contaminado (aceite/grasa/pintura previa): un
+// retraso fijo por evento (cuadrilla de granallado detenida), no un $/m2
+// parejo — se prorratea sobre los m2 de ESE item, asi una pieza chica
+// contaminada sale proporcionalmente mas cara que una grande. La granalla
+// perdida queda en 0 a proposito: no hay una cifra real registrada todavia
+// en Inventario/Compras para cuanto abrasivo se pierde por evento — se deja
+// en 0 en vez de inventar un numero, hasta tener un dato real que cargar.
+// Horas de turno (9h L-J, 6h viernes) confirmadas en ManoObraModule.jsx.
+export const HORAS_RETRASO_CONTAMINACION = 1.5
+const HORAS_PROMEDIO_DIA = (4 * 9 + 1 * 6) / 5
+export function costoHoraCuadrillaGranallado(sueldosGranallado, diasMes) { const horasMes = (+diasMes || 22) * HORAS_PROMEDIO_DIA; return horasMes > 0 ? (+sueldosGranallado || 0) / horasMes : 0 }
+export function recargoContaminacionM2(sede, sueldosGranallado, m2) { const m = +m2 || 0; if (m <= 0) return 0; const costoHora = costoHoraCuadrillaGranallado(sueldosGranallado, sede.diasMes); return (HORAS_RETRASO_CONTAMINACION * costoHora) / m }
 export function indexProductos(productos) { const m = {}; (productos || []).forEach(p => { m[p.n] = p }); return m }
 // El costo/m2 (y por lo tanto el precio que se cobra al cliente) usa el costo TEORICO
 // de pintura (litros realmente consumidos, mils promedio) — no el costo de compra por
@@ -68,5 +90,5 @@ export function indexProductos(productos) { const m = {}; (productos || []).forE
 // es un costo real de este item; cobrarlo aqui inflaba el precio del cliente sin motivo.
 // pinturaCompraM2 se sigue calculando solo para mostrar la seccion informativa
 // "Compra de pintura (envases completos)" — cuanto hay que comprar realmente esta vez.
-export function desgloseItem(item, ctx) { const cte = ctx.constantes; const idx = ctx.prodPorNombre; const capas = (item.esquema && item.esquema.capas) || []; const nCapas = capas.length; const gran = granalladoM2(ctx.sede, ctx.sueldosGranallado, item.factorGrado, item.factorDif); const dil = diluyenteM2(ctx.sede, nCapas); const pc = pinturaCompraM2(capas, idx, cte, cte.perdidaTipica, item.m2); const pin = pinturaM2(capas, idx, cte, cte.perdidaTipica); const fij = fijosM2(ctx.sede, ctx.totalFijosSede, ctx.sueldosProduccion); const lim = +item.limpiezaSP1 || 0; const costoM2 = gran + lim + dil + pin + fij; return { granallado: gran, limpieza: lim, diluyente: dil, pintura: pin, fijos: fij, costoM2, nCapas, comprasPintura: pc.compras, pinturaCosto: pc.costo } }
+export function desgloseItem(item, ctx) { const cte = ctx.constantes; const idx = ctx.prodPorNombre; const capas = (item.esquema && item.esquema.capas) || []; const nCapas = capas.length; const gran = granalladoM2(ctx.sede, ctx.sueldosGranallado, item.factorGrado, item.factorDif); const dil = diluyenteM2(ctx.sede, nCapas); const pc = pinturaCompraM2(capas, idx, cte, cte.perdidaTipica, item.m2); const pin = pinturaM2(capas, idx, cte, cte.perdidaTipica); const fij = fijosM2(ctx.sede, ctx.totalFijosSede, ctx.sueldosProduccion); const aplic = aplicacionPinturaM2(ctx.sede, ctx.sueldosPintores, nCapas); const contam = item.contaminado ? recargoContaminacionM2(ctx.sede, ctx.sueldosGranallado, item.m2) : 0; const lim = +item.limpiezaSP1 || 0; const costoM2 = gran + lim + dil + pin + fij + aplic + contam; return { granallado: gran, limpieza: lim, diluyente: dil, pintura: pin, fijos: fij, aplicacionPintura: aplic, recargoContaminacion: contam, costoM2, nCapas, comprasPintura: pc.compras, pinturaCosto: pc.costo } }
 export function precioM2(costoM2, pctGanancia) { return costoM2 * (1 + (+pctGanancia || 0) / 100) }
