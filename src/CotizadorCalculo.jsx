@@ -14,7 +14,7 @@ const clp = n => '$' + Math.round(+n || 0).toLocaleString('es-CL')
 const precioMargen = (costoM2, pctMargen) => { const m = Math.min(Math.max(+pctMargen || 0, 0), 95) / 100; return (1 - m) > 0 ? (+costoM2 || 0) / (1 - m) : (+costoM2 || 0) }
 const milsProm = c => { const a = +c.mMin || 0; const b = (c.mMax === '' || c.mMax == null) ? a : (+c.mMax || 0); return b > 0 ? (a + b) / 2 : a }
 function nuevaCapa() { return { p: '', mMin: 2, mMax: 4, perdida: 2 } }
-function nuevoItem() { return { desc: '', ral: '', m2: 0, grado: 'SP-10 (near-white)', dif: 'A - Estandar', limpieza: 0, capas: [nuevaCapa()], sinGranallado: false } }
+function nuevoItem() { return { desc: '', ral: '', m2: 0, grado: 'SP-10 (near-white)', dif: 'A - Estandar', limpieza: 0, capas: [nuevaCapa()], sinGranallado: false, contaminado: false } }
 // Folio numérico plano, en la misma secuencia que usa CotizacionesModule (nuevaCot/maxFolio) — sin prefijo,
 // para que al aprobar una cotización 'OT-' + folio no quede 'OT-Cot-793'.
 // Piso en 825 (no 792): el folio 825 falló al guardarse muchas veces
@@ -56,7 +56,7 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
   const [cliQuery, setCliQuery] = useState((inicial && inicial.cliente) || '')
   const [cliSel, setCliSel] = useState(inicial && inicial.cliente ? { nombre: inicial.cliente, rut: inicial.rut || '', giro: inicial.giro || '', direccion: inicial.direccion || '', comuna: inicial.comuna || '' } : null)
   const [cliOpen, setCliOpen] = useState(false)
-  const [items, setItems] = useState(() => (inicial && inicial.items && inicial.items.length) ? inicial.items.map(it => ({ desc: it.descripcion || '', ral: it.ral || '', m2: it.m2 || 0, grado: it.gradoSSPC || 'SP-10 (near-white)', dif: it.factorDificultad || 'A - Estandar', limpieza: it.limpiezaSP1 || 0, capas: (it.capas || []).map(c => ({ p: c.p || '', mMin: (c.mMin != null ? c.mMin : (c.m != null ? c.m : 2)), mMax: (c.mMax != null ? c.mMax : (c.m != null ? c.m : 4)), perdida: (c.perdida != null ? c.perdida : 2) })), sinGranallado: it.sinGranallado || false })) : [nuevoItem()])
+  const [items, setItems] = useState(() => (inicial && inicial.items && inicial.items.length) ? inicial.items.map(it => ({ desc: it.descripcion || '', ral: it.ral || '', m2: it.m2 || 0, grado: it.gradoSSPC || 'SP-10 (near-white)', dif: it.factorDificultad || 'A - Estandar', limpieza: it.limpiezaSP1 || 0, capas: (it.capas || []).map(c => ({ p: c.p || '', mMin: (c.mMin != null ? c.mMin : (c.m != null ? c.m : 2)), mMax: (c.mMax != null ? c.mMax : (c.m != null ? c.m : 4)), perdida: (c.perdida != null ? c.perdida : 2) })), sinGranallado: it.sinGranallado || false, contaminado: it.contaminado || false })) : [nuevoItem()])
   const [pct, setPct] = useState((inicial && (inicial.margenVenta != null ? inicial.margenVenta : inicial.porcentajeGanancia)) || 35)
   const [provPintura, setProvPintura] = useState((inicial && inicial.proveedorPintura) || '')
   const [sg, setSg] = useState(3380000)
@@ -80,7 +80,7 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
   function dg(it) {
     const g = P.grados.find(x => x.grado === it.grado)
     const f = P.factores.find(x => x.nivel === it.dif)
-    const d = desgloseItem({ esquema: { capas: capasEng(it) }, factorGrado: g ? g.factor : 1, factorDif: f ? f.factor : 1, limpiezaSP1: +it.limpieza || 0, m2: +it.m2 || 0 }, ctx)
+    const d = desgloseItem({ esquema: { capas: capasEng(it) }, factorGrado: g ? g.factor : 1, factorDif: f ? f.factor : 1, limpiezaSP1: +it.limpieza || 0, m2: +it.m2 || 0, contaminado: !!it.contaminado }, ctx)
     if (it.sinGranallado) { d.costoM2 -= d.granallado; d.granallado = 0 }
     return d
   }
@@ -111,7 +111,7 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
       }
       const cli = cliSel || { nombre: cliQuery }
       const cot = { id: (inicial && inicial.id) || ('cot' + Date.now()), numero, folio: numero, area: sede, vencimiento: new Date().toISOString().slice(0, 10), tipo: 'calculo', origen: 'cotizador', estado: (inicial && inicial.estado) || 'Alta probabilidad de cierre', cliente: cli.nombre || '', rut: cli.rut || '', giro: cli.giro || '', direccion: cli.direccion || '', comuna: cli.comuna || '', ciudad: cli.ciudad || cli.comuna || '', condicionPago: 'CONTADO', vendedor: cli.vendedor || 'Venta general', sede, fecha: new Date().toISOString().slice(0, 10), margenVenta: +pct, porcentajeGanancia: +pct, proveedorPintura: provPintura,
-        items: items.map((it, i) => { const d = dg(it); const pm = precioMargen(d.costoM2, pct); const etiquetaGrado = it.sinGranallado ? 'sin granallado' : it.grado; return { codigo: it.sinGranallado ? '' : it.grado, detalle: (it.desc || 'Item ' + (i + 1)) + (it.ral ? ' - ' + it.ral : '') + ' - ' + (it.capas.filter(c => c.p).map(c => c.p).join(' + ') || (it.sinGranallado ? 'sin items' : 'solo granallado ' + it.grado)), cant: +it.m2 || 0, unidad: 'm2', pUnitario: Math.round(pm), descuento: 0, comentario: (it.capas.filter(c => c.p).map(c => c.p + ' ' + milsProm(c) + ' mils').join(' + ') || (it.sinGranallado ? 'Sin items' : 'Solo granallado')) + ' - ' + etiquetaGrado, descripcion: it.desc, ral: it.ral, m2: +it.m2 || 0, gradoSSPC: it.grado, sinGranallado: !!it.sinGranallado, factorDificultad: it.dif, limpiezaSP1: +it.limpieza || 0, capas: it.capas.filter(c => c.p), costoM2: Math.round(d.costoM2), precioM2: Math.round(pm), comprasPintura: d.comprasPintura || [], pinturaCompraTotal: (d.comprasPintura || []).reduce((a, cp) => a + (cp.costo || 0), 0), total: Math.round(pm * (+it.m2 || 0)), desglose: { granallado: Math.round(d.granallado), limpieza: Math.round(d.limpieza), diluyente: Math.round(d.diluyente), pintura: Math.round(d.pintura), fijos: Math.round(d.fijos) } } }),
+        items: items.map((it, i) => { const d = dg(it); const pm = precioMargen(d.costoM2, pct); const etiquetaGrado = it.sinGranallado ? 'sin granallado' : it.grado; return { codigo: it.sinGranallado ? '' : it.grado, detalle: (it.desc || 'Item ' + (i + 1)) + (it.ral ? ' - ' + it.ral : '') + ' - ' + (it.capas.filter(c => c.p).map(c => c.p).join(' + ') || (it.sinGranallado ? 'sin items' : 'solo granallado ' + it.grado)), cant: +it.m2 || 0, unidad: 'm2', pUnitario: Math.round(pm), descuento: 0, comentario: (it.capas.filter(c => c.p).map(c => c.p + ' ' + milsProm(c) + ' mils').join(' + ') || (it.sinGranallado ? 'Sin items' : 'Solo granallado')) + ' - ' + etiquetaGrado, descripcion: it.desc, ral: it.ral, m2: +it.m2 || 0, gradoSSPC: it.grado, sinGranallado: !!it.sinGranallado, contaminado: !!it.contaminado, factorDificultad: it.dif, limpiezaSP1: +it.limpieza || 0, capas: it.capas.filter(c => c.p), costoM2: Math.round(d.costoM2), precioM2: Math.round(pm), comprasPintura: d.comprasPintura || [], pinturaCompraTotal: (d.comprasPintura || []).reduce((a, cp) => a + (cp.costo || 0), 0), total: Math.round(pm * (+it.m2 || 0)), desglose: { granallado: Math.round(d.granallado), limpieza: Math.round(d.limpieza), diluyente: Math.round(d.diluyente), pintura: Math.round(d.pintura), fijos: Math.round(d.fijos), aplicacionPintura: Math.round(d.aplicacionPintura), recargoContaminacion: Math.round(d.recargoContaminacion) } } }),
         total: Math.round(totalCot), montoCotizado: Math.round(totalCot), supuestos: { sueldosGranallado: +sg, sueldosPintores: +sp, totalFijos } }
       const nuevo = inicial ? base.map(x => x.id === cot.id ? cot : x) : [...base, cot]
       try { localStorage.setItem('serein_cotizaciones', JSON.stringify(nuevo)) } catch (e) {}
@@ -201,8 +201,13 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
             <input type="checkbox" checked={!it.sinGranallado} onChange={e => updItem(i, x => x.sinGranallado = !e.target.checked)} style={{ width: 'auto' }} />
             Incluir granallado
           </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: T.textSoft, cursor: 'pointer' }}>
+            <input type="checkbox" checked={!!it.contaminado} onChange={e => updItem(i, x => x.contaminado = e.target.checked)} style={{ width: 'auto' }} />
+            Material contaminado (aceite/grasa/pintura)
+          </label>
           {(+it.limpieza || 0) > 0 && <div><div style={{ fontSize: 10.5, color: T.textMute, textTransform: 'uppercase', fontWeight: 700 }}>Limpieza SP-1</div><div style={{ fontSize: 15, fontWeight: 600, color: T.textSoft }}>{clp(+it.limpieza || 0)} /m2</div></div>}
           {it.sinGranallado && <div style={{ fontSize: 11.5, color: T.warn, fontWeight: 600 }}>Sin granallado — solo se cotiza la pintura sobre superficie ya preparada.</div>}
+          {it.contaminado && <div style={{ fontSize: 11.5, color: T.warn, fontWeight: 600 }}>Material contaminado — se suma un recargo por el retraso de la cuadrilla de granallado, prorrateado en los m² de este item.</div>}
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
@@ -240,7 +245,9 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: T.textSoft, padding: '1px 0' }}><span>Limpieza SP-1 /m2</span><span>{clp(d.limpieza)}</span></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: T.textSoft, padding: '1px 0' }}><span>Diluyente /m2</span><span>{clp(d.diluyente)}</span></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: T.textSoft, padding: '1px 0' }}><span>Pintura /m2</span><span>{clp(d.pintura)}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: T.textSoft, padding: '1px 0' }}><span>Aplicacion pintura /m2</span><span>{clp(d.aplicacionPintura)}</span></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: T.textSoft, padding: '1px 0' }}><span>Gastos fijos /m2</span><span>{clp(d.fijos)}</span></div>
+            {it.contaminado && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: T.warn, fontWeight: 600, padding: '1px 0' }}><span>Recargo contaminacion /m2</span><span>{clp(d.recargoContaminacion)}</span></div>}
             {(d.comprasPintura || []).length > 0 && (+it.m2 || 0) > 0 && (
               <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px dashed ' + T.border }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: T.navy, textTransform: 'uppercase', marginBottom: 3 }}>Compra de pintura (envases completos)</div>
