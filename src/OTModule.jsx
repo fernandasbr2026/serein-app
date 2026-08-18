@@ -1037,7 +1037,10 @@ const PROT_BASE = 144
 const nextCorrelativoProt = otsAll => { let mx = PROT_BASE; (otsAll || []).forEach(o => (o.protocolos || []).forEach(p => { if (p.correlativo > mx) mx = p.correlativo })); return mx + 1 }
 const parseRango = s => { const m = (String(s || '').replace(',', '.').match(/\d+(\.\d+)?/g) || []).map(Number); if (m.length >= 2) return [Math.min(m[0], m[1]), Math.max(m[0], m[1])]; if (m.length === 1) return [m[0], m[0]]; return [2, 2.5] }
 const promArr = arr => { const v = (arr || []).map(x => parseFloat(String(x).replace(',', '.'))).filter(x => !isNaN(x)); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0 }
-const acumRango = (capas, idx) => { var accMin = 0, accMax = 0; for (var i = 0; i <= idx; i++) { var r = parseRango(capas[i].solicitado); if (i === 0) { accMin = r[0]; accMax = r[1] } else { var pm = accMax; accMin = pm + r[0]; accMax = pm + r[1] } } return [accMin, accMax] }
+// Acumulado real = suma de los minimos de cada capa por un lado y suma de
+// los maximos por el otro (no la suma del maximo previo con el minimo
+// actual, que angostaba el rango a medida que se agregaban capas).
+const acumRango = (capas, idx) => { var accMin = 0, accMax = 0; for (var i = 0; i <= idx; i++) { var r = parseRango(capas[i].solicitado); accMin += r[0]; accMax += r[1] } return [accMin, accMax] }
 const autoFila = (vals, lo, hi) => { const n = vals.length; const idxE = []; const entered = []; vals.forEach((v, i) => { if (v === '' || v == null) idxE.push(i); else { const nn = parseFloat(String(v).replace(',', '.')); if (!isNaN(nn)) entered.push(nn) } }); if (idxE.length === 0) return vals.slice(); const desired = lo + Math.random() * ((hi - lo) + 0.6); const sumE = entered.reduce((a, b) => a + b, 0); const meanEmpty = (desired * n - sumE) / idxE.length; const res = vals.slice(); idxE.forEach(i => { let val = meanEmpty + (Math.random() * 1.6 - 0.7); val = Math.max(lo - 1, Math.min(hi + 1.8, val)); res[i] = (Math.round(val * 100) / 100).toFixed(2) }); return res }
 const FOTO_W = 800, FOTO_H = 600
 // Antes esta función solo comprimía la foto y devolvía un data-URL base64
