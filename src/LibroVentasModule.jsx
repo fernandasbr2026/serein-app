@@ -155,7 +155,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
   // Notas de credito (tipo 61): restan de la venta
   const esNC = r => String(r.document_type || '').trim() === '61'
   const sgn = r => esNC(r) ? -1 : 1
-  const fichaDe = r => ({ id: 'lv' + r.id, libroId: 'LV' + r.id, origen: 'libroVentas', numero: String(r.document_number || ''), cliente: r.client_name || '', ot: String(r.ot_id || ''), oc: r.oc || '', nv: r.nv || '', cc: r.cc_ot || '', fecha_emision: r.emission_date || '', vencimiento: r.vencimiento || '', neto: sgn(r) * Math.round(Number(r.neto) || 0), monto: sgn(r) * Math.round(Number(r.total) || 0), estado: r.estado_pago || 'Pendiente', fecha_pago: r.fecha_pago || '', banco: r.banco || '', medioPago: r.medio_pago || '', factoringId: r.factoring_id || '', dias: r.dias || 30, diasMora: r.dias_mora || 0, comentarios: 'Importada del Libro de Ventas', vendedor: 'General' })
+  const fichaDe = r => ({ id: 'lv' + r.id, libroId: 'LV' + r.id, origen: 'libroVentas', numero: String(r.document_number || ''), cliente: r.client_name || '', ot: String(r.ot_id || ''), oc: r.oc || '', nv: r.nv || '', cc: r.cc_ot || '', fecha_emision: r.emission_date || '', vencimiento: r.vencimiento || '', neto: sgn(r) * Math.round(Number(r.neto) || 0), monto: sgn(r) * Math.round(Number(r.total) || 0), estado: r.estado_pago || 'Pendiente', fecha_pago: r.fecha_pago || '', banco: r.banco || '', medioPago: r.medio_pago || '', numeroCheque: r.numero_cheque || '', factoringId: r.factoring_id || '', dias: r.dias || 30, diasMora: r.dias_mora || 0, comentarios: 'Importada del Libro de Ventas', vendedor: 'General' })
   const vaAFacturas = r => !!r.area && !r.oculto && r.estado_pago !== 'Anulada'
 
   const sincronizarFicha = r => {
@@ -290,7 +290,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
     })))
   }
 
-  const facturaVacia = { emission_date: new Date().toISOString().slice(0, 10), document_number: '', client_name: '', client_rut: '', document_type: 'Factura', neto: '', iva: '', area: '', oc: '', nv: '', medio_pago: '' }
+  const facturaVacia = { emission_date: new Date().toISOString().slice(0, 10), document_number: '', client_name: '', client_rut: '', document_type: 'Factura', neto: '', iva: '', area: '', oc: '', nv: '', medio_pago: '', numero_cheque: '' }
   const [mostrarAgregar, setMostrarAgregar] = useState(false)
   const [nuevaFC, setNuevaFC] = useState(facturaVacia)
   const setNuevaFCCampo = (campo, valor) => setNuevaFC(f => {
@@ -310,6 +310,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
       document_type: nuevaFC.document_type || 'Factura',
       neto, iva, total: neto + iva, area: nuevaFC.area || null, estado_pago: 'Pendiente', oculto: false,
       oc: nuevaFC.oc.trim(), nv: nuevaFC.nv.trim(), medio_pago: nuevaFC.medio_pago || null,
+      numero_cheque: nuevaFC.medio_pago === 'Cheque' ? nuevaFC.numero_cheque.trim() : null,
     }
     try {
       const { data, error } = await supabase.from('libro_ventas').insert(reg).select().single()
@@ -355,6 +356,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
           <label style={{ fontSize: 11, color: C.mut }}>Orden de compra<input value={nuevaFC.oc} onChange={e => setNuevaFCCampo('oc', e.target.value)} style={ip} /></label>
           <label style={{ fontSize: 11, color: C.mut }}>NV<input value={nuevaFC.nv} onChange={e => setNuevaFCCampo('nv', e.target.value)} style={ip} /></label>
           <label style={{ fontSize: 11, color: C.mut }}>Medio de pago<select value={nuevaFC.medio_pago} onChange={e => setNuevaFCCampo('medio_pago', e.target.value)} style={ip}>{MEDIOS_PAGO.map(m => <option key={m} value={m}>{m || '- medio de pago -'}</option>)}</select></label>
+          {nuevaFC.medio_pago === 'Cheque' && <label style={{ fontSize: 11, color: C.mut }}>N° cheque<input value={nuevaFC.numero_cheque} onChange={e => setNuevaFCCampo('numero_cheque', e.target.value)} style={ip} /></label>}
           <label style={{ fontSize: 11, color: C.mut }}>Neto<input type="number" value={nuevaFC.neto} onChange={e => setNuevaFCCampo('neto', e.target.value)} placeholder="0" style={ip} /></label>
           <label style={{ fontSize: 11, color: C.mut }}>IVA (19%)<input value={clp(nuevaFC.iva)} disabled style={{ ...ip, background: '#eee' }} /></label>
           <label style={{ fontSize: 11, color: C.mut }}>Total<input value={clp((Number(nuevaFC.neto) || 0) + (Number(nuevaFC.iva) || 0))} disabled style={{ ...ip, background: '#eee', fontWeight: 700 }} /></label>
@@ -441,9 +443,12 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
                     </select>
                   </td>
                   <td style={{ padding: '7px 10px' }}>
-                    <select style={{ ...sel, minWidth: 110 }} value={r.medio_pago || ''} onChange={e => setCampo(r, 'medio_pago', e.target.value)}>
-                      {MEDIOS_PAGO.map(m => <option key={m} value={m}>{m || '- medio de pago -'}</option>)}
-                    </select>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <select style={{ ...sel, minWidth: 110 }} value={r.medio_pago || ''} onChange={e => setCampo(r, 'medio_pago', e.target.value)}>
+                        {MEDIOS_PAGO.map(m => <option key={m} value={m}>{m || '- medio de pago -'}</option>)}
+                      </select>
+                      {r.medio_pago === 'Cheque' && <input style={{ ...sel, minWidth: 100 }} placeholder="N° cheque" value={r.numero_cheque || ''} onChange={e => setCampo(r, 'numero_cheque', e.target.value)} />}
+                    </div>
                   </td>
                   <td style={{ padding: '7px 10px' }}><input type="date" style={{ ...sel }} value={r.fecha_pago || ''} onChange={e => setCampo(r, 'fecha_pago', e.target.value)} /></td>
                 </tr>
