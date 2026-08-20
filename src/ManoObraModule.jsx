@@ -88,30 +88,36 @@ const valorHexDe = t => calc(t).horaExtra
 const cargoDe = t => t.cargo || ''
 const vacacionesDe = t => t.vacacionesDisponibles ?? 15
 
-// ----- Atraso -----
+// ----- Atraso / salida anticipada -----
 const minutosDesde = hhmm => { const p = String(hhmm || '').split(':'); const h = parseInt(p[0], 10), m = parseInt(p[1], 10); return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m) }
 export const calcAtrasoMin = horaLlegada => horaLlegada ? Math.max(0, minutosDesde(horaLlegada) - minutosDesde(HORA_ENTRADA_ESTANDAR)) : 0
 const esViernes = fecha => { try { return new Date(fecha + 'T12:00:00').getDay() === 5 } catch (e) { return false } }
+// Hora de salida esperada según el horario real (L-J 17:30, Viernes 14:00).
+export const horaSalidaEstandar = fecha => esViernes(fecha) ? '14:00' : '17:30'
+export const calcSalidaAnticipadaMin = (horaSalida, fecha) => horaSalida ? Math.max(0, minutosDesde(horaSalidaEstandar(fecha)) - minutosDesde(horaSalida)) : 0
 
 // Calcula el costo de UN día para UN trabajador, según el tipo elegido.
 // No se guarda nada acá — es pura función, se usa tanto al guardar como
 // para mostrar la vista previa del descuento antes de guardar.
-export function costoDia(t, tipo, horaLlegada, factorJornada) {
+export function costoDia(t, tipo, horaLlegada, factorJornada, horaSalida, fecha) {
   const c = calc(t)
   const valorDia = Math.round(c.diaBruto * (factorJornada || 1))
   if (tipo === 'Trabajó') {
     const atrasoMin = calcAtrasoMin(horaLlegada)
     const descuentoAtraso = Math.round((atrasoMin / 60) * c.hora)
-    return { valorDia, atrasoMin, descuentoAtraso, descuentoDia: 0, pago: Math.max(0, valorDia - descuentoAtraso), usaVacacion: false }
+    const salidaAnticipadaMin = calcSalidaAnticipadaMin(horaSalida, fecha)
+    const descuentoSalida = Math.round((salidaAnticipadaMin / 60) * c.hora)
+    const descuentoTotal = descuentoAtraso + descuentoSalida
+    return { valorDia, atrasoMin, descuentoAtraso, salidaAnticipadaMin, descuentoSalida, descuentoDia: 0, pago: Math.max(0, valorDia - descuentoTotal), usaVacacion: false }
   }
   if (tipo === 'Falta' || tipo === 'Permiso') {
-    return { valorDia, atrasoMin: 0, descuentoAtraso: 0, descuentoDia: valorDia, pago: 0, usaVacacion: false }
+    return { valorDia, atrasoMin: 0, descuentoAtraso: 0, salidaAnticipadaMin: 0, descuentoSalida: 0, descuentoDia: valorDia, pago: 0, usaVacacion: false }
   }
   if (tipo === 'Vacaciones') {
-    return { valorDia, atrasoMin: 0, descuentoAtraso: 0, descuentoDia: 0, pago: valorDia, usaVacacion: true }
+    return { valorDia, atrasoMin: 0, descuentoAtraso: 0, salidaAnticipadaMin: 0, descuentoSalida: 0, descuentoDia: 0, pago: valorDia, usaVacacion: true }
   }
   // Licencia/Accidente
-  return { valorDia, atrasoMin: 0, descuentoAtraso: 0, descuentoDia: 0, pago: 0, usaVacacion: false }
+  return { valorDia, atrasoMin: 0, descuentoAtraso: 0, salidaAnticipadaMin: 0, descuentoSalida: 0, descuentoDia: 0, pago: 0, usaVacacion: false }
 }
 
 // Normaliza un registro de asistencia — formato nuevo (un registro = un
@@ -125,7 +131,9 @@ export function filasDeAsistencia(a) {
     return [{
       regId: a.id, fecha: a.fecha, trabajadorId: a.trabajadorId, tipo: a.tipo || 'Trabajó',
       horaLlegada: a.horaLlegada || '', atrasoMin: (a.costo && a.costo.atrasoMin) || 0,
-      descuento: (a.costo && (a.costo.descuentoAtraso || a.costo.descuentoDia)) || 0,
+      horaSalida: a.horaSalida || '', salidaAnticipadaMin: (a.costo && a.costo.salidaAnticipadaMin) || 0,
+      descuentoAtraso: (a.costo && a.costo.descuentoAtraso) || 0, descuentoSalida: (a.costo && a.costo.descuentoSalida) || 0,
+      descuento: (a.costo && ((a.costo.descuentoAtraso || 0) + (a.costo.descuentoSalida || 0) || a.costo.descuentoDia)) || 0,
       pago: (a.costo && a.costo.total) || 0, ots: a.ots || [], area: a.area, supervisor: a.supervisor, obs: a.obs || '',
     }]
   }
@@ -207,15 +215,16 @@ function RegistroDiario({ mo, setMo, otsDisponibles, esGerencia, usuario, areas 
     entradas.forEach(([tid, e]) => {
       const t = trabajadoresActualizados.find(x => x.id === tid)
       if (!t) return
-      const d = costoDia(t, e.tipo, e.horaLlegada, factor)
+      const d = costoDia(t, e.tipo, e.horaLlegada, factor, e.horaSalida, f.fecha)
       const esTrabajo = e.tipo === 'Trabajó'
       const reg = {
         id: 'a' + Date.now() + Math.random().toString(36).slice(2, 7),
         fecha: f.fecha, trabajadorId: tid, area: f.area, tipo: e.tipo,
         horaLlegada: esTrabajo ? (e.horaLlegada || '') : '',
+        horaSalida: esTrabajo ? (e.horaSalida || '') : '',
         jornada: f.jornada, ots: esTrabajo ? ots : [], obs: f.obs, supervisor: usuario,
         costo: esTrabajo
-          ? { valorDia: d.valorDia, atrasoMin: d.atrasoMin, descuentoAtraso: d.descuentoAtraso, total: d.pago, porOT: Object.fromEntries(ots.map(o => [o, ots.length ? Math.round(d.pago / ots.length) : 0])) }
+          ? { valorDia: d.valorDia, atrasoMin: d.atrasoMin, descuentoAtraso: d.descuentoAtraso, salidaAnticipadaMin: d.salidaAnticipadaMin, descuentoSalida: d.descuentoSalida, total: d.pago, porOT: Object.fromEntries(ots.map(o => [o, ots.length ? Math.round(d.pago / ots.length) : 0])) }
           : { valorDia: d.valorDia, descuentoDia: d.descuentoDia, total: d.pago },
       }
       nuevosRegistros.push(reg)
@@ -282,7 +291,7 @@ function RegistroDiario({ mo, setMo, otsDisponibles, esGerencia, usuario, areas 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {trabajadores.map(t => {
             const e = f.estados[t.id] || {}
-            const d = e.tipo ? costoDia(t, e.tipo, e.horaLlegada, factor) : null
+            const d = e.tipo ? costoDia(t, e.tipo, e.horaLlegada, factor, e.horaSalida, f.fecha) : null
             return (
               <div key={t.id} style={{ border: '1px solid #EEE9DF', borderRadius: 8, padding: 12, background: e.tipo ? '#FAF9F6' : '#fff' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
@@ -301,9 +310,17 @@ function RegistroDiario({ mo, setMo, otsDisponibles, esGerencia, usuario, areas 
                     <label style={{ fontSize: 11.5, color: C.gris }}>Hora de llegada
                       <input type="time" value={e.horaLlegada || ''} onChange={ev => setEstado(t.id, { horaLlegada: ev.target.value })} style={{ ...inp, marginLeft: 6, padding: '5px 8px' }} />
                     </label>
+                    <label style={{ fontSize: 11.5, color: C.gris }}>Hora de salida
+                      <input type="time" value={e.horaSalida || ''} onChange={ev => setEstado(t.id, { horaSalida: ev.target.value })} style={{ ...inp, marginLeft: 6, padding: '5px 8px' }} />
+                    </label>
                     {d && d.atrasoMin > 0 && (
                       <span style={{ fontSize: 11.5, color: C.rojo, fontWeight: 600 }}>
                         ⚠ {d.atrasoMin} min de atraso{esGerencia ? ` — descuento ${clp(d.descuentoAtraso)}` : ''}
+                      </span>
+                    )}
+                    {d && d.salidaAnticipadaMin > 0 && (
+                      <span style={{ fontSize: 11.5, color: C.rojo, fontWeight: 600 }}>
+                        ⚠ Salió {d.salidaAnticipadaMin} min antes{esGerencia ? ` — descuento ${clp(d.descuentoSalida)}` : ''}
                       </span>
                     )}
                   </div>
@@ -550,7 +567,7 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
                     <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>{a.fecha}</td>
                     <td style={{ padding: '8px' }}>{nombreDe(a.trabajadorId)}</td>
                     <td style={{ padding: '8px' }}><span style={{ color: TIPO_COLOR[a.tipo] || C.carbon, fontWeight: 600, fontSize: 12 }}>{a.tipo}</span></td>
-                    <td style={{ padding: '8px', fontSize: 12 }}>{a.tipo === 'Trabajó' ? (a.horaLlegada || '—') : '—'}{a.atrasoMin > 0 && <span style={{ color: C.rojo }}> · {a.atrasoMin} min atraso</span>}</td>
+                    <td style={{ padding: '8px', fontSize: 12 }}>{a.tipo === 'Trabajó' ? (a.horaLlegada || '—') : '—'}{a.tipo === 'Trabajó' && a.horaSalida ? ` – ${a.horaSalida}` : ''}{a.atrasoMin > 0 && <span style={{ color: C.rojo }}> · {a.atrasoMin} min atraso</span>}{a.salidaAnticipadaMin > 0 && <span style={{ color: C.rojo }}> · salió {a.salidaAnticipadaMin} min antes</span>}</td>
                     <td style={{ padding: '8px', fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{a.ots.join(', ')}</td>
                     {esGerencia && <td style={{ padding: '8px', fontWeight: 600 }}>{clp(a.pago)}{a.descuento > 0 && <div style={{ fontSize: 11, color: C.rojo, fontWeight: 400 }}>−{clp(a.descuento)}</div>}</td>}
                     <td style={{ padding: '8px', textAlign: 'right' }}>
@@ -815,10 +832,12 @@ function ResumenMensual({ mo }) {
       const vacaciones = filasMes.filter(f => f.tipo === 'Vacaciones')
       const licencias = filasMes.filter(f => f.tipo === 'Licencia/Accidente')
       const minutosAtraso = trabajados.reduce((s, f) => s + (f.atrasoMin || 0), 0)
-      const descuentoAtraso = trabajados.reduce((s, f) => s + (f.descuento || 0), 0)
+      const descuentoAtraso = trabajados.reduce((s, f) => s + (f.descuentoAtraso || 0), 0)
+      const minutosSalidaAnticipada = trabajados.reduce((s, f) => s + (f.salidaAnticipadaMin || 0), 0)
+      const descuentoSalidaAnticipada = trabajados.reduce((s, f) => s + (f.descuentoSalida || 0), 0)
       const descuentoFaltas = faltas.reduce((s, f) => s + (f.descuento || 0), 0)
       const descuentoPermisos = permisos.reduce((s, f) => s + (f.descuento || 0), 0)
-      const totalDescuentos = descuentoAtraso + descuentoFaltas + descuentoPermisos
+      const totalDescuentos = descuentoAtraso + descuentoSalidaAnticipada + descuentoFaltas + descuentoPermisos
 
       const extrasMes = (mo.horasExtras || []).filter(h => h.trabajadorId === t.id && h.fecha.startsWith(mes))
       const hexSemana = extrasMes.filter(h => (h.tipo || 'Semana') === 'Semana')
@@ -835,7 +854,7 @@ function ResumenMensual({ mo }) {
 
       return {
         t, diasTrabajados: trabajados.length, faltas: faltas.length, permisos: permisos.length, vacacionesTomadas: vacaciones.length, licencias: licencias.length,
-        minutosAtraso, descuentoAtraso, descuentoFaltas, descuentoPermisos, totalDescuentos,
+        minutosAtraso, descuentoAtraso, minutosSalidaAnticipada, descuentoSalidaAnticipada, descuentoFaltas, descuentoPermisos, totalDescuentos,
         horasExtraSemana: hexSemana.reduce((s, h) => s + (h.horas || 0), 0), pagoHex, feriadosTrabajados: feriados.length, pagoFeriados, turnosNoche: turnoNoche.length, pagoTurnoNoche, totalAdicionales,
         colacionMes, pagoDiasTrabajados, totalNeto, saldoVacaciones: vacacionesDe(t),
       }
@@ -849,8 +868,8 @@ function ResumenMensual({ mo }) {
   function exportarExcel() {
     const filas = resumen.map(r => ({
       Trabajador: r.t.nombre, Cargo: cargoDe(r.t), 'Días trabajados': r.diasTrabajados,
-      Faltas: r.faltas, Permisos: r.permisos, 'Minutos de atraso': r.minutosAtraso,
-      'Descuento atraso': r.descuentoAtraso, 'Descuento faltas': r.descuentoFaltas, 'Descuento permisos': r.descuentoPermisos, 'Total descuentos': r.totalDescuentos,
+      Faltas: r.faltas, Permisos: r.permisos, 'Minutos de atraso': r.minutosAtraso, 'Minutos salida anticipada': r.minutosSalidaAnticipada,
+      'Descuento atraso': r.descuentoAtraso, 'Descuento salida anticipada': r.descuentoSalidaAnticipada, 'Descuento faltas': r.descuentoFaltas, 'Descuento permisos': r.descuentoPermisos, 'Total descuentos': r.totalDescuentos,
       'Días de vacaciones tomados': r.vacacionesTomadas, 'Saldo vacaciones': r.saldoVacaciones, 'Días de licencia': r.licencias,
       'Horas extra semana': r.horasExtraSemana, 'Pago horas extra': r.pagoHex, 'Feriados trabajados': r.feriadosTrabajados, 'Pago feriados': r.pagoFeriados, 'Turnos de noche': r.turnosNoche, 'Pago turno noche': r.pagoTurnoNoche,
       'Colación (informativo, no descuenta)': r.colacionMes, 'Total a pagar (estimado)': r.totalNeto,
@@ -880,7 +899,7 @@ function ResumenMensual({ mo }) {
             <div onClick={() => setAbierto(abierto === r.t.id ? null : r.t.id)} style={{ padding: '14px 16px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
               <div>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>{r.t.nombre}</div>
-                <div style={{ fontSize: 11.5, color: C.gris }}>{cargoDe(r.t)} · {r.diasTrabajados} días trabajados{r.faltas + r.permisos > 0 ? ` · ${r.faltas + r.permisos} inasistencia(s)` : ''}{r.minutosAtraso > 0 ? ` · ${r.minutosAtraso} min de atraso` : ''}</div>
+                <div style={{ fontSize: 11.5, color: C.gris }}>{cargoDe(r.t)} · {r.diasTrabajados} días trabajados{r.faltas + r.permisos > 0 ? ` · ${r.faltas + r.permisos} inasistencia(s)` : ''}{r.minutosAtraso > 0 ? ` · ${r.minutosAtraso} min de atraso` : ''}{r.minutosSalidaAnticipada > 0 ? ` · ${r.minutosSalidaAnticipada} min de salida anticipada` : ''}</div>
               </div>
               <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
                 {r.totalDescuentos > 0 && <span style={{ fontSize: 12.5, color: C.rojo, fontWeight: 600 }}>−{clp(r.totalDescuentos)}</span>}
@@ -894,6 +913,7 @@ function ResumenMensual({ mo }) {
                   <div>Faltas: {r.faltas} día(s) — {clp(r.descuentoFaltas)}</div>
                   <div>Permisos: {r.permisos} día(s) — {clp(r.descuentoPermisos)}</div>
                   <div>Atraso: {r.minutosAtraso} min — {clp(r.descuentoAtraso)}</div>
+                  <div>Salida anticipada: {r.minutosSalidaAnticipada} min — {clp(r.descuentoSalidaAnticipada)}</div>
                   <div style={{ fontWeight: 700, marginTop: 4 }}>Total descuentos: {clp(r.totalDescuentos)}</div>
                 </div>
                 <div style={{ paddingTop: 12 }}>
@@ -971,6 +991,7 @@ function Informes({ mo }) {
     const filasPeriodo = (mo.asistencias || []).flatMap(filasDeAsistencia).filter(f => f.fecha >= desde && f.fecha <= hasta && idSet.has(f.trabajadorId))
     const detalle = filasPeriodo.map(f => ({
       Fecha: f.fecha, Trabajador: nombreDe(f.trabajadorId), Estado: f.tipo, 'Hora llegada': f.horaLlegada || '', 'Minutos atraso': f.atrasoMin,
+      'Hora salida': f.horaSalida || '', 'Minutos salida anticipada': f.salidaAnticipadaMin,
       'OT/OC': f.ots.join(', '), 'Descuento': f.descuento, 'Pago': f.pago, Supervisor: f.supervisor, Observación: f.obs || '',
     }))
 
