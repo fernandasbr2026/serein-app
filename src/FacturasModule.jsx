@@ -125,7 +125,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
   const proyDeOT = n => (proyectos || []).find(p => otNumProy(p) === String(n || '').trim())
   const ccsDeOT = n => { const p = proyDeOT(n); if (!p) return []; const codes = [...new Set([...Object.keys(p.cc || {}), ...(p.compras || []).map(c => c.cc)])].filter(Boolean); return codes.map(c => ({ id: c, nombre: (p.ccNombres && p.ccNombres[c]) || c })) }
   const [creando, setCreando] = useState(false)
-  const nueva = () => ({ numero: '', cliente: '', ot: '', oc: '', cc: '', proyecto: '', nv: '', fecha_emision: '', vencimiento: '', neto: '', monto: '', iva: 'afecta', estado: 'Pendiente', fecha_pago: '', banco: '', medioPago: '', comentarios: '', vendedor: 'General' })
+  const nueva = () => ({ numero: '', cliente: '', ot: '', oc: '', cc: '', proyecto: '', nv: '', fecha_emision: '', vencimiento: '', neto: '', monto: '', iva: 'afecta', estado: 'Pendiente', fecha_pago: '', banco: '', medioPago: '', numeroCheque: '', comentarios: '', vendedor: 'General' })
   const comisionDe = x => x.vendedor === 'Mario' ? Math.round((x.neto || x.monto || 0) * (comisionPct / 100)) : 0
   const [f, setF] = useState(nueva())
   const [busca, setBusca] = useState('')
@@ -382,6 +382,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
               {esIstria && <input style={inp} placeholder="Proyecto (nombre)" value={f.proyecto} onChange={e => setF({ ...f, proyecto: e.target.value })} />}
               <input style={inp} placeholder="NV (codigo)" value={f.nv} onChange={e => setF({ ...f, nv: e.target.value })} />
               <select style={inp} value={f.medioPago || ''} onChange={e => setF({ ...f, medioPago: e.target.value })}>{MEDIOS_PAGO.map(m => <option key={m} value={m}>{m || 'Medio de pago…'}</option>)}</select>
+              {f.medioPago === 'Cheque' && <input style={inp} placeholder="N° cheque" value={f.numeroCheque} onChange={e => setF({ ...f, numeroCheque: e.target.value })} />}
               <label style={{ fontSize: 11, color: C.gris }}>Emisión<input type="date" style={{ ...inp, width: '100%' }} value={f.fecha_emision} onChange={e => setF({ ...f, fecha_emision: e.target.value })} /></label>
               <label style={{ fontSize: 11, color: C.gris }}>Vencimiento<input type="date" style={{ ...inp, width: '100%' }} value={f.vencimiento} onChange={e => setF({ ...f, vencimiento: e.target.value })} /></label>
               <input style={inp} placeholder="Neto CLP *" value={f.neto} onChange={e => setF({ ...f, neto: e.target.value })} /><select style={inp} value={f.iva} onChange={e => setF({ ...f, iva: e.target.value })}><option value="afecta">Afecta (con IVA)</option><option value="exenta">Exenta (sin IVA)</option></select>
@@ -438,9 +439,12 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                     </select>
                   </td>
                   <td style={{ padding: '5px 6px' }}>
-                    <select value={x.medioPago || ''} onChange={e => actualizar(x.id, 'medioPago', e.target.value)} style={{ ...inp, width: 110 }}>
-                      {MEDIOS_PAGO.map(m => <option key={m} value={m}>{m || 'Medio de pago…'}</option>)}
-                    </select>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <select value={x.medioPago || ''} onChange={e => actualizar(x.id, 'medioPago', e.target.value)} style={{ ...inp, width: 110 }}>
+                        {MEDIOS_PAGO.map(m => <option key={m} value={m}>{m || 'Medio de pago…'}</option>)}
+                      </select>
+                      {x.medioPago === 'Cheque' && <input value={x.numeroCheque || ''} onChange={e => actualizar(x.id, 'numeroCheque', e.target.value)} placeholder="N° cheque" style={{ ...inp, width: 100 }} />}
+                    </div>
                   </td>
                   <td style={{ padding: '4px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                     <button onClick={() => setExpandido(expandido === x.id ? null : x.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: abonoTotalDe(x) > 0 ? C.verde : C.gris, fontWeight: 600, textDecoration: 'underline', fontSize: 12.5 }}>
