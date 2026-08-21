@@ -488,7 +488,7 @@ function TileOT({ ot, onOpen, onDragStart, onDropOn, verValores }) {
   )
 }
 
-function TarjetaOT({ ot, onUpdate, onDelete, onCambiarEstado, onAgregarVenta, onEliminarVenta, onAgregarArray, verValores = true, ordenesCompra = [], mo = null, otsAll = [], instrumentos = null, libroCompras = [], enModal = false }) {
+function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onDelete, onCambiarEstado, onAgregarVenta, onEliminarVenta, onAgregarArray, verValores = true, ordenesCompra = [], mo = null, otsAll = [], instrumentos = null, libroCompras = [], enModal = false }) {
   const [abierta, setAbierta] = useState(false)
   const [addVenta, setAddVenta] = useState(false)
   const [addAbono, setAddAbono] = useState(false)
@@ -969,7 +969,7 @@ function TarjetaOT({ ot, onUpdate, onDelete, onCambiarEstado, onAgregarVenta, on
               {(ot.area === 'Santa Rosa' || ot.sede === 'Santa Rosa') && <div><div style={{ fontSize: 11, color: '#F77716', fontWeight: 700, marginBottom: 2 }}>OC (Orden de compra)</div><input placeholder="Ej. 4500123456" style={{ padding: '6px 8px', border: '2px solid #F77716', fontSize: 12.5, fontWeight: 700, width: '100%', boxSizing: 'border-box' }} value={ot.oc && ot.oc !== '\u2014' ? ot.oc : ''} onChange={e => onUpdate(ot.id, { oc: e.target.value })} /></div>}
             </div>
           </div>
-          <ProtocolosOT ot={ot} onUpdate={onUpdate} otsAll={otsAll} instrumentos={instrumentos} />
+          <ProtocolosOT ot={ot} onUpdate={onUpdateProtocolos || onUpdate} otsAll={otsAll} instrumentos={instrumentos} />
           <FotosOT ot={ot} onUpdate={onUpdate} />
 
           <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
@@ -1392,6 +1392,25 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
     pushState()
   }
 
+  // Los protocolos (PIG/PGP) se editan campo por campo mientras se llenan
+  // (cada tecleo dispara un guardado) — con actualizar() normal, cada uno
+  // de esos guardados parte de la copia local de otsAll, que puede no
+  // traer todavía el protocolo recién creado si el push/pull anterior no
+  // alcanzó a completarse. El siguiente guardado reemplaza el arreglo
+  // completo de protocolos con esa copia vieja, y el protocolo recién
+  // creado desaparece sin aviso — mismo problema que ya se resolvió para
+  // eliminar()/agregarAArray(), aplicado acá también.
+  const actualizarProtocolos = async (id, cambios) => {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_ots') || 'null') } catch (e) {}
+    const base = Array.isArray(fresco) ? fresco : otsAll
+    const nuevo = base.map(o => o.id === id ? { ...o, protocolos: cambios.protocolos } : o)
+    try { localStorage.setItem('serein_ots', JSON.stringify(nuevo)) } catch (e) {}
+    setOts(nuevo)
+    pushState()
+  }
+
   // Escribe localStorage ANTES de pushState() de forma sincrónica (no
   // adentro del updater funcional de setOts, que React corre después) —
   // si no, pushState() podía alcanzar a leer localStorage todavía con el
@@ -1621,7 +1640,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
                 <button onClick={() => setSel(null)} style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><X size={15} /> Cerrar</button>
               </div>
               <div style={{ padding: 12 }}>
-                <TarjetaOT ot={so} onUpdate={actualizar} onDelete={id => { eliminar(id); setSel(null) }} onCambiarEstado={cambiarEstado} onAgregarVenta={agregarVenta} onEliminarVenta={eliminarVenta} onAgregarArray={agregarAArray} verValores={verValores} ordenesCompra={ordenesCompra} mo={mo} otsAll={otsAll} instrumentos={instrumentos} libroCompras={libroCompras} enModal />
+                <TarjetaOT ot={so} onUpdate={actualizar} onUpdateProtocolos={actualizarProtocolos} onDelete={id => { eliminar(id); setSel(null) }} onCambiarEstado={cambiarEstado} onAgregarVenta={agregarVenta} onEliminarVenta={eliminarVenta} onAgregarArray={agregarAArray} verValores={verValores} ordenesCompra={ordenesCompra} mo={mo} otsAll={otsAll} instrumentos={instrumentos} libroCompras={libroCompras} enModal />
               </div>
             </div>
           </div>
