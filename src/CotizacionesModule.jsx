@@ -27,7 +27,11 @@ const ESTADOS_COT = ['Alta probabilidad de cierre', 'Baja probabilidad de cierre
 const colorEstadoCot = e => ({ 'Aprobada': [SEREIN.greenSoft, C.verde], 'Rechazada': [SEREIN.redSoft, C.rojo], 'Alta probabilidad de cierre': [SEREIN.blueSoft, SEREIN.blue], 'Baja probabilidad de cierre': [SEREIN.orangeSoft, SEREIN.orangeDark], 'Otro': [SEREIN.fog2, C.gris] }[e] || [SEREIN.fog2, C.gris])
 
 // Datos de la empresa (encabezado del documento)
-const _EMP_DEF = { nombre: 'SERVICIOS REVESTIMIENTOS INDUSTRIALES SPA', rut: '76.860.656-0', giro: 'Revestimientos Industriales y habitacionales', direccion: 'Santa Rosa 70, RENCA', telefono: '56999369503', email: 'administracion@sereinspa.com' }
+// telefono: numero oficial de la empresa (mismo WhatsApp del sitio web) —
+// nunca el celular personal de nadie del equipo. Se puede sobrescribir
+// desde Parametros -> Datos empresa; esto es solo el respaldo si no se ha
+// configurado.
+const _EMP_DEF = { nombre: 'SERVICIOS REVESTIMIENTOS INDUSTRIALES SPA', rut: '76.860.656-0', giro: 'Revestimientos Industriales y habitacionales', direccion: 'Santa Rosa 70, RENCA', telefono: '56945917843', email: 'administracion@sereinspa.com' }
 function _empVal(k, map) { try { const p = JSON.parse(localStorage.getItem('serein_params') || '{}'); const e = (p && p.empresa) || {}; const v = e[map]; return (v && String(v).trim()) || _EMP_DEF[k] || '' } catch (x) { return _EMP_DEF[k] || '' } }
 export const EMPRESA = {}
 ;[['nombre', 'razonSocial'], ['rut', 'rut'], ['giro', 'giro'], ['direccion', 'direccion'], ['telefono', 'telefono'], ['email', 'correo']].forEach(m => Object.defineProperty(EMPRESA, m[0], { get() { return _empVal(m[0], m[1]) }, enumerable: true }))
