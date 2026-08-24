@@ -36,7 +36,9 @@ export const ocIva = oc => Math.round(ocNeto(oc) * 0.19)
 export const ocTotal = oc => ocNeto(oc) + ocIva(oc)
 
 // ---- Documento OC en PDF (formato SEREIN) ----
-const _EMP_DEF_OC = { nombre: 'SERVICIOS REVESTIMIENTOS INDUSTRIALES SPA', rut: '76.860.656-0', giro: 'Revestimientos Industriales y habitacionales', dir: 'Santa Rosa 70, RENCA', tel: '56999369503', email: 'administracion@sereinspa.com' }
+// tel: numero oficial de la empresa (mismo WhatsApp del sitio web) — nunca
+// el celular personal de nadie del equipo.
+const _EMP_DEF_OC = { nombre: 'SERVICIOS REVESTIMIENTOS INDUSTRIALES SPA', rut: '76.860.656-0', giro: 'Revestimientos Industriales y habitacionales', dir: 'Santa Rosa 70, RENCA', tel: '56945917843', email: 'administracion@sereinspa.com' }
 function _empValOC(k, map) { try { const p = JSON.parse(localStorage.getItem('serein_params') || '{}'); const e = (p && p.empresa) || {}; const v = e[map]; return (v && String(v).trim()) || _EMP_DEF_OC[k] || '' } catch (x) { return _EMP_DEF_OC[k] || '' } }
 const EMPRESA_OC = {}
 ;[['nombre', 'razonSocial'], ['rut', 'rut'], ['giro', 'giro'], ['dir', 'direccion'], ['tel', 'telefono'], ['email', 'correo']].forEach(m => Object.defineProperty(EMPRESA_OC, m[0], { get() { return _empValOC(m[0], m[1]) }, enumerable: true }))

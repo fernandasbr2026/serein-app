@@ -3,7 +3,7 @@ import { supabase } from './supabase.js'
 import Login from './Login.jsx'
 import Dashboard from './Dashboard.jsx'
 import LogoSerein from './LogoSerein.jsx'
-import { pullState, pushState } from './sync.js'
+import { pullState, pushState, obtenerEstadoGuardado } from './sync.js'
 import { SEREIN } from './theme-serein.js'
 
 // Captura errores de render para que la app no se quede en blanco y muestre el detalle
@@ -111,7 +111,24 @@ export default function App() {
     let vivo = true
     pullState().then(res => { if (res.ok && res.n === 0) pushState() }).finally(() => { if (vivo) setSincronizado(true) })
     const id = setInterval(() => { pushState() }, 5000)
-    const onHide = () => { pushState() }
+    // pushState() acá es "dispara y olvida" — si el navegador cierra la
+    // pestaña antes de que la subida termine, el fetch se corta a mitad de
+    // camino: queda guardado en localStorage de este equipo, pero nunca
+    // llega a la nube ni a nadie más (fue justo lo que le pasó a la
+    // cotización 865 de Carolina — folio asignado, PDF generado y enviado,
+    // pero no llegó a subirse antes de cerrar). Como no hay forma
+    // confiable de terminar un fetch autenticado durante el unload (a
+    // diferencia de navigator.sendBeacon, que no sirve para esto), la
+    // única defensa real es avisar y dejar que el navegador retenga el
+    // cierre si todavía hay algo "guardando" en este momento.
+    const onHide = e => {
+      pushState()
+      if (obtenerEstadoGuardado().fase === 'guardando') {
+        e.preventDefault()
+        e.returnValue = 'Todavía se está guardando un cambio en la nube. Si sales ahora podrías perderlo.'
+        return e.returnValue
+      }
+    }
     const onVisible = () => { if (document.visibilityState !== 'visible') pushState() }
     window.addEventListener('beforeunload', onHide)
     document.addEventListener('visibilitychange', onVisible)
