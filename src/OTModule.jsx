@@ -329,11 +329,20 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
   const marcas = ot.marcasEsperadas || []
   const [subiendo, setSubiendo] = useState(false)
   const [msg, setMsg] = useState('')
+  // Overlay local mientras se escribe el m2 propio (planta) — el guardado
+  // real se debounce (no pullState/pushState por cada tecla, mismo patron
+  // ya usado en OrdenesCompraModule/FacturasModule para no saturar Supabase).
+  const [localM2Propio, setLocalM2Propio] = useState({})
+  const timersPropio = useRef({})
   const total = marcas.length
   const recibidas = marcas.filter(m => m.recibida).length
   const pendientes = total - recibidas
   const m2Esperado = marcas.reduce((s, m) => s + (parseFloat(m.m2) || 0), 0)
   const m2Recibido = marcas.filter(m => m.recibida).reduce((s, m) => s + (parseFloat(m.m2) || 0), 0)
+  const m2Propio = marcas.reduce((s, m) => {
+    const v = localM2Propio[m.id] !== undefined ? localM2Propio[m.id] : m.m2Propio
+    return s + (parseFloat(v) || 0)
+  }, 0)
 
   const subirExcel = e => {
     const fl = e.target.files[0]
@@ -351,7 +360,7 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
         if (idx >= 0) {
           if (p.m2) { combinadas[idx] = { ...combinadas[idx], m2: p.m2 }; actualizadas++ }
         } else {
-          combinadas.push({ id: 'me' + Date.now() + Math.random().toString(36).slice(2, 7), marca: p.marca, m2: p.m2, recibida: false, fechaRecibida: null })
+          combinadas.push({ id: 'me' + Date.now() + Math.random().toString(36).slice(2, 7), marca: p.marca, m2: p.m2, m2Propio: null, recibida: false, fechaRecibida: null })
           nuevas++
         }
       })
@@ -360,6 +369,13 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
     })
   }
   const toggleRecibida = id => onGuardar(marcas.map(m => m.id === id ? { ...m, recibida: !m.recibida, fechaRecibida: !m.recibida ? hoy() : null } : m))
+  const cambiarM2Propio = (id, valor) => {
+    setLocalM2Propio(p => ({ ...p, [id]: valor }))
+    clearTimeout(timersPropio.current[id])
+    timersPropio.current[id] = setTimeout(() => {
+      onGuardar(marcas.map(m => m.id === id ? { ...m, m2Propio: valor } : m))
+    }, 700)
+  }
   const quitarMarca = id => {
     if (!window.confirm('¿Quitar esta marca de la lista de esperadas? No borra ninguna recepción ya registrada, solo el ítem del checklist.')) return
     onGuardar(marcas.filter(m => m.id !== id))
@@ -381,18 +397,32 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
           <span style={{ fontSize: 12, fontWeight: 700, color: C.carbon }}>{total} esperadas</span>
           <span style={{ fontSize: 12, fontWeight: 700, color: C.verde }}>{recibidas} recibidas</span>
           <span style={{ fontSize: 12, fontWeight: 700, color: pendientes ? '#D9600A' : C.verde }}>{pendientes} pendientes</span>
-          {m2Esperado > 0 && <span style={{ fontSize: 12, color: '#9AA3AD' }}>{m2Recibido.toFixed(2)} / {m2Esperado.toFixed(2)} m²</span>}
+          {m2Esperado > 0 && <span style={{ fontSize: 12, color: '#9AA3AD' }}>Cliente: {m2Recibido.toFixed(2)} / {m2Esperado.toFixed(2)} m²</span>}
+          {m2Propio > 0 && <span style={{ fontSize: 12, color: C.teal, fontWeight: 700 }}>Planta: {m2Propio.toFixed(2)} m²</span>}
         </div>
         <div style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {marcas.map(m => (
+          {marcas.map(m => {
+            const valPropio = localM2Propio[m.id] !== undefined ? localM2Propio[m.id] : (m.m2Propio == null ? '' : m.m2Propio)
+            return (
             <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 4, background: m.recibida ? '#E6F5EA' : '#fff', border: '1px solid ' + (m.recibida ? '#B7E0C4' : '#EEE9DF'), fontSize: 12.5 }}>
               <input type="checkbox" checked={!!m.recibida} onChange={() => toggleRecibida(m.id)} style={{ cursor: 'pointer' }} />
               <span onClick={() => toggleRecibida(m.id)} style={{ flex: 1, cursor: 'pointer', fontWeight: m.recibida ? 400 : 600, textDecoration: m.recibida ? 'line-through' : 'none', color: m.recibida ? '#5A736A' : C.carbon }}>{m.marca}</span>
-              {m.m2 > 0 && <span style={{ color: '#9AA3AD' }}>{m.m2} m²</span>}
+              {m.m2 > 0 && <span title="m² informado por el cliente" style={{ color: '#9AA3AD' }}>{m.m2} m²</span>}
+              <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                <input
+                  type="number" step="0.01" min="0" placeholder="0"
+                  value={valPropio}
+                  onChange={e => cambiarM2Propio(m.id, e.target.value)}
+                  title="m² registrados por nosotros en planta"
+                  style={{ width: 62, border: '1px solid #DFE4EA', borderRadius: 4, padding: '2px 5px', fontSize: 12, color: C.teal }}
+                />
+                <span style={{ color: C.teal, fontSize: 11 }}>m² propios</span>
+              </span>
               {m.recibida && m.fechaRecibida && <span style={{ color: '#9AA3AD', fontSize: 11 }}>{m.fechaRecibida}</span>}
               <button onClick={() => quitarMarca(m.id)} style={{ background: 'none', border: 'none', color: '#C5453D', cursor: 'pointer', padding: 0, display: 'flex' }}><Trash2 size={12} /></button>
             </div>
-          ))}
+            )
+          })}
         </div>
       </>)}
       {msg && <div style={{ fontSize: 11.5, color: C.verde, marginTop: 8, fontWeight: 600 }}>{msg}</div>}
