@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { Plus, Trash2, CalendarDays, Clock3, Users, Wallet, Table2, EyeOff, Download, FileText, FileSpreadsheet, Moon, Sun, AlertTriangle } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -712,11 +712,36 @@ function CostosPorOT({ mo }) {
 
 // ================= NÓMINA / VALORES (GERENCIA) =================
 function NominaMO({ mo, setMo }) {
+  // setTrab() se llama por cada tecla al editar nombre/cargo/sueldo/etc. de
+  // un trabajador. Antes escribia directo sobre la copia local (sin traer
+  // lo mas fresco) y subia al toque — mismo riesgo ya arreglado en OT
+  // (protocolos) y Facturas: si dos personas de RRHH editan la nomina casi
+  // al mismo tiempo, la segunda escritura pisaba a la primera sin aviso.
+  // La UI se actualiza al instante; el guardado real hacia la nube se
+  // agrupa por trabajador y se posterga un momento (pull-fresh + merge +
+  // push recien cuando la persona deja de escribir), para no disparar un
+  // pullState() por cada tecla.
+  const pendientesTrab = useRef({})
+  const timersTrab = useRef({})
   const setTrab = (id, campo, valor) => {
     const nuevo = { ...mo, trabajadores: (mo.trabajadores || []).map(t => t.id === id ? { ...t, [campo]: valor } : t) }
     try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
     setMo(nuevo)
-    pushState()
+    pendientesTrab.current[id] = { ...(pendientesTrab.current[id] || {}), [campo]: valor }
+    clearTimeout(timersTrab.current[id])
+    timersTrab.current[id] = setTimeout(async () => {
+      const acumulados = pendientesTrab.current[id]
+      delete pendientesTrab.current[id]
+      if (!acumulados) return
+      try { await pullState() } catch (e) {}
+      let fresco = null
+      try { fresco = JSON.parse(localStorage.getItem('serein_mo') || 'null') } catch (e) {}
+      const baseMo = (fresco && fresco.ver === MO_VER) ? fresco : mo
+      const nuevoMo = { ...baseMo, trabajadores: (baseMo.trabajadores || []).map(t => t.id === id ? { ...t, ...acumulados } : t) }
+      try { localStorage.setItem('serein_mo', JSON.stringify(nuevoMo)) } catch (e) {}
+      setMo(nuevoMo)
+      pushState()
+    }, 700)
   }
   const setNum = (id, campo, valor) => setTrab(id, campo, num(valor))
   const setColacion = valor => {

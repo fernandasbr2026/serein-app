@@ -162,15 +162,55 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
     const baseLista = baseFacturas[area] || []
     setLista(filtrar(baseLista))
   }
-  const actualizar = (id, campo, valor) => setLista(lista.map(x => x.id === id ? { ...x, [campo]: valor } : x))
+  // actualizar()/setNeto() se llaman por cada tecla al editar cualquier
+  // campo de una factura (número, cliente, OT, OC, NV, banco, comentarios,
+  // neto...). Antes escribían directo con setLista (sin traer lo más
+  // fresco) y subían al toque — si alguien más editaba/agregaba una
+  // factura de esta misma área casi al mismo tiempo, esa escritura la
+  // pisaba sin aviso (mismo bug que borró la cotización 865 de Carolina,
+  // aplicado acá a facturas). La UI se actualiza al instante para que
+  // siga sintiéndose igual de rápido al escribir, pero el guardado real
+  // hacia la nube se agrupa por factura y se posterga un momento: recién
+  // cuando la persona deja de tocar esa fila, se trae lo más fresco y se
+  // aplican TODOS los cambios acumulados de esa factura de una vez — así
+  // no se dispara un pullState() por cada tecla (eso fue justo lo que
+  // saturó Supabase la vez que se tuvo que revertir escribirConReintento).
+  const pendientesFactura = useRef({})
+  const timersFactura = useRef({})
+  const guardarCambiosFactura = (id, cambios) => {
+    setLista(lista.map(x => x.id === id ? { ...x, ...cambios } : x))
+    pendientesFactura.current[id] = { ...(pendientesFactura.current[id] || {}), ...cambios }
+    clearTimeout(timersFactura.current[id])
+    timersFactura.current[id] = setTimeout(async () => {
+      const acumulados = pendientesFactura.current[id]
+      delete pendientesFactura.current[id]
+      if (!acumulados) return
+      try { await pullState() } catch (e) {}
+      let fresco = null
+      try { fresco = JSON.parse(localStorage.getItem('serein_facturas') || 'null') } catch (e) {}
+      const baseFacturas = fresco && typeof fresco === 'object' ? fresco : (facturas || {})
+      const baseLista = baseFacturas[area] || []
+      const nuevo = { ...baseFacturas, [area]: baseLista.map(x => x.id === id ? { ...x, ...acumulados } : x) }
+      try { localStorage.setItem('serein_facturas', JSON.stringify(nuevo)) } catch (e) {}
+      setFacturas(nuevo)
+      pushState()
+    }, 700)
+  }
+  const actualizar = (id, campo, valor) => guardarCambiosFactura(id, { [campo]: valor })
   function agregar() {
     const nt = num(f.neto)
     if (!f.numero || nt <= 0) return
     setLista([{ id: 'f' + Date.now(), ...f, neto: nt, monto: f.iva === 'exenta' ? nt : brutoDe(nt) }, ...lista])
     setF(nueva()); setCreando(false)
   }
-  // Al cambiar el neto, recalcula el bruto automáticamente (IVA 19%)
-  const setNeto = (id, valor) => { const nt = num(valor); setLista(lista.map(x => x.id === id ? { ...x, neto: nt, monto: montoFacturaDe({ ...x, neto: nt }) } : x)) }
+  // Al cambiar el neto, recalcula el bruto automáticamente (IVA 19%) —
+  // monto depende también de si la factura es exenta (x.iva), por eso se
+  // busca la fila actual en vez de armar un objeto con solo el neto.
+  const setNeto = (id, valor) => {
+    const nt = num(valor)
+    const x = lista.find(r => r.id === id)
+    guardarCambiosFactura(id, { neto: nt, monto: montoFacturaDe({ ...(x || {}), neto: nt }) })
+  }
   // Registrar/borrar un abono: trae lo más fresco de la nube antes de
   // escribir (mismo patrón agregarAArray de OTModule.jsx) porque un abono
   // es dinero real — no queremos partir de una copia vieja de la factura
