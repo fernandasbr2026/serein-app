@@ -283,6 +283,123 @@ function FormCosto({ onAdd, onCancel }) {
 // ---------- Tarjeta OT ----------
 const ETIQUETAS_FOTO = ['Recepción', 'Proceso', 'Despacho', 'Otro']
 
+// Lee un Excel con las marcas/spool que el cliente informa que deben
+// llegar (columna "marca" obligatoria, "m2"/"m²"/"superficie" opcional) —
+// mismo patron de deteccion de columnas por nombre que ya usa
+// LibroVentasModule.jsx para no depender de un orden fijo de columnas.
+function parseExcelMarcas(file, cb) {
+  const reader = new FileReader()
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' })
+      const hoja = wb.SheetNames[0]
+      const filas = XLSX.utils.sheet_to_json(wb.Sheets[hoja], { header: 1, raw: true, blankrows: false })
+      if (!filas.length) { cb([], 'El archivo está vacío.'); return }
+      const norm = s => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+      let hi = 0
+      for (let i = 0; i < Math.min(filas.length, 10); i++) {
+        const t = (filas[i] || []).map(norm).join('|')
+        if (t.includes('marca')) { hi = i; break }
+      }
+      const hdr = (filas[hi] || []).map(norm)
+      const col = (...nombres) => { for (const n of nombres) { const idx = hdr.findIndex(h => h.includes(n)); if (idx >= 0) return idx } return -1 }
+      const ciMarca = col('marca')
+      const ciM2 = col('m2', 'm²', 'superficie', 'area', 'área')
+      if (ciMarca < 0) { cb([], 'No se encontró una columna "marca" en el Excel — revisa que el encabezado la tenga en las primeras filas.'); return }
+      const out = []
+      for (let i = hi + 1; i < filas.length; i++) {
+        const fila = filas[i] || []
+        const marca = String(fila[ciMarca] == null ? '' : fila[ciMarca]).trim()
+        if (!marca) continue
+        const m2 = ciM2 >= 0 ? (parseFloat(String(fila[ciM2] == null ? '' : fila[ciM2]).replace(',', '.')) || 0) : 0
+        out.push({ marca, m2 })
+      }
+      cb(out, out.length ? '' : 'No se encontraron filas con marca cargada.')
+    } catch (err) { cb([], 'No se pudo leer el archivo: ' + ((err && err.message) || String(err))) }
+  }
+  reader.readAsArrayBuffer(file)
+}
+
+// Checklist de marcas esperadas por OT (spool/piezas que el cliente avisa
+// que van a llegar) contra lo realmente recibido. Subir un Excel nuevo
+// AGREGA/actualiza marcas — nunca borra ni resetea el estado "recibida"
+// de una marca que ya estaba marcada, para no perder el avance ya
+// registrado si suben una version mas nueva del listado del cliente.
+function MarcasEsperadasOT({ ot, onGuardar }) {
+  const marcas = ot.marcasEsperadas || []
+  const [subiendo, setSubiendo] = useState(false)
+  const [msg, setMsg] = useState('')
+  const total = marcas.length
+  const recibidas = marcas.filter(m => m.recibida).length
+  const pendientes = total - recibidas
+  const m2Esperado = marcas.reduce((s, m) => s + (parseFloat(m.m2) || 0), 0)
+  const m2Recibido = marcas.filter(m => m.recibida).reduce((s, m) => s + (parseFloat(m.m2) || 0), 0)
+
+  const subirExcel = e => {
+    const fl = e.target.files[0]
+    e.target.value = ''
+    if (!fl) return
+    setSubiendo(true); setMsg('')
+    parseExcelMarcas(fl, (parsed, error) => {
+      setSubiendo(false)
+      if (error) { window.alert(error); return }
+      const combinadas = [...marcas]
+      let nuevas = 0, actualizadas = 0
+      parsed.forEach(p => {
+        const key = p.marca.trim().toLowerCase()
+        const idx = combinadas.findIndex(m => String(m.marca || '').trim().toLowerCase() === key)
+        if (idx >= 0) {
+          if (p.m2) { combinadas[idx] = { ...combinadas[idx], m2: p.m2 }; actualizadas++ }
+        } else {
+          combinadas.push({ id: 'me' + Date.now() + Math.random().toString(36).slice(2, 7), marca: p.marca, m2: p.m2, recibida: false, fechaRecibida: null })
+          nuevas++
+        }
+      })
+      onGuardar(combinadas)
+      setMsg(`Listo — ${nuevas} marca(s) nueva(s), ${actualizadas} con m² actualizado. Lo que ya estaba marcado como recibido no se tocó.`)
+    })
+  }
+  const toggleRecibida = id => onGuardar(marcas.map(m => m.id === id ? { ...m, recibida: !m.recibida, fechaRecibida: !m.recibida ? hoy() : null } : m))
+  const quitarMarca = id => {
+    if (!window.confirm('¿Quitar esta marca de la lista de esperadas? No borra ninguna recepción ya registrada, solo el ítem del checklist.')) return
+    onGuardar(marcas.filter(m => m.id !== id))
+  }
+
+  return (
+    <div style={{ marginTop: 14, border: '1px solid #DFE4EA', borderRadius: 6, padding: 12, background: '#FCFBF9' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: '#D9600A' }}>Marcas esperadas (checklist de recepción)</span>
+        <label style={{ cursor: subiendo ? 'wait' : 'pointer', background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, opacity: subiendo ? 0.7 : 1 }}>
+          <Plus size={14} /> {subiendo ? 'Leyendo…' : 'Subir Excel de marcas'}
+          <input type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} disabled={subiendo} onChange={subirExcel} />
+        </label>
+      </div>
+      {total === 0 ? (
+        <div style={{ fontSize: 12, color: '#9AA3AD' }}>Sin marcas cargadas todavía. Sube el Excel con las marcas (y m², si lo tienen) que el cliente informa que deben llegar — columnas "marca" y "m2".</div>
+      ) : (<>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: C.carbon }}>{total} esperadas</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: C.verde }}>{recibidas} recibidas</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: pendientes ? '#D9600A' : C.verde }}>{pendientes} pendientes</span>
+          {m2Esperado > 0 && <span style={{ fontSize: 12, color: '#9AA3AD' }}>{m2Recibido.toFixed(2)} / {m2Esperado.toFixed(2)} m²</span>}
+        </div>
+        <div style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {marcas.map(m => (
+            <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 4, background: m.recibida ? '#E6F5EA' : '#fff', border: '1px solid ' + (m.recibida ? '#B7E0C4' : '#EEE9DF'), fontSize: 12.5 }}>
+              <input type="checkbox" checked={!!m.recibida} onChange={() => toggleRecibida(m.id)} style={{ cursor: 'pointer' }} />
+              <span onClick={() => toggleRecibida(m.id)} style={{ flex: 1, cursor: 'pointer', fontWeight: m.recibida ? 400 : 600, textDecoration: m.recibida ? 'line-through' : 'none', color: m.recibida ? '#5A736A' : C.carbon }}>{m.marca}</span>
+              {m.m2 > 0 && <span style={{ color: '#9AA3AD' }}>{m.m2} m²</span>}
+              {m.recibida && m.fechaRecibida && <span style={{ color: '#9AA3AD', fontSize: 11 }}>{m.fechaRecibida}</span>}
+              <button onClick={() => quitarMarca(m.id)} style={{ background: 'none', border: 'none', color: '#C5453D', cursor: 'pointer', padding: 0, display: 'flex' }}><Trash2 size={12} /></button>
+            </div>
+          ))}
+        </div>
+      </>)}
+      {msg && <div style={{ fontSize: 11.5, color: C.verde, marginTop: 8, fontWeight: 600 }}>{msg}</div>}
+    </div>
+  )
+}
+
 function SobrantePanel({ ot }) {
   const [open, setOpen] = useState(false)
   const [nombre, setNombre] = useState('')
@@ -488,7 +605,7 @@ function TileOT({ ot, onOpen, onDragStart, onDropOn, verValores }) {
   )
 }
 
-function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onDelete, onCambiarEstado, onAgregarVenta, onEliminarVenta, onAgregarArray, verValores = true, ordenesCompra = [], mo = null, otsAll = [], instrumentos = null, libroCompras = [], enModal = false }) {
+function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, onDelete, onCambiarEstado, onAgregarVenta, onEliminarVenta, onAgregarArray, verValores = true, ordenesCompra = [], mo = null, otsAll = [], instrumentos = null, libroCompras = [], enModal = false }) {
   const [abierta, setAbierta] = useState(false)
   const [addVenta, setAddVenta] = useState(false)
   const [addAbono, setAddAbono] = useState(false)
@@ -630,6 +747,9 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onDelete, onCambiarEstado
               <textarea value={ot.servicios || ''} onChange={e => onUpdate(ot.id, { servicios: e.target.value })} placeholder="Servicios adicionales, requerimientos y notas para el taller…" style={{ ...inp, width: '100%', marginTop: 4, minHeight: 72, resize: 'vertical', fontFamily: 'inherit' }} />
             </label>
           </div>
+
+          {/* MARCAS ESPERADAS (checklist contra el Excel del cliente) */}
+          <MarcasEsperadasOT ot={ot} onGuardar={nuevasMarcas => onUpdateMarcasEsperadas ? onUpdateMarcasEsperadas(ot.id, nuevasMarcas) : onUpdate(ot.id, { marcasEsperadas: nuevasMarcas })} />
 
           {/* RECEPCION - PARTIDAS / ENTREGAS DE MATERIAL */}
 
@@ -1423,6 +1543,20 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
     pushState()
   }
 
+  // Checklist de marcas esperadas (subida por Excel) — mismo patron seguro
+  // que actualizarProtocolos(): trae lo mas fresco antes de escribir, para
+  // no pisar nada si dos personas marcan "recibida" casi al mismo tiempo.
+  const actualizarMarcasEsperadas = async (id, marcasEsperadas) => {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_ots') || 'null') } catch (e) {}
+    const base = Array.isArray(fresco) ? fresco : otsAll
+    const nuevo = base.map(o => o.id === id ? { ...o, marcasEsperadas } : o)
+    try { localStorage.setItem('serein_ots', JSON.stringify(nuevo)) } catch (e) {}
+    setOts(nuevo)
+    pushState()
+  }
+
   // Escribe localStorage ANTES de pushState() de forma sincrónica (no
   // adentro del updater funcional de setOts, que React corre después) —
   // si no, pushState() podía alcanzar a leer localStorage todavía con el
@@ -1652,7 +1786,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
                 <button onClick={() => setSel(null)} style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><X size={15} /> Cerrar</button>
               </div>
               <div style={{ padding: 12 }}>
-                <TarjetaOT ot={so} onUpdate={actualizar} onUpdateProtocolos={actualizarProtocolos} onDelete={id => { eliminar(id); setSel(null) }} onCambiarEstado={cambiarEstado} onAgregarVenta={agregarVenta} onEliminarVenta={eliminarVenta} onAgregarArray={agregarAArray} verValores={verValores} ordenesCompra={ordenesCompra} mo={mo} otsAll={otsAll} instrumentos={instrumentos} libroCompras={libroCompras} enModal />
+                <TarjetaOT ot={so} onUpdate={actualizar} onUpdateProtocolos={actualizarProtocolos} onUpdateMarcasEsperadas={actualizarMarcasEsperadas} onDelete={id => { eliminar(id); setSel(null) }} onCambiarEstado={cambiarEstado} onAgregarVenta={agregarVenta} onEliminarVenta={eliminarVenta} onAgregarArray={agregarAArray} verValores={verValores} ordenesCompra={ordenesCompra} mo={mo} otsAll={otsAll} instrumentos={instrumentos} libroCompras={libroCompras} enModal />
               </div>
             </div>
           </div>
