@@ -334,6 +334,8 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
   // ya usado en OrdenesCompraModule/FacturasModule para no saturar Supabase).
   const [localM2Propio, setLocalM2Propio] = useState({})
   const timersPropio = useRef({})
+  const [buscar, setBuscar] = useState('')
+  const marcasFiltradas = buscar.trim() ? marcas.filter(m => String(m.marca || '').toLowerCase().includes(buscar.trim().toLowerCase())) : marcas
   const total = marcas.length
   const recibidas = marcas.filter(m => m.recibida).length
   const pendientes = total - recibidas
@@ -400,8 +402,16 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
           {m2Esperado > 0 && <span style={{ fontSize: 12, color: '#9AA3AD' }}>Cliente: {m2Recibido.toFixed(2)} / {m2Esperado.toFixed(2)} m²</span>}
           {m2Propio > 0 && <span style={{ fontSize: 12, color: C.teal, fontWeight: 700 }}>Planta: {m2Propio.toFixed(2)} m²</span>}
         </div>
+        <input
+          value={buscar}
+          onChange={e => setBuscar(e.target.value)}
+          placeholder="Buscar marca por código…"
+          style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #DFE4EA', borderRadius: 4, padding: '6px 8px', fontSize: 12.5, marginBottom: 8 }}
+        />
+        {buscar.trim() && <div style={{ fontSize: 11, color: '#9AA3AD', marginBottom: 6 }}>{marcasFiltradas.length} de {total} coinciden</div>}
         <div style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {marcas.map(m => {
+          {marcasFiltradas.length === 0 && <div style={{ fontSize: 12, color: '#9AA3AD' }}>Sin resultados para "{buscar}".</div>}
+          {marcasFiltradas.map(m => {
             const valPropio = localM2Propio[m.id] !== undefined ? localM2Propio[m.id] : (m.m2Propio == null ? '' : m.m2Propio)
             return (
             <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 4, background: m.recibida ? '#E6F5EA' : '#fff', border: '1px solid ' + (m.recibida ? '#B7E0C4' : '#EEE9DF'), fontSize: 12.5 }}>
