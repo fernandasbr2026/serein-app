@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { Plus, Trash2, Search, ChevronDown, ChevronUp, Download } from 'lucide-react'
 import Paginador, { paginar } from './Paginador.jsx'
 import { PROVEEDORES_FICHA } from './proveedores-data.js'
@@ -259,12 +259,6 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
   const ocs = pp.ocs || []
   const provLista = Object.values((proveedores || []).reduce((m, p) => { const n = (p.nombre || '').trim(); if (n && !m[n.toLowerCase()]) m[n.toLowerCase()] = p; return m }, {}))
   const otsDisponibles = [...new Set((ots || []).map(o => o.numero).filter(Boolean))]
-  const upd = (id, cambios) => {
-    const nuevo = { ...pp, ocs: ocs.map(o => o.id === id ? { ...o, ...cambios } : o) }
-    try { localStorage.setItem('serein_pp', JSON.stringify(nuevo)) } catch (e) {}
-    setPp(nuevo)
-    pushState()
-  }
   // pp.ocs tambien lo escriben ProveedoresPagosModule.jsx y
   // generarOCPintura() en CotizacionesModule.jsx — antes de agregar o
   // eliminar una OC acá se trae lo más fresco de la nube, para no partir
@@ -280,6 +274,33 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
     pushState()
   }
   const eliminar = id => guardarOcFresco(base => base.filter(o => o.id !== id))
+  // upd() se llama por cada tecla/click al editar campos de una OC (numero,
+  // proveedor, items, asignaciones...). Antes escribia directo sobre la
+  // copia local (ocs.map) y subia sin traer lo mas fresco — si otro modulo
+  // (ProveedoresPagosModule.jsx, o generarOCPintura() de Cotizaciones)
+  // guardaba una OC nueva casi al mismo tiempo, esta escritura la pisaba
+  // sin aviso. Ahora la UI se actualiza al instante (para que se sienta
+  // igual de rapido al escribir) pero el guardado real hacia la nube se
+  // agrupa por fila y se posterga un momento: recien cuando la persona deja
+  // de tocar esa OC, se trae lo mas fresco (guardarOcFresco, mismo patron
+  // que eliminar) y se aplican TODOS los cambios acumulados de esa fila de
+  // una vez. Asi no se dispara un pullState() por cada tecla (eso fue lo
+  // que saturaba Supabase antes), pero el guardado final siempre
+  // parte de una base fresca.
+  const pendientesOC = useRef({})
+  const timersOC = useRef({})
+  const upd = (id, cambios) => {
+    const nuevo = { ...pp, ocs: ocs.map(o => o.id === id ? { ...o, ...cambios } : o) }
+    try { localStorage.setItem('serein_pp', JSON.stringify(nuevo)) } catch (e) {}
+    setPp(nuevo)
+    pendientesOC.current[id] = { ...(pendientesOC.current[id] || {}), ...cambios }
+    clearTimeout(timersOC.current[id])
+    timersOC.current[id] = setTimeout(() => {
+      const acumulados = pendientesOC.current[id]
+      delete pendientesOC.current[id]
+      if (acumulados) guardarOcFresco(base => base.map(o => o.id === id ? { ...o, ...acumulados } : o))
+    }, 700)
+  }
   const maxOC = ocs.reduce((m, o) => Math.max(m, parseInt(String(o.numero).replace(/\D/g, ''), 10) || 0), 517)
   const [creando, setCreando] = useState(false)
   const nueva = () => ({ id: 'oc' + Date.now(), numero: String(maxOC + 1), proveedor: '', rut: '', categoria: 'Pintura', detalle: '', area: 'Santa Rosa', fecha: hoy(), neto: 0, plazo: 30, vencimiento: sumarDias(hoy(), 30), estadoPago: 'Pendiente', asignaciones: [], items: [], direccion: '', despacho: '', adjunto: '', obs: '' })

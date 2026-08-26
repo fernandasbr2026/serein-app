@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useRef } from 'react'
 import { Plus, Trash2, X, Truck, ReceiptText, CalendarClock, CalendarDays, TrendingUp, TrendingDown, FileText, BarChart3, Wallet, AlertTriangle, Search } from 'lucide-react'
 import { OC_SEED } from './ordenes-compra-data.js'
 import { ocTotal } from './OrdenesCompraModule.jsx'
@@ -204,17 +204,37 @@ function SeccionOC({ pp, setPp }) {
   const ocs = pp.ocs || []
   const [busca, setBusca] = useState('')
   const [fEst, setFEst] = useState('')
+  const aplicarCambiosOC = (o, cambios) => {
+    const n = { ...o, ...cambios }
+    if (('fecha' in cambios || 'plazo' in cambios) && n.fecha) n.vencimiento = sumarDias(n.fecha, parseInt(n.plazo, 10) || 0)
+    return n
+  }
+  // pp.ocs tambien lo escribe OrdenesCompraModule.jsx (y generarOCPintura()
+  // en CotizacionesModule.jsx) — mismo fix que ahi: la UI se actualiza al
+  // instante al escribir, pero el guardado real hacia la nube se agrupa por
+  // fila y se posterga (pull-fresh + merge + push) recien cuando la persona
+  // deja de tocar esa OC, para no disparar un pullState() por cada tecla.
+  const pendientesOC = useRef({})
+  const timersOC = useRef({})
   const upd = (id, cambios) => {
-    const nuevoOcs = ocs.map(o => {
-      if (o.id !== id) return o
-      const n = { ...o, ...cambios }
-      if (('fecha' in cambios || 'plazo' in cambios) && n.fecha) n.vencimiento = sumarDias(n.fecha, parseInt(n.plazo, 10) || 0)
-      return n
-    })
-    const nuevo = { ...pp, ocs: nuevoOcs }
+    const nuevo = { ...pp, ocs: ocs.map(o => o.id === id ? aplicarCambiosOC(o, cambios) : o) }
     try { localStorage.setItem('serein_pp', JSON.stringify(nuevo)) } catch (e) {}
     setPp(nuevo)
-    pushState()
+    pendientesOC.current[id] = { ...(pendientesOC.current[id] || {}), ...cambios }
+    clearTimeout(timersOC.current[id])
+    timersOC.current[id] = setTimeout(async () => {
+      const acumulados = pendientesOC.current[id]
+      delete pendientesOC.current[id]
+      if (!acumulados) return
+      try { await pullState() } catch (e) {}
+      let fresco = null
+      try { fresco = JSON.parse(localStorage.getItem('serein_pp') || 'null') } catch (e) {}
+      const basePp = fresco && typeof fresco === 'object' ? fresco : pp
+      const nuevoPp = { ...basePp, ocs: (basePp.ocs || []).map(o => o.id === id ? aplicarCambiosOC(o, acumulados) : o) }
+      try { localStorage.setItem('serein_pp', JSON.stringify(nuevoPp)) } catch (e) {}
+      setPp(nuevoPp)
+      pushState()
+    }, 700)
   }
   const agregar = async () => {
     const item = { id: 'oc' + Date.now(), numero: '', proveedor: '', rut: '', fecha: hoy(), monto: 0, plazo: 30, vencimiento: sumarDias(hoy(), 30), estadoPago: 'Pendiente', estadoOC: '', obs: '' }

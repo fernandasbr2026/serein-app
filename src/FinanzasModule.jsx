@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useRef } from 'react'
 import { Plus, Trash2, X, Copy, Landmark, ReceiptText, PieChart as PieIcon, CalendarClock, BarChart3, CheckCircle2 } from 'lucide-react'
 
 import { SEREIN } from './theme-serein.js'
@@ -343,11 +343,36 @@ function CreditosLeasing({ fin, setFin }) {
     pushState()
   }
 
+  // actualizarCuota() se llama por cada tecla al editar capital/interés de
+  // una cuota. Antes escribía directo sobre la copia local (sin traer lo
+  // más fresco) y subía al toque — mismo riesgo ya arreglado en OT
+  // (protocolos), Facturas y Órdenes de Compra. La UI se actualiza al
+  // instante; el guardado real hacia la nube se agrupa por cuota y se
+  // posterga un momento (pull-fresh + merge + push recién cuando la
+  // persona deja de escribir), para no disparar un pullState() por cada
+  // tecla.
+  const pendientesCuota = useRef({})
+  const timersCuota = useRef({})
   function actualizarCuota(oid, n, cambios) {
     const nuevo = { ...fin, obligaciones: fin.obligaciones.map(o => o.id !== oid ? o : { ...o, cuotas: o.cuotas.map(c => c.n === n ? { ...c, ...cambios } : c) }) }
     try { localStorage.setItem('serein_fin', JSON.stringify(nuevo)) } catch (e) {}
     setFin(nuevo)
-    pushState()
+    const key = oid + ':' + n
+    pendientesCuota.current[key] = { ...(pendientesCuota.current[key] || {}), ...cambios }
+    clearTimeout(timersCuota.current[key])
+    timersCuota.current[key] = setTimeout(async () => {
+      const acumulados = pendientesCuota.current[key]
+      delete pendientesCuota.current[key]
+      if (!acumulados) return
+      try { await pullState() } catch (e) {}
+      let fresco = null
+      try { fresco = JSON.parse(localStorage.getItem('serein_fin') || 'null') } catch (e) {}
+      const baseFin = fresco && typeof fresco === 'object' ? fresco : fin
+      const nuevoFin = { ...baseFin, obligaciones: (baseFin.obligaciones || []).map(o => o.id !== oid ? o : { ...o, cuotas: (o.cuotas || []).map(c => c.n === n ? { ...c, ...acumulados } : c) }) }
+      try { localStorage.setItem('serein_fin', JSON.stringify(nuevoFin)) } catch (e) {}
+      setFin(nuevoFin)
+      pushState()
+    }, 700)
   }
 
   async function eliminarObligacionFresca(id) {
