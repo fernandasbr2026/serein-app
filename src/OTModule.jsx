@@ -440,6 +440,131 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
   )
 }
 
+// Resumen automatico por "tipo" (etiqueta manual por fila, ej. "Estanque
+// 200lt") para ver de un vistazo cuantas piezas de cada tipo entraron a
+// Recepcion. Agrupa por el texto EXACTO de `tipo` (sin heuristica sobre el
+// detalle libre) para no armar grupos falsos por variaciones de mayusculas
+// o espacios — mas trabajo llenar el campo, pero el resumen no miente.
+function resumenTiposRecepcion(partidas) {
+  const map = {}
+  ;(partidas || []).forEach(p => {
+    const t = String(p.tipo || '').trim()
+    if (!t) return
+    const cant = parseFloat(p.cantidad) || 1
+    map[t] = (map[t] || 0) + cant
+  })
+  return Object.entries(map).sort((a, b) => b[1] - a[1])
+}
+
+// Recepcion de material de la OT. Ademas del alta manual de siempre
+// (detalle libre + m2 + estado), arriba se puede tildar directamente una
+// marca pendiente del checklist "Marcas esperadas": eso crea la fila de
+// recepcion con la marca y el m2 del cliente ya cargados, Y marca esa marca
+// como recibida arriba — a diferencia de los protocolos (donde
+// deliberadamente NO se cruza con "recibida"), acá si corresponde: Recepcion
+// es el evento real de recepcion fisica del material.
+// Los campos nuevos (cantidad, m2 cliente, m2 propio, tipo) son opcionales y
+// se suman a los de siempre (detalle, fecha, m2, estado, obs, fotos) sin
+// tocarlos, para no reinterpretar ni perder ninguna recepcion ya cargada.
+function RecepcionOT({ ot, onUpdate, onAgregarArray, onUpdateMarcasEsperadas }) {
+  const partidas = ot.partidas || []
+  const marcasEsperadas = ot.marcasEsperadas || []
+  const pendientes = marcasEsperadas.filter(m => !m.recibida)
+  const [buscarPend, setBuscarPend] = useState('')
+  const pendFiltradas = buscarPend.trim() ? pendientes.filter(m => String(m.marca || '').toLowerCase().includes(buscarPend.trim().toLowerCase())) : pendientes
+  const resumen = resumenTiposRecepcion(partidas)
+  const tiposUsados = Array.from(new Set(partidas.map(p => String(p.tipo || '').trim()).filter(Boolean)))
+  const inp2 = { border: '1px solid #DFE4EA', borderRadius: 4, padding: '6px 8px', fontSize: 12.5, boxSizing: 'border-box' }
+
+  const recibirDesdeChecklist = async m => {
+    await onAgregarArray(ot.id, 'partidas', {
+      id: 'pa' + Date.now() + Math.random().toString(36).slice(2, 7),
+      detalle: m.marca, fecha: hoy(), estado: 'Recibida',
+      m2: m.m2 || '', obs: '', fotos: [],
+      cantidad: 1, m2Cliente: m.m2 || '', m2Propio: '', tipo: ''
+    })
+    onUpdateMarcasEsperadas(ot.id, marcasEsperadas.map(x => x.id === m.id ? { ...x, recibida: true, fechaRecibida: hoy() } : x))
+  }
+  const setP = (i, campo, valor) => onUpdate(ot.id, { partidas: partidas.map((x, j) => j === i ? { ...x, [campo]: valor } : x) })
+
+  return (<div style={{ marginTop: 14 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+      <span style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: '#D9600A' }}>Recepción / Partidas / entregas de material</span>
+      <button onClick={() => onAgregarArray(ot.id, 'partidas', { id: 'pa' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [] })} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}><Plus size={14} /> Agregar recepción</button>
+    </div>
+
+    {resumen.length > 0 && (
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+        {resumen.map(([tipo, cant]) => (
+          <span key={tipo} style={{ fontSize: 11.5, fontWeight: 600, background: '#EFF6F4', color: C.teal, border: '1px solid #CFE4DF', borderRadius: 12, padding: '3px 10px' }}>{tipo} x {cant}</span>
+        ))}
+      </div>
+    )}
+
+    {marcasEsperadas.length > 0 && (
+      <div style={{ border: '1px dashed #CFC9BC', borderRadius: 6, padding: 10, marginBottom: 10, background: '#FBFAF7' }}>
+        <div style={{ fontSize: 11.5, fontWeight: 700, color: '#5A736A', marginBottom: 6, textTransform: 'uppercase' }}>Recibir desde el checklist ({pendientes.length} pendientes)</div>
+        {pendientes.length === 0 ? (
+          <div style={{ fontSize: 12, color: '#9AA3AD' }}>No quedan marcas esperadas pendientes por recibir.</div>
+        ) : (<>
+          {pendientes.length > 6 && <input value={buscarPend} onChange={e => setBuscarPend(e.target.value)} placeholder="Buscar marca por código…" style={{ ...inp2, width: '100%', marginBottom: 6 }} />}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 160, overflowY: 'auto' }}>
+            {pendFiltradas.map(m => (
+              <button key={m.id} onClick={() => recibirDesdeChecklist(m)} title="Crea la recepción con esta marca y la marca como recibida arriba" style={{ background: '#fff', border: '1px solid #CFE4DF', color: C.carbon, borderRadius: 4, padding: '4px 9px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+                <Plus size={12} color={C.teal} /> {m.marca}{m.m2 > 0 && <span style={{ color: '#9AA3AD' }}>({m.m2} m²)</span>}
+              </button>
+            ))}
+          </div>
+        </>)}
+      </div>
+    )}
+
+    {partidas.length === 0 ? (<div style={{ fontSize: 12, color: '#9AA3AD', marginBottom: 6 }}>Sin registros.</div>) : null}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {partidas.map((p, i) => (
+        <div key={p.id || i} style={{ border: '1px solid #DFE4EA', borderRadius: 6, padding: 10, background: '#FCFBF9' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+            <span style={{ fontWeight: 700, fontSize: 12, color: C.carbon }}>#{i + 1}</span>
+            <input value={p.detalle || ''} onChange={e => setP(i, 'detalle', e.target.value)} placeholder="Detalle del material" style={{ ...inp2, flex: '2 1 150px' }} />
+            <input type="date" value={p.fecha || ''} onChange={e => setP(i, 'fecha', e.target.value)} style={{ ...inp2, flex: '0 1 140px' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><input type="number" value={p.m2 || ''} onChange={e => setP(i, 'm2', e.target.value)} placeholder="m²" style={{ ...inp2, width: 72 }} /><span style={{ fontSize: 11, color: '#9AA3AD' }}>m²</span></div>
+            <select value={p.estado || 'Pendiente'} onChange={e => setP(i, 'estado', e.target.value)} style={{ border: 'none', background: p.estado === 'Recibida' ? '#E6F5EA' : '#F5E5DE', color: p.estado === 'Recibida' ? C.verde : '#D9600A', padding: '5px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}><option>Pendiente</option><option>Recibida</option></select>
+            <button onClick={() => onUpdate(ot.id, { partidas: partidas.filter((_, j) => j !== i) })} style={btnMini}><Trash2 size={13} /></button>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: '#9AA3AD' }}>Cantidad</label><input type="number" min="0" value={p.cantidad || ''} onChange={e => setP(i, 'cantidad', e.target.value)} style={{ ...inp2, width: 68 }} /></div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: '#9AA3AD' }}>m² cliente</label><input type="number" step="0.01" min="0" value={p.m2Cliente || ''} onChange={e => setP(i, 'm2Cliente', e.target.value)} style={{ ...inp2, width: 76 }} /></div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.teal }}>m² propios</label><input type="number" step="0.01" min="0" value={p.m2Propio || ''} onChange={e => setP(i, 'm2Propio', e.target.value)} style={{ ...inp2, width: 76, color: C.teal }} /></div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <label style={{ fontSize: 10, color: '#9AA3AD' }}>Diferencia</label>
+              <span style={{ fontSize: 12.5, fontWeight: 700, padding: '6px 0', color: (() => { const d = (parseFloat(p.m2Propio) || 0) - (parseFloat(p.m2Cliente) || 0); return d === 0 ? '#9AA3AD' : (d < 0 ? '#C5453D' : '#D9600A') })() }}>
+                {(p.m2Cliente || p.m2Propio) ? (((parseFloat(p.m2Propio) || 0) - (parseFloat(p.m2Cliente) || 0)).toFixed(2) + ' m²') : '—'}
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: '1 1 140px' }}>
+              <label style={{ fontSize: 10, color: '#9AA3AD' }}>Tipo (para el resumen de arriba)</label>
+              <input list={'tipos-' + ot.id} value={p.tipo || ''} onChange={e => setP(i, 'tipo', e.target.value)} placeholder="ej. Estanque 200lt" style={inp2} />
+              <datalist id={'tipos-' + ot.id}>{tiposUsados.map(t => <option key={t} value={t} />)}</datalist>
+            </div>
+          </div>
+          <textarea value={p.obs || ''} onChange={e => setP(i, 'obs', e.target.value)} placeholder="Observaciones" style={{ ...inp2, width: '100%', minHeight: 38, resize: 'vertical' }} />
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+            {(p.fotos || []).map((f, k) => (
+              <div key={k} style={{ position: 'relative' }}>
+                <img src={f} style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 4, border: '1px solid #DFE4EA' }} />
+                <button onClick={() => setP(i, 'fotos', (p.fotos || []).filter((_, z) => z !== k))} style={{ position: 'absolute', top: -6, right: -6, background: '#C5453D', color: '#fff', border: 'none', borderRadius: '50%', width: 18, height: 18, fontSize: 11, cursor: 'pointer', lineHeight: 1 }}>×</button>
+              </div>
+            ))}
+            <label style={{ cursor: 'pointer', width: 64, height: 64, border: '1px dashed #C9C4B8', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, color: '#B0A89A' }}>+
+              <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { const fls = [...e.target.files]; if (!fls.length) return; const acc = []; let c = 0; fls.forEach(fl => imgToData(fl, d => { acc.push(d); c++; if (c === fls.length) setP(i, 'fotos', [...(p.fotos || []), ...acc]) })) }} />
+            </label>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>)
+}
+
 function SobrantePanel({ ot }) {
   const [open, setOpen] = useState(false)
   const [nombre, setNombre] = useState('')
@@ -791,41 +916,8 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
           {/* MARCAS ESPERADAS (checklist contra el Excel del cliente) */}
           <MarcasEsperadasOT ot={ot} onGuardar={nuevasMarcas => onUpdateMarcasEsperadas ? onUpdateMarcasEsperadas(ot.id, nuevasMarcas) : onUpdate(ot.id, { marcasEsperadas: nuevasMarcas })} />
 
-          {/* RECEPCION - PARTIDAS / ENTREGAS DE MATERIAL */}
-
-        <div style={{ marginTop: 14 }}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-            <span style={{ fontSize:13, fontWeight:700, textTransform:'uppercase', color:'#D9600A' }}>Recepción / Partidas / entregas de material</span>
-            <button onClick={() => onAgregarArray(ot.id, 'partidas', { id: 'pa' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [] })} style={{ background: C.teal, color:'#fff', border:'none', padding:'6px 12px', cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', gap:4 }}><Plus size={14} /> Agregar recepción</button>
-          </div>
-          {(ot.partidas || []).length === 0 ? (<div style={{ fontSize:12, color:'#9AA3AD', marginBottom:6 }}>Sin registros.</div>) : null}
-          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-            {(ot.partidas || []).map((p, i) => (
-              <div key={p.id || i} style={{ border:'1px solid #DFE4EA', borderRadius:6, padding:10, background:'#FCFBF9' }}>
-                <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', marginBottom:8 }}>
-                  <span style={{ fontWeight:700, fontSize:12, color:C.carbon }}>#{i + 1}</span>
-                  <input value={p.detalle || ''} onChange={e => onUpdate(ot.id, { partidas: (ot.partidas || []).map((x, j) => j === i ? { ...x, detalle: e.target.value } : x) })} placeholder="Detalle del material" style={{ ...inp, flex:'2 1 150px', padding:'6px 8px' }} />
-                  <input type="date" value={p.fecha || ''} onChange={e => onUpdate(ot.id, { partidas: (ot.partidas || []).map((x, j) => j === i ? { ...x, fecha: e.target.value } : x) })} style={{ ...inp, flex:'0 1 140px', padding:'6px 8px' }} />
-                  <div style={{ display:'flex', alignItems:'center', gap:4 }}><input type="number" value={p.m2 || ''} onChange={e => onUpdate(ot.id, { partidas: (ot.partidas || []).map((x, j) => j === i ? { ...x, m2: e.target.value } : x) })} placeholder="m²" style={{ ...inp, width:72, padding:'6px 8px' }} /><span style={{ fontSize:11, color:'#9AA3AD' }}>m²</span></div>
-                  <select value={p.estado || 'Pendiente'} onChange={e => onUpdate(ot.id, { partidas: (ot.partidas || []).map((x, j) => j === i ? { ...x, estado: e.target.value } : x) })} style={{ border:'none', background: p.estado === 'Recibida' ? '#E6F5EA' : '#F5E5DE', color: p.estado === 'Recibida' ? C.verde : '#D9600A', padding:'5px 8px', fontSize:11, fontWeight:700, cursor:'pointer' }}><option>Pendiente</option><option>Recibida</option></select>
-                  <button onClick={() => onUpdate(ot.id, { partidas: (ot.partidas || []).filter((_, j) => j !== i) })} style={btnMini}><Trash2 size={13} /></button>
-                </div>
-                <textarea value={p.obs || ''} onChange={e => onUpdate(ot.id, { partidas: (ot.partidas || []).map((x, j) => j === i ? { ...x, obs: e.target.value } : x) })} placeholder="Observaciones" style={{ ...inp, width:'100%', minHeight:38, padding:'6px 8px', resize:'vertical', boxSizing:'border-box' }} />
-                <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginTop:8 }}>
-                  {(p.fotos || []).map((f, k) => (
-                    <div key={k} style={{ position:'relative' }}>
-                      <img src={f} style={{ width:64, height:64, objectFit:'cover', borderRadius:4, border:'1px solid #DFE4EA' }} />
-                      <button onClick={() => onUpdate(ot.id, { partidas: (ot.partidas || []).map((x, j) => j === i ? { ...x, fotos: (x.fotos || []).filter((_, z) => z !== k) } : x) })} style={{ position:'absolute', top:-6, right:-6, background:'#C5453D', color:'#fff', border:'none', borderRadius:'50%', width:18, height:18, fontSize:11, cursor:'pointer', lineHeight:1 }}>×</button>
-                    </div>
-                  ))}
-                  <label style={{ cursor:'pointer', width:64, height:64, border:'1px dashed #C9C4B8', borderRadius:4, display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, color:'#B0A89A' }}>+
-                    <input type="file" accept="image/*" multiple style={{ display:'none' }} onChange={e => { const fls = [...e.target.files]; if (!fls.length) return; const acc = []; let c = 0; fls.forEach(fl => imgToData(fl, d => { acc.push(d); c++; if (c === fls.length) onUpdate(ot.id, { partidas: (ot.partidas || []).map((x, j) => j === i ? { ...x, fotos: [...(x.fotos || []), ...acc] } : x) }); })); }} />
-                  </label>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+          {/* RECEPCION - PARTIDAS */}
+          <RecepcionOT ot={ot} onUpdate={onUpdate} onAgregarArray={onAgregarArray} onUpdateMarcasEsperadas={onUpdateMarcasEsperadas || ((id, v) => onUpdate(id, { marcasEsperadas: v }))} />
 
         {/* ENTREGAS / DESPACHO SEREIN */}
 
@@ -1318,19 +1410,37 @@ function htmlPGP(p, equipos) {
   var pageEq = '<div class="page">' + rptHeader('PROTOCOLO GRANALLADO Y PINTURA', 'EQUIPOS DE MEDICION', [['Documento N', p.docNro || ''], ['Orden de Trabajo', p.ot || '']], p.logoCliente) + rptSection('Equipos de medicion') + rptEquipos(equipos) + rptFooter() + '</div>'; return '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(p.codigo || 'PGP') + '</title><style>' + PROTO_CSS + '</style></head><body>' + page1 + page2 + pageEq + '</body></html>';
 }
 var PROTO_CSS = '@page{size:A4;margin:20mm 15mm 15mm 15mm}*{box-sizing:border-box}body{font-family:Inter,Arial,Helvetica,sans-serif;color:#101828;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.page{position:relative;padding-bottom:70px}.page+.page{page-break-before:always}.rhead{position:relative;display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #061A40;padding:4px 0 10px;overflow:hidden}.logo{display:flex;align-items:baseline}.lg-a{color:#061A40;font-weight:800;font-size:22px;letter-spacing:1px}.lg-b{color:#FF6B00;font-weight:800;font-size:22px;margin-left:5px;letter-spacing:1px}.rh-mid{flex:1;text-align:center}.rh-title{color:#061A40;font-weight:800;font-size:17px;letter-spacing:.5px}.rh-sub{color:#FF6B00;font-weight:700;font-size:10px;letter-spacing:2px;margin-top:2px}.codebox{background:#061A40;color:#fff;padding:8px 12px;border-radius:6px;font-size:10px;min-width:160px}.cb-row{display:flex;justify-content:space-between;gap:12px;padding:1px 0}.cb-k{color:#9fb0cf}.cb-v{font-weight:700}.stripe{position:absolute;top:-10px;right:120px;width:60px;height:130%;background:#FF6B00;opacity:.10;transform:skewX(-22deg)}.infogrid{display:grid;grid-template-columns:1fr 1fr;gap:0 26px;margin:14px 0 4px}.info-item{display:flex;justify-content:space-between;border-bottom:1px solid #D8DCE5;padding:5px 2px;font-size:11px}.info-k{color:#5a6b85}.info-v{font-weight:700;color:#101828;text-align:right}.sec-title{color:#061A40;font-weight:800;font-size:12px;text-transform:uppercase;border-left:4px solid #FF6B00;padding-left:9px;margin:16px 0 7px;letter-spacing:.4px;page-break-after:avoid}.sub-sec-title{color:#5a6b85;font-weight:700;font-size:10.5px;text-transform:uppercase;margin:8px 0 4px;letter-spacing:.3px}.keep-together{page-break-inside:avoid}.marcas-list{columns:3;column-gap:24px;-webkit-columns:3;margin:0 0 14px;padding-left:18px;font-size:11px;line-height:1.75;color:#101828}.marcas-list li{break-inside:avoid-column}table.dt{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px}table.dt th{background:#061A40;color:#fff;padding:6px 8px;text-align:left;font-weight:700;font-size:10px}table.dt td{border:1px solid #D8DCE5;padding:6px 8px}table.dt td.c{text-align:center}.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700}.badge-ok{background:#e6f7ec;color:#16A34A}.badge-no{background:#fdeaea;color:#DC2626}.prom-badge{display:inline-block;background:#FF6B00;color:#fff;padding:2px 9px;border-radius:4px;font-weight:700;font-size:10.5px}.norm{display:inline-block;padding:1px 7px;border:1px solid #D8DCE5;border-radius:4px;font-size:9px;color:#5a6b85;background:#F5F7FA}.sign-cell{height:32px}.rfooter{display:flex;margin-top:20px;border-radius:6px;overflow:hidden;border:1px solid #D8DCE5}.rf-navy{background:#061A40;color:#fff;flex:1;display:flex;gap:20px;justify-content:center;align-items:center;padding:10px;font-size:10px;font-weight:600}.rf-web{background:#FF6B00;color:#fff;padding:0 16px;font-weight:700;font-size:11px;display:flex;align-items:center}.evcard{border:1px solid #D8DCE5;border-radius:8px;padding:12px 14px;margin-bottom:12px;display:flex;gap:16px;page-break-inside:avoid;background:#fff}.ev-left{width:36%}.ev-title{color:#FF6B00;font-weight:800;font-size:12px}.ev-desc{margin:5px 0;font-size:11px;font-weight:600;color:#101828}.ev-obs{font-size:10.5px;color:#344054;line-height:1.4}.ev-right{flex:1;display:grid;gap:6px}.ev-right.g1{grid-template-columns:1fr}.ev-right.g2{grid-template-columns:repeat(2,1fr)}.ev-right.g3{grid-template-columns:repeat(3,1fr)}.ev-right.g4{grid-template-columns:repeat(2,1fr)}.imgframe{border:2px solid #061A40;border-radius:4px;overflow:hidden;height:150px;background:#F5F7FA;display:flex;align-items:center;justify-content:center}.imgframe img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block}.equipos{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:8px}.eq-col{border:1px solid #D8DCE5;border-radius:8px;padding:10px;text-align:center}.eq-name{color:#061A40;font-weight:800;font-size:12px}.eq-code{color:#FF6B00;font-weight:800;font-size:13px;margin:2px 0}.eq-sub{color:#5a6b85;font-size:10px;margin-bottom:8px}.eq-img{border:2px solid #061A40;border-radius:4px;overflow:hidden;height:130px;background:#F5F7FA;margin-bottom:6px;display:flex;align-items:center;justify-content:center}.eq-img img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain}'
-// Certificados de calibracion de los instrumentos (cargados en Parametros)
-// se abren junto con el protocolo, no como un boton aparte que alguien
-// pueda olvidar apretar — "adjuntos" en el sentido de que salen del mismo
-// clic. Se abren ANTES del setTimeout del print, en el mismo llamado
-// sincrono del click, para que el navegador los trate como ventanas
-// pedidas por el usuario y no las bloquee como popup.
-function abrirCertificadosInstrumentos(equipos) {
-  if (!equipos) return
-  ;['espCertificado', 'rugCertificado', 'termoCertificado', 'granallaCertificado', 'galgasCertificado'].forEach(function (k) {
-    if (equipos[k]) window.open(equipos[k], '_blank')
-  })
+// Certificados de calibracion de los instrumentos (cargados en Parametros):
+// se descargan solos al descargar el protocolo. Antes se intentaba con
+// window.open() por cada uno, pero el navegador bloquea esa cadena de
+// popups casi siempre (solo pasa el primero). Ahora se traen con fetch() y
+// se bajan como blob via un <a download> — no es un popup, asi que nunca lo
+// bloquea el navegador. Si el fetch falla (ej. sin conexion, CORS raro) se
+// omite en silencio: el listado de links clickeables que ya se ve en cada
+// protocolo sigue disponible como respaldo manual.
+function nombreCertificado(label, blob) {
+  var ext = ''
+  if (blob && blob.type) { if (blob.type.indexOf('pdf') >= 0) ext = '.pdf'; else if (blob.type.indexOf('image/') === 0) ext = '.' + blob.type.split('/')[1] }
+  return 'Certificado ' + label + ext
 }
-function descargarProto(p, equipos) { const w = window.open('', '_blank'); if (!w) { window.alert('Habilita las ventanas emergentes.'); return } try{var _i=localStorage.getItem('serein_logoIstria')||'',_sv=null,_sw=0;if(_i&&String(p.area||'').toLowerCase().indexOf('istria')>=0){_sv=localStorage.getItem('serein_logo');localStorage.setItem('serein_logo',_i);_sw=1;window.__sereinProtoIstria=true}}catch(e){} w.document.write(p.tipo === 'PIG' ? htmlPIG(p, equipos) : htmlPGP(p, equipos)); try{if(_sw){if(_sv==null)localStorage.removeItem('serein_logo');else localStorage.setItem('serein_logo',_sv);window.__sereinProtoIstria=false;}}catch(e){} w.document.close(); abrirCertificadosInstrumentos(equipos); setTimeout(function () { w.focus(); w.print() }, 400) }
+async function descargarCertificadosInstrumentos(equipos) {
+  if (!equipos) return
+  for (var i = 0; i < CERT_LABELS.length; i++) {
+    var k = CERT_LABELS[i][0], label = CERT_LABELS[i][1]
+    var url = equipos[k]
+    if (!url) continue
+    try {
+      var res = await fetch(url)
+      var blob = await res.blob()
+      var objUrl = URL.createObjectURL(blob)
+      var a = document.createElement('a')
+      a.href = objUrl; a.download = nombreCertificado(label, blob)
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      setTimeout(function () { URL.revokeObjectURL(objUrl) }, 15000)
+    } catch (e) { /* se omite — el link manual del certificado sigue disponible */ }
+  }
+}
+function descargarProto(p, equipos, incluirCerts) { const w = window.open('', '_blank'); if (!w) { window.alert('Habilita las ventanas emergentes.'); return } try{var _i=localStorage.getItem('serein_logoIstria')||'',_sv=null,_sw=0;if(_i&&String(p.area||'').toLowerCase().indexOf('istria')>=0){_sv=localStorage.getItem('serein_logo');localStorage.setItem('serein_logo',_i);_sw=1;window.__sereinProtoIstria=true}}catch(e){} w.document.write(p.tipo === 'PIG' ? htmlPIG(p, equipos) : htmlPGP(p, equipos)); try{if(_sw){if(_sv==null)localStorage.removeItem('serein_logo');else localStorage.setItem('serein_logo',_sv);window.__sereinProtoIstria=false;}}catch(e){} w.document.close(); if (incluirCerts !== false) descargarCertificadosInstrumentos(equipos); setTimeout(function () { w.focus(); w.print() }, 400) }
 function PF({ label, children }) { return (<div><div style={{ fontSize: 11, color: '#9AA3AD', marginBottom: 2, marginTop: 4 }}>{label}</div>{children}</div>) }
 // Checklist de marcas de pieza para un protocolo: las candidatas salen de
 // las "marcas esperadas" cargadas por Excel en la OT (ver MarcasEsperadasOT
@@ -1387,18 +1497,18 @@ function TablaMedidas({ titulo, filas, ncols, onSetCell, onAuto, onAddFila, onDe
   const ip = { padding: '4px 5px', border: '1px solid #DFE4EA', fontSize: 12, width: 50, textAlign: 'center', boxSizing: 'border-box' }
   const proms = filas.map(f => promArr(f)); const global = proms.length ? (proms.reduce((a, b) => a + b, 0) / proms.length) : 0
   return (<div style={{ marginTop: 8 }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}><span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase' }}>{titulo}</span><div style={{ display: 'flex', gap: 6 }}>{onAddFila && <button onClick={onAddFila} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '4px 8px', cursor: 'pointer', fontSize: 12 }}>+ fila</button>}{onDelFila && filas.length > 1 && <button onClick={onDelFila} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '4px 8px', cursor: 'pointer', fontSize: 12 }}>- fila</button>}<button onClick={onAuto} title="Completa las celdas vacias con valores aceptables" style={{ background: '#3D7A4E', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 12 }}>Autocompletar</button></div></div><div style={{ overflowX: 'auto' }}><table style={{ borderCollapse: 'collapse', fontSize: 12, marginTop: 4 }}><thead><tr><th style={{ padding: 3, fontSize: 10, color: '#9AA3AD' }}>Item</th>{Array.from({ length: ncols }).map((_, c) => <th key={c} style={{ padding: 3, fontSize: 10, color: '#9AA3AD' }}>{c + 1}</th>)}<th style={{ padding: 3, fontSize: 10, color: '#9AA3AD' }}>Prom.</th></tr></thead><tbody>{filas.map((f, ri) => (<tr key={ri}><td style={{ padding: 2, textAlign: 'center', fontWeight: 600 }}>{ri + 1}</td>{f.map((v, ci) => <td key={ci} style={{ padding: 2 }}><input style={ip} value={v} onChange={e => onSetCell(ri, ci, e.target.value)} /></td>)}<td style={{ padding: 2, textAlign: 'center', fontWeight: 700, color: '#F77716' }}>{proms[ri] ? proms[ri].toFixed(2) : ''}</td></tr>))}</tbody></table></div><div style={{ fontSize: 12, marginTop: 4 }}>{resumen}: <b>{global ? global.toFixed(2) : ''}</b></div></div>) }
-// Certificados que salen listados como link clickeable, ademas del intento
-// automatico de abrirCertificadosInstrumentos() al descargar el protocolo.
-// El auto-open via window.open() en cadena lo bloquea el navegador en la
-// mayoria de los casos (solo el primer popup de un mismo click suele pasar
-// el bloqueador) — este listado es el respaldo que SIEMPRE funciona, porque
-// cada click en el link es un gesto de usuario nuevo.
+// Certificados: se descargan solos (fetch + blob, ver
+// descargarCertificadosInstrumentos) al apretar "Descargar PDF", si el
+// checkbox "incluir certificados" esta tildado (por defecto si). Ademas
+// siempre queda el listado de links clickeables abajo como respaldo manual,
+// para volver a bajar uno solo o por si el fetch automatico fallara.
 var CERT_LABELS = [['espCertificado', 'Medidor de espesor'], ['rugCertificado', 'Rugosimetro'], ['termoCertificado', 'Termohigrometro'], ['granallaCertificado', 'Granalla'], ['galgasCertificado', 'Galgas de calibracion']]
 function ProtoHead({ p, upd, onDel, titulo, equipos, col, onTgl }) {
   const ip = { padding: '6px 8px', border: '1px solid #DFE4EA', fontSize: 12.5, boxSizing: 'border-box', width: '100%' }
   const set = (k, v) => upd({ ...p, [k]: v })
   const certsDisponibles = CERT_LABELS.filter(c => equipos && equipos[c[0]])
-  return (<div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}><span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 14, textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }} onClick={onTgl}>{col ? '▸ ' : '▾ '}{p.codigo} - {titulo}</span><div style={{ display: 'flex', gap: 8 }}><button onClick={() => descargarProto(p, equipos)} style={{ background: '#101315', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>Descargar PDF</button><button onClick={onDel} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 10px', cursor: 'pointer', fontSize: 12.5, color: '#9AA3AD' }}>Eliminar</button></div></div>{certsDisponibles.length > 0 && (<div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 11.5, marginBottom: 8, padding: '6px 10px', background: '#F6F9F8', border: '1px solid #DFE4EA', borderRadius: 4 }}><span style={{ color: '#9AA3AD' }}>Certificados de calibracion:</span>{certsDisponibles.map(c => (<a key={c[0]} href={equipos[c[0]]} target="_blank" rel="noreferrer" style={{ color: '#0E7A8F', fontWeight: 600 }}>{c[1]}</a>))}</div>)}{!col && (<><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8 }}><PF label="Codigo"><input style={ip} value={p.codigo} onChange={e => set('codigo', e.target.value)} /></PF><PF label="Orden de Trabajo"><input style={ip} value={p.ot} onChange={e => set('ot', e.target.value)} /></PF><PF label="NV"><input style={ip} value={p.nv} onChange={e => set('nv', e.target.value)} /></PF><PF label="Codigo PGP (gran/pintura)"><input style={ip} value={p.pgpCodigo} onChange={e => set('pgpCodigo', e.target.value)} /></PF><PF label="Cliente"><input style={ip} value={p.cliente} onChange={e => set('cliente', e.target.value)} /></PF><PF label="Proyecto"><input style={ip} value={p.proyecto} onChange={e => set('proyecto', e.target.value)} /></PF><PF label="Fecha"><input type="date" style={ip} value={p.fecha} onChange={e => set('fecha', e.target.value)} /></PF><PF label="Preparado por"><input style={ip} value={p.preparadoPor} onChange={e => set('preparadoPor', e.target.value)} /></PF></div><div style={{ marginTop: 10 }}><div style={{ fontSize: 11, color: '#9AA3AD', marginBottom: 4 }}>Logo del cliente (opcional) — si se carga, reemplaza el logo SEREIN solo en este documento</div><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>{p.logoCliente ? <img src={p.logoCliente} alt="logo cliente" style={{ height: 40, background: '#fff', border: '1px solid #DFE4EA', borderRadius: 4, padding: 3, objectFit: 'contain' }} /> : <div style={{ height: 40, width: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #DFE4EA', borderRadius: 4, fontSize: 10.5, color: '#9AA3AD' }}>Sin logo</div>}<label style={{ cursor: 'pointer', background: '#101315', color: '#fff', fontSize: 11.5, fontWeight: 600, padding: '6px 11px', borderRadius: 4 }}>Subir logo<input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const fl = e.target.files[0]; if (!fl) return; imgToData(fl, d => set('logoCliente', d)); e.target.value = '' }} /></label>{p.logoCliente && <button onClick={() => set('logoCliente', '')} style={{ background: 'transparent', border: '1px solid #DFE4EA', color: '#C5453D', fontSize: 11.5, padding: '6px 10px', borderRadius: 4, cursor: 'pointer' }}>Quitar</button>}</div></div></>)}</div>) }
+  const [incluirCerts, setIncluirCerts] = useState(true)
+  return (<div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}><span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 14, textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }} onClick={onTgl}>{col ? '▸ ' : '▾ '}{p.codigo} - {titulo}</span><div style={{ display: 'flex', gap: 8 }}><button onClick={() => descargarProto(p, equipos, incluirCerts)} style={{ background: '#101315', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>Descargar PDF</button><button onClick={onDel} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 10px', cursor: 'pointer', fontSize: 12.5, color: '#9AA3AD' }}>Eliminar</button></div></div>{certsDisponibles.length > 0 && (<div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 11.5, marginBottom: 8, padding: '6px 10px', background: '#F6F9F8', border: '1px solid #DFE4EA', borderRadius: 4 }}><label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', color: '#5A636E' }}><input type="checkbox" checked={incluirCerts} onChange={e => setIncluirCerts(e.target.checked)} style={{ cursor: 'pointer' }} /> Incluir certificados al descargar</label><span style={{ color: '#9AA3AD' }}>·</span>{certsDisponibles.map(c => (<a key={c[0]} href={equipos[c[0]]} target="_blank" rel="noreferrer" style={{ color: '#0E7A8F', fontWeight: 600 }}>{c[1]}</a>))}</div>)}{!col && (<><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8 }}><PF label="Codigo"><input style={ip} value={p.codigo} onChange={e => set('codigo', e.target.value)} /></PF><PF label="Orden de Trabajo"><input style={ip} value={p.ot} onChange={e => set('ot', e.target.value)} /></PF><PF label="NV"><input style={ip} value={p.nv} onChange={e => set('nv', e.target.value)} /></PF><PF label="Codigo PGP (gran/pintura)"><input style={ip} value={p.pgpCodigo} onChange={e => set('pgpCodigo', e.target.value)} /></PF><PF label="Cliente"><input style={ip} value={p.cliente} onChange={e => set('cliente', e.target.value)} /></PF><PF label="Proyecto"><input style={ip} value={p.proyecto} onChange={e => set('proyecto', e.target.value)} /></PF><PF label="Fecha"><input type="date" style={ip} value={p.fecha} onChange={e => set('fecha', e.target.value)} /></PF><PF label="Preparado por"><input style={ip} value={p.preparadoPor} onChange={e => set('preparadoPor', e.target.value)} /></PF></div><div style={{ marginTop: 10 }}><div style={{ fontSize: 11, color: '#9AA3AD', marginBottom: 4 }}>Logo del cliente (opcional) — si se carga, reemplaza el logo SEREIN solo en este documento</div><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>{p.logoCliente ? <img src={p.logoCliente} alt="logo cliente" style={{ height: 40, background: '#fff', border: '1px solid #DFE4EA', borderRadius: 4, padding: 3, objectFit: 'contain' }} /> : <div style={{ height: 40, width: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #DFE4EA', borderRadius: 4, fontSize: 10.5, color: '#9AA3AD' }}>Sin logo</div>}<label style={{ cursor: 'pointer', background: '#101315', color: '#fff', fontSize: 11.5, fontWeight: 600, padding: '6px 11px', borderRadius: 4 }}>Subir logo<input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const fl = e.target.files[0]; if (!fl) return; imgToData(fl, d => set('logoCliente', d)); e.target.value = '' }} /></label>{p.logoCliente && <button onClick={() => set('logoCliente', '')} style={{ background: 'transparent', border: '1px solid #DFE4EA', color: '#C5453D', fontSize: 11.5, padding: '6px 10px', borderRadius: 4, cursor: 'pointer' }}>Quitar</button>}</div></div></>)}</div>) }
 function ProtoPIGForm({ p, upd, onDel, instrumentos, marcasEsperadas = [], usadasEnOtros = [] }) {
   const ip = { padding: '6px 8px', border: '1px solid #DFE4EA', fontSize: 12.5, boxSizing: 'border-box', width: '100%' }
   const set = (k, v) => upd({ ...p, [k]: v }); const setAmb = (k, v) => upd({ ...p, amb: { ...p.amb, [k]: v } }); const setChk = (i, k, v) => upd({ ...p, checks: p.checks.map((c, j) => j === i ? { ...c, [k]: v } : c) }); const setMed = (i, v) => upd({ ...p, medidas: p.medidas.map((m, j) => j === i ? v : m) }); const [col, setCol] = useState(false)
