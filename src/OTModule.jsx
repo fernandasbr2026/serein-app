@@ -427,7 +427,7 @@ function TileOT({ ot, onOpen, onDragStart, onDropOn, verValores }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
           <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 12, background: '#101315', color: '#fff', padding: '2px 7px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{ot.numero}</span>
-          {(ot.area === 'Santa Rosa' || ot.sede === 'Santa Rosa') && ot.oc && ot.oc !== '—' ? <span title="Orden de compra del cliente" style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 11.5, background: '#F77716', color: '#fff', padding: '2px 7px', borderRadius: 3, whiteSpace: 'nowrap' }}>OC {ot.oc}</span> : null}
+          {(ot.area === 'Santa Rosa' || ot.sede === 'Santa Rosa') && ot.oc && ot.oc !== '—' ? <span title="Orden de compra del cliente" style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 11.5, background: '#1B9E5D', color: '#fff', padding: '2px 7px', borderRadius: 3, whiteSpace: 'nowrap' }}>OC {ot.oc}</span> : null}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <ChipEstado ot={ot} />
@@ -551,7 +551,7 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onDelete, onCambiarEstado
             <ChipEstado ot={ot} />
           </div>
           <div style={{ fontSize: 12, color: '#9AA3AD', marginTop: 5, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-            <span><FileText size={11} style={{ verticalAlign: -1 }} /> {ot.cotizacion}{ot.oc && ot.oc !== '—' ? ' · Aprob. cliente ' + ot.oc : ''}</span>
+            <span><FileText size={11} style={{ verticalAlign: -1 }} /> {ot.cotizacion}{ot.oc && ot.oc !== '—' ? <> · Aprob. cliente <b style={{ color: '#1B9E5D' }}>{ot.oc}</b></> : ''}</span>
             {ot.m2 > 0 && <span><Ruler size={11} style={{ verticalAlign: -1 }} /> {ot.m2} m²</span>}
             <span><Paintbrush size={11} style={{ verticalAlign: -1 }} /> {ot.esquema}</span>
           </div>
