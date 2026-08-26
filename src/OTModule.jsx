@@ -1166,7 +1166,7 @@ var PROTO_CSS = '@page{size:A4;margin:20mm 15mm 15mm 15mm}*{box-sizing:border-bo
 // pedidas por el usuario y no las bloquee como popup.
 function abrirCertificadosInstrumentos(equipos) {
   if (!equipos) return
-  ;['espCertificado', 'rugCertificado', 'termoCertificado'].forEach(function (k) {
+  ;['espCertificado', 'rugCertificado', 'termoCertificado', 'granallaCertificado', 'galgasCertificado'].forEach(function (k) {
     if (equipos[k]) window.open(equipos[k], '_blank')
   })
 }
