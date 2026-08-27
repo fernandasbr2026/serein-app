@@ -26,11 +26,22 @@ const AREAS = ['Santa Rosa', 'Istria', 'Proyectos']
 const ESTADOS_COT = ['Alta probabilidad de cierre', 'Baja probabilidad de cierre', 'Aprobada', 'Rechazada', 'Otro']
 const colorEstadoCot = e => ({ 'Aprobada': [SEREIN.greenSoft, C.verde], 'Rechazada': [SEREIN.redSoft, C.rojo], 'Alta probabilidad de cierre': [SEREIN.blueSoft, SEREIN.blue], 'Baja probabilidad de cierre': [SEREIN.orangeSoft, SEREIN.orangeDark], 'Otro': [SEREIN.fog2, C.gris] }[e] || [SEREIN.fog2, C.gris])
 
-// Datos de la empresa (encabezado del documento)
-const _EMP_DEF = { nombre: 'SERVICIOS REVESTIMIENTOS INDUSTRIALES SPA', rut: '76.860.656-0', giro: 'Revestimientos Industriales y habitacionales', direccion: 'Santa Rosa 70, RENCA', telefono: '56999369503', email: 'administracion@sereinspa.com' }
+// Datos de la empresa (encabezado del documento).
+// Sin telefono: los documentos comerciales llevan solo direccion y correo
+// corporativo — el celular que estaba aqui era personal y no debe salir en
+// cotizaciones, OT ni informes enviados a clientes o proveedores.
+const _EMP_DEF = { nombre: 'SERVICIOS REVESTIMIENTOS INDUSTRIALES SPA', rut: '76.860.656-0', giro: 'Revestimientos Industriales y habitacionales', direccion: 'Santa Rosa 70', comuna: 'Lampa', email: 'administracion@sereinspa.com' }
 function _empVal(k, map) { try { const p = JSON.parse(localStorage.getItem('serein_params') || '{}'); const e = (p && p.empresa) || {}; const v = e[map]; return (v && String(v).trim()) || _EMP_DEF[k] || '' } catch (x) { return _EMP_DEF[k] || '' } }
 export const EMPRESA = {}
-;[['nombre', 'razonSocial'], ['rut', 'rut'], ['giro', 'giro'], ['direccion', 'direccion'], ['telefono', 'telefono'], ['email', 'correo']].forEach(m => Object.defineProperty(EMPRESA, m[0], { get() { return _empVal(m[0], m[1]) }, enumerable: true }))
+;[['nombre', 'razonSocial'], ['rut', 'rut'], ['giro', 'giro'], ['direccion', 'direccion'], ['comuna', 'comuna'], ['email', 'correo']].forEach(m => Object.defineProperty(EMPRESA, m[0], { get() { return _empVal(m[0], m[1]) }, enumerable: true }))
+// Linea de contacto unica de todos los documentos: "Santa Rosa 70, Lampa · administracion@sereinspa.com".
+// La comuna se agrega solo si la direccion configurada en Parametros no trae
+// ya una (es decir, si viene sin coma); asi respeta lo que la persona escribio.
+export function contactoEmpresa() {
+  const d = EMPRESA.direccion || '', c = EMPRESA.comuna || ''
+  const dir = (c && d && d.indexOf(',') === -1) ? (d + ', ' + c) : d
+  return [dir, EMPRESA.email].filter(Boolean).join(' · ')
+}
 
 const itemTotal = it => Math.max(0, Math.round((numDec(it.cant) * num(it.pUnitario)) - num(it.descuento)))
 export function totales(cot) {
@@ -123,7 +134,7 @@ function htmlDoc(cot, { conValores, esOT, conCondiciones }) {
       ${(function(){var _l='';try{_l=localStorage.getItem('serein_logo')||''}catch(e){}return _l?'<img src="'+_l+'" style="height:46px;display:block;margin-bottom:8px"/>':''})()}
       <div class="emp"><b>${EMPRESA.nombre}</b>
         <div>R.U.T: ${EMPRESA.rut}</div><div>${EMPRESA.giro}</div>
-        <div>${EMPRESA.direccion}</div><div>Teléfono: ${EMPRESA.telefono}</div><div>Email: ${EMPRESA.email}</div>
+        <div>${contactoEmpresa()}</div>
       </div>
       <div class="doc"><div class="t">${titulo}</div><div class="f">${foliolbl}</div></div>
     </div>
@@ -189,13 +200,13 @@ const fmt = n => (Math.round((n || 0) * 10) / 10).toLocaleString('es-CL')
 const totEnv = rows.reduce((a, c) => a + c.envases, 0)
 const filasHtml = rows.map((c, i) => `<tr><td>${i + 1}</td><td>${c.producto}</td><td class="r">${c.envases}</td><td class="r">${fmt(c.litrosEnvase)} L</td><td class="r">${fmt(c.envases * c.litrosEnvase)} L</td></tr>`).join('')
 const html = `<!doctype html><html><head><meta charset="utf-8"><title>Solicitud pintura ${cot.folio || ''}</title><style>${estilosDoc()} h2{font-family:Oswald,Arial;color:#101315;margin:14px 0 6px;font-size:15px} .sub{color:#5A636E;font-size:12px;margin-bottom:10px}</style></head><body>`
-+ `<div class="head"><div class="emp"><b>${EMPRESA.nombre || 'SEREIN SpA'}</b><div>R.U.T: ${EMPRESA.rut || ''}</div><div>${EMPRESA.direccion || ''}</div><div>${EMPRESA.email || ''}</div></div><div class="doc"><div class="t">Solicitud de compra</div><div class="f">Pintura · Cot. N° ${cot.folio || ''}</div></div></div>`
++ `<div class="head"><div class="emp"><b>${EMPRESA.nombre || 'SEREIN SpA'}</b><div>R.U.T: ${EMPRESA.rut || ''}</div><div>${contactoEmpresa()}</div></div><div class="doc"><div class="t">Solicitud de compra</div><div class="f">Pintura · Cot. N° ${cot.folio || ''}</div></div></div>`
 + `<div class="sub">Fecha: ${new Date().toISOString().slice(0, 10)} · Obra/Cliente: ${cot.cliente || ''} · Área: ${cot.area || ''}</div>`
 + `<div style="font-size:12px;margin:6px 0 10px">Estimado proveedor, solicitamos cotizar y despachar los siguientes productos (envases completos):</div>`
 + `<table class="items"><thead><tr><th>#</th><th>Producto</th><th class="r">Envases</th><th class="r">Contenido/env</th><th class="r">Total litros</th></tr></thead><tbody>${filasHtml}</tbody></table>`
 + `<table class="tot"><tr><td class="lbl big">Total envases</td><td class="r big">${totEnv}</td></tr></table>`
 + `<div class="sub" style="margin-top:14px">Favor confirmar disponibilidad, precio y plazo de entrega. Despachar a: ${EMPRESA.direccion || ''}.</div>`
-+ `<div class="datos" style="margin-top:10px;border:1px solid #D8DCE5;padding:10px;font-size:11px">Contacto: ${EMPRESA.nombre || ''} · ${EMPRESA.email || ''} · Tel: ${EMPRESA.telefono || ''}</div>`
++ `<div class="datos" style="margin-top:10px;border:1px solid #D8DCE5;padding:10px;font-size:11px">Contacto: ${EMPRESA.nombre || ''} · ${EMPRESA.email || ''}</div>`
 + `</body></html>`
 imprimir(html)
 }
@@ -213,7 +224,7 @@ function htmlOTDoc(ot) {
   return `<!doctype html><html><head><meta charset="utf-8"><title>OT ${ot.numero || ''}</title><style>${estilosDoc()}</style></head><body>
     <div class="head">
       ${(function(){var _l='';try{_l=localStorage.getItem('serein_logo')||''}catch(e){}return _l?'<img src="'+_l+'" style="height:46px;display:block;margin-bottom:8px"/>':''})()}
-      <div class="emp"><b>${EMPRESA.nombre}</b><div>R.U.T: ${EMPRESA.rut}</div><div>${EMPRESA.direccion}</div><div>Tel: ${EMPRESA.telefono} · ${EMPRESA.email}</div></div>
+      <div class="emp"><b>${EMPRESA.nombre}</b><div>R.U.T: ${EMPRESA.rut}</div><div>${contactoEmpresa()}</div></div>
       <div class="doc"><div class="t">Orden de trabajo</div><div class="f">${ot.numero || ''}</div></div>
     </div>
     <table class="cli"><tbody>

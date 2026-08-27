@@ -1,5 +1,5 @@
 import { SEREIN } from './theme-serein.js'
-import { EMPRESA } from './CotizacionesModule.jsx'
+import { EMPRESA, contactoEmpresa } from './CotizacionesModule.jsx'
 
 // ============================================================
 // Informe PDF de facturas seleccionadas (Facturas / Libro de Ventas).
@@ -83,7 +83,7 @@ function htmlInforme(items) {
         ${logo ? '<img src="' + logo + '" style="height:40px;display:block;margin-bottom:6px"/>' : ''}
         <b>${EMPRESA.nombre}</b>
         <div>R.U.T: ${EMPRESA.rut}</div><div>${EMPRESA.giro}</div>
-        <div>${EMPRESA.direccion}</div><div>Teléfono: ${EMPRESA.telefono}</div><div>Email: ${EMPRESA.email}</div>
+        <div>${contactoEmpresa()}</div>
       </div>
       <div class="doc"><div class="t">Informe de facturas</div><div class="f">${filas.length} documento(s) · Emitido el ${fmtF(new Date().toISOString().slice(0, 10))}</div></div>
     </div>
