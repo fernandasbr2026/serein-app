@@ -204,14 +204,44 @@ const html = `<!doctype html><html><head><meta charset="utf-8"><title>Solicitud 
 imprimir(html)
 }
 
-// OT en PDF a partir de la OT real (refleja esquema, servicios y partidas editados)
+// OT en PDF a partir de la OT real (refleja esquema, servicios, marcas
+// esperadas, recepcion y despacho editados en la app). A proposito NO
+// incluye protocolos de calidad (PIG/PGP) ni certificados de calibracion —
+// esos se descargan aparte, desde cada protocolo. Tampoco incluye montos
+// (mismo criterio de siempre: "documento sin valores, uso interno/taller").
+function tablaDetalleMaterial(titulo, filas) {
+  if (!filas.length) return ''
+  const r2 = n => Math.round((parseFloat(n) || 0) * 100) / 100
+  const rows = filas.map((p, i) => {
+    const dif = r2(p.m2Propio) - r2(p.m2Cliente)
+    const difTxt = (p.m2Cliente || p.m2Propio) ? (dif.toFixed(2) + ' m²') : '—'
+    return `<tr><td>${i + 1}</td><td>${p.detalle || ''}</td><td>${p.fecha || ''}</td><td>${p.estado || ''}</td>
+      <td class="r">${p.cantidad || ''}</td><td class="r">${p.m2 || ''}</td>
+      <td class="r">${p.m2Cliente || ''}</td><td class="r">${p.m2Propio || ''}</td><td class="r">${difTxt}</td>
+      <td>${p.tipo || ''}</td><td>${p.obs || ''}</td></tr>`
+  }).join('')
+  return `<div style="margin-top:12px"><b style="font-size:12px">${titulo}</b>
+    <table class="items" style="margin-top:4px"><thead><tr><th>N°</th><th>Detalle</th><th>Fecha</th><th>Estado</th><th class="r">Cant.</th><th class="r">m²</th><th class="r">m² cliente</th><th class="r">m² propios</th><th class="r">Diferencia</th><th>Tipo</th><th>Observaciones</th></tr></thead><tbody>${rows}</tbody></table></div>`
+}
 function htmlOTDoc(ot) {
   const items = ot.itemsCot || []
   const filas = items.map((it, i) => `<tr><td>${i + 1}</td><td>${it.codigo || ''}</td><td><b>${it.detalle || ''}</b>${it.comentario ? '<br><span style="color:#777">Comentario: ' + it.comentario + '</span>' : ''}</td><td class="r">${fmtCant(it.cant)}</td><td>${it.unidad || 'UN'}</td></tr>`).join('')
   const partidas = ot.partidas || []
-  const partHtml = partidas.length ? `<div style="margin-top:12px"><b style="font-size:12px">Partidas / entregas de material</b>
-    <table class="items" style="margin-top:4px"><thead><tr><th>N°</th><th>Detalle del material</th><th>Fecha estimada</th><th>Estado</th></tr></thead><tbody>
-    ${partidas.map((p, i) => `<tr><td>${i + 1}</td><td>${p.detalle || ''}</td><td>${p.fecha || ''}</td><td>${p.estado || ''}</td></tr>`).join('')}</tbody></table></div>` : ''
+  const despachos = ot.despachos || []
+  const marcasEsperadas = ot.marcasEsperadas || []
+  const partHtml = tablaDetalleMaterial('Recepción / Partidas de material', partidas)
+  const despHtml = tablaDetalleMaterial('Entregas / Despacho SEREIN', despachos)
+  const marcasHtml = marcasEsperadas.length ? `<div style="margin-top:12px"><b style="font-size:12px">Marcas esperadas (checklist de recepción)</b>
+    <table class="items" style="margin-top:4px"><thead><tr><th>Marca</th><th class="r">m² cliente</th><th class="r">m² propios</th><th>Recibida</th><th>Fecha recibida</th></tr></thead><tbody>
+    ${marcasEsperadas.map(m => `<tr><td>${m.marca || ''}</td><td class="r">${m.m2 || ''}</td><td class="r">${m.m2Propio || ''}</td><td>${m.recibida ? 'Sí' : 'No'}</td><td>${m.fechaRecibida || ''}</td></tr>`).join('')}</tbody></table></div>` : ''
+  const r2 = n => Math.round((parseFloat(n) || 0) * 100) / 100
+  const m2c = r2(ot.m2)
+  const m2r = r2(partidas.reduce((s, p) => s + (parseFloat(p.m2) || 0), 0))
+  const m2d = r2(despachos.reduce((s, p) => s + (parseFloat(p.m2) || 0), 0))
+  const m2planta = r2(m2r - m2d)
+  const resumenM2Html = `<div style="margin-top:12px"><b style="font-size:12px">Resumen de m²</b>
+    <table class="items" style="margin-top:4px"><thead><tr><th>m² cotización</th><th>m² recepcionados</th><th>m² despachados</th><th>m² en planta</th></tr></thead><tbody>
+    <tr><td class="r">${m2c}</td><td class="r">${m2r}</td><td class="r">${m2d}</td><td class="r">${m2planta}</td></tr></tbody></table></div>`
   const esquema = (ot.esquema && ot.esquema !== '—') ? String(ot.esquema).replace(/\n/g, '<br>') : ''
   const servicios = ot.servicios ? String(ot.servicios).replace(/\n/g, '<br>') : ''; const pintHtml = (ot.pinturaCotizada && ot.pinturaCotizada.length) ? '<div style="margin-top:12px"><b style="font-size:12px">Pintura cotizada (tope de consumo)</b><table class="items" style="margin-top:4px"><thead><tr><th>Producto</th><th>Envases</th><th>Litros</th></tr></thead><tbody>' + ot.pinturaCotizada.map(p => '<tr><td>' + (p.producto || '') + '</td><td>' + (p.envases || 0) + '</td><td>' + (Math.round((p.litros || 0) * 10) / 10) + ' L</td></tr>').join('') + '</tbody></table><div style="font-size:10px;color:#777;margin-top:3px">No usar mas pintura que la cotizada para este proyecto.</div></div>' : ''
   return `<!doctype html><html><head><meta charset="utf-8"><title>OT ${ot.numero || ''}</title><style>${estilosDoc()}</style></head><body>
@@ -227,7 +257,10 @@ function htmlOTDoc(ot) {
     ${items.length ? `<table class="items"><thead><tr><th>Item</th><th>Código</th><th>Detalle</th><th>Cant</th><th>Unidad</th></tr></thead><tbody>${filas}</tbody></table>` : ''}
     ${esquema ? `<div style="margin-top:12px;font-size:11px"><b>Esquema de pintura:</b><br>${esquema}</div>` : ''}
     ${servicios ? `<div style="margin-top:8px;font-size:11px"><b>Servicios / observaciones:</b><br>${servicios}</div>` : ''}
+    ${resumenM2Html}
+    ${marcasHtml}
     ${partHtml}
+    ${despHtml}
     ${pintHtml}
     <div class="badge" style="margin-top:12px">DOCUMENTO SIN VALORES · USO INTERNO / TALLER</div>
   </body></html>`
