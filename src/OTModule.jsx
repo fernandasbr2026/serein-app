@@ -487,9 +487,9 @@ function RecepcionOT({ ot, onUpdate, onAgregarArray, onUpdateMarcasEsperadas }) 
   }
   const setP = (i, campo, valor) => onUpdate(ot.id, { partidas: partidas.map((x, j) => j === i ? { ...x, [campo]: valor } : x) })
 
-  return (<div style={{ marginTop: 14 }}>
+  return (<div style={{ marginTop: 14, background: '#F2F4F6', border: '1px solid #DBE0E5', borderLeft: '4px solid #5A6B85', borderRadius: 6, padding: 12 }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-      <span style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: '#D9600A' }}>Recepción / Partidas / entregas de material</span>
+      <span style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: '#5A6B85' }}>Recepción / Partidas de material</span>
       <button onClick={() => onAgregarArray(ot.id, 'partidas', { id: 'pa' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [] })} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}><Plus size={14} /> Agregar recepción</button>
     </div>
 
@@ -522,7 +522,7 @@ function RecepcionOT({ ot, onUpdate, onAgregarArray, onUpdateMarcasEsperadas }) 
     {partidas.length === 0 ? (<div style={{ fontSize: 12, color: '#9AA3AD', marginBottom: 6 }}>Sin registros.</div>) : null}
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {partidas.map((p, i) => (
-        <div key={p.id || i} style={{ border: '1px solid #DFE4EA', borderRadius: 6, padding: 10, background: '#FCFBF9' }}>
+        <div key={p.id || i} style={{ border: '1px solid #DBE0E5', borderRadius: 6, padding: 10, background: '#fff' }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
             <span style={{ fontWeight: 700, fontSize: 12, color: C.carbon }}>#{i + 1}</span>
             <input value={p.detalle || ''} onChange={e => setP(i, 'detalle', e.target.value)} placeholder="Detalle del material" style={{ ...inp2, flex: '2 1 150px' }} />
@@ -921,7 +921,7 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
 
         {/* ENTREGAS / DESPACHO SEREIN */}
 
-        <div style={{ marginTop: 14 }}>
+        <div style={{ marginTop: 14, background: '#FFF4EC', border: '1px solid #F3D9C2', borderLeft: '4px solid #D9600A', borderRadius: 6, padding: 12 }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
             <span style={{ fontSize:13, fontWeight:700, textTransform:'uppercase', color:'#D9600A' }}>Entregas / Despacho SEREIN</span>
             <button onClick={() => onAgregarArray(ot.id, 'despachos', { id: 'de' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [] })} style={{ background: C.teal, color:'#fff', border:'none', padding:'6px 12px', cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', gap:4 }}><Plus size={14} /> Agregar despacho</button>
@@ -930,7 +930,7 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
           {(ot.despachos || []).length === 0 ? (<div style={{ fontSize:12, color:'#9AA3AD', marginBottom:6 }}>Sin registros.</div>) : null}
           <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
             {(ot.despachos || []).map((p, i) => (
-              <div key={p.id || i} style={{ border:'1px solid #DFE4EA', borderRadius:6, padding:10, background:'#FCFBF9' }}>
+              <div key={p.id || i} style={{ border:'1px solid #F3D9C2', borderRadius:6, padding:10, background:'#fff' }}>
                 <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', marginBottom:8 }}>
                   <span style={{ fontWeight:700, fontSize:12, color:C.carbon }}>#{i + 1}</span>
                   <input value={p.detalle || ''} onChange={e => onUpdate(ot.id, { despachos: (ot.despachos || []).map((x, j) => j === i ? { ...x, detalle: e.target.value } : x) })} placeholder="Detalle del material" style={{ ...inp, flex:'2 1 150px', padding:'6px 8px' }} />
