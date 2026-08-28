@@ -135,8 +135,8 @@ function htmlInforme({ items, area, filtroDescripcion, periodoDescripcion, usuar
     <div class="datos"><b>Datos de transferencia</b><br/>
       SERVICIOS REVESTIMIENTOS INDUSTRIALES SpA · RUT 76.860.656-0<br/>
       Banco de Chile · Cuenta Corriente N° 532147409<br/>
-      ${EMPRESA.email} · Carolina Marillanca, Gerente Comercial<br/>
-      Dirección: Santa Rosa 70, Lampa · sereingroup.cl · Tel: 56 9 7647 1744
+      ${EMPRESA.email}<br/>
+      Dirección: Santa Rosa 70, Lampa · sereingroup.cl
     </div>
   </body></html>`
 }
