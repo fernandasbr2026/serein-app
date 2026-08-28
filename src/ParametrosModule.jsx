@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Plus, Trash2, Landmark, Info, TrendingUp, RefreshCw } from 'lucide-react'
 import { pullState, pushState } from './sync.js'
 import { supabase } from './supabase.js'
@@ -28,6 +28,30 @@ export const PARAMS_SEED = {
   instrumentos: { espMarca: 'ELCOMETER', espSerie: 'MH11472', rugMarca: 'ELCOMETER', rugSerie: 'NE30319', termoMarca: 'ELCOMETER', termoSerie: 'KCA721' },
 }
 
+// Escritura segura de params: TODO Parametros (factoring, UF, instrumentos,
+// certificados, empresa, logos) vive en UN solo blob (serein_params). Antes
+// cada seccion escribia ese blob completo calculado desde el `params` local
+// de React, sin traer lo mas fresco de la nube primero — si dos cambios
+// caian cerca en el tiempo (dos pestanas, o incluso solo el usuario subiendo
+// varios certificados seguidos sin esperar a que cada uno terminara), el
+// segundo pisaba al primero y ese campo desaparecia sin aviso (asi se
+// perdieron los certificados de calibracion). Mismo patron ya probado en
+// OrdenesCompraModule/FacturasModule/OTModule: traer lo fresco de la nube
+// justo antes de escribir, y solo fusionar el pedazo que cambio.
+async function paramsFrescos(paramsLocal) {
+  try { await pullState() } catch (e) {}
+  try {
+    const f = JSON.parse(localStorage.getItem('serein_params') || 'null')
+    if (f && typeof f === 'object') return f
+  } catch (e) {}
+  return paramsLocal
+}
+function guardarParams(nuevo, setParams) {
+  try { localStorage.setItem('serein_params', JSON.stringify(nuevo)) } catch (e) {}
+  setParams(nuevo)
+  pushState()
+}
+
 // Cálculo de pérdida por factoring (reutilizable desde otros módulos)
 //  - base: monto total con IVA que adelanta el factoring
 //  - dias: días del crédito de la factura
@@ -55,12 +79,25 @@ export function perdidaFactoringFactura(fac, params) {
 function SeccionFactoring({ params, setParams }) {
   const lista = params.factoring || []
   const [nuevo, setNuevo] = useState({ nombre: '', tasa: '', tasaMora: '', costoOp: '' })
+  const pendFact = useRef({})
+  const timersFact = useRef({})
 
+  // Edicion de una fila existente (se escribe con cada tecla) — mismo patron
+  // debounced-seguro que Ordenes de Compra/Facturas: la UI se actualiza al
+  // toque, pero el guardado real (pull-fresh + fusion + push) se dispara
+  // recien 700ms despues de la ultima tecla, para no pisar cambios de otra
+  // pestana ni saturar Supabase escribiendo por cada digito.
   const actualizar = (id, campo, valor) => {
-    const nuevoParams = { ...params, factoring: lista.map(f => f.id === id ? { ...f, [campo]: valor } : f) }
-    try { localStorage.setItem('serein_params', JSON.stringify(nuevoParams)) } catch (e) {}
-    setParams(nuevoParams)
-    pushState()
+    setParams({ ...params, factoring: lista.map(f => f.id === id ? { ...f, [campo]: valor } : f) })
+    pendFact.current[id] = { ...(pendFact.current[id] || {}), [campo]: valor }
+    clearTimeout(timersFact.current[id])
+    timersFact.current[id] = setTimeout(async () => {
+      const patch = pendFact.current[id]; delete pendFact.current[id]
+      const base = await paramsFrescos(params)
+      const baseLista = base.factoring || []
+      const nuevoParams = { ...base, factoring: baseLista.map(f => f.id === id ? { ...f, ...patch } : f) }
+      guardarParams(nuevoParams, setParams)
+    }, 700)
   }
   async function agregar() {
     if (!nuevo.nombre) return
@@ -146,6 +183,7 @@ function SeccionUF({ params, setParams }) {
   const uf = params.uf || { valor: 0, fecha: '' }
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
+  const timerUf = useRef(null)
   async function traer() {
     setCargando(true); setError('')
     try {
@@ -153,14 +191,26 @@ function SeccionUF({ params, setParams }) {
       const d = await r.json()
       const s = d.serie && d.serie[0]
       if (s) {
-        const nuevo = { ...params, uf: { valor: Math.round(s.valor), fecha: (s.fecha || '').slice(0, 10) } }
-        try { localStorage.setItem('serein_params', JSON.stringify(nuevo)) } catch (e) {}
-        setParams(nuevo)
-        pushState()
+        const valorNuevo = { valor: Math.round(s.valor), fecha: (s.fecha || '').slice(0, 10) }
+        setParams({ ...params, uf: valorNuevo })
+        const base = await paramsFrescos(params)
+        guardarParams({ ...base, uf: valorNuevo }, setParams)
       }
       else setError('Sin datos de UF.')
     } catch (e) { setError('No se pudo actualizar la UF en línea. Puedes ingresarla a mano.') }
     setCargando(false)
+  }
+  // El ingreso manual se debounce igual que un campo de texto normal — se
+  // ve al toque, pero el pull-fresh + guardado recien pasa 700ms despues de
+  // la ultima tecla.
+  const cambiarValorManual = valor => {
+    const nuevo = { valor, fecha: uf.fecha }
+    setParams({ ...params, uf: nuevo })
+    clearTimeout(timerUf.current)
+    timerUf.current = setTimeout(async () => {
+      const base = await paramsFrescos(params)
+      guardarParams({ ...base, uf: nuevo }, setParams)
+    }, 700)
   }
   useEffect(() => { if (!uf.valor) traer() }, [])
   return (
@@ -180,7 +230,7 @@ function SeccionUF({ params, setParams }) {
             <RefreshCw size={13} /> {cargando ? 'Actualizando…' : 'Actualizar UF'}
           </button>
           <span style={{ fontSize: 12, color: C.gris }}>o ingresar a mano:</span>
-          <input value={uf.valor || ''} onChange={e => { const nuevo = { ...params, uf: { valor: num(e.target.value), fecha: uf.fecha } }; try { localStorage.setItem('serein_params', JSON.stringify(nuevo)) } catch (er) {}; setParams(nuevo); pushState() }} style={{ ...inp, width: 110, textAlign: 'right' }} />
+          <input value={uf.valor || ''} onChange={e => cambiarValorManual(num(e.target.value))} style={{ ...inp, width: 110, textAlign: 'right' }} />
         </div>
         {error && <div style={{ fontSize: 12, color: C.rojo, marginTop: 8 }}>{error}</div>}
         <div style={{ fontSize: 12, color: C.gris, marginTop: 12, background: '#F2F4F7', padding: 10 }}>
@@ -208,11 +258,43 @@ const subirCertificado = async (file, carpeta, cb) => {
 }
 function SeccionInstrumentos({ params, setParams }) {
   const inst = params.instrumentos || { espMarca: 'ELCOMETER', espSerie: 'MH11472', rugMarca: 'ELCOMETER', rugSerie: 'NE30319', termoMarca: 'ELCOMETER', termoSerie: 'KCA721' }
-  useEffect(() => { if (!params.instrumentos) { const nuevo = { ...params, instrumentos: inst }; try { localStorage.setItem('serein_params', JSON.stringify(nuevo)) } catch (e) {}; setParams(nuevo); pushState() } }, [])
-  const set = (k, v) => { const nuevo = { ...params, instrumentos: { ...inst, [k]: v } }; try { localStorage.setItem('serein_params', JSON.stringify(nuevo)) } catch (e) {}; setParams(nuevo); pushState() }
+  const pendInst = useRef({})
+  const timerInst = useRef(null)
+  useEffect(() => {
+    if (params.instrumentos) return
+    ;(async () => {
+      const base = await paramsFrescos(params)
+      if (base.instrumentos) { setParams(base); return }
+      guardarParams({ ...base, instrumentos: inst }, setParams)
+    })()
+  }, [])
+  // Un solo `set()` para todo (marca/serie escritas letra a letra, fotos y
+  // certificados por click): la UI se actualiza al toque, pero el guardado
+  // real se acumula en pendInst y se dispara 700ms despues del ultimo
+  // cambio — pull-fresh de la nube, fusiona SOLO los campos que cambiaron
+  // sobre eso, y recien ahi escribe. Asi un certificado subido no se pisa
+  // con un cambio de marca/serie hecho casi al mismo tiempo (ni con lo que
+  // haya cambiado cualquier otra pestana/persona mientras tanto).
+  const set = (k, v) => {
+    setParams({ ...params, instrumentos: { ...inst, [k]: v } })
+    pendInst.current[k] = v
+    clearTimeout(timerInst.current)
+    timerInst.current = setTimeout(async () => {
+      const patch = pendInst.current; pendInst.current = {}
+      const base = await paramsFrescos(params)
+      guardarParams({ ...base, instrumentos: { ...(base.instrumentos || {}), ...patch } }, setParams)
+    }, 700)
+  }
+  const setTop = (k, v) => {
+    setParams({ ...params, [k]: v })
+    ;(async () => {
+      const base = await paramsFrescos(params)
+      guardarParams({ ...base, [k]: v }, setParams)
+    })()
+  }
   const ip = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box', width: '100%', marginTop: 4 }
   const lb = { fontSize: 12, color: '#9AA3AD' }
-  return (<div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Instrumentos / equipos de inspeccion</div><div style={{ marginBottom: 16, paddingBottom: 14, borderBottom: '1px solid #DFE4EA' }}><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase', marginBottom: 4 }}>Logo de la empresa</div><div style={{ fontSize: 12, color: '#5A636E', marginBottom: 8 }}>Se usa en todos los PDF descargables (protocolos, cotizaciones y ordenes de compra).</div><div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>{(params.logo) ? <img src={params.logo} alt="logo" style={{ height: 50, background: '#fff', border: '1px solid #DFE4EA', borderRadius: 6, padding: 4, objectFit: 'contain' }} /> : <div style={{ height: 50, width: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #DFE4EA', borderRadius: 6, fontSize: 11, color: '#9AA3AD' }}>Sin logo</div>}<label style={{ cursor: 'pointer', background: '#101315', color: '#fff', fontSize: 12, fontWeight: 600, padding: '8px 14px', borderRadius: 6 }}>Subir logo<input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const fl = e.target.files[0]; if (!fl) return; const rd = new FileReader(); rd.onload = () => { const d = rd.result; try { localStorage.setItem('serein_logo', d) } catch (x) {} const nuevo = { ...params, logo: d }; try { localStorage.setItem('serein_params', JSON.stringify(nuevo)) } catch (x) {} setParams(nuevo); pushState() }; rd.readAsDataURL(fl) }} /></label>{params.logo ? <button onClick={() => { try { localStorage.removeItem('serein_logo') } catch (x) {} const nuevo = { ...params, logo: '' }; try { localStorage.setItem('serein_params', JSON.stringify(nuevo)) } catch (x) {} setParams(nuevo); pushState() }} style={{ background: 'transparent', border: '1px solid #DFE4EA', color: '#C5453D', fontSize: 12, padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>Quitar</button> : null}</div></div><div style={{ marginBottom: 16, paddingBottom: 14, borderBottom: '1px solid #DFE4EA' }}><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase', marginBottom: 4 }}>Logo Istria (PIG / PGP de Istria)</div><div style={{ fontSize: 12, color: '#5A636E', marginBottom: 8 }}>Se usa solo en los protocolos PIG y PGP de las OT del area Istria. Si no cargas uno, esos documentos usan el logo SEREIN.</div><div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>{(params.logoIstria) ? <img src={params.logoIstria} alt="logo Istria" style={{ height: 50, background: '#fff', border: '1px solid #DFE4EA', borderRadius: 6, padding: 4, objectFit: 'contain' }} /> : <div style={{ height: 50, width: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #DFE4EA', borderRadius: 6, fontSize: 11, color: '#9AA3AD' }}>Sin logo Istria</div>}<label style={{ cursor: 'pointer', background: '#101315', color: '#fff', fontSize: 12, fontWeight: 600, padding: '8px 14px', borderRadius: 6 }}>Subir logo Istria<input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const fl = e.target.files[0]; if (!fl) return; const rd = new FileReader(); rd.onload = () => { const d = rd.result; try { localStorage.setItem('serein_logoIstria', d) } catch (x) {} const nuevo = { ...params, logoIstria: d }; try { localStorage.setItem('serein_params', JSON.stringify(nuevo)) } catch (x) {} setParams(nuevo); pushState() }; rd.readAsDataURL(fl) }} /></label>{params.logoIstria ? <button onClick={() => { try { localStorage.removeItem('serein_logoIstria') } catch (x) {} const nuevo = { ...params, logoIstria: '' }; try { localStorage.setItem('serein_params', JSON.stringify(nuevo)) } catch (x) {} setParams(nuevo); pushState() }} style={{ background: 'transparent', border: '1px solid #DFE4EA', color: '#C5453D', fontSize: 12, padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>Quitar</button> : null}</div></div><div style={{ fontSize: 12, color: '#9AA3AD', marginBottom: 14 }}>Estos codigos se cargan automaticamente al generar un protocolo PGP y siguen siendo editables en cada protocolo. Cambialos aqui cuando cambien los equipos.</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px,1fr))', gap: 12 }}><label style={lb}>Medidor de espesor - Marca<input style={ip} value={inst.espMarca || ''} onChange={e => set('espMarca', e.target.value)} /></label><label style={lb}>Medidor de espesor - Serie<input style={ip} value={inst.espSerie || ''} onChange={e => set('espSerie', e.target.value)} /></label><label style={lb}>Rugosimetro - Marca<input style={ip} value={inst.rugMarca || ''} onChange={e => set('rugMarca', e.target.value)} /></label><label style={lb}>Rugosimetro - Serie<input style={ip} value={inst.rugSerie || ''} onChange={e => set('rugSerie', e.target.value)} /></label><label style={lb}>Termohigrometro - Marca<input style={ip} value={inst.termoMarca || ''} onChange={e => set('termoMarca', e.target.value)} /></label><label style={lb}>Termohigrometro - Serie<input style={ip} value={inst.termoSerie || ''} onChange={e => set('termoSerie', e.target.value)} /></label></div><div style={{ fontSize: 12, fontWeight: 600, color: '#5A636E', margin: '16px 0 8px' }}>Fotos de los equipos (aparecen en la ultima hoja de los protocolos)</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px,1fr))', gap: 14 }}>{[['Medidor de espesor', 'espFotos'], ['Rugosimetro', 'rugFotos'], ['Termohigrometro', 'termoFotos']].map(eq => { const fotos = inst[eq[1]] || []; return (<div key={eq[1]} style={{ border: '1px solid #DFE4EA', padding: 10 }}><div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>{eq[0]}</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{fotos.map((d, idx) => (<div key={idx} style={{ position: 'relative' }}><img src={d} style={{ width: 70, height: 70, objectFit: 'contain', background: '#F2F4F7', border: '1px solid #DFE4EA' }} /><button onClick={() => set(eq[1], fotos.filter((_, j) => j !== idx))} style={{ position: 'absolute', top: -6, right: -6, background: '#C5453D', color: '#fff', border: 'none', borderRadius: '50%', width: 18, height: 18, cursor: 'pointer', fontSize: 11 }}>x</button></div>))}{fotos.length < 3 && (<label style={{ width: 70, height: 70, border: '1px dashed #DFE4EA', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#9AA3AD', fontSize: 20 }}>+<input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { const files = [...(e.target.files || [])].slice(0, 3 - fotos.length); let pend = files.length; if (!pend) return; const acc = []; files.forEach(f => imgToDataP(f, d => { acc.push(d); pend--; if (pend === 0) set(eq[1], [...fotos, ...acc]) })); e.target.value = '' }} /></label>)}</div></div>) })}</div>
+  return (<div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Instrumentos / equipos de inspeccion</div><div style={{ marginBottom: 16, paddingBottom: 14, borderBottom: '1px solid #DFE4EA' }}><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase', marginBottom: 4 }}>Logo de la empresa</div><div style={{ fontSize: 12, color: '#5A636E', marginBottom: 8 }}>Se usa en todos los PDF descargables (protocolos, cotizaciones y ordenes de compra).</div><div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>{(params.logo) ? <img src={params.logo} alt="logo" style={{ height: 50, background: '#fff', border: '1px solid #DFE4EA', borderRadius: 6, padding: 4, objectFit: 'contain' }} /> : <div style={{ height: 50, width: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #DFE4EA', borderRadius: 6, fontSize: 11, color: '#9AA3AD' }}>Sin logo</div>}<label style={{ cursor: 'pointer', background: '#101315', color: '#fff', fontSize: 12, fontWeight: 600, padding: '8px 14px', borderRadius: 6 }}>Subir logo<input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const fl = e.target.files[0]; if (!fl) return; const rd = new FileReader(); rd.onload = () => { const d = rd.result; try { localStorage.setItem('serein_logo', d) } catch (x) {} setTop('logo', d) }; rd.readAsDataURL(fl) }} /></label>{params.logo ? <button onClick={() => { try { localStorage.removeItem('serein_logo') } catch (x) {} setTop('logo', '') }} style={{ background: 'transparent', border: '1px solid #DFE4EA', color: '#C5453D', fontSize: 12, padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>Quitar</button> : null}</div></div><div style={{ marginBottom: 16, paddingBottom: 14, borderBottom: '1px solid #DFE4EA' }}><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase', marginBottom: 4 }}>Logo Istria (PIG / PGP de Istria)</div><div style={{ fontSize: 12, color: '#5A636E', marginBottom: 8 }}>Se usa solo en los protocolos PIG y PGP de las OT del area Istria. Si no cargas uno, esos documentos usan el logo SEREIN.</div><div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>{(params.logoIstria) ? <img src={params.logoIstria} alt="logo Istria" style={{ height: 50, background: '#fff', border: '1px solid #DFE4EA', borderRadius: 6, padding: 4, objectFit: 'contain' }} /> : <div style={{ height: 50, width: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #DFE4EA', borderRadius: 6, fontSize: 11, color: '#9AA3AD' }}>Sin logo Istria</div>}<label style={{ cursor: 'pointer', background: '#101315', color: '#fff', fontSize: 12, fontWeight: 600, padding: '8px 14px', borderRadius: 6 }}>Subir logo Istria<input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const fl = e.target.files[0]; if (!fl) return; const rd = new FileReader(); rd.onload = () => { const d = rd.result; try { localStorage.setItem('serein_logoIstria', d) } catch (x) {} setTop('logoIstria', d) }; rd.readAsDataURL(fl) }} /></label>{params.logoIstria ? <button onClick={() => { try { localStorage.removeItem('serein_logoIstria') } catch (x) {} setTop('logoIstria', '') }} style={{ background: 'transparent', border: '1px solid #DFE4EA', color: '#C5453D', fontSize: 12, padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>Quitar</button> : null}</div></div><div style={{ fontSize: 12, color: '#9AA3AD', marginBottom: 14 }}>Estos codigos se cargan automaticamente al generar un protocolo PGP y siguen siendo editables en cada protocolo. Cambialos aqui cuando cambien los equipos.</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px,1fr))', gap: 12 }}><label style={lb}>Medidor de espesor - Marca<input style={ip} value={inst.espMarca || ''} onChange={e => set('espMarca', e.target.value)} /></label><label style={lb}>Medidor de espesor - Serie<input style={ip} value={inst.espSerie || ''} onChange={e => set('espSerie', e.target.value)} /></label><label style={lb}>Rugosimetro - Marca<input style={ip} value={inst.rugMarca || ''} onChange={e => set('rugMarca', e.target.value)} /></label><label style={lb}>Rugosimetro - Serie<input style={ip} value={inst.rugSerie || ''} onChange={e => set('rugSerie', e.target.value)} /></label><label style={lb}>Termohigrometro - Marca<input style={ip} value={inst.termoMarca || ''} onChange={e => set('termoMarca', e.target.value)} /></label><label style={lb}>Termohigrometro - Serie<input style={ip} value={inst.termoSerie || ''} onChange={e => set('termoSerie', e.target.value)} /></label></div><div style={{ fontSize: 12, fontWeight: 600, color: '#5A636E', margin: '16px 0 8px' }}>Fotos de los equipos (aparecen en la ultima hoja de los protocolos)</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px,1fr))', gap: 14 }}>{[['Medidor de espesor', 'espFotos'], ['Rugosimetro', 'rugFotos'], ['Termohigrometro', 'termoFotos']].map(eq => { const fotos = inst[eq[1]] || []; return (<div key={eq[1]} style={{ border: '1px solid #DFE4EA', padding: 10 }}><div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>{eq[0]}</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{fotos.map((d, idx) => (<div key={idx} style={{ position: 'relative' }}><img src={d} style={{ width: 70, height: 70, objectFit: 'contain', background: '#F2F4F7', border: '1px solid #DFE4EA' }} /><button onClick={() => set(eq[1], fotos.filter((_, j) => j !== idx))} style={{ position: 'absolute', top: -6, right: -6, background: '#C5453D', color: '#fff', border: 'none', borderRadius: '50%', width: 18, height: 18, cursor: 'pointer', fontSize: 11 }}>x</button></div>))}{fotos.length < 3 && (<label style={{ width: 70, height: 70, border: '1px dashed #DFE4EA', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#9AA3AD', fontSize: 20 }}>+<input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { const files = [...(e.target.files || [])].slice(0, 3 - fotos.length); let pend = files.length; if (!pend) return; const acc = []; files.forEach(f => imgToDataP(f, d => { acc.push(d); pend--; if (pend === 0) set(eq[1], [...fotos, ...acc]) })); e.target.value = '' }} /></label>)}</div></div>) })}</div>
 <div style={{ fontSize: 12, fontWeight: 600, color: '#5A636E', margin: '16px 0 8px' }}>Certificados de calibracion (se adjuntan solos al descargar el protocolo)</div>
 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px,1fr))', gap: 14 }}>
   {[['Medidor de espesor', 'espCertificado'], ['Rugosimetro', 'rugCertificado'], ['Termohigrometro', 'termoCertificado'], ['Granalla', 'granallaCertificado'], ['Galgas de calibracion', 'galgasCertificado']].map(eq => {
@@ -237,7 +319,28 @@ function SeccionInstrumentos({ params, setParams }) {
 
 function SeccionEmpresa({ params, setParams }) {
   const emp = params.empresa || {}
-  const set = (k, v) => { const nuevo = { ...params, empresa: { ...(params.empresa || {}), [k]: v } }; try { localStorage.setItem('serein_params', JSON.stringify(nuevo)) } catch (e) {}; setParams(nuevo); pushState() }
+  const pendEmp = useRef({})
+  const timerEmp = useRef(null)
+  // Mismo patron debounced-seguro que SeccionInstrumentos: instantaneo en
+  // pantalla, guardado real (pull-fresh + fusion + push) 700ms despues de
+  // la ultima tecla.
+  const set = (k, v) => {
+    setParams({ ...params, empresa: { ...emp, [k]: v } })
+    pendEmp.current[k] = v
+    clearTimeout(timerEmp.current)
+    timerEmp.current = setTimeout(async () => {
+      const patch = pendEmp.current; pendEmp.current = {}
+      const base = await paramsFrescos(params)
+      guardarParams({ ...base, empresa: { ...(base.empresa || {}), ...patch } }, setParams)
+    }, 700)
+  }
+  const setTop = (k, v) => {
+    setParams({ ...params, [k]: v })
+    ;(async () => {
+      const base = await paramsFrescos(params)
+      guardarParams({ ...base, [k]: v }, setParams)
+    })()
+  }
   const ip = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box', width: '100%', marginTop: 4 }
   const lb = { fontSize: 12, color: '#9AA3AD' }
   const campos = [['razonSocial', 'Razón social'], ['rut', 'RUT'], ['giro', 'Giro'], ['direccion', 'Dirección'], ['comuna', 'Comuna / Ciudad'], ['telefono', 'Teléfono'], ['correo', 'Correo'], ['web', 'Sitio web']]
@@ -253,7 +356,7 @@ function SeccionEmpresa({ params, setParams }) {
         <div style={{ fontSize: 12, color: '#5A636E', marginBottom: 8 }}>Se usa en los PDF (cotizaciones, OC, protocolos). Tambien se puede administrar en la pestana Instrumentos.</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           {(params.logo) ? <img src={params.logo} alt="logo" style={{ height: 50, background: '#fff', border: '1px solid #DFE4EA', borderRadius: 6, padding: 4, objectFit: 'contain' }} /> : <div style={{ height: 50, width: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #DFE4EA', borderRadius: 6, fontSize: 11, color: '#9AA3AD' }}>Sin logo</div>}
-          <label style={{ cursor: 'pointer', background: '#101315', color: '#fff', fontSize: 12, fontWeight: 600, padding: '8px 14px', borderRadius: 6 }}>Subir logo<input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const fl = e.target.files[0]; if (!fl) return; const rd = new FileReader(); rd.onload = () => { const d = rd.result; try { localStorage.setItem('serein_logo', d) } catch (x) {} const nuevo = { ...params, logo: d }; try { localStorage.setItem('serein_params', JSON.stringify(nuevo)) } catch (x) {} setParams(nuevo); pushState() }; rd.readAsDataURL(fl) }} /></label>
+          <label style={{ cursor: 'pointer', background: '#101315', color: '#fff', fontSize: 12, fontWeight: 600, padding: '8px 14px', borderRadius: 6 }}>Subir logo<input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const fl = e.target.files[0]; if (!fl) return; const rd = new FileReader(); rd.onload = () => { const d = rd.result; try { localStorage.setItem('serein_logo', d) } catch (x) {} setTop('logo', d) }; rd.readAsDataURL(fl) }} /></label>
         </div>
       </div>
     </div>
