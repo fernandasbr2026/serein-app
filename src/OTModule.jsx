@@ -335,6 +335,8 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
   const [localM2Propio, setLocalM2Propio] = useState({})
   const timersPropio = useRef({})
   const [buscar, setBuscar] = useState('')
+  const [mostrarForm, setMostrarForm] = useState(false)
+  const [nuevo, setNuevo] = useState({ tag: '', idPieza: '', m2: '' })
   const marcasFiltradas = buscar.trim() ? marcas.filter(m => String(m.marca || '').toLowerCase().includes(buscar.trim().toLowerCase())) : marcas
   const total = marcas.length
   const recibidas = marcas.filter(m => m.recibida).length
@@ -382,18 +384,63 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
     if (!window.confirm('¿Quitar esta marca de la lista de esperadas? No borra ninguna recepción ya registrada, solo el ítem del checklist.')) return
     onGuardar(marcas.filter(m => m.id !== id))
   }
+  // Alta manual (ademas de subir Excel) — TAG obligatorio, ID opcional (un
+  // mismo TAG puede tener varios ID, ej. 2610-SP-32402 con -A, -B, -C...).
+  // Se guardan como campos separados para poder editarlos, pero tambien se
+  // combinan en `marca` (TAG-ID) porque es el campo que ya usa todo el
+  // resto de la app (checklist de recepcion, despacho, protocolos, Excel) —
+  // asi una marca agregada a mano funciona identico a una que vino del
+  // Excel, sin tocar esa logica existente.
+  const agregarManual = () => {
+    const tag = nuevo.tag.trim()
+    if (!tag) return
+    const idPieza = nuevo.idPieza.trim()
+    const marcaTxt = idPieza ? (tag + '-' + idPieza) : tag
+    const dup = marcas.some(m => String(m.marca || '').trim().toLowerCase() === marcaTxt.toLowerCase())
+    if (dup) { window.alert('Ya existe una marca "' + marcaTxt + '" en el checklist.'); return }
+    onGuardar([...marcas, {
+      id: 'me' + Date.now() + Math.random().toString(36).slice(2, 7),
+      marca: marcaTxt, tag, idPieza: idPieza || null,
+      m2: parseFloat(nuevo.m2) || 0, m2Propio: null, recibida: false, fechaRecibida: null
+    }])
+    setNuevo({ tag: '', idPieza: '', m2: '' }); setMostrarForm(false)
+  }
 
   return (
     <div style={{ marginTop: 14, border: '1px solid #DFE4EA', borderRadius: 6, padding: 12, background: '#FCFBF9' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
         <span style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: '#D9600A' }}>Marcas esperadas (checklist de recepción)</span>
-        <label style={{ cursor: subiendo ? 'wait' : 'pointer', background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, opacity: subiendo ? 0.7 : 1 }}>
-          <Plus size={14} /> {subiendo ? 'Leyendo…' : 'Subir Excel de marcas'}
-          <input type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} disabled={subiendo} onChange={subirExcel} />
-        </label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setMostrarForm(v => !v)} style={{ background: mostrarForm ? '#EEE9DF' : C.carbon, color: mostrarForm ? C.carbon : '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Plus size={14} /> Agregar marca
+          </button>
+          <label style={{ cursor: subiendo ? 'wait' : 'pointer', background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, opacity: subiendo ? 0.7 : 1 }}>
+            <Plus size={14} /> {subiendo ? 'Leyendo…' : 'Subir Excel de marcas'}
+            <input type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} disabled={subiendo} onChange={subirExcel} />
+          </label>
+        </div>
       </div>
+      {mostrarForm && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end', marginBottom: 12, padding: 10, border: '1px dashed #CFC9BC', borderRadius: 6, background: '#FBFAF7' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <label style={{ fontSize: 10, color: '#9AA3AD' }}>TAG</label>
+            <input value={nuevo.tag} onChange={e => setNuevo({ ...nuevo, tag: e.target.value })} placeholder="ej. 2610-SP-32402" style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '6px 8px', fontSize: 12.5, width: 170 }} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <label style={{ fontSize: 10, color: '#9AA3AD' }}>ID (opcional)</label>
+            <input value={nuevo.idPieza} onChange={e => setNuevo({ ...nuevo, idPieza: e.target.value })} placeholder="ej. A" style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '6px 8px', fontSize: 12.5, width: 90 }} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <label style={{ fontSize: 10, color: '#9AA3AD' }}>m² cliente</label>
+            <input type="number" step="0.01" min="0" value={nuevo.m2} onChange={e => setNuevo({ ...nuevo, m2: e.target.value })} style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '6px 8px', fontSize: 12.5, width: 90 }} />
+          </div>
+          <button onClick={agregarManual} disabled={!nuevo.tag.trim()} style={{ background: nuevo.tag.trim() ? C.verde : '#DFE4EA', color: '#fff', border: 'none', borderRadius: 4, padding: '7px 14px', fontSize: 13, cursor: nuevo.tag.trim() ? 'pointer' : 'not-allowed' }}>Agregar</button>
+          <button onClick={() => { setMostrarForm(false); setNuevo({ tag: '', idPieza: '', m2: '' }) }} style={{ background: 'none', border: '1px solid #DFE4EA', borderRadius: 4, padding: '7px 12px', fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+          {nuevo.tag.trim() && <div style={{ flexBasis: '100%', fontSize: 11, color: '#9AA3AD' }}>Se guardará como: <b>{nuevo.idPieza.trim() ? nuevo.tag.trim() + '-' + nuevo.idPieza.trim() : nuevo.tag.trim()}</b></div>}
+        </div>
+      )}
       {total === 0 ? (
-        <div style={{ fontSize: 12, color: '#9AA3AD' }}>Sin marcas cargadas todavía. Sube el Excel con las marcas (y m², si lo tienen) que el cliente informa que deben llegar — columnas "marca" y "m2".</div>
+        <div style={{ fontSize: 12, color: '#9AA3AD' }}>Sin marcas cargadas todavía. Sube el Excel con las marcas (y m², si lo tienen) que el cliente informa que deben llegar — columnas "marca" y "m2" — o agrégalas a mano con "+ Agregar marca".</div>
       ) : (<>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: C.carbon }}>{total} esperadas</span>
