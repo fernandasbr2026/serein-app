@@ -82,6 +82,15 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
     const f = P.factores.find(x => x.nivel === it.dif)
     const d = desgloseItem({ esquema: { capas: capasEng(it) }, factorGrado: g ? g.factor : 1, factorDif: f ? f.factor : 1, limpiezaSP1: +it.limpieza || 0, m2: +it.m2 || 0, contaminado: !!it.contaminado }, ctx)
     if (it.sinGranallado) { d.costoM2 -= d.granallado; d.granallado = 0 }
+    // Valor manual del granallado: pisa el auto-calculado por grado SSPC,
+    // reemplazando SOLO ese componente dentro de costoM2 — el resto del
+    // desglose (limpieza, pintura, fijos, recargo contaminacion) sigue
+    // calculandose igual.
+    else if (it.granalladoManualOn && it.granalladoManual !== '' && it.granalladoManual != null) {
+      const manual = +it.granalladoManual || 0
+      d.costoM2 += manual - d.granallado
+      d.granallado = manual
+    }
     return d
   }
   const totalCot = items.reduce((s, it) => s + precioMargen(dg(it).costoM2, pct) * (+it.m2 || 0), 0)
@@ -195,11 +204,25 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
           </div>
           <div>
             <div style={{ fontSize: 10.5, color: T.textMute, textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.4 }}>Granallado</div>
-            <div style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 700, color: it.sinGranallado ? T.textMute : T.navy, lineHeight: 1.1 }}>{clp(d.granallado)}<span style={{ fontSize: 12, color: T.textMute, fontWeight: 400 }}> /m2</span></div>
+            {it.granalladoManualOn && !it.sinGranallado ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <input type="number" value={it.granalladoManual} onChange={e => updItem(i, x => x.granalladoManual = e.target.value)} style={{ ...inp, width: 90, fontWeight: 700 }} />
+                <span style={{ fontSize: 12, color: T.textMute }}>/m2</span>
+              </div>
+            ) : (
+              <div style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 700, color: it.sinGranallado ? T.textMute : T.navy, lineHeight: 1.1 }}>{clp(d.granallado)}<span style={{ fontSize: 12, color: T.textMute, fontWeight: 400 }}> /m2</span></div>
+            )}
           </div>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: T.textSoft, cursor: 'pointer' }}>
             <input type="checkbox" checked={!it.sinGranallado} onChange={e => updItem(i, x => x.sinGranallado = !e.target.checked)} style={{ width: 'auto' }} />
             Incluir granallado
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: T.textSoft, cursor: it.sinGranallado ? 'default' : 'pointer', opacity: it.sinGranallado ? 0.5 : 1 }}>
+            <input type="checkbox" checked={!!it.granalladoManualOn} disabled={it.sinGranallado} onChange={e => updItem(i, x => {
+              x.granalladoManualOn = e.target.checked
+              if (e.target.checked && (x.granalladoManual === undefined || x.granalladoManual === '')) x.granalladoManual = String(Math.round(dg(x).granallado))
+            })} style={{ width: 'auto' }} />
+            Valor manual
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: T.textSoft, cursor: 'pointer' }}>
             <input type="checkbox" checked={!!it.contaminado} onChange={e => updItem(i, x => x.contaminado = e.target.checked)} style={{ width: 'auto' }} />
