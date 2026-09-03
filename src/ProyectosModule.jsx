@@ -271,10 +271,20 @@ function FichaEditor({ p, onUpdate, onClose }) {
   )
 }
 
-function AbonosOT({ p, facturasOT, onUpdate }) {
+// Registrar pago con metodo "Factoring": se ingresa el monto BRUTO de la
+// factura factorizada, se elige cual factoring (misma lista de Parametros
+// que ya usa el resto de la app) y se calcula la perdida con la misma
+// formula (calcularPerdidaFactoring) que ya usan Facturas/Asesor/Consolidado
+// — el abono queda guardado con el monto NETO (el que realmente entro a la
+// cuenta) para no descuadrar el reparto/saldo de facturas que ya existia,
+// y ademas con montoBruto/perdidaFactoring/factoringId para trazabilidad.
+function AbonosOT({ p, facturasOT, onUpdate, params }) {
   const [add, setAdd] = useState(false)
-  const [f, setF] = useState({ monto: '', fecha: '', banco: '' })
+  const [f, setF] = useState({ monto: '', fecha: '', banco: '', metodo: 'Transferencia', factoringId: '', dias: '30', diasMora: '' })
   const abonos = p.abonos || []
+  const factoringList = (params && params.factoring) || []
+  const factoringSel = factoringList.find(x => x.id === f.factoringId) || null
+  const perdidaPreview = (f.metodo === 'Factoring' && factoringSel) ? calcularPerdidaFactoring(num(f.monto), num(f.dias), num(f.diasMora), factoringSel) : null
   // Total real de cada factura: usa el monto con IVA que ya viene calculado (exento => monto = neto)
   const totalDe = fac => Math.round(fac.monto || (fac.neto || 0) * 1.19)
   const inpA = { border: '1px solid #DFE4EA', borderRadius: 4, padding: '6px 8px', fontSize: 12 }
@@ -297,8 +307,15 @@ function AbonosOT({ p, facturasOT, onUpdate }) {
   const totPendiente = Math.max(0, totFacturado - (totRecibido - saldoFavor))
   const guardar = () => {
     if (!(num(f.monto) > 0)) return
-    onUpdate(p.id, { abonos: [...abonos, { id: 'ab' + Date.now(), monto: num(f.monto), fecha: f.fecha || '—', banco: f.banco || '' }] })
-    setF({ monto: '', fecha: '', banco: '' }); setAdd(false)
+    const esFactoring = f.metodo === 'Factoring' && factoringSel
+    const bruto = num(f.monto)
+    const perdida = esFactoring ? perdidaPreview.total : 0
+    const neto = esFactoring ? Math.max(0, bruto - perdida) : bruto
+    onUpdate(p.id, { abonos: [...abonos, {
+      id: 'ab' + Date.now(), monto: neto, fecha: f.fecha || '—', banco: f.banco || '',
+      metodo: f.metodo, ...(esFactoring ? { montoBruto: bruto, factoringId: factoringSel.id, factoringNombre: factoringSel.nombre, perdidaFactoring: perdida } : {})
+    }] })
+    setF({ monto: '', fecha: '', banco: '', metodo: 'Transferencia', factoringId: '', dias: '30', diasMora: '' }); setAdd(false)
   }
   const eliminar = id => onUpdate(p.id, { abonos: abonos.filter(a => a.id !== id) })
   return (
@@ -334,13 +351,37 @@ function AbonosOT({ p, facturasOT, onUpdate }) {
         </div>
       )}
       {add && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end', marginTop: 10, paddingTop: 10, borderTop: '1px dashed #DFE4EA' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Monto pagado</label><input value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} placeholder="Total transferido" style={{ ...inpA, width: 140, textAlign: 'right' }} /></div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Fecha</label><input type="date" value={f.fecha && f.fecha !== '—' ? f.fecha : ''} onChange={e => setF({ ...f, fecha: e.target.value })} style={{ ...inpA, width: 140 }} /></div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Banco</label><input list="serein-bancos" value={f.banco} onChange={e => setF({ ...f, banco: e.target.value })} placeholder="Banco..." style={{ ...inpA, width: 130 }} /></div>
-          <button onClick={guardar} style={{ background: C.verde, color: '#fff', border: 'none', borderRadius: 4, padding: '7px 14px', fontSize: 13, cursor: 'pointer' }}>Agregar</button>
-          <button onClick={() => setAdd(false)} style={{ background: 'none', border: '1px solid #DFE4EA', borderRadius: 4, padding: '7px 12px', fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
-          <div style={{ flexBasis: '100%', fontSize: 11, color: C.gris }}>El pago se reparte solo: cubre primero la factura mas antigua y el sobrante pasa a la siguiente.</div>
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed #DFE4EA' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Método de pago</label>
+              <select value={f.metodo} onChange={e => setF({ ...f, metodo: e.target.value })} style={{ ...inpA, width: 150 }}>
+                <option>Transferencia</option><option>Efectivo</option><option>Cheque</option><option>Factoring</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>{f.metodo === 'Factoring' ? 'Monto bruto (factura)' : 'Monto pagado'}</label><input value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} placeholder="Total transferido" style={{ ...inpA, width: 140, textAlign: 'right' }} /></div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Fecha</label><input type="date" value={f.fecha && f.fecha !== '—' ? f.fecha : ''} onChange={e => setF({ ...f, fecha: e.target.value })} style={{ ...inpA, width: 140 }} /></div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Banco</label><input list="serein-bancos" value={f.banco} onChange={e => setF({ ...f, banco: e.target.value })} placeholder="Banco..." style={{ ...inpA, width: 130 }} /></div>
+          </div>
+          {f.metodo === 'Factoring' && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end', marginTop: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Factoring</label>
+                <select value={f.factoringId} onChange={e => setF({ ...f, factoringId: e.target.value })} style={{ ...inpA, width: 160 }}>
+                  <option value="">Selecciona...</option>
+                  {factoringList.map(fc => <option key={fc.id} value={fc.id}>{fc.nombre}</option>)}
+                </select>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Días crédito</label><input type="number" value={f.dias} onChange={e => setF({ ...f, dias: e.target.value })} style={{ ...inpA, width: 90, textAlign: 'right' }} /></div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Días mora</label><input type="number" value={f.diasMora} onChange={e => setF({ ...f, diasMora: e.target.value })} placeholder="0" style={{ ...inpA, width: 90, textAlign: 'right' }} /></div>
+              {perdidaPreview && (
+                <div style={{ fontSize: 12, color: C.gris }}>Pérdida est.: <b style={{ color: C.rojo }}>{clp(perdidaPreview.total)}</b> → neto a recibir: <b style={{ color: C.verde }}>{clp(Math.max(0, num(f.monto) - perdidaPreview.total))}</b></div>
+              )}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <button onClick={guardar} style={{ background: C.verde, color: '#fff', border: 'none', borderRadius: 4, padding: '7px 14px', fontSize: 13, cursor: 'pointer' }}>Agregar</button>
+            <button onClick={() => setAdd(false)} style={{ background: 'none', border: '1px solid #DFE4EA', borderRadius: 4, padding: '7px 12px', fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+          </div>
+          <div style={{ fontSize: 11, color: C.gris, marginTop: 6 }}>El pago se reparte solo: cubre primero la factura mas antigua y el sobrante pasa a la siguiente.{f.metodo === 'Factoring' ? ' Con factoring, lo que se reparte/abona es el monto NETO (bruto menos la pérdida).' : ''}</div>
         </div>
       )}
       {abonos.length > 0 && (
@@ -348,7 +389,7 @@ function AbonosOT({ p, facturasOT, onUpdate }) {
           <div style={{ fontSize: 10, color: C.gris, textTransform: 'uppercase', marginBottom: 4 }}>Pagos registrados</div>
           {abonos.map(a => (
             <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '3px 0', borderBottom: '1px solid #F2F4F7' }}>
-              <span style={{ color: C.gris }}>{a.numero ? 'Factura ' + a.numero + ' · ' : 'Pago · '}{a.fecha}{a.banco ? ' · ' + a.banco : ''}</span>
+              <span style={{ color: C.gris }}>{a.numero ? 'Factura ' + a.numero + ' · ' : 'Pago · '}{a.fecha}{a.banco ? ' · ' + a.banco : ''}{a.metodo && a.metodo !== 'Transferencia' ? ' · ' + a.metodo : ''}{a.perdidaFactoring > 0 && <span style={{ color: C.rojo }}> · bruto {clp(a.montoBruto)} − pérdida {clp(a.perdidaFactoring)} ({a.factoringNombre})</span>}</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}><b>{clp(a.monto)}</b><button onClick={() => eliminar(a.id)} style={{ background: 'none', border: 'none', color: '#D9600A', cursor: 'pointer', fontSize: 13 }}>x</button></span>
             </div>
           ))}
@@ -486,7 +527,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
       {(abierto || enModal) && (
         <div style={{ borderTop: '1px solid #DFE4EA', padding: 18 }}>
           <div style={{ background: remIva >= 0 ? '#F2F4F7' : '#E6F7EE', border: '1px solid ' + (remIva >= 0 ? '#FF9D5C' : '#1B9E5D'), borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}><div><div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: C.gris, letterSpacing: '.03em' }}>Remanente de IVA del proyecto</div><div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>IVA ventas {clp(remIvaVenta)} - IVA compras {clp(remIvaCompra)}</div></div><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 22, color: remIva >= 0 ? '#D9600A' : C.verde }}>{clp(remIva)}</div></div>
-          <div style={{ background: '#E7EFFB', border: '1px solid #E7EFFB', borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}><div><div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: C.gris, letterSpacing: '.03em' }}>Disponible del bruto (venta c/IVA − compras)</div><div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>Bruto {clp(Math.round(venta * 1.19))} − compras {clp(costoReal)}</div></div><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 22, color: (Math.round(venta * 1.19) - costoReal) >= 0 ? C.verde : C.rojo }}>{clp(Math.round(venta * 1.19) - costoReal)}</div></div>
+          <div style={{ background: '#E7EFFB', border: '1px solid #E7EFFB', borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}><div><div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: C.gris, letterSpacing: '.03em' }}>Disponible del bruto (venta c/IVA − compras − PPM)</div><div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>Bruto {clp(Math.round(venta * 1.19))} − compras {clp(costoReal)} − PPM ({ppmPct}%) {clp(ppm)}</div></div><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 22, color: (Math.round(venta * 1.19) - costoReal - ppm) >= 0 ? C.verde : C.rojo }}>{clp(Math.round(venta * 1.19) - costoReal - ppm)}</div></div>
           <div style={{ marginBottom: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
               <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.teal }}>🧾 Facturas de esta OT · Estados de pago (EDP)</div>
@@ -560,7 +601,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
               </>
             )}
           </div>
-          <AbonosOT p={p} facturasOT={facturasOT} onUpdate={onUpdate} />
+          <AbonosOT p={p} facturasOT={facturasOT} onUpdate={onUpdate} params={params} />
           <datalist id="serein-bancos"><option value="Banco de Chile" /><option value="BancoEstado" /><option value="BCI" /><option value="Santander" /><option value="Scotiabank" /><option value="Itaú" /><option value="BICE" /><option value="Security" /><option value="Banco Falabella" /><option value="Banco Ripley" /><option value="Consorcio" /><option value="Internacional" /><option value="HSBC" /></datalist>
 
           {/* COMPRAS */}
