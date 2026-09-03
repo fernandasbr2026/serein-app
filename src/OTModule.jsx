@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx'
 import { descargarOTDesdeOT } from './CotizacionesModule.jsx'
 import { costoOCdeOT } from './OrdenesCompraModule.jsx'
 import { supabase } from './supabase.js'
+import { generarPdfProtocoloBlob, blobToBase64, fileToBase64, protocoloCompleto } from './protocolo-pdf.js'
 import { costoMOdeOT } from './ManoObraModule.jsx'
 import Paginador, { paginar } from './Paginador.jsx'
 import { pullState, pushState } from './sync.js'
@@ -1638,7 +1639,108 @@ function ProtoHead({ p, upd, onDel, titulo, equipos, col, onTgl }) {
   const [certsSel, setCertsSel] = useState({})
   const certMarcado = k => certsSel[k] !== false
   const toggleCert = k => setCertsSel(s => ({ ...s, [k]: !certMarcado(k) }))
-  return (<div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}><span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 14, textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }} onClick={onTgl}>{col ? '▸ ' : '▾ '}{p.codigo} - {titulo}</span><div style={{ display: 'flex', gap: 8 }}><button onClick={() => descargarProto(p, equipos, certsDisponibles.filter(c => certMarcado(c[0])).map(c => c[0]))} style={{ background: '#101315', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>Descargar PDF</button><button onClick={onDel} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 10px', cursor: 'pointer', fontSize: 12.5, color: '#9AA3AD' }}>Eliminar</button></div></div>{certsDisponibles.length > 0 && (<div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 11.5, marginBottom: 8, padding: '6px 10px', background: '#F6F9F8', border: '1px solid #DFE4EA', borderRadius: 4 }}><span style={{ color: '#9AA3AD' }}>Certificados a incluir:</span>{certsDisponibles.map(c => (<label key={c[0]} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}><input type="checkbox" checked={certMarcado(c[0])} onChange={() => toggleCert(c[0])} style={{ cursor: 'pointer' }} /><a href={equipos[c[0]]} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#0E7A8F', fontWeight: 600 }}>{c[1]}</a></label>))}</div>)}{!col && (<><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8 }}><PF label="Codigo"><input style={ip} value={p.codigo} onChange={e => set('codigo', e.target.value)} /></PF><PF label="Orden de Trabajo"><input style={ip} value={p.ot} onChange={e => set('ot', e.target.value)} /></PF><PF label="NV"><input style={ip} value={p.nv} onChange={e => set('nv', e.target.value)} /></PF><PF label="Codigo PGP (gran/pintura)"><input style={ip} value={p.pgpCodigo} onChange={e => set('pgpCodigo', e.target.value)} /></PF><PF label="Cliente"><input style={ip} value={p.cliente} onChange={e => set('cliente', e.target.value)} /></PF><PF label="Proyecto"><input style={ip} value={p.proyecto} onChange={e => set('proyecto', e.target.value)} /></PF><PF label="Fecha"><input type="date" style={ip} value={p.fecha} onChange={e => set('fecha', e.target.value)} /></PF><PF label="Preparado por"><input style={ip} value={p.preparadoPor} onChange={e => set('preparadoPor', e.target.value)} /></PF></div><div style={{ marginTop: 10 }}><div style={{ fontSize: 11, color: '#9AA3AD', marginBottom: 4 }}>Logo del cliente (opcional) — si se carga, reemplaza el logo SEREIN solo en este documento</div><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>{p.logoCliente ? <img src={p.logoCliente} alt="logo cliente" style={{ height: 40, background: '#fff', border: '1px solid #DFE4EA', borderRadius: 4, padding: 3, objectFit: 'contain' }} /> : <div style={{ height: 40, width: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #DFE4EA', borderRadius: 4, fontSize: 10.5, color: '#9AA3AD' }}>Sin logo</div>}<label style={{ cursor: 'pointer', background: '#101315', color: '#fff', fontSize: 11.5, fontWeight: 600, padding: '6px 11px', borderRadius: 4 }}>Subir logo<input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const fl = e.target.files[0]; if (!fl) return; imgToData(fl, d => set('logoCliente', d)); e.target.value = '' }} /></label>{p.logoCliente && <button onClick={() => set('logoCliente', '')} style={{ background: 'transparent', border: '1px solid #DFE4EA', color: '#C5453D', fontSize: 11.5, padding: '6px 10px', borderRadius: 4, cursor: 'pointer' }}>Quitar</button>}</div></div></>)}</div>) }
+
+  // Leer la OC/OT del cliente con IA para auto-completar el protocolo.
+  // Nunca escribe directo: siempre pasa por un panel de revision donde
+  // se puede editar o destildar cada campo antes de aplicarlo — la IA
+  // propone, la persona decide.
+  const [subiendoOC, setSubiendoOC] = useState(false)
+  const [revisionOC, setRevisionOC] = useState(null)
+  const [errorOC, setErrorOC] = useState('')
+  const subirOC = async e => {
+    const fl = e.target.files[0]
+    e.target.value = ''
+    if (!fl) return
+    setSubiendoOC(true); setErrorOC(''); setRevisionOC(null)
+    try {
+      const pdfBase64 = await fileToBase64(fl)
+      const { data, error } = await supabase.functions.invoke('extraer-oc', { body: { pdfBase64, filename: fl.name } })
+      if (error) throw error
+      if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo leer el documento.')
+      const d = data.datos || {}
+      setRevisionOC({
+        cliente: { valor: d.cliente || '', aplicar: !!d.cliente },
+        ocNumero: { valor: d.ocNumero || '', aplicar: !!d.ocNumero },
+        nv: { valor: d.nv || '', aplicar: !!d.nv },
+        fecha: { valor: d.fecha || '', aplicar: !!d.fecha },
+        marcas: (d.marcas || []).map(m => ({ ...m, aplicar: true })),
+      })
+    } catch (err) { setErrorOC('No se pudo leer el documento: ' + ((err && err.message) || String(err))) }
+    setSubiendoOC(false)
+  }
+  const aplicarRevisionOC = () => {
+    if (!revisionOC) return
+    const cambios = {}
+    if (revisionOC.cliente.aplicar && revisionOC.cliente.valor) cambios.cliente = revisionOC.cliente.valor
+    if (revisionOC.ocNumero.aplicar && revisionOC.ocNumero.valor) cambios.oc = revisionOC.ocNumero.valor
+    if (revisionOC.nv.aplicar && revisionOC.nv.valor) cambios.nv = revisionOC.nv.valor
+    if (revisionOC.fecha.aplicar && revisionOC.fecha.valor) cambios.fecha = revisionOC.fecha.valor
+    const marcasNuevas = revisionOC.marcas.filter(m => m.aplicar).map(m => (m.id ? m.tag + '-' + m.id : m.tag)).filter(Boolean)
+    if (marcasNuevas.length) {
+      const existentes = new Set((p.marcas || []).map(x => String(x || '').trim().toLowerCase()))
+      const aSumar = marcasNuevas.filter(m => !existentes.has(m.trim().toLowerCase()))
+      cambios.marcas = [...(p.marcas || []), ...aSumar]
+    }
+    upd({ ...p, ...cambios })
+    setRevisionOC(null)
+  }
+
+  // Cierre + subida automatica a Drive: solo se habilita cuando el
+  // protocolo tiene firmas con fecha y al menos una foto de evidencia —
+  // el clic en el boton ES la revision humana antes de cerrarlo (nadie
+  // mas lo hace por la persona).
+  const [subiendoDrive, setSubiendoDrive] = useState(false)
+  const [driveMsg, setDriveMsg] = useState(null)
+  const chequeoCompleto = protocoloCompleto(p)
+  const cerrarYSubirDrive = async () => {
+    setSubiendoDrive(true); setDriveMsg(null)
+    try {
+      const html = p.tipo === 'PIG' ? htmlPIG(p, equipos) : htmlPGP(p, equipos)
+      const blob = await generarPdfProtocoloBlob(html)
+      const pdfBase64 = await blobToBase64(blob)
+      const filename = `${p.codigo || 'Protocolo'} - ${p.cliente || 'Sin cliente'}.pdf`
+      const { data, error } = await supabase.functions.invoke('subir-protocolo-drive', { body: { pdfBase64, filename, cliente: p.cliente || 'Sin cliente' } })
+      if (error) throw error
+      if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo subir a Drive.')
+      setDriveMsg({ ok: true, link: data.webViewLink })
+    } catch (err) { setDriveMsg({ ok: false, texto: 'No se pudo subir a Drive: ' + ((err && err.message) || String(err)) }) }
+    setSubiendoDrive(false)
+  }
+
+  return (<div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}><span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 14, textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }} onClick={onTgl}>{col ? '▸ ' : '▾ '}{p.codigo} - {titulo}</span><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><label style={{ cursor: subiendoOC ? 'wait' : 'pointer', background: '#fff', color: C.teal, border: '1px solid ' + C.teal, padding: '7px 12px', fontSize: 12.5, opacity: subiendoOC ? 0.6 : 1 }}>{subiendoOC ? 'Leyendo…' : 'Subir OC/OT (auto-completar)'}<input type="file" accept="application/pdf" style={{ display: 'none' }} disabled={subiendoOC} onChange={subirOC} /></label><button onClick={() => descargarProto(p, equipos, certsDisponibles.filter(c => certMarcado(c[0])).map(c => c[0]))} style={{ background: '#101315', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>Descargar PDF</button><button onClick={cerrarYSubirDrive} disabled={!chequeoCompleto.completo || subiendoDrive} title={chequeoCompleto.completo ? 'Genera el PDF y lo sube a Drive, en la carpeta del cliente' : 'Falta: ' + chequeoCompleto.faltantes.join(', ')} style={{ background: chequeoCompleto.completo ? C.verde : '#DFE4EA', color: chequeoCompleto.completo ? '#fff' : '#9AA3AD', border: 'none', padding: '7px 12px', cursor: chequeoCompleto.completo && !subiendoDrive ? 'pointer' : 'not-allowed', fontSize: 12.5 }}>{subiendoDrive ? 'Subiendo…' : 'Cerrar y subir a Drive'}</button><button onClick={onDel} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 10px', cursor: 'pointer', fontSize: 12.5, color: '#9AA3AD' }}>Eliminar</button></div></div>
+    {errorOC && <div style={{ fontSize: 11.5, color: '#C5453D', marginBottom: 8 }}>{errorOC}</div>}
+    {driveMsg && (driveMsg.ok
+      ? <div style={{ fontSize: 11.5, color: C.verde, marginBottom: 8 }}>✓ Subido a Drive. <a href={driveMsg.link} target="_blank" rel="noreferrer" style={{ color: C.teal }}>Ver archivo</a></div>
+      : <div style={{ fontSize: 11.5, color: '#C5453D', marginBottom: 8 }}>{driveMsg.texto}</div>)}
+    {revisionOC && (
+      <div style={{ border: '1px dashed #CFC9BC', borderRadius: 6, padding: 10, marginBottom: 10, background: '#FBFAF7' }}>
+        <div style={{ fontSize: 11.5, fontWeight: 700, color: '#5A736A', marginBottom: 8, textTransform: 'uppercase' }}>Revisa lo que leyó la IA antes de aplicar</div>
+        {[['cliente', 'Cliente'], ['ocNumero', 'N° OC'], ['nv', 'NV'], ['fecha', 'Fecha']].map(([k, lbl]) => (
+          <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <input type="checkbox" checked={revisionOC[k].aplicar} onChange={e => setRevisionOC(r => ({ ...r, [k]: { ...r[k], aplicar: e.target.checked } }))} />
+            <span style={{ fontSize: 11, color: '#9AA3AD', width: 70 }}>{lbl}</span>
+            <input value={revisionOC[k].valor} onChange={e => setRevisionOC(r => ({ ...r, [k]: { ...r[k], valor: e.target.value } }))} style={{ ...ip, flex: 1 }} />
+          </div>
+        ))}
+        {revisionOC.marcas.length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ fontSize: 11, color: '#9AA3AD', marginBottom: 4 }}>Marcas encontradas ({revisionOC.marcas.length})</div>
+            <div style={{ maxHeight: 140, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {revisionOC.marcas.map((m, i) => (
+                <label key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                  <input type="checkbox" checked={m.aplicar} onChange={e => setRevisionOC(r => ({ ...r, marcas: r.marcas.map((x, j) => j === i ? { ...x, aplicar: e.target.checked } : x) }))} />
+                  {m.id ? m.tag + '-' + m.id : m.tag}{m.m2 ? <span style={{ color: '#9AA3AD' }}> ({m.m2} m²)</span> : null}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <button onClick={aplicarRevisionOC} style={{ background: C.verde, color: '#fff', border: 'none', borderRadius: 4, padding: '6px 14px', fontSize: 12.5, cursor: 'pointer' }}>Aplicar al protocolo</button>
+          <button onClick={() => setRevisionOC(null)} style={{ background: 'none', border: '1px solid #DFE4EA', borderRadius: 4, padding: '6px 12px', fontSize: 12.5, cursor: 'pointer' }}>Descartar</button>
+        </div>
+      </div>
+    )}{certsDisponibles.length > 0 && (<div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 11.5, marginBottom: 8, padding: '6px 10px', background: '#F6F9F8', border: '1px solid #DFE4EA', borderRadius: 4 }}><span style={{ color: '#9AA3AD' }}>Certificados a incluir:</span>{certsDisponibles.map(c => (<label key={c[0]} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}><input type="checkbox" checked={certMarcado(c[0])} onChange={() => toggleCert(c[0])} style={{ cursor: 'pointer' }} /><a href={equipos[c[0]]} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#0E7A8F', fontWeight: 600 }}>{c[1]}</a></label>))}</div>)}{!col && (<><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8 }}><PF label="Codigo"><input style={ip} value={p.codigo} onChange={e => set('codigo', e.target.value)} /></PF><PF label="Orden de Trabajo"><input style={ip} value={p.ot} onChange={e => set('ot', e.target.value)} /></PF><PF label="NV"><input style={ip} value={p.nv} onChange={e => set('nv', e.target.value)} /></PF><PF label="Codigo PGP (gran/pintura)"><input style={ip} value={p.pgpCodigo} onChange={e => set('pgpCodigo', e.target.value)} /></PF><PF label="Cliente"><input style={ip} value={p.cliente} onChange={e => set('cliente', e.target.value)} /></PF><PF label="Proyecto"><input style={ip} value={p.proyecto} onChange={e => set('proyecto', e.target.value)} /></PF><PF label="Fecha"><input type="date" style={ip} value={p.fecha} onChange={e => set('fecha', e.target.value)} /></PF><PF label="Preparado por"><input style={ip} value={p.preparadoPor} onChange={e => set('preparadoPor', e.target.value)} /></PF></div><div style={{ marginTop: 10 }}><div style={{ fontSize: 11, color: '#9AA3AD', marginBottom: 4 }}>Logo del cliente (opcional) — si se carga, reemplaza el logo SEREIN solo en este documento</div><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>{p.logoCliente ? <img src={p.logoCliente} alt="logo cliente" style={{ height: 40, background: '#fff', border: '1px solid #DFE4EA', borderRadius: 4, padding: 3, objectFit: 'contain' }} /> : <div style={{ height: 40, width: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #DFE4EA', borderRadius: 4, fontSize: 10.5, color: '#9AA3AD' }}>Sin logo</div>}<label style={{ cursor: 'pointer', background: '#101315', color: '#fff', fontSize: 11.5, fontWeight: 600, padding: '6px 11px', borderRadius: 4 }}>Subir logo<input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const fl = e.target.files[0]; if (!fl) return; imgToData(fl, d => set('logoCliente', d)); e.target.value = '' }} /></label>{p.logoCliente && <button onClick={() => set('logoCliente', '')} style={{ background: 'transparent', border: '1px solid #DFE4EA', color: '#C5453D', fontSize: 11.5, padding: '6px 10px', borderRadius: 4, cursor: 'pointer' }}>Quitar</button>}</div></div></>)}</div>) }
 // Editar un protocolo con estado local + debounce: antes cada tecla llamaba
 // de inmediato a upd(), que reescribe el arreglo COMPLETO de OTs en
 // localStorage/Supabase y fuerza un re-render de todo el listado — con
