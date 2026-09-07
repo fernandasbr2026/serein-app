@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx'
 import { descargarOTDesdeOT } from './CotizacionesModule.jsx'
 import { costoOCdeOT } from './OrdenesCompraModule.jsx'
 import { supabase } from './supabase.js'
-import { generarPdfProtocoloBlob, blobToBase64, fileToBase64, protocoloCompleto } from './protocolo-pdf.js'
+import { generarPdfProtocoloBlob, agregarCertificadosAlPdf, blobToBase64, fileToBase64, protocoloCompleto } from './protocolo-pdf.js'
 import { costoMOdeOT } from './ManoObraModule.jsx'
 import Paginador, { paginar } from './Paginador.jsx'
 import { pullState, pushState } from './sync.js'
@@ -1539,37 +1539,9 @@ function htmlPGP(p, equipos) {
 }
 var PROTO_CSS = '@page{size:A4;margin:20mm 15mm 15mm 15mm}*{box-sizing:border-box}body{font-family:Inter,Arial,Helvetica,sans-serif;color:#101828;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.page{position:relative;padding-bottom:70px}.page+.page{page-break-before:always}.rhead{position:relative;display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #061A40;padding:4px 0 10px;overflow:hidden}.logo{display:flex;align-items:baseline}.lg-a{color:#061A40;font-weight:800;font-size:22px;letter-spacing:1px}.lg-b{color:#FF6B00;font-weight:800;font-size:22px;margin-left:5px;letter-spacing:1px}.rh-mid{flex:1;text-align:center}.rh-title{color:#061A40;font-weight:800;font-size:17px;letter-spacing:.5px}.rh-sub{color:#FF6B00;font-weight:700;font-size:10px;letter-spacing:2px;margin-top:2px}.codebox{background:#061A40;color:#fff;padding:8px 12px;border-radius:6px;font-size:10px;min-width:160px}.cb-row{display:flex;justify-content:space-between;gap:12px;padding:1px 0}.cb-k{color:#9fb0cf}.cb-v{font-weight:700}.stripe{position:absolute;top:-10px;right:120px;width:60px;height:130%;background:#FF6B00;opacity:.10;transform:skewX(-22deg)}.infogrid{display:grid;grid-template-columns:1fr 1fr;gap:0 26px;margin:14px 0 4px}.info-item{display:flex;justify-content:space-between;border-bottom:1px solid #D8DCE5;padding:5px 2px;font-size:11px}.info-k{color:#5a6b85}.info-v{font-weight:700;color:#101828;text-align:right}.sec-title{color:#061A40;font-weight:800;font-size:12px;text-transform:uppercase;border-left:4px solid #FF6B00;padding-left:9px;margin:16px 0 7px;letter-spacing:.4px;page-break-after:avoid}.sub-sec-title{color:#5a6b85;font-weight:700;font-size:10.5px;text-transform:uppercase;margin:8px 0 4px;letter-spacing:.3px}.keep-together{page-break-inside:avoid}.marcas-list{columns:3;column-gap:24px;-webkit-columns:3;margin:0 0 14px;padding-left:18px;font-size:11px;line-height:1.75;color:#101828}.marcas-list li{break-inside:avoid-column}table.dt{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px}table.dt th{background:#061A40;color:#fff;padding:6px 8px;text-align:left;font-weight:700;font-size:10px}table.dt td{border:1px solid #D8DCE5;padding:6px 8px}table.dt td.c{text-align:center}.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700}.badge-ok{background:#e6f7ec;color:#16A34A}.badge-no{background:#fdeaea;color:#DC2626}.prom-badge{display:inline-block;background:#FF6B00;color:#fff;padding:2px 9px;border-radius:4px;font-weight:700;font-size:10.5px}.norm{display:inline-block;padding:1px 7px;border:1px solid #D8DCE5;border-radius:4px;font-size:9px;color:#5a6b85;background:#F5F7FA}.sign-cell{height:32px}.rfooter{display:flex;margin-top:20px;border-radius:6px;overflow:hidden;border:1px solid #D8DCE5}.rf-navy{background:#061A40;color:#fff;flex:1;display:flex;gap:20px;justify-content:center;align-items:center;padding:10px;font-size:10px;font-weight:600}.rf-web{background:#FF6B00;color:#fff;padding:0 16px;font-weight:700;font-size:11px;display:flex;align-items:center}.evcard{border:1px solid #D8DCE5;border-radius:8px;padding:12px 14px;margin-bottom:12px;display:flex;gap:16px;page-break-inside:avoid;background:#fff}.ev-left{width:36%}.ev-title{color:#FF6B00;font-weight:800;font-size:12px}.ev-desc{margin:5px 0;font-size:11px;font-weight:600;color:#101828}.ev-obs{font-size:10.5px;color:#344054;line-height:1.4}.ev-right{flex:1;display:grid;gap:6px}.ev-right.g1{grid-template-columns:1fr}.ev-right.g2{grid-template-columns:repeat(2,1fr)}.ev-right.g3{grid-template-columns:repeat(3,1fr)}.ev-right.g4{grid-template-columns:repeat(2,1fr)}.imgframe{border:2px solid #061A40;border-radius:4px;overflow:hidden;height:150px;background:#F5F7FA;display:flex;align-items:center;justify-content:center}.imgframe img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block}.equipos{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:8px}.eq-col{border:1px solid #D8DCE5;border-radius:8px;padding:10px;text-align:center}.eq-name{color:#061A40;font-weight:800;font-size:12px}.eq-code{color:#FF6B00;font-weight:800;font-size:13px;margin:2px 0}.eq-sub{color:#5a6b85;font-size:10px;margin-bottom:8px}.eq-img{border:2px solid #061A40;border-radius:4px;overflow:hidden;height:130px;background:#F5F7FA;margin-bottom:6px;display:flex;align-items:center;justify-content:center}.eq-img img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain}'
 // Certificados de calibracion de los instrumentos (cargados en Parametros):
-// se descargan solos al descargar el protocolo. Antes se intentaba con
-// window.open() por cada uno, pero el navegador bloquea esa cadena de
-// popups casi siempre (solo pasa el primero). Ahora se traen con fetch() y
-// se bajan como blob via un <a download> — no es un popup, asi que nunca lo
-// bloquea el navegador. Si el fetch falla (ej. sin conexion, CORS raro) se
-// omite en silencio: el listado de links clickeables que ya se ve en cada
-// protocolo sigue disponible como respaldo manual.
-function nombreCertificado(label, blob) {
-  var ext = ''
-  if (blob && blob.type) { if (blob.type.indexOf('pdf') >= 0) ext = '.pdf'; else if (blob.type.indexOf('image/') === 0) ext = '.' + blob.type.split('/')[1] }
-  return 'Certificado ' + label + ext
-}
-async function descargarCertificadosInstrumentos(equipos, soloKeys) {
-  if (!equipos) return
-  for (var i = 0; i < CERT_LABELS.length; i++) {
-    var k = CERT_LABELS[i][0], label = CERT_LABELS[i][1]
-    if (soloKeys && soloKeys.indexOf(k) < 0) continue
-    var url = equipos[k]
-    if (!url) continue
-    try {
-      var res = await fetch(url)
-      var blob = await res.blob()
-      var objUrl = URL.createObjectURL(blob)
-      var a = document.createElement('a')
-      a.href = objUrl; a.download = nombreCertificado(label, blob)
-      document.body.appendChild(a); a.click(); document.body.removeChild(a)
-      setTimeout(function () { URL.revokeObjectURL(objUrl) }, 15000)
-    } catch (e) { /* se omite — el link manual del certificado sigue disponible */ }
-  }
-}
-function descargarProto(p, equipos, certsKeys) { const w = window.open('', '_blank'); if (!w) { window.alert('Habilita las ventanas emergentes.'); return } try{var _i=localStorage.getItem('serein_logoIstria')||'',_sv=null,_sw=0;if(_i&&String(p.area||'').toLowerCase().indexOf('istria')>=0){_sv=localStorage.getItem('serein_logo');localStorage.setItem('serein_logo',_i);_sw=1;window.__sereinProtoIstria=true}}catch(e){} w.document.write(p.tipo === 'PIG' ? htmlPIG(p, equipos) : htmlPGP(p, equipos)); try{if(_sw){if(_sv==null)localStorage.removeItem('serein_logo');else localStorage.setItem('serein_logo',_sv);window.__sereinProtoIstria=false;}}catch(e){} w.document.close(); if (certsKeys && certsKeys.length) descargarCertificadosInstrumentos(equipos, certsKeys); setTimeout(function () { w.focus(); w.print() }, 400) }
+// se fusionan al PDF del protocolo al descargarlo (ver
+// agregarCertificadosAlPdf en protocolo-pdf.js y descargarPdfConCerts mas
+// abajo), asi que ya no hace falta abrirlos ni bajarlos aparte.
 function PF({ label, children }) { return (<div><div style={{ fontSize: 11, color: '#9AA3AD', marginBottom: 2, marginTop: 4 }}>{label}</div>{children}</div>) }
 // Checklist de marcas de pieza para un protocolo: las candidatas salen de
 // las "marcas esperadas" cargadas por Excel en la OT (ver MarcasEsperadasOT
@@ -1685,6 +1657,33 @@ function ProtoHead({ p, upd, onDel, titulo, equipos, col, onTgl }) {
     setRevisionOC(null)
   }
 
+  // Descargar PDF: genera el protocolo como PDF real (no via print()) y,
+  // si hay certificados tildados, les fusiona las paginas al mismo
+  // archivo antes de bajarlo — asi queda UN solo PDF descargado, en vez
+  // de un archivo de protocolo mas uno por cada certificado aparte.
+  const [descargando, setDescargando] = useState(false)
+  const descargarPdfConCerts = async () => {
+    setDescargando(true); setErrorOC('')
+    let _sv = null, _sw = 0
+    try {
+      try {
+        const _i = localStorage.getItem('serein_logoIstria') || ''
+        if (_i && String(p.area || '').toLowerCase().indexOf('istria') >= 0) { _sv = localStorage.getItem('serein_logo'); localStorage.setItem('serein_logo', _i); _sw = 1; window.__sereinProtoIstria = true }
+      } catch (e) {}
+      const html = p.tipo === 'PIG' ? htmlPIG(p, equipos) : htmlPGP(p, equipos)
+      try { if (_sw) { if (_sv == null) localStorage.removeItem('serein_logo'); else localStorage.setItem('serein_logo', _sv); window.__sereinProtoIstria = false } } catch (e) {}
+      let blob = await generarPdfProtocoloBlob(html)
+      const certUrls = certsDisponibles.filter(c => certMarcado(c[0])).map(c => equipos[c[0]]).filter(Boolean)
+      if (certUrls.length) blob = await agregarCertificadosAlPdf(blob, certUrls)
+      const objUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = objUrl; a.download = `${p.codigo || 'Protocolo'}.pdf`
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(objUrl), 15000)
+    } catch (err) { setErrorOC('No se pudo generar el PDF: ' + ((err && err.message) || String(err))) }
+    setDescargando(false)
+  }
+
   // Cierre + subida automatica a Drive: solo se habilita cuando el
   // protocolo tiene firmas con fecha y al menos una foto de evidencia —
   // el clic en el boton ES la revision humana antes de cerrarlo (nadie
@@ -1707,7 +1706,7 @@ function ProtoHead({ p, upd, onDel, titulo, equipos, col, onTgl }) {
     setSubiendoDrive(false)
   }
 
-  return (<div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}><span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 14, textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }} onClick={onTgl}>{col ? '▸ ' : '▾ '}{p.codigo} - {titulo}</span><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><label style={{ cursor: subiendoOC ? 'wait' : 'pointer', background: '#fff', color: C.teal, border: '1px solid ' + C.teal, padding: '7px 12px', fontSize: 12.5, opacity: subiendoOC ? 0.6 : 1 }}>{subiendoOC ? 'Leyendo…' : 'Subir OC/OT (auto-completar)'}<input type="file" accept="application/pdf,image/*" multiple style={{ display: 'none' }} disabled={subiendoOC} onChange={subirOC} /></label><button onClick={() => descargarProto(p, equipos, certsDisponibles.filter(c => certMarcado(c[0])).map(c => c[0]))} style={{ background: '#101315', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>Descargar PDF</button><button onClick={cerrarYSubirDrive} disabled={!chequeoCompleto.completo || subiendoDrive} title={chequeoCompleto.completo ? 'Genera el PDF y lo sube a Drive, en la carpeta del cliente' : 'Falta: ' + chequeoCompleto.faltantes.join(', ')} style={{ background: chequeoCompleto.completo ? C.verde : '#DFE4EA', color: chequeoCompleto.completo ? '#fff' : '#9AA3AD', border: 'none', padding: '7px 12px', cursor: chequeoCompleto.completo && !subiendoDrive ? 'pointer' : 'not-allowed', fontSize: 12.5 }}>{subiendoDrive ? 'Subiendo…' : 'Cerrar y subir a Drive'}</button><button onClick={onDel} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 10px', cursor: 'pointer', fontSize: 12.5, color: '#9AA3AD' }}>Eliminar</button></div></div>
+  return (<div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}><span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 14, textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }} onClick={onTgl}>{col ? '▸ ' : '▾ '}{p.codigo} - {titulo}</span><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><label style={{ cursor: subiendoOC ? 'wait' : 'pointer', background: '#fff', color: C.teal, border: '1px solid ' + C.teal, padding: '7px 12px', fontSize: 12.5, opacity: subiendoOC ? 0.6 : 1 }}>{subiendoOC ? 'Leyendo…' : 'Subir OC/OT (auto-completar)'}<input type="file" accept="application/pdf,image/*" multiple style={{ display: 'none' }} disabled={subiendoOC} onChange={subirOC} /></label><button onClick={descargarPdfConCerts} disabled={descargando} style={{ background: '#101315', color: '#fff', border: 'none', padding: '7px 12px', cursor: descargando ? 'wait' : 'pointer', fontSize: 12.5, opacity: descargando ? 0.7 : 1 }}>{descargando ? 'Generando…' : 'Descargar PDF'}</button><button onClick={cerrarYSubirDrive} disabled={!chequeoCompleto.completo || subiendoDrive} title={chequeoCompleto.completo ? 'Genera el PDF y lo sube a Drive, en la carpeta del cliente' : 'Falta: ' + chequeoCompleto.faltantes.join(', ')} style={{ background: chequeoCompleto.completo ? C.verde : '#DFE4EA', color: chequeoCompleto.completo ? '#fff' : '#9AA3AD', border: 'none', padding: '7px 12px', cursor: chequeoCompleto.completo && !subiendoDrive ? 'pointer' : 'not-allowed', fontSize: 12.5 }}>{subiendoDrive ? 'Subiendo…' : 'Cerrar y subir a Drive'}</button><button onClick={onDel} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 10px', cursor: 'pointer', fontSize: 12.5, color: '#9AA3AD' }}>Eliminar</button></div></div>
     {errorOC && <div style={{ fontSize: 11.5, color: '#C5453D', marginBottom: 8 }}>{errorOC}</div>}
     {driveMsg && (driveMsg.ok
       ? <div style={{ fontSize: 11.5, color: C.verde, marginBottom: 8 }}>✓ Subido a Drive. <a href={driveMsg.link} target="_blank" rel="noreferrer" style={{ color: C.teal }}>Ver archivo</a></div>
