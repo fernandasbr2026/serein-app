@@ -867,7 +867,7 @@ function TileOT({ ot, onOpen, onDragStart, onDropOn, verValores }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
           <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 12, background: '#101315', color: '#fff', padding: '2px 7px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{ot.numero}</span>
-          {(ot.area === 'Santa Rosa' || ot.sede === 'Santa Rosa') && ot.oc && ot.oc !== '—' ? <span title="Orden de compra del cliente" style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 11.5, background: '#1B9E5D', color: '#fff', padding: '2px 7px', borderRadius: 3, whiteSpace: 'nowrap' }}>OC {ot.oc}</span> : null}
+          {ot.oc && ot.oc !== '—' ? <span title="Orden de compra del cliente" style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 11.5, background: (ot.area === 'Istria' || ot.sede === 'Istria') ? '#C5453D' : '#1B9E5D', color: '#fff', padding: '2px 7px', borderRadius: 3, whiteSpace: 'nowrap' }}>OC {ot.oc}</span> : null}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <ChipEstado ot={ot} />
@@ -991,7 +991,7 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
             <ChipEstado ot={ot} />
           </div>
           <div style={{ fontSize: 12, color: '#9AA3AD', marginTop: 5, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-            <span><FileText size={11} style={{ verticalAlign: -1 }} /> {ot.cotizacion}{ot.oc && ot.oc !== '—' ? <> · Aprob. cliente <b style={{ color: '#1B9E5D' }}>{ot.oc}</b></> : ''}</span>
+            <span><FileText size={11} style={{ verticalAlign: -1 }} /> {ot.cotizacion}{ot.oc && ot.oc !== '—' ? <> · Aprob. cliente <b style={{ color: (ot.area === 'Istria' || ot.sede === 'Istria') ? '#C5453D' : '#1B9E5D' }}>{ot.oc}</b></> : ''}</span>
             {ot.m2 > 0 && <span><Ruler size={11} style={{ verticalAlign: -1 }} /> {ot.m2} m²</span>}
             <span><Paintbrush size={11} style={{ verticalAlign: -1 }} /> {ot.esquema}</span>
           </div>
@@ -1342,7 +1342,7 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
               <div><div style={{ fontSize: 11, color: '#9AA3AD', marginBottom: 2 }}>Correo</div><input style={{ padding: '6px 8px', border: '1px solid #DFE4EA', fontSize: 12.5, width: '100%', boxSizing: 'border-box' }} value={ot.correo || ''} onChange={e => onUpdate(ot.id, { correo: e.target.value })} /></div>
               <div><div style={{ fontSize: 11, color: '#9AA3AD', marginBottom: 2 }}>Telefono</div><input style={{ padding: '6px 8px', border: '1px solid #DFE4EA', fontSize: 12.5, width: '100%', boxSizing: 'border-box' }} value={ot.telefono || ''} onChange={e => onUpdate(ot.id, { telefono: e.target.value })} /></div>
               <div><div style={{ fontSize: 11, color: '#9AA3AD', marginBottom: 2 }}>NV (Nota de Venta)</div><input style={{ padding: '6px 8px', border: '1px solid #DFE4EA', fontSize: 12.5, width: '100%', boxSizing: 'border-box' }} value={ot.nv || ''} onChange={e => onUpdate(ot.id, { nv: e.target.value })} /></div>
-              {(ot.area === 'Santa Rosa' || ot.sede === 'Santa Rosa') && <div><div style={{ fontSize: 11, color: '#F77716', fontWeight: 700, marginBottom: 2 }}>OC (Orden de compra)</div><input placeholder="Ej. 4500123456" style={{ padding: '6px 8px', border: '2px solid #F77716', fontSize: 12.5, fontWeight: 700, width: '100%', boxSizing: 'border-box' }} value={ot.oc && ot.oc !== '\u2014' ? ot.oc : ''} onChange={e => onUpdate(ot.id, { oc: e.target.value })} /></div>}
+              <div><div style={{ fontSize: 11, color: (ot.area === 'Istria' || ot.sede === 'Istria') ? '#C5453D' : '#F77716', fontWeight: 700, marginBottom: 2 }}>OC (Orden de compra)</div><input placeholder="Ej. 4500123456" style={{ padding: '6px 8px', border: '2px solid ' + ((ot.area === 'Istria' || ot.sede === 'Istria') ? '#C5453D' : '#F77716'), fontSize: 12.5, fontWeight: 700, width: '100%', boxSizing: 'border-box' }} value={ot.oc && ot.oc !== '\u2014' ? ot.oc : ''} onChange={e => onUpdate(ot.id, { oc: e.target.value })} /></div>
             </div>
           </div>
           <ProtocolosOT ot={ot} onUpdate={onUpdateProtocolos || onUpdate} otsAll={otsAll} instrumentos={instrumentos} />
