@@ -1648,13 +1648,13 @@ function ProtoHead({ p, upd, onDel, titulo, equipos, col, onTgl }) {
   const [revisionOC, setRevisionOC] = useState(null)
   const [errorOC, setErrorOC] = useState('')
   const subirOC = async e => {
-    const fl = e.target.files[0]
+    const fls = [...e.target.files]
     e.target.value = ''
-    if (!fl) return
+    if (!fls.length) return
     setSubiendoOC(true); setErrorOC(''); setRevisionOC(null)
     try {
-      const pdfBase64 = await fileToBase64(fl)
-      const { data, error } = await supabase.functions.invoke('extraer-oc', { body: { pdfBase64, filename: fl.name } })
+      const archivos = await Promise.all(fls.map(async fl => ({ base64: await fileToBase64(fl), mimeType: fl.type || 'application/pdf', filename: fl.name })))
+      const { data, error } = await supabase.functions.invoke('extraer-oc', { body: { archivos, filename: fls[0].name } })
       if (error) throw error
       if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo leer el documento.')
       const d = data.datos || {}
@@ -1707,7 +1707,7 @@ function ProtoHead({ p, upd, onDel, titulo, equipos, col, onTgl }) {
     setSubiendoDrive(false)
   }
 
-  return (<div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}><span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 14, textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }} onClick={onTgl}>{col ? '▸ ' : '▾ '}{p.codigo} - {titulo}</span><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><label style={{ cursor: subiendoOC ? 'wait' : 'pointer', background: '#fff', color: C.teal, border: '1px solid ' + C.teal, padding: '7px 12px', fontSize: 12.5, opacity: subiendoOC ? 0.6 : 1 }}>{subiendoOC ? 'Leyendo…' : 'Subir OC/OT (auto-completar)'}<input type="file" accept="application/pdf" style={{ display: 'none' }} disabled={subiendoOC} onChange={subirOC} /></label><button onClick={() => descargarProto(p, equipos, certsDisponibles.filter(c => certMarcado(c[0])).map(c => c[0]))} style={{ background: '#101315', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>Descargar PDF</button><button onClick={cerrarYSubirDrive} disabled={!chequeoCompleto.completo || subiendoDrive} title={chequeoCompleto.completo ? 'Genera el PDF y lo sube a Drive, en la carpeta del cliente' : 'Falta: ' + chequeoCompleto.faltantes.join(', ')} style={{ background: chequeoCompleto.completo ? C.verde : '#DFE4EA', color: chequeoCompleto.completo ? '#fff' : '#9AA3AD', border: 'none', padding: '7px 12px', cursor: chequeoCompleto.completo && !subiendoDrive ? 'pointer' : 'not-allowed', fontSize: 12.5 }}>{subiendoDrive ? 'Subiendo…' : 'Cerrar y subir a Drive'}</button><button onClick={onDel} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 10px', cursor: 'pointer', fontSize: 12.5, color: '#9AA3AD' }}>Eliminar</button></div></div>
+  return (<div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}><span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 14, textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }} onClick={onTgl}>{col ? '▸ ' : '▾ '}{p.codigo} - {titulo}</span><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><label style={{ cursor: subiendoOC ? 'wait' : 'pointer', background: '#fff', color: C.teal, border: '1px solid ' + C.teal, padding: '7px 12px', fontSize: 12.5, opacity: subiendoOC ? 0.6 : 1 }}>{subiendoOC ? 'Leyendo…' : 'Subir OC/OT (auto-completar)'}<input type="file" accept="application/pdf,image/*" multiple style={{ display: 'none' }} disabled={subiendoOC} onChange={subirOC} /></label><button onClick={() => descargarProto(p, equipos, certsDisponibles.filter(c => certMarcado(c[0])).map(c => c[0]))} style={{ background: '#101315', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>Descargar PDF</button><button onClick={cerrarYSubirDrive} disabled={!chequeoCompleto.completo || subiendoDrive} title={chequeoCompleto.completo ? 'Genera el PDF y lo sube a Drive, en la carpeta del cliente' : 'Falta: ' + chequeoCompleto.faltantes.join(', ')} style={{ background: chequeoCompleto.completo ? C.verde : '#DFE4EA', color: chequeoCompleto.completo ? '#fff' : '#9AA3AD', border: 'none', padding: '7px 12px', cursor: chequeoCompleto.completo && !subiendoDrive ? 'pointer' : 'not-allowed', fontSize: 12.5 }}>{subiendoDrive ? 'Subiendo…' : 'Cerrar y subir a Drive'}</button><button onClick={onDel} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 10px', cursor: 'pointer', fontSize: 12.5, color: '#9AA3AD' }}>Eliminar</button></div></div>
     {errorOC && <div style={{ fontSize: 11.5, color: '#C5453D', marginBottom: 8 }}>{errorOC}</div>}
     {driveMsg && (driveMsg.ok
       ? <div style={{ fontSize: 11.5, color: C.verde, marginBottom: 8 }}>✓ Subido a Drive. <a href={driveMsg.link} target="_blank" rel="noreferrer" style={{ color: C.teal }}>Ver archivo</a></div>
