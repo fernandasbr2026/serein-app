@@ -259,11 +259,17 @@ const fotoFirmaAPng = (file, cb) => {
       ctx.drawImage(img, 0, 0, w, h)
       const datos = ctx.getImageData(0, 0, w, h)
       const d = datos.data
-      const UMBRAL = 200, RANGO = 55
+      // Umbral duro (solo un borde chico de 18 niveles se suaviza) para que
+      // el trazo quede solido y oscuro en vez de un gris tenue -- una firma
+      // se necesita legible, no un efecto de transparencia suave.
+      const UMBRAL = 215, RANGO = 18
       for (let i = 0; i < d.length; i += 4) {
         const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]
-        if (lum > UMBRAL) d[i + 3] = 0
-        else if (lum > UMBRAL - RANGO) d[i + 3] = Math.round(255 * (UMBRAL - lum) / RANGO)
+        if (lum > UMBRAL) { d[i + 3] = 0; continue }
+        d[i + 3] = lum > UMBRAL - RANGO ? Math.round(255 * (UMBRAL - lum) / RANGO) : 255
+        // oscurece el trazo hacia negro para que se vea nitido y parejo,
+        // sin importar si la foto quedo con tinta azul o poca luz
+        d[i] = Math.min(d[i], 40); d[i + 1] = Math.min(d[i + 1], 40); d[i + 2] = Math.min(d[i + 2], 40)
       }
       ctx.putImageData(datos, 0, 0)
       cb(cv.toDataURL('image/png'))
