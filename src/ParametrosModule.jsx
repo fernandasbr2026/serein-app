@@ -242,6 +242,36 @@ function SeccionUF({ params, setParams }) {
 }
 
 const imgToDataP = (file, cb) => { const r = new FileReader(); r.onload = e => { const img = new Image(); img.onload = () => { var max = 1000; var w = img.width, h = img.height; if (w > h && w > max) { h = Math.round(h * max / w); w = max } else if (h > max) { w = Math.round(w * max / h); h = max } const cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.getContext('2d').drawImage(img, 0, 0, w, h); cb(cv.toDataURL('image/jpeg', 0.72)) }; img.src = e.target.result }; r.readAsDataURL(file) }
+// Foto de una firma en papel -> PNG con el fondo (blanco/claro) transparente,
+// para que se pueda pegar encima del protocolo sin dejar un recuadro blanco.
+// Umbral simple por luminosidad: los pixeles claros (el papel) se vuelven
+// transparentes; el trazo de la firma (mucho mas oscuro/saturado que el
+// papel) se mantiene, con un borde suavizado para que no quede dentado.
+const fotoFirmaAPng = (file, cb) => {
+  const r = new FileReader()
+  r.onload = e => {
+    const img = new Image()
+    img.onload = () => {
+      var max = 700; var w = img.width, h = img.height
+      if (w > max) { h = Math.round(h * max / w); w = max }
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h
+      const ctx = cv.getContext('2d')
+      ctx.drawImage(img, 0, 0, w, h)
+      const datos = ctx.getImageData(0, 0, w, h)
+      const d = datos.data
+      const UMBRAL = 200, RANGO = 55
+      for (let i = 0; i < d.length; i += 4) {
+        const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]
+        if (lum > UMBRAL) d[i + 3] = 0
+        else if (lum > UMBRAL - RANGO) d[i + 3] = Math.round(255 * (UMBRAL - lum) / RANGO)
+      }
+      ctx.putImageData(datos, 0, 0)
+      cb(cv.toDataURL('image/png'))
+    }
+    img.src = e.target.result
+  }
+  r.readAsDataURL(file)
+}
 // Certificado de calibracion (PDF o imagen) de un instrumento — a diferencia
 // de las fotos de arriba, no se guarda como base64 en params (un PDF puede
 // pesar varios MB, y params se guarda entero en cada cambio). Sube el
@@ -312,6 +342,29 @@ function SeccionInstrumentos({ params, setParams }) {
           <input type="file" accept="application/pdf,image/*" style={{ display: 'none' }} onChange={e => { const fl = e.target.files[0]; if (!fl) return; subirCertificado(fl, eq[1], url2 => set(eq[1], url2)); e.target.value = '' }} />
         </label>
       )}
+    </div>)
+  })}
+</div>
+<div style={{ fontSize: 12, fontWeight: 600, color: '#5A636E', margin: '16px 0 8px' }}>Firmas (se completan solas en los protocolos, donde aparezca el nombre de la persona)</div>
+<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px,1fr))', gap: 14 }}>
+  {['Boris Gomez', 'Luis Soto'].map(nombre => {
+    const firmas = inst.firmas || {}
+    const img = firmas[nombre] || ''
+    const fondoCheck = { backgroundImage: 'linear-gradient(45deg,#eee 25%,transparent 25%),linear-gradient(-45deg,#eee 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#eee 75%),linear-gradient(-45deg,transparent 75%,#eee 75%)', backgroundSize: '10px 10px', backgroundPosition: '0 0,0 5px,5px -5px,-5px 0px' }
+    return (<div key={nombre} style={{ border: '1px solid #DFE4EA', padding: 10 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>{nombre}</div>
+      {img ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
+          <div style={{ ...fondoCheck, border: '1px solid #DFE4EA', borderRadius: 4, padding: 6 }}><img src={img} style={{ height: 44, display: 'block' }} /></div>
+          <button onClick={() => set('firmas', { ...firmas, [nombre]: '' })} style={{ background: 'transparent', border: '1px solid #DFE4EA', color: '#C5453D', fontSize: 11, padding: '4px 8px', borderRadius: 4, cursor: 'pointer' }}>Quitar</button>
+        </div>
+      ) : (
+        <label style={{ cursor: 'pointer', display: 'inline-block', background: '#101315', color: '#fff', fontSize: 11.5, fontWeight: 600, padding: '6px 12px', borderRadius: 4 }}>
+          Subir foto de la firma
+          <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const fl = e.target.files[0]; if (!fl) return; fotoFirmaAPng(fl, png => set('firmas', { ...firmas, [nombre]: png })); e.target.value = '' }} />
+        </label>
+      )}
+      <div style={{ fontSize: 10.5, color: '#9AA3AD', marginTop: 6 }}>Sube la foto de la firma sobre papel blanco — el fondo se quita solo.</div>
     </div>)
   })}
 </div>
