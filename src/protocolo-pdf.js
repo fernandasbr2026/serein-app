@@ -5,7 +5,6 @@
 // son dependencias de la app (ver OrganigramaModule.jsx).
 import { jsPDF } from 'jspdf'
 import { toPng } from 'html-to-image'
-import { PDFDocument } from 'pdf-lib'
 
 // Ancho de referencia: 794px equivale a 210mm (ancho A4) a 96dpi. Se le
 // fija ese ancho al contenedor porque las paginas del protocolo no traen
@@ -46,68 +45,6 @@ export async function generarPdfProtocoloBlob(fullHtml) {
   } finally {
     document.body.removeChild(contenedor)
   }
-}
-
-// Convierte cualquier imagen (webp, gif, etc.) a un ArrayBuffer PNG,
-// para los formatos que pdf-lib no sabe incrustar directo (solo soporta
-// PNG y JPG nativamente).
-function imagenAPngBuffer(blob) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(blob)
-    const img = new Image()
-    img.onload = () => {
-      const cv = document.createElement('canvas')
-      cv.width = img.naturalWidth; cv.height = img.naturalHeight
-      cv.getContext('2d').drawImage(img, 0, 0)
-      cv.toBlob(png => {
-        URL.revokeObjectURL(url)
-        if (!png) { reject(new Error('No se pudo convertir la imagen')); return }
-        png.arrayBuffer().then(resolve, reject)
-      }, 'image/png')
-    }
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo cargar la imagen')) }
-    img.src = url
-  })
-}
-
-// Fusiona los certificados de calibracion tildados en las mismas paginas
-// del PDF del protocolo, para que quede UN solo archivo al descargar (en
-// vez de un archivo por certificado aparte). Cada certificado puede ser
-// un PDF (se copian sus paginas tal cual) o una imagen (se agrega como
-// una pagina A4 nueva, centrada). Si un certificado puntual falla al
-// traerlo o leerlo, se omite y se sigue con el resto — nunca se cae la
-// descarga del protocolo completo por un certificado con problemas.
-export async function agregarCertificadosAlPdf(protocoloBlob, certUrls) {
-  const pdfDoc = await PDFDocument.load(await protocoloBlob.arrayBuffer())
-  for (const url of certUrls) {
-    try {
-      const res = await fetch(url)
-      if (!res.ok) continue
-      const blob = await res.blob()
-      const tipo = (blob.type || res.headers.get('content-type') || '').toLowerCase()
-      if (tipo.indexOf('pdf') >= 0) {
-        const certDoc = await PDFDocument.load(await blob.arrayBuffer())
-        const paginas = await pdfDoc.copyPages(certDoc, certDoc.getPageIndices())
-        paginas.forEach(pg => pdfDoc.addPage(pg))
-        continue
-      }
-      let buf = await blob.arrayBuffer()
-      let img
-      try {
-        img = tipo.indexOf('png') >= 0 ? await pdfDoc.embedPng(buf) : await pdfDoc.embedJpg(buf)
-      } catch (e) {
-        img = await pdfDoc.embedPng(await imagenAPngBuffer(blob))
-      }
-      const pagina = pdfDoc.addPage([595.28, 841.89]) // A4 en puntos
-      const { width, height } = pagina.getSize()
-      const margen = 40
-      const escala = Math.min((width - margen * 2) / img.width, (height - margen * 2) / img.height, 1)
-      const w = img.width * escala, h = img.height * escala
-      pagina.drawImage(img, { x: (width - w) / 2, y: (height - h) / 2, width: w, height: h })
-    } catch (e) { /* se omite ese certificado — el resto del PDF sigue */ }
-  }
-  const bytes = await pdfDoc.save()
-  return new Blob([bytes], { type: 'application/pdf' })
 }
 
 export function blobToBase64(blob) {

@@ -243,10 +243,24 @@ function SeccionUF({ params, setParams }) {
 
 const imgToDataP = (file, cb) => { const r = new FileReader(); r.onload = e => { const img = new Image(); img.onload = () => { var max = 1000; var w = img.width, h = img.height; if (w > h && w > max) { h = Math.round(h * max / w); w = max } else if (h > max) { w = Math.round(w * max / h); h = max } const cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.getContext('2d').drawImage(img, 0, 0, w, h); cb(cv.toDataURL('image/jpeg', 0.72)) }; img.src = e.target.result }; r.readAsDataURL(file) }
 // Foto de una firma en papel -> PNG con el fondo (blanco/claro) transparente,
-// para que se pueda pegar encima del protocolo sin dejar un recuadro blanco.
-// Umbral simple por luminosidad: los pixeles claros (el papel) se vuelven
-// transparentes; el trazo de la firma (mucho mas oscuro/saturado que el
-// papel) se mantiene, con un borde suavizado para que no quede dentado.
+// para que se pegue encima del protocolo sin dejar un recuadro blanco.
+// El umbral fijo (asumir que el papel es blanco puro) fallaba feo con fotos
+// reales con sombra o luz pareja: si el fondo no era lo bastante claro,
+// TODA la foto se marcaba como "trazo" y quedaba un rectangulo solido
+// negro en vez de la firma. Ahora el umbral se calcula a partir del propio
+// fondo de la foto (promedio de una franja del borde, que normalmente es
+// puro papel) y, si aun asi mas de un tercio de la imagen quedaria opaca
+// (senal de que no se pudo separar bien fondo de trazo), se usa la foto
+// completa sin recortar el fondo -- una firma con fondo blanco se ve mucho
+// mejor que un bloque negro.
+function luminancia(r, g, b) { return 0.299 * r + 0.587 * g + 0.114 * b }
+function promedioBorde(d, w, h) {
+  let suma = 0, n = 0
+  const paso = Math.max(1, Math.floor(w / 60))
+  for (let x = 0; x < w; x += paso) { for (const y of [0, h - 1]) { const i = (y * w + x) * 4; suma += luminancia(d[i], d[i + 1], d[i + 2]); n++ } }
+  for (let y = 0; y < h; y += paso) { for (const x of [0, w - 1]) { const i = (y * w + x) * 4; suma += luminancia(d[i], d[i + 1], d[i + 2]); n++ } }
+  return n ? suma / n : 235
+}
 const fotoFirmaAPng = (file, cb) => {
   const r = new FileReader()
   r.onload = e => {
@@ -259,18 +273,19 @@ const fotoFirmaAPng = (file, cb) => {
       ctx.drawImage(img, 0, 0, w, h)
       const datos = ctx.getImageData(0, 0, w, h)
       const d = datos.data
-      // Umbral duro (solo un borde chico de 18 niveles se suaviza) para que
-      // el trazo quede solido y oscuro en vez de un gris tenue -- una firma
-      // se necesita legible, no un efecto de transparencia suave.
-      const UMBRAL = 215, RANGO = 18
+      const fondo = promedioBorde(d, w, h)
+      const UMBRAL = fondo - 25, RANGO = 30
+      let opacos = 0
       for (let i = 0; i < d.length; i += 4) {
-        const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]
+        const lum = luminancia(d[i], d[i + 1], d[i + 2])
         if (lum > UMBRAL) { d[i + 3] = 0; continue }
         d[i + 3] = lum > UMBRAL - RANGO ? Math.round(255 * (UMBRAL - lum) / RANGO) : 255
-        // oscurece el trazo hacia negro para que se vea nitido y parejo,
-        // sin importar si la foto quedo con tinta azul o poca luz
-        d[i] = Math.min(d[i], 40); d[i + 1] = Math.min(d[i + 1], 40); d[i + 2] = Math.min(d[i + 2], 40)
+        if (d[i + 3] > 40) opacos++
       }
+      // Si "el trazo" termino siendo un tercio o mas de la foto, la
+      // separacion fallo (fondo no uniforme/oscuro) -- se descarta el
+      // recorte y se deja la foto tal cual, con su fondo blanco normal.
+      if (opacos > (w * h) / 3) { cb(cv.toDataURL('image/jpeg', 0.85)); return }
       ctx.putImageData(datos, 0, 0)
       cb(cv.toDataURL('image/png'))
     }
