@@ -253,6 +253,13 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const areasUsuario = perfil.areas || []
   const modulosPerfil = Array.isArray(perfil.modulos) ? perfil.modulos : null
   const sinValores = Array.isArray(perfil.sin_valores) ? perfil.sin_valores : []
+  // Restriccion a proyectos puntuales (ej. un cliente externo que solo debe
+  // ver 2 OT de Proyectos): perfil.proyectos_ids trae los N de OT
+  // permitidos. null/ausente = sin restriccion (todo el mundo sigue viendo
+  // lo mismo que antes). El filtro es solo de UI — ver la nota en el mismo
+  // punto donde se arma proyectosVisibles, mas abajo, sobre por que esto no
+  // reemplaza un control de acceso a nivel de base de datos.
+  const proyectosIdsPermitidos = Array.isArray(perfil.proyectos_ids) ? perfil.proyectos_ids.map(String) : null
   const esGerencia = areasUsuario.length > 1 && perfil.tipo !== 'supervisor'
   const esSupervisor = perfil.tipo === 'supervisor'
   const tieneProyectos = areasUsuario.includes('Proyectos')
@@ -291,7 +298,12 @@ export default function Dashboard({ perfil, email, onLogout }) {
     ...(esGerencia ? ['PARAMETROS'] : []),
   ]
   const ORDEN_MODULOS = ['TODAS', 'ORGANIGRAMA', 'CRM', 'ASESOR', 'Santa Rosa', 'Istria', 'GESTION_PROYECTOS', 'FINANZAS', 'ORDENES_COMPRA', 'PAGOS', 'LIBRO_COMPRAS', 'LIBRO_VENTAS', 'CARTOLAS_BANCARIAS', 'TRAZABILIDAD', 'COTIZADOR', 'CLIENTES', 'CONTACTOS', 'COMPRAS_OP', 'PRODUCCION', 'GESTION_OT', 'ASISTENCIA', 'INVENTARIO', 'PARAMETROS']
-  if (modulosPerfil) tabs = ORDEN_MODULOS.filter(c => c === 'INVENTARIO' || modulosPerfil.includes(c))
+  // INVENTARIO se agrega siempre para los perfiles con lista blanca de
+  // modulos (varios supervisores lo necesitan aunque no este en su lista) —
+  // perfil.ocultar_inventario es la excepcion explicita para un perfil que
+  // de verdad no debe ver nada mas que su lista (default false, no cambia
+  // nada para nadie que no tenga esta columna en true).
+  if (modulosPerfil) tabs = ORDEN_MODULOS.filter(c => (c === 'INVENTARIO' && !perfil.ocultar_inventario) || modulosPerfil.includes(c))
   // Recuerda la ultima pestana usada para que, si el panel se remonta por
   // algo ajeno (ej. un parpadeo de sesion al cambiar de pestana del navegador),
   // no caiga siempre en la primera pestana de la lista (que puede ser Asesor IA).
@@ -767,12 +779,27 @@ export default function Dashboard({ perfil, email, onLogout }) {
       <main style={{ flex: 1, minWidth: 0, height: '100vh', overflowY: 'auto' }}>
       <div style={{ padding: 20, maxWidth: 1200, margin: '0 auto' }}>
               <PageHeader titulo={nombreTab(areaSel)} perfil={perfil} email={email} />
-        {esModuloOrganigrama ? (<OrganigramaModule esGerencia={esGerencia} />) : esModuloCRM ? (<CRMModule />) : esModuloAsesor && puedeVer('ASESOR') ? (<AsesorModule fin={fin} pp={pp} proyectos={proyectos} ots={ots} params={params} onIr={setAreaSel} />) : esModuloLibroCompras && puedeVer('LIBRO_COMPRAS') ? (<LibroComprasModule esGerencia={esGerencia} ots={ots} factoringList={params.factoring || []} proyectos={proyectos} setProyectos={setProyectos} />) : esModuloLibroVentas && puedeVer('LIBRO_VENTAS') ? (<LibroVentasModule ots={ots} proyectos={proyectos} facturas={facturas} setFacturas={setFacturas} params={params} />) : esModuloProyectos && puedeVer('GESTION_PROYECTOS') ? (
-          <>
-          {resumenFinancieroArea('Proyectos')}
-          <ProyectosModule proyectos={proyectos} setProyectos={setProyectos} params={params} facturas={facturas} setFacturas={setFacturas} comisionPct={comisiones['Proyectos'] ?? 2} setComisionPct={v => setComisiones(c => ({ ...c, Proyectos: v }))} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={nombresClientes(contactos)} />
-          </>
-        ) : esModuloOT ? (
+        {esModuloOrganigrama ? (<OrganigramaModule esGerencia={esGerencia} />) : esModuloCRM ? (<CRMModule />) : esModuloAsesor && puedeVer('ASESOR') ? (<AsesorModule fin={fin} pp={pp} proyectos={proyectos} ots={ots} params={params} onIr={setAreaSel} />) : esModuloLibroCompras && puedeVer('LIBRO_COMPRAS') ? (<LibroComprasModule esGerencia={esGerencia} ots={ots} factoringList={params.factoring || []} proyectos={proyectos} setProyectos={setProyectos} />) : esModuloLibroVentas && puedeVer('LIBRO_VENTAS') ? (<LibroVentasModule ots={ots} proyectos={proyectos} facturas={facturas} setFacturas={setFacturas} params={params} />) : esModuloProyectos && puedeVer('GESTION_PROYECTOS') ? (() => {
+          // proyectosIdsPermitidos filtra por p.ot (el N de OT/cotizacion del
+          // proyecto). setProyectosSeguro fusiona el resultado del modulo
+          // (que solo conoce su subconjunto filtrado) de vuelta sobre la
+          // lista completa, tocando solo los proyectos permitidos — para no
+          // pisar/borrar el resto cuando este perfil restringido guarda algo
+          // (mismo riesgo que "reescribir el array completo" que ya se
+          // corrigio en otros modulos este mes).
+          const proyectosVisibles = proyectosIdsPermitidos ? proyectos.filter(p => proyectosIdsPermitidos.includes(String(p.ot))) : proyectos
+          const setProyectosSeguro = actualizado => {
+            if (!proyectosIdsPermitidos) { setProyectos(actualizado); return }
+            const noVisibles = proyectos.filter(p => !proyectosIdsPermitidos.includes(String(p.ot)))
+            setProyectos([...noVisibles, ...actualizado])
+          }
+          return (
+            <>
+            {!sinValores.includes('RESUMEN_FINANCIERO_PROYECTOS') && resumenFinancieroArea('Proyectos')}
+            <ProyectosModule proyectos={proyectosVisibles} setProyectos={setProyectosSeguro} params={params} facturas={facturas} setFacturas={setFacturas} comisionPct={comisiones['Proyectos'] ?? 2} setComisionPct={v => setComisiones(c => ({ ...c, Proyectos: v }))} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={nombresClientes(contactos)} />
+            </>
+          )
+        })() : esModuloOT ? (
           <OTModule areasPermitidas={areasOTUsuario} ots={ots} setOts={setOts} verValores={verValoresOT} clientes={contactos.clientes || []} ordenesCompra={pp.ocs || []} mo={mo} instrumentos={params.instrumentos} />
         ) : esModuloComprasOp && puedeVer('COMPRAS_OP') ? (
           <ComprasOperativasModule
