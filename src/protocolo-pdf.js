@@ -7,12 +7,20 @@ import { jsPDF } from 'jspdf'
 import { toPng } from 'html-to-image'
 import { PDFDocument } from 'pdf-lib'
 
+// Ancho de referencia: 794px equivale a 210mm (ancho A4) a 96dpi. Se le
+// fija ese ancho al contenedor porque las paginas del protocolo no traen
+// un ancho propio en su CSS (estaba pensado solo para @page al imprimir,
+// que no aplica fuera de una impresion real) — sin esto, el div se
+// renderiza con un ancho impredecible (shrink-to-fit) y todo sale mal
+// proporcionado y con contenido recortado al forzarlo despues a 210x297.
+const PX_POR_MM = 794 / 210
+
 export async function generarPdfProtocoloBlob(fullHtml) {
   const styleMatch = fullHtml.match(/<style>([\s\S]*?)<\/style>/)
   const bodyMatch = fullHtml.match(/<body>([\s\S]*?)<\/body>/)
   if (!styleMatch || !bodyMatch) throw new Error('No se pudo preparar el documento para exportar.')
   const contenedor = document.createElement('div')
-  contenedor.style.cssText = 'position:fixed;left:-99999px;top:0;background:#fff'
+  contenedor.style.cssText = 'position:fixed;left:-99999px;top:0;width:794px;background:#fff'
   contenedor.innerHTML = `<style>${styleMatch[1]}</style>${bodyMatch[1]}`
   document.body.appendChild(contenedor)
   try {
@@ -23,9 +31,16 @@ export async function generarPdfProtocoloBlob(fullHtml) {
     if (!paginas.length) throw new Error('No se encontraron paginas para exportar.')
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     for (let i = 0; i < paginas.length; i++) {
+      const alturaPx = paginas[i].getBoundingClientRect().height
       const dataUrl = await toPng(paginas[i], { pixelRatio: 2, backgroundColor: '#ffffff' })
       if (i > 0) pdf.addPage()
-      pdf.addImage(dataUrl, 'PNG', 0, 0, 210, 297)
+      // Mantiene la proporcion real capturada (ancho fijo 210mm) en vez de
+      // estirar siempre a 210x297 — si una pagina resulta mas alta que una
+      // hoja A4, se reduce completa (ancho y alto) para que quepa entera
+      // en vez de recortarse en el borde.
+      let w = 210, h = alturaPx / PX_POR_MM
+      if (h > 297) { const f = 297 / h; w *= f; h = 297 }
+      pdf.addImage(dataUrl, 'PNG', (210 - w) / 2, 0, w, h)
     }
     return pdf.output('blob')
   } finally {
