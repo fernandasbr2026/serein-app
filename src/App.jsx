@@ -84,7 +84,7 @@ export default function App() {
     let vivo = true
     supabase
       .from('perfiles')
-      .select('nombre, rol, areas, tipo, modulos, sin_valores')
+      .select('nombre, rol, areas, tipo, modulos, sin_valores, proyectos_ids, ocultar_inventario')
       .eq('id', session.user.id)
       .single()
       .then(({ data, error }) => {

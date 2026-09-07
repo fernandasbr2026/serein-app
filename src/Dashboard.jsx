@@ -796,7 +796,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
           return (
             <>
             {!sinValores.includes('RESUMEN_FINANCIERO_PROYECTOS') && resumenFinancieroArea('Proyectos')}
-            <ProyectosModule proyectos={proyectosVisibles} setProyectos={setProyectosSeguro} params={params} facturas={facturas} setFacturas={setFacturas} comisionPct={comisiones['Proyectos'] ?? 2} setComisionPct={v => setComisiones(c => ({ ...c, Proyectos: v }))} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={nombresClientes(contactos)} />
+            <ProyectosModule proyectos={proyectosVisibles} setProyectos={setProyectosSeguro} params={params} facturas={facturas} setFacturas={setFacturas} comisionPct={comisiones['Proyectos'] ?? 2} setComisionPct={v => setComisiones(c => ({ ...c, Proyectos: v }))} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={nombresClientes(contactos)} ocultarResumenFinanciero={sinValores.includes('RESUMEN_FINANCIERO_PROYECTOS')} />
             </>
           )
         })() : esModuloOT ? (
