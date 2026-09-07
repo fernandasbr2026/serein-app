@@ -853,7 +853,7 @@ function ProyCotizacionesList({ setProyectos }) {
   )
 }
 
-export default function ProyectosModule({ proyectos: proyExt, setProyectos: setProyExt, params = { factoring: [] }, facturas = {}, setFacturas = () => {}, comisionPct = 2, setComisionPct = () => {}, ppmPct = 2, setPpmPct = () => {}, clientesSugeridos = [] }) {
+export default function ProyectosModule({ proyectos: proyExt, setProyectos: setProyExt, params = { factoring: [] }, facturas = {}, setFacturas = () => {}, comisionPct = 2, setComisionPct = () => {}, ppmPct = 2, setPpmPct = () => {}, clientesSugeridos = [], ocultarResumenFinanciero = false }) {
   const [proyInt, setProyInt] = useState(PROYECTOS)
   const proyectos = proyExt ?? proyInt
   const setProyectos = setProyExt ?? setProyInt
@@ -942,6 +942,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
 
   return (
     <div>
+      {!ocultarResumenFinanciero && (<>
       <div style={{ background: '#FDECDD', border: '1px solid #FF9D5C', borderLeft: '6px solid ' + C.ambar, padding: '14px 18px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14 }}>
         <div>
           <div style={{ fontSize: 11, color: '#D9600A', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.4 }}>Debería tener en caja</div>
@@ -979,6 +980,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
         {kpi('Pérdida factoring', clp(totPerdidaFact), totPerdidaFact > 0 ? C.rojo : C.carbon)}
         {kpi('UT est. global', totVenta > 0 ? (((totVenta - totCostoEst) / totVenta) * 100).toFixed(0) + '%' : '0%', C.verde)}
       </div>
+      </>)}
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
         {[['tarjetas', 'Tarjetas', LayoutGrid], ...(verCotizadorProy ? [['cotizarProy', 'Cotización Proyecto', Receipt], ['cotizacionesProy', 'Cotizaciones', Receipt], ['cotizarIntumescente', 'Cotización Intumescente', Flame], ['comprasSII', 'Compras SII', ShoppingCart]] : []), ['consolidado', 'Consolidado', Table2], ['cerrados', 'Proyectos cerrados', LayoutGrid], ['facturas', 'Facturas', Receipt], ...(verCotizadorProy ? [['parametros', 'Parámetros Proyectos', Target]] : [])].map(([id, lbl, Icon]) => (
