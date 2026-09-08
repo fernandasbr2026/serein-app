@@ -642,6 +642,63 @@ function resumenTiposRecepcion(partidas) {
 // Los campos nuevos (cantidad, m2 cliente, m2 propio, tipo) son opcionales y
 // se suman a los de siempre (detalle, fecha, m2, estado, obs, fotos) sin
 // tocarlos, para no reinterpretar ni perder ninguna recepcion ya cargada.
+// Fase D — lectura de guias de recepcion/despacho con IA (extraer-guia,
+// clon de extraer-oc con su propio prompt/schema). Cada marca que lee la
+// IA se coteja contra las marcas esperadas de la OT: las que calzan se
+// proponen tildadas, las que no se muestran aparte para revision manual
+// (la guia puede traer piezas de otra OT por error, o venir mal leida).
+function cotejarGuia(marcasLeidas, marcasEsperadas) {
+  const normM = s => String(s == null ? '' : s).trim().toLowerCase()
+  return (marcasLeidas || []).map(ml => {
+    const marcaTxt = ml.id ? (ml.tag + '-' + ml.id) : ml.tag
+    const match = (marcasEsperadas || []).find(me => normM(me.marca) === normM(marcaTxt))
+    return { tag: ml.tag, id: ml.id || null, marcaTxt, marcaEsperadaId: match ? match.id : null, aplicar: !!match }
+  })
+}
+function PanelRevisionGuia({ revision, setRevision, onAplicar, onDescartar, etiquetaAccion }) {
+  const calzan = revision.marcas.filter(m => m.marcaEsperadaId)
+  const noCalzan = revision.marcas.filter(m => !m.marcaEsperadaId)
+  return (
+    <div style={{ border: '1px dashed #CFC9BC', borderRadius: 6, padding: 10, marginBottom: 10, background: '#FBFAF7' }}>
+      <div style={{ fontSize: 11.5, fontWeight: 700, color: '#5A736A', marginBottom: 8, textTransform: 'uppercase' }}>Revisa lo que leyó la IA antes de aplicar</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <input type="checkbox" checked={revision.numeroGuia.aplicar} onChange={e => setRevision(r => ({ ...r, numeroGuia: { ...r.numeroGuia, aplicar: e.target.checked } }))} />
+        <span style={{ fontSize: 11, color: '#9AA3AD', width: 60 }}>N° guía</span>
+        <input value={revision.numeroGuia.valor} onChange={e => setRevision(r => ({ ...r, numeroGuia: { ...r.numeroGuia, valor: e.target.value } }))} style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '5px 7px', fontSize: 12.5, flex: 1 }} />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <input type="checkbox" checked={revision.fecha.aplicar} onChange={e => setRevision(r => ({ ...r, fecha: { ...r.fecha, aplicar: e.target.checked } }))} />
+        <span style={{ fontSize: 11, color: '#9AA3AD', width: 60 }}>Fecha</span>
+        <input type="date" value={revision.fecha.valor} onChange={e => setRevision(r => ({ ...r, fecha: { ...r.fecha, valor: e.target.value } }))} style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '5px 7px', fontSize: 12.5, flex: 1 }} />
+      </div>
+      {calzan.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <div style={{ fontSize: 11, color: C.verde, marginBottom: 4, fontWeight: 700 }}>Calzan con marcas esperadas de esta OT ({calzan.length})</div>
+          <div style={{ maxHeight: 140, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {revision.marcas.map((m, idx) => m.marcaEsperadaId ? (
+              <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                <input type="checkbox" checked={m.aplicar} onChange={e => setRevision(r => ({ ...r, marcas: r.marcas.map((x, j) => j === idx ? { ...x, aplicar: e.target.checked } : x) }))} />
+                {m.marcaTxt}
+              </label>
+            ) : null)}
+          </div>
+        </div>
+      )}
+      {noCalzan.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <div style={{ fontSize: 11, color: '#D9600A', marginBottom: 4, fontWeight: 700 }}>No calzan con ninguna marca esperada de esta OT — revisar a mano ({noCalzan.length})</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {noCalzan.map((m, i) => <span key={i} style={{ background: '#FDECDD', color: '#D9600A', borderRadius: 10, padding: '2px 8px', fontSize: 11 }}>{m.marcaTxt}</span>)}
+          </div>
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <button onClick={onAplicar} style={{ background: C.verde, color: '#fff', border: 'none', borderRadius: 4, padding: '6px 14px', fontSize: 12.5, cursor: 'pointer' }}>{etiquetaAccion}</button>
+        <button onClick={onDescartar} style={{ background: 'none', border: '1px solid #DFE4EA', borderRadius: 4, padding: '6px 12px', fontSize: 12.5, cursor: 'pointer' }}>Descartar</button>
+      </div>
+    </div>
+  )
+}
 function RecepcionOT({ ot, onUpdate, onAgregarArray, onUpdateMarcasEsperadas }) {
   const partidas = ot.partidas || []
   const marcasEsperadas = ot.marcasEsperadas || []
@@ -664,11 +721,56 @@ function RecepcionOT({ ot, onUpdate, onAgregarArray, onUpdateMarcasEsperadas }) 
   }
   const setP = (i, campo, valor) => onUpdate(ot.id, { partidas: partidas.map((x, j) => j === i ? { ...x, [campo]: valor } : x) })
 
+  const [subiendoGuia, setSubiendoGuia] = useState(false)
+  const [revisionGuia, setRevisionGuia] = useState(null)
+  const [errorGuia, setErrorGuia] = useState('')
+  const subirGuia = async e => {
+    const fls = [...e.target.files]
+    e.target.value = ''
+    if (!fls.length) return
+    setSubiendoGuia(true); setErrorGuia(''); setRevisionGuia(null)
+    try {
+      const archivos = await Promise.all(fls.map(async fl => ({ base64: await fileToBase64(fl), mimeType: fl.type || 'application/pdf', filename: fl.name })))
+      const { data, error } = await supabase.functions.invoke('extraer-guia', { body: { archivos, filename: fls[0].name } })
+      if (error) throw error
+      if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo leer la guía.')
+      const d = data.datos || {}
+      setRevisionGuia({
+        numeroGuia: { valor: d.numeroGuia || '', aplicar: !!d.numeroGuia },
+        fecha: { valor: d.fecha || hoy(), aplicar: true },
+        marcas: cotejarGuia(d.marcas || [], marcasEsperadas),
+      })
+    } catch (err) { setErrorGuia('No se pudo leer la guía: ' + ((err && err.message) || String(err))) }
+    setSubiendoGuia(false)
+  }
+  const aplicarRevisionGuia = () => {
+    if (!revisionGuia) return
+    const loteId = 'pa' + Date.now() + Math.random().toString(36).slice(2, 7)
+    const fecha = (revisionGuia.fecha.aplicar && revisionGuia.fecha.valor) ? revisionGuia.fecha.valor : hoy()
+    const numeroGuia = revisionGuia.numeroGuia.aplicar ? revisionGuia.numeroGuia.valor : ''
+    const marcasAplicar = revisionGuia.marcas.filter(m => m.aplicar && m.marcaEsperadaId)
+    onAgregarArray(ot.id, 'partidas', {
+      id: loteId, detalle: 'Guía ' + (numeroGuia || '(leída con IA)'), fecha, estado: 'Recibida',
+      m2: '', obs: '', fotos: [], cantidad: marcasAplicar.length || '', m2Cliente: '', m2Propio: '', tipo: '', numeroGuia, plazoDias: ''
+    })
+    const idsAplicar = new Set(marcasAplicar.map(m => m.marcaEsperadaId))
+    onUpdateMarcasEsperadas(ot.id, marcasEsperadas.map(m => idsAplicar.has(m.id) ? { ...m, recibida: true, fechaRecibida: fecha, loteId } : m))
+    setRevisionGuia(null)
+  }
+
   return (<div style={{ marginTop: 14, background: '#F2F4F6', border: '1px solid #DBE0E5', borderLeft: '4px solid #5A6B85', borderRadius: 6, padding: 12 }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
       <span style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: '#5A6B85' }}>Recepción / Partidas de material</span>
-      <button onClick={() => onAgregarArray(ot.id, 'partidas', { id: 'pa' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [], numeroGuia: '', plazoDias: '' })} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}><Plus size={14} /> Agregar recepción</button>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <label style={{ cursor: subiendoGuia ? 'wait' : 'pointer', background: '#fff', color: '#5A6B85', border: '1px solid #5A6B85', padding: '6px 12px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, opacity: subiendoGuia ? 0.6 : 1 }}>
+          {subiendoGuia ? 'Leyendo…' : 'Subir guía (leer con IA)'}
+          <input type="file" accept="application/pdf,image/*" multiple style={{ display: 'none' }} disabled={subiendoGuia} onChange={subirGuia} />
+        </label>
+        <button onClick={() => onAgregarArray(ot.id, 'partidas', { id: 'pa' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [], numeroGuia: '', plazoDias: '' })} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}><Plus size={14} /> Agregar recepción</button>
+      </div>
     </div>
+    {errorGuia && <div style={{ fontSize: 11.5, color: '#C5453D', marginBottom: 8 }}>{errorGuia}</div>}
+    {revisionGuia && <PanelRevisionGuia revision={revisionGuia} setRevision={setRevisionGuia} onAplicar={aplicarRevisionGuia} onDescartar={() => setRevisionGuia(null)} etiquetaAccion="Crear recepción" />}
 
     {resumen.length > 0 && (
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
@@ -776,11 +878,56 @@ function DespachoOT({ ot, onUpdate, onAgregarArray, onUpdateMarcasEsperadas }) {
   }
   const setP = (i, campo, valor) => onUpdate(ot.id, { despachos: despachos.map((x, j) => j === i ? { ...x, [campo]: valor } : x) })
 
+  const [subiendoGuia, setSubiendoGuia] = useState(false)
+  const [revisionGuia, setRevisionGuia] = useState(null)
+  const [errorGuia, setErrorGuia] = useState('')
+  const subirGuia = async e => {
+    const fls = [...e.target.files]
+    e.target.value = ''
+    if (!fls.length) return
+    setSubiendoGuia(true); setErrorGuia(''); setRevisionGuia(null)
+    try {
+      const archivos = await Promise.all(fls.map(async fl => ({ base64: await fileToBase64(fl), mimeType: fl.type || 'application/pdf', filename: fl.name })))
+      const { data, error } = await supabase.functions.invoke('extraer-guia', { body: { archivos, filename: fls[0].name } })
+      if (error) throw error
+      if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo leer la guía.')
+      const d = data.datos || {}
+      setRevisionGuia({
+        numeroGuia: { valor: d.numeroGuia || '', aplicar: !!d.numeroGuia },
+        fecha: { valor: d.fecha || hoy(), aplicar: true },
+        marcas: cotejarGuia(d.marcas || [], marcasEsperadas),
+      })
+    } catch (err) { setErrorGuia('No se pudo leer la guía: ' + ((err && err.message) || String(err))) }
+    setSubiendoGuia(false)
+  }
+  const aplicarRevisionGuia = () => {
+    if (!revisionGuia) return
+    const despachoId = 'de' + Date.now() + Math.random().toString(36).slice(2, 7)
+    const fecha = (revisionGuia.fecha.aplicar && revisionGuia.fecha.valor) ? revisionGuia.fecha.valor : hoy()
+    const numeroGuia = revisionGuia.numeroGuia.aplicar ? revisionGuia.numeroGuia.valor : ''
+    const marcasAplicar = revisionGuia.marcas.filter(m => m.aplicar && m.marcaEsperadaId)
+    onAgregarArray(ot.id, 'despachos', {
+      id: despachoId, detalle: 'Guía ' + (numeroGuia || '(leída con IA)'), fecha, estado: 'Despachada',
+      m2: '', obs: '', fotos: [], cantidad: marcasAplicar.length || '', m2Cliente: '', m2Propio: '', tipo: '', numeroGuia
+    })
+    const idsAplicar = new Set(marcasAplicar.map(m => m.marcaEsperadaId))
+    if (onUpdateMarcasEsperadas) onUpdateMarcasEsperadas(ot.id, marcasEsperadas.map(m => idsAplicar.has(m.id) ? { ...m, despachoId, fechaDespacho: fecha } : m))
+    setRevisionGuia(null)
+  }
+
   return (<div style={{ marginTop: 14, background: '#FFF4EC', border: '1px solid #F3D9C2', borderLeft: '4px solid #D9600A', borderRadius: 6, padding: 12 }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
       <span style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: '#D9600A' }}>Entregas / Despacho SEREIN</span>
-      <button onClick={() => onAgregarArray(ot.id, 'despachos', { id: 'de' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [], numeroGuia: '' })} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}><Plus size={14} /> Agregar despacho</button>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <label style={{ cursor: subiendoGuia ? 'wait' : 'pointer', background: '#fff', color: '#D9600A', border: '1px solid #D9600A', padding: '6px 12px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, opacity: subiendoGuia ? 0.6 : 1 }}>
+          {subiendoGuia ? 'Leyendo…' : 'Subir guía (leer con IA)'}
+          <input type="file" accept="application/pdf,image/*" multiple style={{ display: 'none' }} disabled={subiendoGuia} onChange={subirGuia} />
+        </label>
+        <button onClick={() => onAgregarArray(ot.id, 'despachos', { id: 'de' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [], numeroGuia: '' })} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}><Plus size={14} /> Agregar despacho</button>
+      </div>
     </div>
+    {errorGuia && <div style={{ fontSize: 11.5, color: '#C5453D', marginBottom: 8 }}>{errorGuia}</div>}
+    {revisionGuia && <PanelRevisionGuia revision={revisionGuia} setRevision={setRevisionGuia} onAplicar={aplicarRevisionGuia} onDescartar={() => setRevisionGuia(null)} etiquetaAccion="Crear despacho" />}
 
     <SobrantePanel ot={ot} />
 
