@@ -337,7 +337,7 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
   const timersPropio = useRef({})
   const [buscar, setBuscar] = useState('')
   const [mostrarForm, setMostrarForm] = useState(false)
-  const [nuevo, setNuevo] = useState({ tag: '', idPieza: '', m2: '' })
+  const [nuevo, setNuevo] = useState({ tag: '', idPieza: '', m2: '', referencia: '' })
   const marcasFiltradas = buscar.trim() ? marcas.filter(m => String(m.marca || '').toLowerCase().includes(buscar.trim().toLowerCase())) : marcas
   const total = marcas.length
   const recibidas = marcas.filter(m => m.recibida).length
@@ -401,10 +401,10 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
     if (dup) { window.alert('Ya existe una marca "' + marcaTxt + '" en el checklist.'); return }
     onGuardar([...marcas, {
       id: 'me' + Date.now() + Math.random().toString(36).slice(2, 7),
-      marca: marcaTxt, tag, idPieza: idPieza || null,
+      marca: marcaTxt, tag, idPieza: idPieza || null, referencia: nuevo.referencia.trim() || null,
       m2: parseFloat(nuevo.m2) || 0, m2Propio: null, recibida: false, fechaRecibida: null
     }])
-    setNuevo({ tag: '', idPieza: '', m2: '' }); setMostrarForm(false)
+    setNuevo({ tag: '', idPieza: '', m2: '', referencia: '' }); setMostrarForm(false)
   }
 
   return (
@@ -435,8 +435,12 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
             <label style={{ fontSize: 10, color: '#9AA3AD' }}>m² cliente</label>
             <input type="number" step="0.01" min="0" value={nuevo.m2} onChange={e => setNuevo({ ...nuevo, m2: e.target.value })} style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '6px 8px', fontSize: 12.5, width: 90 }} />
           </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <label style={{ fontSize: 10, color: '#9AA3AD' }}>Referencia (opcional)</label>
+            <input value={nuevo.referencia} onChange={e => setNuevo({ ...nuevo, referencia: e.target.value })} placeholder="ej. N° de plano" style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '6px 8px', fontSize: 12.5, width: 130 }} />
+          </div>
           <button onClick={agregarManual} disabled={!nuevo.tag.trim()} style={{ background: nuevo.tag.trim() ? C.verde : '#DFE4EA', color: '#fff', border: 'none', borderRadius: 4, padding: '7px 14px', fontSize: 13, cursor: nuevo.tag.trim() ? 'pointer' : 'not-allowed' }}>Agregar</button>
-          <button onClick={() => { setMostrarForm(false); setNuevo({ tag: '', idPieza: '', m2: '' }) }} style={{ background: 'none', border: '1px solid #DFE4EA', borderRadius: 4, padding: '7px 12px', fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+          <button onClick={() => { setMostrarForm(false); setNuevo({ tag: '', idPieza: '', m2: '', referencia: '' }) }} style={{ background: 'none', border: '1px solid #DFE4EA', borderRadius: 4, padding: '7px 12px', fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
           {nuevo.tag.trim() && <div style={{ flexBasis: '100%', fontSize: 11, color: '#9AA3AD' }}>Se guardará como: <b>{nuevo.idPieza.trim() ? nuevo.tag.trim() + '-' + nuevo.idPieza.trim() : nuevo.tag.trim()}</b></div>}
         </div>
       )}
@@ -525,20 +529,21 @@ function RecepcionOT({ ot, onUpdate, onAgregarArray, onUpdateMarcasEsperadas }) 
   const inp2 = { border: '1px solid #DFE4EA', borderRadius: 4, padding: '6px 8px', fontSize: 12.5, boxSizing: 'border-box' }
 
   const recibirDesdeChecklist = async m => {
+    const loteId = 'pa' + Date.now() + Math.random().toString(36).slice(2, 7)
     await onAgregarArray(ot.id, 'partidas', {
-      id: 'pa' + Date.now() + Math.random().toString(36).slice(2, 7),
+      id: loteId,
       detalle: m.marca, fecha: hoy(), estado: 'Recibida',
       m2: m.m2 || '', obs: '', fotos: [],
-      cantidad: 1, m2Cliente: m.m2 || '', m2Propio: '', tipo: ''
+      cantidad: 1, m2Cliente: m.m2 || '', m2Propio: '', tipo: '', numeroGuia: '', plazoDias: ''
     })
-    onUpdateMarcasEsperadas(ot.id, marcasEsperadas.map(x => x.id === m.id ? { ...x, recibida: true, fechaRecibida: hoy() } : x))
+    onUpdateMarcasEsperadas(ot.id, marcasEsperadas.map(x => x.id === m.id ? { ...x, recibida: true, fechaRecibida: hoy(), loteId } : x))
   }
   const setP = (i, campo, valor) => onUpdate(ot.id, { partidas: partidas.map((x, j) => j === i ? { ...x, [campo]: valor } : x) })
 
   return (<div style={{ marginTop: 14, background: '#F2F4F6', border: '1px solid #DBE0E5', borderLeft: '4px solid #5A6B85', borderRadius: 6, padding: 12 }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
       <span style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: '#5A6B85' }}>Recepción / Partidas de material</span>
-      <button onClick={() => onAgregarArray(ot.id, 'partidas', { id: 'pa' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [] })} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}><Plus size={14} /> Agregar recepción</button>
+      <button onClick={() => onAgregarArray(ot.id, 'partidas', { id: 'pa' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [], numeroGuia: '', plazoDias: '' })} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}><Plus size={14} /> Agregar recepción</button>
     </div>
 
     {resumen.length > 0 && (
@@ -594,6 +599,8 @@ function RecepcionOT({ ot, onUpdate, onAgregarArray, onUpdateMarcasEsperadas }) 
               <input list={'tipos-' + ot.id} value={p.tipo || ''} onChange={e => setP(i, 'tipo', e.target.value)} placeholder="ej. Estanque 200lt" style={inp2} />
               <datalist id={'tipos-' + ot.id}>{tiposUsados.map(t => <option key={t} value={t} />)}</datalist>
             </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: '#9AA3AD' }}>N° de guía</label><input value={p.numeroGuia || ''} onChange={e => setP(i, 'numeroGuia', e.target.value)} placeholder="ej. 12345" style={{ ...inp2, width: 100 }} /></div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: '#9AA3AD' }}>Plazo (días hábiles)</label><input type="number" min="0" value={p.plazoDias || ''} onChange={e => setP(i, 'plazoDias', e.target.value)} placeholder="ej. 10" style={{ ...inp2, width: 90 }} /></div>
           </div>
           <textarea value={p.obs || ''} onChange={e => setP(i, 'obs', e.target.value)} placeholder="Observaciones" style={{ ...inp2, width: '100%', minHeight: 38, resize: 'vertical' }} />
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
@@ -621,7 +628,7 @@ function RecepcionOT({ ot, onUpdate, onAgregarArray, onUpdateMarcasEsperadas }) 
 // en ningun despacho de esta OT (match por texto de marca, mismo criterio
 // que usadasEnOtros en los protocolos). No cambia ni el estado "recibida"
 // de la marca ni ningun campo existente de despachos — solo agrega.
-function DespachoOT({ ot, onUpdate, onAgregarArray }) {
+function DespachoOT({ ot, onUpdate, onAgregarArray, onUpdateMarcasEsperadas }) {
   const despachos = ot.despachos || []
   const marcasEsperadas = ot.marcasEsperadas || []
   const norm = s => String(s == null ? '' : s).trim().toLowerCase()
@@ -634,19 +641,21 @@ function DespachoOT({ ot, onUpdate, onAgregarArray }) {
   const inp2 = { border: '1px solid #DFE4EA', borderRadius: 4, padding: '6px 8px', fontSize: 12.5, boxSizing: 'border-box' }
 
   const despacharDesdeChecklist = m => {
+    const despachoId = 'de' + Date.now() + Math.random().toString(36).slice(2, 7)
     onAgregarArray(ot.id, 'despachos', {
-      id: 'de' + Date.now() + Math.random().toString(36).slice(2, 7),
+      id: despachoId,
       detalle: m.marca, fecha: hoy(), estado: 'Despachada',
       m2: m.m2 || '', obs: '', fotos: [],
-      cantidad: 1, m2Cliente: m.m2 || '', m2Propio: m.m2Propio || '', tipo: ''
+      cantidad: 1, m2Cliente: m.m2 || '', m2Propio: m.m2Propio || '', tipo: '', numeroGuia: ''
     })
+    if (onUpdateMarcasEsperadas) onUpdateMarcasEsperadas(ot.id, marcasEsperadas.map(x => x.id === m.id ? { ...x, despachoId, fechaDespacho: hoy() } : x))
   }
   const setP = (i, campo, valor) => onUpdate(ot.id, { despachos: despachos.map((x, j) => j === i ? { ...x, [campo]: valor } : x) })
 
   return (<div style={{ marginTop: 14, background: '#FFF4EC', border: '1px solid #F3D9C2', borderLeft: '4px solid #D9600A', borderRadius: 6, padding: 12 }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
       <span style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: '#D9600A' }}>Entregas / Despacho SEREIN</span>
-      <button onClick={() => onAgregarArray(ot.id, 'despachos', { id: 'de' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [] })} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}><Plus size={14} /> Agregar despacho</button>
+      <button onClick={() => onAgregarArray(ot.id, 'despachos', { id: 'de' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [], numeroGuia: '' })} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}><Plus size={14} /> Agregar despacho</button>
     </div>
 
     <SobrantePanel ot={ot} />
@@ -704,6 +713,7 @@ function DespachoOT({ ot, onUpdate, onAgregarArray }) {
               <input list={'tipos-desp-' + ot.id} value={p.tipo || ''} onChange={e => setP(i, 'tipo', e.target.value)} placeholder="ej. Estanque 200lt" style={inp2} />
               <datalist id={'tipos-desp-' + ot.id}>{tiposUsados.map(t => <option key={t} value={t} />)}</datalist>
             </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: '#9AA3AD' }}>N° de guía</label><input value={p.numeroGuia || ''} onChange={e => setP(i, 'numeroGuia', e.target.value)} placeholder="ej. 12345" style={{ ...inp2, width: 100 }} /></div>
           </div>
           <textarea value={p.obs || ''} onChange={e => setP(i, 'obs', e.target.value)} placeholder="Observaciones" style={{ ...inp2, width: '100%', minHeight: 38, resize: 'vertical' }} />
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
@@ -721,6 +731,135 @@ function DespachoOT({ ot, onUpdate, onAgregarArray }) {
       ))}
     </div>
   </div>)
+}
+
+// Fase B del rediseno de OT — trazabilidad por pieza. El granallado y las
+// capas de pintura NO se marcan a mano aca: se derivan de los Protocolos
+// que ya se llenan en la pestana Calidad (una sola fuente de datos, no se
+// reescribe nada). Si una pieza esta en la lista de marcas de un PIG, el
+// granallado queda con la fecha de ese PIG; si esta en un PGP, cada
+// "Capa N" toma la fecha ambiental de esa capa del PGP que la incluye.
+function normMarcaTz(s) { return String(s == null ? '' : s).trim().toLowerCase() }
+function protocoloDeMarca(protocolos, marcaTxt, tipo) {
+  const key = normMarcaTz(marcaTxt)
+  return (protocolos || []).find(p => p.tipo === tipo && (p.marcas || []).some(m => normMarcaTz(m) === key)) || null
+}
+function TrazabilidadPiezasOT({ ot, onUpdateMarcasEsperadas }) {
+  const marcas = ot.marcasEsperadas || []
+  const partidas = ot.partidas || []
+  const despachos = ot.despachos || []
+  const protocolos = ot.protocolos || []
+  const setMarcas = nuevas => onUpdateMarcasEsperadas(ot.id, nuevas)
+  const [filtroEstado, setFiltroEstado] = useState('')
+  const [filtroLote, setFiltroLote] = useState('')
+
+  // Columnas de capa fijas para toda la tabla = el maximo entre los PGP de
+  // esta OT (cada fila solo llena las que le correspondan a su protocolo).
+  const maxCapas = protocolos.filter(p => p.tipo === 'PGP').reduce((mx, p) => Math.max(mx, (p.capas || []).length), 0)
+
+  const filas = marcas.map(m => {
+    const pig = protocoloDeMarca(protocolos, m.marca, 'PIG')
+    const pgp = protocoloDeMarca(protocolos, m.marca, 'PGP')
+    const fechaGranallado = pig ? ((pig.amb && pig.amb.fecha) || pig.fecha || null) : null
+    const capasTotalPieza = pgp ? (pgp.capas || []).length : 0
+    const fechasCapas = Array.from({ length: maxCapas }, (_, i) => {
+      const cap = pgp && pgp.capas && pgp.capas[i]
+      return cap && cap.amb ? (cap.amb.fecha || null) : null
+    })
+    const capasHechas = fechasCapas.filter(Boolean).length
+    const despachada = !!m.despachoId
+    let estado, colorEstado
+    if (despachada) { estado = 'Despachada'; colorEstado = C.verde }
+    else if (pgp && capasTotalPieza > 0 && capasHechas === capasTotalPieza) { estado = 'Lista'; colorEstado = C.verde }
+    else if (capasHechas > 0) { estado = `Capa ${capasHechas}/${capasTotalPieza}`; colorEstado = C.teal }
+    else if (fechaGranallado) { estado = 'Granallado'; colorEstado = '#5A6B85' }
+    else if (m.recibida) { estado = 'Recibida'; colorEstado = '#D9600A' }
+    else { estado = 'Por llegar'; colorEstado = '#9AA3AD' }
+    return { m, fechaGranallado, fechasCapas, estado, colorEstado }
+  })
+
+  const filasFiltradas = filas.filter(f => {
+    if (filtroEstado && f.estado !== filtroEstado) return false
+    if (filtroLote && f.m.loteId !== filtroLote) return false
+    return true
+  })
+  const estadosPresentes = Array.from(new Set(filas.map(f => f.estado)))
+  const loteLabel = p => (p.numeroGuia ? 'Guía ' + p.numeroGuia : (p.detalle || 'Lote')) + (p.fecha ? ' · ' + p.fecha : '')
+
+  // Asignar un lote (= una recepcion/partida) a una pieza es, en la
+  // practica, recibirla: si no tenia fecha de recepcion, toma la del lote.
+  const asignarLote = (id, loteId) => {
+    const partida = partidas.find(p => p.id === loteId)
+    setMarcas(marcas.map(m => m.id === id ? { ...m, loteId: loteId || null, recibida: loteId ? true : m.recibida, fechaRecibida: loteId ? (m.fechaRecibida || (partida && partida.fecha) || hoy()) : m.fechaRecibida } : m))
+  }
+  const asignarDespacho = (id, despachoId) => {
+    const desp = despachos.find(d => d.id === despachoId)
+    setMarcas(marcas.map(m => m.id === id ? { ...m, despachoId: despachoId || null, fechaDespacho: despachoId ? ((desp && desp.fecha) || hoy()) : null } : m))
+  }
+  const cambiarReferencia = (id, valor) => setMarcas(marcas.map(m => m.id === id ? { ...m, referencia: valor } : m))
+
+  if (!marcas.length) return null
+
+  return (
+    <div style={{ marginTop: 14, border: '1px solid #DFE4EA', borderRadius: 6, padding: 12, background: '#FAFAF8' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: C.carbon }}>Trazabilidad por pieza</span>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)} style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '5px 8px', fontSize: 12 }}>
+            <option value="">Todos los estados</option>
+            {estadosPresentes.map(e => <option key={e} value={e}>{e}</option>)}
+          </select>
+          {partidas.length > 0 && (
+            <select value={filtroLote} onChange={e => setFiltroLote(e.target.value)} style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '5px 8px', fontSize: 12 }}>
+              <option value="">Todos los lotes</option>
+              {partidas.map(p => <option key={p.id} value={p.id}>{loteLabel(p)}</option>)}
+            </select>
+          )}
+        </div>
+      </div>
+      {marcas.length === 0 ? (
+        <div style={{ fontSize: 12, color: '#9AA3AD' }}>Sin marcas esperadas cargadas todavía.</div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                {['Marca/TAG', 'ID', 'Referencia', 'm²', 'Recibida', 'Granallado', ...Array.from({ length: maxCapas }, (_, i) => 'Capa ' + (i + 1)), 'Estado', 'Lote', 'Despacho'].map((h, i) => (
+                  <th key={i} style={{ textAlign: 'left', padding: '5px 6px', fontSize: 10.5, color: '#9AA3AD', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filasFiltradas.map(({ m, fechaGranallado, fechasCapas, estado, colorEstado }) => (
+                <tr key={m.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                  <td style={{ padding: '5px 6px', fontWeight: 600, whiteSpace: 'nowrap' }}>{m.tag || m.marca}</td>
+                  <td style={{ padding: '5px 6px', color: '#9AA3AD' }}>{m.idPieza || '—'}</td>
+                  <td style={{ padding: '5px 6px' }}><input value={m.referencia || ''} onChange={e => cambiarReferencia(m.id, e.target.value)} placeholder="—" style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '3px 5px', fontSize: 11.5, width: 90 }} /></td>
+                  <td style={{ padding: '5px 6px', color: '#9AA3AD' }}>{m.m2 || '—'}</td>
+                  <td style={{ padding: '5px 6px', color: m.recibida ? C.verde : '#9AA3AD', whiteSpace: 'nowrap' }}>{m.fechaRecibida || '—'}</td>
+                  <td style={{ padding: '5px 6px', color: fechaGranallado ? '#5A6B85' : '#C9C4B8', whiteSpace: 'nowrap' }}>{fechaGranallado || '—'}</td>
+                  {fechasCapas.map((f, i) => <td key={i} style={{ padding: '5px 6px', color: f ? C.teal : '#C9C4B8', whiteSpace: 'nowrap' }}>{f || '—'}</td>)}
+                  <td style={{ padding: '5px 6px' }}><span style={{ background: colorEstado, color: '#fff', borderRadius: 10, padding: '2px 8px', fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap' }}>{estado}</span></td>
+                  <td style={{ padding: '5px 6px' }}>
+                    <select value={m.loteId || ''} onChange={e => asignarLote(m.id, e.target.value)} style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '3px 5px', fontSize: 11 }}>
+                      <option value="">— sin lote —</option>
+                      {partidas.map(p => <option key={p.id} value={p.id}>{loteLabel(p)}</option>)}
+                    </select>
+                  </td>
+                  <td style={{ padding: '5px 6px' }}>
+                    <select value={m.despachoId || ''} onChange={e => asignarDespacho(m.id, e.target.value)} style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '3px 5px', fontSize: 11 }}>
+                      <option value="">— sin despacho —</option>
+                      {despachos.map(d => <option key={d.id} value={d.id}>{loteLabel(d)}</option>)}
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function SobrantePanel({ ot }) {
@@ -1119,8 +1258,11 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
           {/* RECEPCION - PARTIDAS */}
           <RecepcionOT ot={ot} onUpdate={onUpdate} onAgregarArray={onAgregarArray} onUpdateMarcasEsperadas={onUpdateMarcasEsperadas || ((id, v) => onUpdate(id, { marcasEsperadas: v }))} />
 
+        {/* TRAZABILIDAD POR PIEZA */}
+        <TrazabilidadPiezasOT ot={ot} onUpdateMarcasEsperadas={onUpdateMarcasEsperadas || ((id, v) => onUpdate(id, { marcasEsperadas: v }))} />
+
         {/* ENTREGAS / DESPACHO SEREIN */}
-        <DespachoOT ot={ot} onUpdate={onUpdate} onAgregarArray={onAgregarArray} />
+        <DespachoOT ot={ot} onUpdate={onUpdate} onAgregarArray={onAgregarArray} onUpdateMarcasEsperadas={onUpdateMarcasEsperadas || ((id, v) => onUpdate(id, { marcasEsperadas: v }))} />
 
           {/* ÍTEMS COTIZADOS · AJUSTE DE VENTA POR M² REALES (solo OT que vienen de una cotización aprobada).
               Fuera del gate de verValores a propósito: cargar el m² real medido en
