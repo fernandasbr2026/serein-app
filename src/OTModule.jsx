@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { ChevronDown, ChevronUp, Plus, Trash2, X, Ruler, Paintbrush, FileText, Receipt, ShoppingCart, CircleDollarSign, Download, Camera, Search, RotateCcw, Lock, Unlock, CalendarDays, Save } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { descargarOTDesdeOT } from './CotizacionesModule.jsx'
@@ -1094,24 +1094,15 @@ function granalladoHecho(pig) {
   if ((pig.checks || []).some(c => (c.fotos || []).length > 0)) return true
   return false
 }
-function TrazabilidadPiezasOT({ ot, onUpdateMarcasEsperadas }) {
+// Calculo de las filas de trazabilidad de una OT (una por pieza) — vive
+// aparte del componente que las pinta para poder reutilizarlo tal cual en
+// la exportacion a Excel de la OT (descargarOT), sin mantener la misma
+// logica escrita dos veces en dos lugares que se podrian ir desalineando.
+function calcularFilasTrazabilidad(ot) {
   const marcas = ot.marcasEsperadas || []
   const partidas = ot.partidas || []
-  const despachos = ot.despachos || []
   const protocolos = ot.protocolos || []
-  const setMarcas = nuevas => onUpdateMarcasEsperadas(ot.id, nuevas)
-  const [filtroEstado, setFiltroEstado] = useState('')
-  const [filtroLote, setFiltroLote] = useState('')
-  // Overlay local para "Referencia" — mismo patron de debounce que ya usa
-  // cambiarM2Propio en MarcasEsperadasOT, para no disparar un guardado a
-  // la nube (pullState+pushState) en cada tecla.
-  const [localReferencia, setLocalReferencia] = useState({})
-  const timersReferencia = useRef({})
-
-  // Columnas de capa fijas para toda la tabla = el maximo entre los PGP de
-  // esta OT (cada fila solo llena las que le correspondan a su protocolo).
   const maxCapas = protocolos.filter(p => p.tipo === 'PGP').reduce((mx, p) => Math.max(mx, (p.capas || []).length), 0)
-
   const filas = marcas.map(m => {
     const pig = protocoloDeMarca(protocolos, m.marca, 'PIG')
     const pgp = protocoloDeMarca(protocolos, m.marca, 'PGP')
@@ -1137,8 +1128,28 @@ function TrazabilidadPiezasOT({ ot, onUpdateMarcasEsperadas }) {
     const lote = m.loteId ? partidas.find(p => p.id === m.loteId) : null
     const vencimiento = (lote && lote.plazoDias && lote.fecha) ? sumarDiasHabiles(lote.fecha, lote.plazoDias) : null
     const diasRestantes = vencimiento && !despachada ? diasHabilesHasta(vencimiento) : null
-    return { m, fechaGranallado, fechasCapas, estado, colorEstado, vencimiento, diasRestantes }
+    return { m, lote, fechaGranallado, fechasCapas, estado, colorEstado, vencimiento, diasRestantes }
   })
+  return { filas, maxCapas }
+}
+function TrazabilidadPiezasOT({ ot, onUpdateMarcasEsperadas }) {
+  const marcas = ot.marcasEsperadas || []
+  const partidas = ot.partidas || []
+  const despachos = ot.despachos || []
+  const setMarcas = nuevas => onUpdateMarcasEsperadas(ot.id, nuevas)
+  const [filtroEstado, setFiltroEstado] = useState('')
+  const [filtroLote, setFiltroLote] = useState('')
+  // Overlay local para "Referencia" — mismo patron de debounce que ya usa
+  // cambiarM2Propio en MarcasEsperadasOT, para no disparar un guardado a
+  // la nube (pullState+pushState) en cada tecla.
+  const [localReferencia, setLocalReferencia] = useState({})
+  const timersReferencia = useRef({})
+
+  // Memoizado: con muchas piezas y protocolos, este calculo es O(piezas x
+  // protocolos) — sin memo se repetia en cada render (incluida cada tecla
+  // del campo Referencia, que ya tiene su propio debounce pero igual
+  // dispara un render local).
+  const { filas, maxCapas } = useMemo(() => calcularFilasTrazabilidad(ot), [ot.marcasEsperadas, ot.partidas, ot.protocolos])
 
   const filasFiltradas = filas.filter(f => {
     if (filtroEstado && f.estado !== filtroEstado) return false
@@ -1344,6 +1355,22 @@ function descargarOT(ot) {
     ['Categoría', 'Detalle', 'Fecha', 'Monto'],
     ...(ot.costos || []).map(x => [x.categoria, x.detalle || '—', x.fecha || '—', x.monto]),
   ]), 'Costos')
+  // Trazabilidad por pieza — mismo calculo que se ve en pantalla
+  // (calcularFilasTrazabilidad), asi el Excel exportado no puede quedar
+  // desalineado con lo que muestra la app. Es el dato que suele pedir un
+  // cliente industrial junto al dossier de calidad, y antes no salía en
+  // ningún exportable.
+  if ((ot.marcasEsperadas || []).length) {
+    const { filas, maxCapas } = calcularFilasTrazabilidad(ot)
+    const header = ['Marca/TAG', 'ID', 'Referencia', 'm²', 'Recibida', 'Guía recepción', 'Granallado', ...Array.from({ length: maxCapas }, (_, i) => 'Capa ' + (i + 1)), 'Estado', 'Vence', 'Guía despacho']
+    const filasHoja = filas.map(f => [
+      f.m.tag || f.m.marca, f.m.idPieza || '', f.m.referencia || '', f.m.m2 || '',
+      f.m.fechaRecibida || '', (f.lote && f.lote.numeroGuia) || '',
+      f.fechaGranallado || '', ...f.fechasCapas.map(c => c || ''),
+      f.estado, f.vencimiento || '', f.m.despachoId ? 'Sí' : '',
+    ])
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([header, ...filasHoja]), 'Trazabilidad')
+  }
   XLSX.writeFile(wb, `${ot.numero}.xlsx`)
 }
 
