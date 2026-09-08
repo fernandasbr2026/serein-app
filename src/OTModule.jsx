@@ -26,6 +26,16 @@ const CATEGORIAS_COSTO = ['Materiales', 'Mano de obra', 'Gastos asociados', 'Arr
 const ESTADOS_OT = ['Cotizada', 'En ejecución', 'Terminada', 'Facturada', 'Cerrada']
 const PREPARACIONES = ['SSPC-SP1 Limpieza solvente', 'SSPC-SP2/SP3 Manual/Mecánica', 'SSPC-SP6 Comercial', 'SSPC-SP10 Casi blanco', 'SSPC-SP5 Metal blanco', 'Hidrolavado', 'Otra']
 const hoy = () => new Date().toISOString().slice(0, 10)
+// Le pone un limite de tiempo a cualquier promesa: si no resuelve antes,
+// rechaza con un mensaje claro en vez de dejar la operacion colgada para
+// siempre (ej. generar el PDF de un protocolo con una imagen dañada podia
+// quedarse "Subiendo…" eternamente, sin exito ni error).
+function conLimiteTiempo(promesa, ms, mensaje) {
+  return Promise.race([
+    promesa,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(mensaje)), ms)),
+  ])
+}
 
 // Fuente unica de "venta neta" de una OT — la usan la tarjeta, la ficha y
 // los indicadores de arriba, para que nunca muestren numeros distintos.
@@ -2334,10 +2344,15 @@ function ProtoHead({ p, upd, onDel, titulo, equipos, col, onTgl }) {
     setSubiendoDrive(true); setDriveMsg(null)
     try {
       const html = p.tipo === 'PIG' ? htmlPIG(p, equipos) : htmlPGP(p, equipos)
-      const blob = await generarPdfProtocoloBlob(html)
+      // Con limite de tiempo: generar la imagen de cada pagina (html-to-image)
+      // podia quedarse colgada para siempre si alguna imagen embebida (foto,
+      // firma, logo) fallaba en silencio al renderizar — sin este limite, el
+      // boton se quedaba diciendo "Subiendo…" eternamente, sin exito ni
+      // error, sin ninguna forma de saber que paso.
+      const blob = await conLimiteTiempo(generarPdfProtocoloBlob(html), 45000, 'No se pudo generar el PDF a tiempo (45s) — puede que una foto o firma cargada esté dañada. Intenta de nuevo; si se repite, avisa cuál protocolo es.')
       const pdfBase64 = await blobToBase64(blob)
       const filename = `${p.codigo || 'Protocolo'} - ${p.cliente || 'Sin cliente'}.pdf`
-      const { data, error } = await supabase.functions.invoke('subir-protocolo-drive', { body: { pdfBase64, filename, cliente: p.cliente || 'Sin cliente' } })
+      const { data, error } = await conLimiteTiempo(supabase.functions.invoke('subir-protocolo-drive', { body: { pdfBase64, filename, cliente: p.cliente || 'Sin cliente' } }), 30000, 'La subida a Drive no respondió a tiempo (30s). Revisa tu conexión e intenta de nuevo.')
       if (error) throw error
       if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo subir a Drive.')
       setDriveMsg({ ok: true, link: data.webViewLink })
@@ -2347,7 +2362,7 @@ function ProtoHead({ p, upd, onDel, titulo, equipos, col, onTgl }) {
 
   return (<div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}><span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 14, textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }} onClick={onTgl}>{col ? '▸ ' : '▾ '}{p.codigo} - {titulo}</span><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><button onClick={() => descargarProto(p, equipos, certsDisponibles.filter(c => certMarcado(c[0])).map(c => c[0]))} style={{ background: '#101315', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>Descargar PDF</button><button onClick={cerrarYSubirDrive} disabled={!chequeoCompleto.completo || subiendoDrive} title={chequeoCompleto.completo ? 'Genera el PDF y lo sube a Drive, en la carpeta del cliente' : 'Falta: ' + chequeoCompleto.faltantes.join(', ')} style={{ background: chequeoCompleto.completo ? C.verde : '#DFE4EA', color: chequeoCompleto.completo ? '#fff' : '#9AA3AD', border: 'none', padding: '7px 12px', cursor: chequeoCompleto.completo && !subiendoDrive ? 'pointer' : 'not-allowed', fontSize: 12.5 }}>{subiendoDrive ? 'Subiendo…' : 'Cerrar y subir a Drive'}</button><button onClick={onDel} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 10px', cursor: 'pointer', fontSize: 12.5, color: '#9AA3AD' }}>Eliminar</button></div></div>
     {driveMsg && (driveMsg.ok
-      ? <div style={{ fontSize: 11.5, color: C.verde, marginBottom: 8 }}>✓ Subido a Drive. <a href={driveMsg.link} target="_blank" rel="noreferrer" style={{ color: C.teal }}>Ver archivo</a></div>
+      ? <div style={{ fontSize: 12.5, fontWeight: 700, color: C.verde, background: '#E6F5EA', border: '1px solid #B7E0C4', borderRadius: 4, padding: '8px 12px', marginBottom: 8 }}>✓ Documento cargado con éxito. <a href={driveMsg.link} target="_blank" rel="noreferrer" style={{ color: C.teal, fontWeight: 700 }}>Ver en Drive</a></div>
       : <div style={{ fontSize: 11.5, color: '#C5453D', marginBottom: 8 }}>{driveMsg.texto}</div>)}
     {certsDisponibles.length > 0 && (<div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 11.5, marginBottom: 8, padding: '6px 10px', background: '#F6F9F8', border: '1px solid #DFE4EA', borderRadius: 4 }}><span style={{ color: '#9AA3AD' }}>Certificados a incluir:</span>{certsDisponibles.map(c => (<label key={c[0]} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}><input type="checkbox" checked={certMarcado(c[0])} onChange={() => toggleCert(c[0])} style={{ cursor: 'pointer' }} /><a href={equipos[c[0]]} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#0E7A8F', fontWeight: 600 }}>{c[1]}</a></label>))}</div>)}{!col && (<><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8 }}><PF label="Codigo"><input style={ip} value={p.codigo} onChange={e => set('codigo', e.target.value)} /></PF><PF label="Orden de Trabajo"><input style={ip} value={p.ot} onChange={e => set('ot', e.target.value)} /></PF><PF label="NV"><input style={ip} value={p.nv} onChange={e => set('nv', e.target.value)} /></PF><PF label="Codigo PGP (gran/pintura)"><input style={ip} value={p.pgpCodigo} onChange={e => set('pgpCodigo', e.target.value)} /></PF><PF label="Cliente"><input style={ip} value={p.cliente} onChange={e => set('cliente', e.target.value)} /></PF><PF label="Proyecto"><input style={ip} value={p.proyecto} onChange={e => set('proyecto', e.target.value)} /></PF><PF label="Fecha"><input type="date" style={ip} value={p.fecha} onChange={e => set('fecha', e.target.value)} /></PF><PF label="Preparado por"><input style={ip} value={p.preparadoPor} onChange={e => set('preparadoPor', e.target.value)} /></PF></div><div style={{ marginTop: 10 }}><div style={{ fontSize: 11, color: '#9AA3AD', marginBottom: 4 }}>Logo del cliente (opcional) — si se carga, reemplaza el logo SEREIN solo en este documento</div><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>{p.logoCliente ? <img src={p.logoCliente} alt="logo cliente" style={{ height: 40, background: '#fff', border: '1px solid #DFE4EA', borderRadius: 4, padding: 3, objectFit: 'contain' }} /> : <div style={{ height: 40, width: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #DFE4EA', borderRadius: 4, fontSize: 10.5, color: '#9AA3AD' }}>Sin logo</div>}<label style={{ cursor: 'pointer', background: '#101315', color: '#fff', fontSize: 11.5, fontWeight: 600, padding: '6px 11px', borderRadius: 4 }}>Subir logo<input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const fl = e.target.files[0]; if (!fl) return; imgToData(fl, d => set('logoCliente', d)); e.target.value = '' }} /></label>{p.logoCliente && <button onClick={() => set('logoCliente', '')} style={{ background: 'transparent', border: '1px solid #DFE4EA', color: '#C5453D', fontSize: 11.5, padding: '6px 10px', borderRadius: 4, cursor: 'pointer' }}>Quitar</button>}</div></div></>)}</div>) }
 // Editar un protocolo con estado local + debounce: antes cada tecla llamaba
