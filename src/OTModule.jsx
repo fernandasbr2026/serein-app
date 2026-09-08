@@ -288,37 +288,73 @@ const ETIQUETAS_FOTO = ['Recepción', 'Proceso', 'Despacho', 'Otro']
 // llegar (columna "marca" obligatoria, "m2"/"m²"/"superficie" opcional) —
 // mismo patron de deteccion de columnas por nombre que ya usa
 // LibroVentasModule.jsx para no depender de un orden fijo de columnas.
-function parseExcelMarcas(file, cb) {
+// mapeoManual, si viene, fuerza los indices de columna en vez de adivinarlos
+// (para clientes cuyo Excel no dice "marca" en el encabezado, o que ademas
+// traen columnas de ID/Referencia que la deteccion automatica no adivina
+// sola) — { colMarca, colId, colReferencia, colM2 }, todos indices de
+// columna o -1/null si esa columna no existe. El callback recibe tambien
+// la fila de encabezado cruda (headerRow), para poder mostrarla en un
+// panel de mapeo si hace falta.
+function parseExcelMarcas(file, cb, mapeoManual) {
   const reader = new FileReader()
   reader.onload = e => {
     try {
       const wb = XLSX.read(e.target.result, { type: 'array' })
       const hoja = wb.SheetNames[0]
       const filas = XLSX.utils.sheet_to_json(wb.Sheets[hoja], { header: 1, raw: true, blankrows: false })
-      if (!filas.length) { cb([], 'El archivo está vacío.'); return }
+      if (!filas.length) { cb([], 'El archivo está vacío.', null); return }
       const norm = s => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
       let hi = 0
       for (let i = 0; i < Math.min(filas.length, 10); i++) {
         const t = (filas[i] || []).map(norm).join('|')
         if (t.includes('marca')) { hi = i; break }
       }
-      const hdr = (filas[hi] || []).map(norm)
+      const headerRow = filas[hi] || []
+      const hdr = headerRow.map(norm)
       const col = (...nombres) => { for (const n of nombres) { const idx = hdr.findIndex(h => h.includes(n)); if (idx >= 0) return idx } return -1 }
-      const ciMarca = col('marca')
-      const ciM2 = col('m2', 'm²', 'superficie', 'area', 'área')
-      if (ciMarca < 0) { cb([], 'No se encontró una columna "marca" en el Excel — revisa que el encabezado la tenga en las primeras filas.'); return }
+      const ciMarca = mapeoManual ? (mapeoManual.colMarca ?? -1) : col('marca')
+      const ciM2 = mapeoManual ? (mapeoManual.colM2 ?? -1) : col('m2', 'm²', 'superficie', 'area', 'área')
+      const ciId = mapeoManual ? (mapeoManual.colId ?? -1) : -1
+      const ciReferencia = mapeoManual ? (mapeoManual.colReferencia ?? -1) : -1
+      if (ciMarca < 0) { cb([], 'No se encontró una columna "marca" en el Excel — revisa que el encabezado la tenga en las primeras filas, o indica tú las columnas.', headerRow); return }
       const out = []
       for (let i = hi + 1; i < filas.length; i++) {
         const fila = filas[i] || []
         const marca = String(fila[ciMarca] == null ? '' : fila[ciMarca]).trim()
         if (!marca) continue
         const m2 = ciM2 >= 0 ? (parseFloat(String(fila[ciM2] == null ? '' : fila[ciM2]).replace(',', '.')) || 0) : 0
-        out.push({ marca, m2 })
+        const idPieza = ciId >= 0 ? String(fila[ciId] == null ? '' : fila[ciId]).trim() : ''
+        const referencia = ciReferencia >= 0 ? String(fila[ciReferencia] == null ? '' : fila[ciReferencia]).trim() : ''
+        out.push({ marca, m2, idPieza: idPieza || null, referencia: referencia || null })
       }
-      cb(out, out.length ? '' : 'No se encontraron filas con marca cargada.')
-    } catch (err) { cb([], 'No se pudo leer el archivo: ' + ((err && err.message) || String(err))) }
+      cb(out, out.length ? '' : 'No se encontraron filas con marca cargada.', headerRow)
+    } catch (err) { cb([], 'No se pudo leer el archivo: ' + ((err && err.message) || String(err)), null) }
   }
   reader.readAsArrayBuffer(file)
+}
+// Mapeo de columnas de Excel guardado por cliente, en el mismo blob de
+// Parametros (serein_params) que ya usan instrumentos/firmas — asi la
+// proxima vez que se sube un Excel del mismo cliente no hay que volver a
+// indicar las columnas. Trae lo mas fresco de la nube antes de escribir,
+// mismo patron de "pull-fresh + merge" que usa ParametrosModule, para no
+// pisar un cambio de Parametros hecho casi al mismo tiempo desde otra
+// pestana.
+function normClienteKey(s) { return String(s || '').trim().toLowerCase() }
+function leerMapeoExcelCliente(clienteKey) {
+  if (!clienteKey) return null
+  try {
+    const base = JSON.parse(localStorage.getItem('serein_params') || '{}') || {}
+    return (base.mapeosExcelPorCliente || {})[clienteKey] || null
+  } catch (e) { return null }
+}
+async function guardarMapeoExcelCliente(clienteKey, mapeo) {
+  if (!clienteKey) return
+  try { await pullState() } catch (e) {}
+  let base = {}
+  try { base = JSON.parse(localStorage.getItem('serein_params') || '{}') || {} } catch (e) {}
+  const nuevo = { ...base, mapeosExcelPorCliente: { ...(base.mapeosExcelPorCliente || {}), [clienteKey]: mapeo } }
+  try { localStorage.setItem('serein_params', JSON.stringify(nuevo)) } catch (e) {}
+  pushState()
 }
 
 // Checklist de marcas esperadas por OT (spool/piezas que el cliente avisa
@@ -349,29 +385,76 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
     return s + (parseFloat(v) || 0)
   }, 0)
 
+  // Excel de marcas: primera vez que se sube el de un cliente nuevo se
+  // pide indicar las columnas (si la deteccion automatica de "marca" no
+  // funciono) y siempre se muestra una vista previa antes de tocar el
+  // checklist real — recien al confirmar se aplica el merge (que nunca
+  // borra ni resetea lo ya recibido, igual que antes).
+  const clienteKey = normClienteKey(ot.cliente)
+  const [pantallaExcel, setPantallaExcel] = useState(null)
+  // null | { modo:'mapeo', file, headerRow, elegidas:{colMarca,colId,colReferencia,colM2} }
+  // | { modo:'preview', items:[{marca,m2,idPieza,referencia,aplicar}], mapeoUsado, esNuevoMapeo }
+
+  const irAPreview = (parsed, mapeoUsado, esNuevoMapeo) => {
+    setPantallaExcel({ modo: 'preview', items: parsed.map(p => ({ ...p, aplicar: true })), mapeoUsado, esNuevoMapeo })
+  }
   const subirExcel = e => {
     const fl = e.target.files[0]
     e.target.value = ''
     if (!fl) return
+    const mapeoGuardado = leerMapeoExcelCliente(clienteKey)
     setSubiendo(true); setMsg('')
-    parseExcelMarcas(fl, (parsed, error) => {
+    parseExcelMarcas(fl, (parsed, error, headerRow) => {
       setSubiendo(false)
-      if (error) { window.alert(error); return }
-      const combinadas = [...marcas]
-      let nuevas = 0, actualizadas = 0
-      parsed.forEach(p => {
-        const key = p.marca.trim().toLowerCase()
-        const idx = combinadas.findIndex(m => String(m.marca || '').trim().toLowerCase() === key)
-        if (idx >= 0) {
-          if (p.m2) { combinadas[idx] = { ...combinadas[idx], m2: p.m2 }; actualizadas++ }
-        } else {
-          combinadas.push({ id: 'me' + Date.now() + Math.random().toString(36).slice(2, 7), marca: p.marca, m2: p.m2, m2Propio: null, recibida: false, fechaRecibida: null })
-          nuevas++
-        }
-      })
-      onGuardar(combinadas)
-      setMsg(`Listo — ${nuevas} marca(s) nueva(s), ${actualizadas} con m² actualizado. Lo que ya estaba marcado como recibido no se tocó.`)
+      if (mapeoGuardado) {
+        if (error && !parsed.length) { window.alert('No se pudo leer el archivo con el mapeo guardado para este cliente: ' + error); return }
+        irAPreview(parsed, mapeoGuardado, false)
+        return
+      }
+      if (!error) { irAPreview(parsed, null, true); return } // deteccion automatica funcionó
+      if (!headerRow || !headerRow.length) { window.alert(error); return }
+      setPantallaExcel({ modo: 'mapeo', file: fl, headerRow, elegidas: { colMarca: '', colId: '', colReferencia: '', colM2: '' } })
+    }, mapeoGuardado || undefined)
+  }
+  const confirmarMapeoManual = () => {
+    const { file, elegidas } = pantallaExcel
+    const mapeo = {
+      colMarca: elegidas.colMarca === '' ? -1 : Number(elegidas.colMarca),
+      colId: elegidas.colId === '' ? -1 : Number(elegidas.colId),
+      colReferencia: elegidas.colReferencia === '' ? -1 : Number(elegidas.colReferencia),
+      colM2: elegidas.colM2 === '' ? -1 : Number(elegidas.colM2),
+    }
+    if (mapeo.colMarca < 0) { window.alert('Indica al menos la columna de Marca/TAG.'); return }
+    setSubiendo(true)
+    parseExcelMarcas(file, (parsed, error) => {
+      setSubiendo(false)
+      if (error && !parsed.length) { window.alert(error); return }
+      irAPreview(parsed, mapeo, true)
+    }, mapeo)
+  }
+  const confirmarImportacion = () => {
+    const { items, mapeoUsado, esNuevoMapeo } = pantallaExcel
+    const seleccionados = items.filter(it => it.aplicar)
+    const combinadas = [...marcas]
+    let nuevas = 0, actualizadas = 0
+    seleccionados.forEach(p => {
+      const key = p.marca.trim().toLowerCase()
+      const idx = combinadas.findIndex(m => String(m.marca || '').trim().toLowerCase() === key)
+      if (idx >= 0) {
+        const cambios = {}
+        if (p.m2) cambios.m2 = p.m2
+        if (p.idPieza) cambios.idPieza = p.idPieza
+        if (p.referencia) cambios.referencia = p.referencia
+        if (Object.keys(cambios).length) { combinadas[idx] = { ...combinadas[idx], ...cambios }; actualizadas++ }
+      } else {
+        combinadas.push({ id: 'me' + Date.now() + Math.random().toString(36).slice(2, 7), marca: p.marca, tag: null, idPieza: p.idPieza || null, referencia: p.referencia || null, m2: p.m2, m2Propio: null, recibida: false, fechaRecibida: null })
+        nuevas++
+      }
     })
+    onGuardar(combinadas)
+    if (esNuevoMapeo && mapeoUsado) guardarMapeoExcelCliente(clienteKey, mapeoUsado)
+    setPantallaExcel(null)
+    setMsg(`Listo — ${nuevas} marca(s) nueva(s), ${actualizadas} actualizada(s). Lo que ya estaba marcado como recibido no se tocó.`)
   }
   const toggleRecibida = id => onGuardar(marcas.map(m => m.id === id ? { ...m, recibida: !m.recibida, fechaRecibida: !m.recibida ? hoy() : null } : m))
   const cambiarM2Propio = (id, valor) => {
@@ -421,6 +504,47 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
           </label>
         </div>
       </div>
+      {pantallaExcel && pantallaExcel.modo === 'mapeo' && (
+        <div style={{ border: '1px dashed #CFC9BC', borderRadius: 6, padding: 10, marginBottom: 12, background: '#FBFAF7' }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: '#5A736A', marginBottom: 6, textTransform: 'uppercase' }}>Primera vez con este cliente — indica qué columna es cada dato</div>
+          <div style={{ fontSize: 11.5, color: '#9AA3AD', marginBottom: 8 }}>No se pudo adivinar sola la columna de marca. Este mapeo se guarda para {ot.cliente || 'este cliente'} — la próxima vez no hace falta repetirlo.</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+            {[['colMarca', 'Marca/TAG (obligatoria)'], ['colId', 'ID (opcional)'], ['colReferencia', 'Referencia (opcional)'], ['colM2', 'm² (opcional)']].map(([campo, lbl]) => (
+              <div key={campo} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <label style={{ fontSize: 10, color: '#9AA3AD' }}>{lbl}</label>
+                <select value={pantallaExcel.elegidas[campo]} onChange={e => setPantallaExcel(s => ({ ...s, elegidas: { ...s.elegidas, [campo]: e.target.value } }))} style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '6px 8px', fontSize: 12.5, minWidth: 160 }}>
+                  <option value="">— no aplica —</option>
+                  {pantallaExcel.headerRow.map((h, i) => <option key={i} value={i}>{String(h || '(columna ' + (i + 1) + ')')}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button onClick={confirmarMapeoManual} style={{ background: C.verde, color: '#fff', border: 'none', borderRadius: 4, padding: '7px 14px', fontSize: 12.5, cursor: 'pointer' }}>Continuar</button>
+            <button onClick={() => setPantallaExcel(null)} style={{ background: 'none', border: '1px solid #DFE4EA', borderRadius: 4, padding: '7px 12px', fontSize: 12.5, cursor: 'pointer' }}>Cancelar</button>
+          </div>
+        </div>
+      )}
+      {pantallaExcel && pantallaExcel.modo === 'preview' && (
+        <div style={{ border: '1px dashed #CFC9BC', borderRadius: 6, padding: 10, marginBottom: 12, background: '#FBFAF7' }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: '#5A736A', marginBottom: 6, textTransform: 'uppercase' }}>Vista previa — se van a importar {pantallaExcel.items.filter(it => it.aplicar).length} de {pantallaExcel.items.length} pieza(s)</div>
+          <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 8 }}>
+            {pantallaExcel.items.map((it, i) => (
+              <label key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                <input type="checkbox" checked={it.aplicar} onChange={e => setPantallaExcel(s => ({ ...s, items: s.items.map((x, j) => j === i ? { ...x, aplicar: e.target.checked } : x) }))} />
+                <span style={{ fontWeight: 600 }}>{it.marca}</span>
+                {it.idPieza && <span style={{ color: '#9AA3AD' }}>ID {it.idPieza}</span>}
+                {it.referencia && <span style={{ color: '#9AA3AD' }}>Ref. {it.referencia}</span>}
+                {it.m2 > 0 && <span style={{ color: '#9AA3AD' }}>{it.m2} m²</span>}
+              </label>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={confirmarImportacion} style={{ background: C.verde, color: '#fff', border: 'none', borderRadius: 4, padding: '7px 14px', fontSize: 12.5, cursor: 'pointer' }}>Importar</button>
+            <button onClick={() => setPantallaExcel(null)} style={{ background: 'none', border: '1px solid #DFE4EA', borderRadius: 4, padding: '7px 12px', fontSize: 12.5, cursor: 'pointer' }}>Cancelar</button>
+          </div>
+        </div>
+      )}
       {mostrarForm && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end', marginBottom: 12, padding: 10, border: '1px dashed #CFC9BC', borderRadius: 6, background: '#FBFAF7' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
