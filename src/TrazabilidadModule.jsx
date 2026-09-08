@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { AlertTriangle, ArrowRight, CheckCircle2, Mail } from 'lucide-react'
 import { ocNeto, ocTotal, vencOC } from './OrdenesCompraModule.jsx'
 import { supabase } from './supabase.js'
+import { sumarDiasHabiles, diasHabilesHasta } from './plazos.js'
 
 // ============================================================
 // MÓDULO: Trazabilidad y Alertas (Gerencia)
@@ -21,31 +22,6 @@ const produccionDe = o => ({ 'Cotizada': 'No iniciada', 'En ejecución': 'En pro
 const facturacionDe = o => (o.ventas && o.ventas.length > 0) ? ('Facturada (' + o.ventas.length + ')') : (['Facturada', 'Cerrada', 'Terminada'].includes(o.estado) ? 'Pendiente' : '—')
 const cobranzaDe = o => { const v = o.ventas || []; if (!v.length) return '—'; if (v.every(x => x.estadoPago === 'Pagado')) return 'Cobrado'; if (v.some(x => x.estadoPago === 'Pagado')) return 'Parcial'; return 'Pendiente' }
 
-// Plazo comprometido en dias HABILES (Fase E): a partir de la fecha del
-// lote (= una recepcion/partida con plazoDias, ver Fase B/D de OTModule),
-// se suman solo dias de semana para llegar a la fecha de vencimiento.
-function sumarDiasHabiles(fechaStr, dias) {
-  if (!fechaStr || !dias) return null
-  let d = new Date(fechaStr + 'T00:00:00')
-  let restante = Number(dias)
-  while (restante > 0) {
-    d.setDate(d.getDate() + 1)
-    if (d.getDay() !== 0 && d.getDay() !== 6) restante--
-  }
-  return d.toISOString().slice(0, 10)
-}
-// Dias habiles entre hoy y una fecha de vencimiento (negativo = ya vencio).
-function diasHabilesHasta(fechaVenc) {
-  if (!fechaVenc) return null
-  const a = new Date(hoy() + 'T00:00:00'), b = new Date(fechaVenc + 'T00:00:00')
-  const signo = b >= a ? 1 : -1
-  let d = new Date(a), n = 0
-  while (d.getTime() !== b.getTime()) {
-    d.setDate(d.getDate() + signo)
-    if (d.getDay() !== 0 && d.getDay() !== 6) n += signo
-  }
-  return n
-}
 // Junta, de todas las OT, los lotes (partidas de recepcion con plazo
 // comprometido) que todavia tienen piezas sin despachar — un lote con
 // todas sus piezas ya despachadas no genera alarma, ya se cumplio.
