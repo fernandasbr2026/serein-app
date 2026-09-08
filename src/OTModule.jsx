@@ -8,6 +8,7 @@ import { generarPdfProtocoloBlob, blobToBase64, fileToBase64, protocoloCompleto 
 import { costoMOdeOT } from './ManoObraModule.jsx'
 import Paginador, { paginar } from './Paginador.jsx'
 import { pullState, pushState } from './sync.js'
+import { sumarDiasHabiles, diasHabilesHasta } from './plazos.js'
 import { SEREIN } from './theme-serein.js'
 import { KpiCard, Pill, Btn, TabsBar } from './ui.jsx'
 import { PILL_VARIANT } from './theme-serein.js'
@@ -332,28 +333,30 @@ function parseExcelMarcas(file, cb, mapeoManual) {
   }
   reader.readAsArrayBuffer(file)
 }
-// Mapeo de columnas de Excel guardado por cliente, en el mismo blob de
-// Parametros (serein_params) que ya usan instrumentos/firmas — asi la
-// proxima vez que se sube un Excel del mismo cliente no hay que volver a
-// indicar las columnas. Trae lo mas fresco de la nube antes de escribir,
-// mismo patron de "pull-fresh + merge" que usa ParametrosModule, para no
-// pisar un cambio de Parametros hecho casi al mismo tiempo desde otra
-// pestana.
+// Mapeo de columnas de Excel guardado por cliente. Vive en su PROPIA clave
+// (serein_mapeosExcel), no dentro de serein_params: Dashboard.jsx reescribe
+// serein_params completo desde el estado React de "params" cada vez que
+// cambia casi cualquier cosa en la app (ots, facturas, cotizaciones...), y
+// ese estado React nunca se entera de un mapeo escrito acá directo a
+// localStorage — el resultado era que el mapeo guardado se pisaba solo
+// segundos después, de forma intermitente. Con su propia clave (que igual
+// sincroniza sola a la nube, sync.js sube cualquier "serein_*" que
+// cambie) el mapeo ya no depende del ciclo de guardado de Parametros.
 function normClienteKey(s) { return String(s || '').trim().toLowerCase() }
 function leerMapeoExcelCliente(clienteKey) {
   if (!clienteKey) return null
   try {
-    const base = JSON.parse(localStorage.getItem('serein_params') || '{}') || {}
-    return (base.mapeosExcelPorCliente || {})[clienteKey] || null
+    const base = JSON.parse(localStorage.getItem('serein_mapeosExcel') || '{}') || {}
+    return base[clienteKey] || null
   } catch (e) { return null }
 }
 async function guardarMapeoExcelCliente(clienteKey, mapeo) {
   if (!clienteKey) return
   try { await pullState() } catch (e) {}
   let base = {}
-  try { base = JSON.parse(localStorage.getItem('serein_params') || '{}') || {} } catch (e) {}
-  const nuevo = { ...base, mapeosExcelPorCliente: { ...(base.mapeosExcelPorCliente || {}), [clienteKey]: mapeo } }
-  try { localStorage.setItem('serein_params', JSON.stringify(nuevo)) } catch (e) {}
+  try { base = JSON.parse(localStorage.getItem('serein_mapeosExcel') || '{}') || {} } catch (e) {}
+  const nuevo = { ...base, [clienteKey]: mapeo }
+  try { localStorage.setItem('serein_mapeosExcel', JSON.stringify(nuevo)) } catch (e) {}
   pushState()
 }
 
@@ -374,7 +377,7 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
   const [buscar, setBuscar] = useState('')
   const [mostrarForm, setMostrarForm] = useState(false)
   const [nuevo, setNuevo] = useState({ tag: '', idPieza: '', m2: '', referencia: '' })
-  const marcasFiltradas = buscar.trim() ? marcas.filter(m => String(m.marca || '').toLowerCase().includes(buscar.trim().toLowerCase())) : marcas
+  const marcasFiltradas = buscar.trim() ? marcas.filter(m => [m.marca, m.idPieza, m.referencia].some(v => String(v || '').toLowerCase().includes(buscar.trim().toLowerCase()))) : marcas
   const total = marcas.length
   const recibidas = marcas.filter(m => m.recibida).length
   const pendientes = total - recibidas
@@ -648,19 +651,24 @@ function resumenTiposRecepcion(partidas) {
 // proponen tildadas, las que no se muestran aparte para revision manual
 // (la guia puede traer piezas de otra OT por error, o venir mal leida).
 function cotejarGuia(marcasLeidas, marcasEsperadas) {
-  const normM = s => String(s == null ? '' : s).trim().toLowerCase()
   return (marcasLeidas || []).map(ml => {
     const marcaTxt = ml.id ? (ml.tag + '-' + ml.id) : ml.tag
-    const match = (marcasEsperadas || []).find(me => normM(me.marca) === normM(marcaTxt))
+    const match = (marcasEsperadas || []).find(me => normMarca(me.marca) === normMarca(marcaTxt))
     return { tag: ml.tag, id: ml.id || null, marcaTxt, marcaEsperadaId: match ? match.id : null, aplicar: !!match }
   })
 }
-function PanelRevisionGuia({ revision, setRevision, onAplicar, onDescartar, etiquetaAccion }) {
+function PanelRevisionGuia({ revision, setRevision, onAplicar, onDescartar, etiquetaAccion, mostrarPlazo, onAgregarMarcaNueva }) {
   const calzan = revision.marcas.filter(m => m.marcaEsperadaId)
   const noCalzan = revision.marcas.filter(m => !m.marcaEsperadaId)
   return (
     <div style={{ border: '1px dashed #CFC9BC', borderRadius: 6, padding: 10, marginBottom: 10, background: '#FBFAF7' }}>
       <div style={{ fontSize: 11.5, fontWeight: 700, color: '#5A736A', marginBottom: 8, textTransform: 'uppercase' }}>Revisa lo que leyó la IA antes de aplicar</div>
+      {mostrarPlazo && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <span style={{ fontSize: 11, color: '#9AA3AD', width: 60 }}>Plazo</span>
+          <input type="number" min="0" value={revision.plazoDias.valor} onChange={e => setRevision(r => ({ ...r, plazoDias: { ...r.plazoDias, valor: e.target.value } }))} placeholder="días hábiles comprometidos" style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '5px 7px', fontSize: 12.5, flex: 1 }} />
+        </div>
+      )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
         <input type="checkbox" checked={revision.numeroGuia.aplicar} onChange={e => setRevision(r => ({ ...r, numeroGuia: { ...r.numeroGuia, aplicar: e.target.checked } }))} />
         <span style={{ fontSize: 11, color: '#9AA3AD', width: 60 }}>N° guía</span>
@@ -686,9 +694,16 @@ function PanelRevisionGuia({ revision, setRevision, onAplicar, onDescartar, etiq
       )}
       {noCalzan.length > 0 && (
         <div style={{ marginTop: 8 }}>
-          <div style={{ fontSize: 11, color: '#D9600A', marginBottom: 4, fontWeight: 700 }}>No calzan con ninguna marca esperada de esta OT — revisar a mano ({noCalzan.length})</div>
+          <div style={{ fontSize: 11, color: '#D9600A', marginBottom: 4, fontWeight: 700 }}>No calzan con ninguna marca esperada de esta OT ({noCalzan.length}) — puede ser una guía mal leída, o piezas que faltan en el checklist</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {noCalzan.map((m, i) => <span key={i} style={{ background: '#FDECDD', color: '#D9600A', borderRadius: 10, padding: '2px 8px', fontSize: 11 }}>{m.marcaTxt}</span>)}
+            {revision.marcas.map((m, idx) => m.marcaEsperadaId ? null : (
+              <span key={idx} style={{ background: '#FDECDD', color: '#D9600A', borderRadius: 10, padding: '2px 4px 2px 8px', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                {m.marcaTxt}
+                {onAgregarMarcaNueva && (
+                  <button onClick={() => onAgregarMarcaNueva(idx)} title="Agregar como marca nueva al checklist de esta OT" style={{ background: '#D9600A', color: '#fff', border: 'none', borderRadius: 8, width: 16, height: 16, fontSize: 11, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+                )}
+              </span>
+            ))}
           </div>
         </div>
       )}
@@ -704,18 +719,23 @@ function RecepcionOT({ ot, onUpdate, onAgregarArray, onUpdateMarcasEsperadas }) 
   const marcasEsperadas = ot.marcasEsperadas || []
   const pendientes = marcasEsperadas.filter(m => !m.recibida)
   const [buscarPend, setBuscarPend] = useState('')
-  const pendFiltradas = buscarPend.trim() ? pendientes.filter(m => String(m.marca || '').toLowerCase().includes(buscarPend.trim().toLowerCase())) : pendientes
+  const pendFiltradas = buscarPend.trim() ? pendientes.filter(m => [m.marca, m.idPieza, m.referencia].some(v => String(v || '').toLowerCase().includes(buscarPend.trim().toLowerCase()))) : pendientes
   const resumen = resumenTiposRecepcion(partidas)
   const tiposUsados = Array.from(new Set(partidas.map(p => String(p.tipo || '').trim()).filter(Boolean)))
   const inp2 = { border: '1px solid #DFE4EA', borderRadius: 4, padding: '6px 8px', fontSize: 12.5, boxSizing: 'border-box' }
 
+  // Plazo comprometido por defecto para las recepciones creadas desde el
+  // checklist rapido (sin pasar por la guia leida con IA) — sin esto, esas
+  // recepciones nunca alimentaban el tablero de vencimientos de
+  // Trazabilidad y Alertas porque quedaban con plazoDias vacio.
+  const [plazoDefault, setPlazoDefault] = useState('')
   const recibirDesdeChecklist = async m => {
     const loteId = 'pa' + Date.now() + Math.random().toString(36).slice(2, 7)
     await onAgregarArray(ot.id, 'partidas', {
       id: loteId,
       detalle: m.marca, fecha: hoy(), estado: 'Recibida',
       m2: m.m2 || '', obs: '', fotos: [],
-      cantidad: 1, m2Cliente: m.m2 || '', m2Propio: '', tipo: '', numeroGuia: '', plazoDias: ''
+      cantidad: 1, m2Cliente: m.m2 || '', m2Propio: '', tipo: '', numeroGuia: '', plazoDias: plazoDefault
     })
     onUpdateMarcasEsperadas(ot.id, marcasEsperadas.map(x => x.id === m.id ? { ...x, recibida: true, fechaRecibida: hoy(), loteId } : x))
   }
@@ -738,20 +758,32 @@ function RecepcionOT({ ot, onUpdate, onAgregarArray, onUpdateMarcasEsperadas }) 
       setRevisionGuia({
         numeroGuia: { valor: d.numeroGuia || '', aplicar: !!d.numeroGuia },
         fecha: { valor: d.fecha || hoy(), aplicar: true },
+        plazoDias: { valor: '', aplicar: true },
         marcas: cotejarGuia(d.marcas || [], marcasEsperadas),
       })
     } catch (err) { setErrorGuia('No se pudo leer la guía: ' + ((err && err.message) || String(err))) }
     setSubiendoGuia(false)
   }
-  const aplicarRevisionGuia = () => {
+  // Agregar una marca leida que no calzaba con ninguna del checklist: se
+  // suma como marca esperada nueva de la OT y queda tildada en el panel,
+  // para no perder la pieza solo porque no estaba cargada de antes.
+  const agregarMarcaNuevaDesdeGuia = idx => {
+    const m = revisionGuia.marcas[idx]
+    if (!m) return
+    const nuevaId = 'me' + Date.now() + Math.random().toString(36).slice(2, 7)
+    onUpdateMarcasEsperadas(ot.id, [...marcasEsperadas, { id: nuevaId, marca: m.marcaTxt, tag: m.tag, idPieza: m.id || null, referencia: null, m2: 0, m2Propio: null, recibida: false, fechaRecibida: null }])
+    setRevisionGuia(r => ({ ...r, marcas: r.marcas.map((x, j) => j === idx ? { ...x, marcaEsperadaId: nuevaId, aplicar: true } : x) }))
+  }
+  const aplicarRevisionGuia = async () => {
     if (!revisionGuia) return
     const loteId = 'pa' + Date.now() + Math.random().toString(36).slice(2, 7)
     const fecha = (revisionGuia.fecha.aplicar && revisionGuia.fecha.valor) ? revisionGuia.fecha.valor : hoy()
     const numeroGuia = revisionGuia.numeroGuia.aplicar ? revisionGuia.numeroGuia.valor : ''
+    const plazoDias = revisionGuia.plazoDias.aplicar ? revisionGuia.plazoDias.valor : ''
     const marcasAplicar = revisionGuia.marcas.filter(m => m.aplicar && m.marcaEsperadaId)
-    onAgregarArray(ot.id, 'partidas', {
+    await onAgregarArray(ot.id, 'partidas', {
       id: loteId, detalle: 'Guía ' + (numeroGuia || '(leída con IA)'), fecha, estado: 'Recibida',
-      m2: '', obs: '', fotos: [], cantidad: marcasAplicar.length || '', m2Cliente: '', m2Propio: '', tipo: '', numeroGuia, plazoDias: ''
+      m2: '', obs: '', fotos: [], cantidad: marcasAplicar.length || '', m2Cliente: '', m2Propio: '', tipo: '', numeroGuia, plazoDias
     })
     const idsAplicar = new Set(marcasAplicar.map(m => m.marcaEsperadaId))
     onUpdateMarcasEsperadas(ot.id, marcasEsperadas.map(m => idsAplicar.has(m.id) ? { ...m, recibida: true, fechaRecibida: fecha, loteId } : m))
@@ -766,11 +798,11 @@ function RecepcionOT({ ot, onUpdate, onAgregarArray, onUpdateMarcasEsperadas }) 
           {subiendoGuia ? 'Leyendo…' : 'Subir guía (leer con IA)'}
           <input type="file" accept="application/pdf,image/*" multiple style={{ display: 'none' }} disabled={subiendoGuia} onChange={subirGuia} />
         </label>
-        <button onClick={() => onAgregarArray(ot.id, 'partidas', { id: 'pa' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [], numeroGuia: '', plazoDias: '' })} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}><Plus size={14} /> Agregar recepción</button>
+        <button onClick={() => onAgregarArray(ot.id, 'partidas', { id: 'pa' + Date.now() + Math.random().toString(36).slice(2, 7), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [], numeroGuia: '', plazoDias: '' })} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}><Plus size={14} /> Agregar recepción</button>
       </div>
     </div>
     {errorGuia && <div style={{ fontSize: 11.5, color: '#C5453D', marginBottom: 8 }}>{errorGuia}</div>}
-    {revisionGuia && <PanelRevisionGuia revision={revisionGuia} setRevision={setRevisionGuia} onAplicar={aplicarRevisionGuia} onDescartar={() => setRevisionGuia(null)} etiquetaAccion="Crear recepción" />}
+    {revisionGuia && <PanelRevisionGuia revision={revisionGuia} setRevision={setRevisionGuia} onAplicar={aplicarRevisionGuia} onDescartar={() => setRevisionGuia(null)} etiquetaAccion="Crear recepción" mostrarPlazo onAgregarMarcaNueva={agregarMarcaNuevaDesdeGuia} />}
 
     {resumen.length > 0 && (
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
@@ -782,7 +814,12 @@ function RecepcionOT({ ot, onUpdate, onAgregarArray, onUpdateMarcasEsperadas }) 
 
     {marcasEsperadas.length > 0 && (
       <div style={{ border: '1px dashed #CFC9BC', borderRadius: 6, padding: 10, marginBottom: 10, background: '#FBFAF7' }}>
-        <div style={{ fontSize: 11.5, fontWeight: 700, color: '#5A736A', marginBottom: 6, textTransform: 'uppercase' }}>Recibir desde el checklist ({pendientes.length} pendientes)</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: '#5A736A', textTransform: 'uppercase' }}>Recibir desde el checklist ({pendientes.length} pendientes)</div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#9AA3AD' }}>Plazo por defecto (días hábiles)
+            <input type="number" min="0" value={plazoDefault} onChange={e => setPlazoDefault(e.target.value)} title="Se aplica a las recepciones que crees con los botones de abajo, para que el vencimiento aparezca en Trazabilidad y Alertas" style={{ ...inp2, width: 60 }} />
+          </label>
+        </div>
         {pendientes.length === 0 ? (
           <div style={{ fontSize: 12, color: '#9AA3AD' }}>No quedan marcas esperadas pendientes por recibir.</div>
         ) : (<>
@@ -808,7 +845,12 @@ function RecepcionOT({ ot, onUpdate, onAgregarArray, onUpdateMarcasEsperadas }) 
             <input type="date" value={p.fecha || ''} onChange={e => setP(i, 'fecha', e.target.value)} style={{ ...inp2, flex: '0 1 140px' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><input type="number" value={p.m2 || ''} onChange={e => setP(i, 'm2', e.target.value)} placeholder="m²" style={{ ...inp2, width: 72 }} /><span style={{ fontSize: 11, color: '#9AA3AD' }}>m²</span></div>
             <select value={p.estado || 'Pendiente'} onChange={e => setP(i, 'estado', e.target.value)} style={{ border: 'none', background: p.estado === 'Recibida' ? '#E6F5EA' : '#F5E5DE', color: p.estado === 'Recibida' ? C.verde : '#D9600A', padding: '5px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}><option>Pendiente</option><option>Recibida</option></select>
-            <button onClick={() => onUpdate(ot.id, { partidas: partidas.filter((_, j) => j !== i) })} style={btnMini}><Trash2 size={13} /></button>
+            <button onClick={() => {
+              const piezasDelLote = marcasEsperadas.filter(x => x.loteId === p.id).length
+              if (piezasDelLote && !window.confirm(`Esta recepción tiene ${piezasDelLote} pieza(s) asociada(s) — al eliminarla, esas piezas quedan sin lote (no se borra su estado de recibida). ¿Continuar?`)) return
+              onUpdate(ot.id, { partidas: partidas.filter((_, j) => j !== i) })
+              if (piezasDelLote) onUpdateMarcasEsperadas(ot.id, marcasEsperadas.map(x => x.loteId === p.id ? { ...x, loteId: null } : x))
+            }} style={btnMini}><Trash2 size={13} /></button>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: '#9AA3AD' }}>Cantidad</label><input type="number" min="0" value={p.cantidad || ''} onChange={e => setP(i, 'cantidad', e.target.value)} style={{ ...inp2, width: 68 }} /></div>
@@ -858,17 +900,20 @@ function DespachoOT({ ot, onUpdate, onAgregarArray, onUpdateMarcasEsperadas }) {
   const despachos = ot.despachos || []
   const marcasEsperadas = ot.marcasEsperadas || []
   const norm = s => String(s == null ? '' : s).trim().toLowerCase()
-  const yaDespachadas = new Set(despachos.map(d => norm(d.detalle)))
-  const pendientes = marcasEsperadas.filter(m => m.recibida && !yaDespachadas.has(norm(m.marca)))
+  // "Ya despachada" se decide por el vinculo real (despachoId), no por
+  // texto: un despacho creado desde una guia leida con IA no repite la
+  // marca en su "detalle" (dice "Guia 12345"), asi que comparar por texto
+  // dejaba piezas ya despachadas ofrecidas de nuevo en el checklist.
+  const pendientes = marcasEsperadas.filter(m => m.recibida && !m.despachoId)
   const [buscarPend, setBuscarPend] = useState('')
-  const pendFiltradas = buscarPend.trim() ? pendientes.filter(m => norm(m.marca).includes(buscarPend.trim().toLowerCase())) : pendientes
+  const pendFiltradas = buscarPend.trim() ? pendientes.filter(m => [m.marca, m.idPieza, m.referencia].some(v => norm(v).includes(buscarPend.trim().toLowerCase()))) : pendientes
   const resumen = resumenTiposRecepcion(despachos)
   const tiposUsados = Array.from(new Set(despachos.map(p => String(p.tipo || '').trim()).filter(Boolean)))
   const inp2 = { border: '1px solid #DFE4EA', borderRadius: 4, padding: '6px 8px', fontSize: 12.5, boxSizing: 'border-box' }
 
-  const despacharDesdeChecklist = m => {
+  const despacharDesdeChecklist = async m => {
     const despachoId = 'de' + Date.now() + Math.random().toString(36).slice(2, 7)
-    onAgregarArray(ot.id, 'despachos', {
+    await onAgregarArray(ot.id, 'despachos', {
       id: despachoId,
       detalle: m.marca, fecha: hoy(), estado: 'Despachada',
       m2: m.m2 || '', obs: '', fotos: [],
@@ -900,13 +945,20 @@ function DespachoOT({ ot, onUpdate, onAgregarArray, onUpdateMarcasEsperadas }) {
     } catch (err) { setErrorGuia('No se pudo leer la guía: ' + ((err && err.message) || String(err))) }
     setSubiendoGuia(false)
   }
-  const aplicarRevisionGuia = () => {
+  const agregarMarcaNuevaDesdeGuia = idx => {
+    const m = revisionGuia.marcas[idx]
+    if (!m) return
+    const nuevaId = 'me' + Date.now() + Math.random().toString(36).slice(2, 7)
+    if (onUpdateMarcasEsperadas) onUpdateMarcasEsperadas(ot.id, [...marcasEsperadas, { id: nuevaId, marca: m.marcaTxt, tag: m.tag, idPieza: m.id || null, referencia: null, m2: 0, m2Propio: null, recibida: true, fechaRecibida: hoy() }])
+    setRevisionGuia(r => ({ ...r, marcas: r.marcas.map((x, j) => j === idx ? { ...x, marcaEsperadaId: nuevaId, aplicar: true } : x) }))
+  }
+  const aplicarRevisionGuia = async () => {
     if (!revisionGuia) return
     const despachoId = 'de' + Date.now() + Math.random().toString(36).slice(2, 7)
     const fecha = (revisionGuia.fecha.aplicar && revisionGuia.fecha.valor) ? revisionGuia.fecha.valor : hoy()
     const numeroGuia = revisionGuia.numeroGuia.aplicar ? revisionGuia.numeroGuia.valor : ''
     const marcasAplicar = revisionGuia.marcas.filter(m => m.aplicar && m.marcaEsperadaId)
-    onAgregarArray(ot.id, 'despachos', {
+    await onAgregarArray(ot.id, 'despachos', {
       id: despachoId, detalle: 'Guía ' + (numeroGuia || '(leída con IA)'), fecha, estado: 'Despachada',
       m2: '', obs: '', fotos: [], cantidad: marcasAplicar.length || '', m2Cliente: '', m2Propio: '', tipo: '', numeroGuia
     })
@@ -923,11 +975,11 @@ function DespachoOT({ ot, onUpdate, onAgregarArray, onUpdateMarcasEsperadas }) {
           {subiendoGuia ? 'Leyendo…' : 'Subir guía (leer con IA)'}
           <input type="file" accept="application/pdf,image/*" multiple style={{ display: 'none' }} disabled={subiendoGuia} onChange={subirGuia} />
         </label>
-        <button onClick={() => onAgregarArray(ot.id, 'despachos', { id: 'de' + Date.now(), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [], numeroGuia: '' })} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}><Plus size={14} /> Agregar despacho</button>
+        <button onClick={() => onAgregarArray(ot.id, 'despachos', { id: 'de' + Date.now() + Math.random().toString(36).slice(2, 7), detalle: '', fecha: '', estado: 'Pendiente', m2: '', obs: '', fotos: [], numeroGuia: '' })} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}><Plus size={14} /> Agregar despacho</button>
       </div>
     </div>
     {errorGuia && <div style={{ fontSize: 11.5, color: '#C5453D', marginBottom: 8 }}>{errorGuia}</div>}
-    {revisionGuia && <PanelRevisionGuia revision={revisionGuia} setRevision={setRevisionGuia} onAplicar={aplicarRevisionGuia} onDescartar={() => setRevisionGuia(null)} etiquetaAccion="Crear despacho" />}
+    {revisionGuia && <PanelRevisionGuia revision={revisionGuia} setRevision={setRevisionGuia} onAplicar={aplicarRevisionGuia} onDescartar={() => setRevisionGuia(null)} etiquetaAccion="Crear despacho" onAgregarMarcaNueva={agregarMarcaNuevaDesdeGuia} />}
 
     <SobrantePanel ot={ot} />
 
@@ -967,7 +1019,12 @@ function DespachoOT({ ot, onUpdate, onAgregarArray, onUpdateMarcasEsperadas }) {
             <input type="date" value={p.fecha || ''} onChange={e => setP(i, 'fecha', e.target.value)} style={{ ...inp2, flex: '0 1 140px' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><input type="number" value={p.m2 || ''} onChange={e => setP(i, 'm2', e.target.value)} placeholder="m²" style={{ ...inp2, width: 72 }} /><span style={{ fontSize: 11, color: '#9AA3AD' }}>m²</span></div>
             <select value={p.estado || 'Pendiente'} onChange={e => setP(i, 'estado', e.target.value)} style={{ border: 'none', background: p.estado === 'Despachada' ? '#E6F5EA' : '#F5E5DE', color: p.estado === 'Despachada' ? C.verde : '#D9600A', padding: '5px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}><option>Pendiente</option><option>Despachada</option></select>
-            <button onClick={() => onUpdate(ot.id, { despachos: despachos.filter((_, j) => j !== i) })} style={btnMini}><Trash2 size={13} /></button>
+            <button onClick={() => {
+              const piezasDelDespacho = marcasEsperadas.filter(x => x.despachoId === p.id).length
+              if (piezasDelDespacho && !window.confirm(`Este despacho tiene ${piezasDelDespacho} pieza(s) asociada(s) — al eliminarlo, esas piezas quedan sin despacho (siguen recibidas). ¿Continuar?`)) return
+              onUpdate(ot.id, { despachos: despachos.filter((_, j) => j !== i) })
+              if (piezasDelDespacho && onUpdateMarcasEsperadas) onUpdateMarcasEsperadas(ot.id, marcasEsperadas.map(x => x.despachoId === p.id ? { ...x, despachoId: null, fechaDespacho: null } : x))
+            }} style={btnMini}><Trash2 size={13} /></button>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: '#9AA3AD' }}>Cantidad</label><input type="number" min="0" value={p.cantidad || ''} onChange={e => setP(i, 'cantidad', e.target.value)} style={{ ...inp2, width: 68 }} /></div>
@@ -1010,10 +1067,32 @@ function DespachoOT({ ot, onUpdate, onAgregarArray, onUpdateMarcasEsperadas }) {
 // reescribe nada). Si una pieza esta en la lista de marcas de un PIG, el
 // granallado queda con la fecha de ese PIG; si esta en un PGP, cada
 // "Capa N" toma la fecha ambiental de esa capa del PGP que la incluye.
-function normMarcaTz(s) { return String(s == null ? '' : s).trim().toLowerCase() }
+//
+// normMarca(): quita tildes/mayusculas y colapsa guiones/espacios, para
+// que "2610-SP-32402 A" (con espacio) calce con "2610-SP-32402-A" (con
+// guion) y con variantes de tildes — antes solo se normalizaba a
+// minusculas, y coincidencias reales se perdian por eso.
+function normMarca(s) { return String(s == null ? '' : s).trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[\s-]+/g, '-') }
+// Un mismo campo de marcas puede traer varios codigos separados por ";"/","
+// /salto de linea (la gente pega varias marcas juntas) — rptMarcas() ya
+// separa asi para el PDF; protocoloDeMarca() necesita el mismo criterio
+// para no dejar sin trazabilidad a una marca que esta ahi pero acompañada.
+function marcasDeCampo(m) { return String(m || '').split(/[;,\n]+/).map(x => x.trim()).filter(Boolean) }
 function protocoloDeMarca(protocolos, marcaTxt, tipo) {
-  const key = normMarcaTz(marcaTxt)
-  return (protocolos || []).find(p => p.tipo === tipo && (p.marcas || []).some(m => normMarcaTz(m) === key)) || null
+  const key = normMarca(marcaTxt)
+  if (!key) return null
+  return (protocolos || []).find(p => p.tipo === tipo && (p.marcas || []).some(m => marcasDeCampo(m).some(x => normMarca(x) === key))) || null
+}
+// Una capa/granallado solo cuenta como "hecha" si tiene una medicion real
+// cargada — antes se usaba la fecha por defecto (hoy) que trae el
+// protocolo al crearse, asi que una pieza aparecia "Lista" apenas alguien
+// generaba el PGP, sin haber pintado ni medido nada todavia.
+function capaHecha(cap) { return !!(cap && (cap.filas || []).some(fila => (fila || []).some(v => String(v || '').trim()))) }
+function granalladoHecho(pig) {
+  if (!pig) return false
+  if ((pig.medidas || []).some(v => String(v || '').trim())) return true
+  if ((pig.checks || []).some(c => (c.fotos || []).length > 0)) return true
+  return false
 }
 function TrazabilidadPiezasOT({ ot, onUpdateMarcasEsperadas }) {
   const marcas = ot.marcasEsperadas || []
@@ -1023,6 +1102,11 @@ function TrazabilidadPiezasOT({ ot, onUpdateMarcasEsperadas }) {
   const setMarcas = nuevas => onUpdateMarcasEsperadas(ot.id, nuevas)
   const [filtroEstado, setFiltroEstado] = useState('')
   const [filtroLote, setFiltroLote] = useState('')
+  // Overlay local para "Referencia" — mismo patron de debounce que ya usa
+  // cambiarM2Propio en MarcasEsperadasOT, para no disparar un guardado a
+  // la nube (pullState+pushState) en cada tecla.
+  const [localReferencia, setLocalReferencia] = useState({})
+  const timersReferencia = useRef({})
 
   // Columnas de capa fijas para toda la tabla = el maximo entre los PGP de
   // esta OT (cada fila solo llena las que le correspondan a su protocolo).
@@ -1031,11 +1115,11 @@ function TrazabilidadPiezasOT({ ot, onUpdateMarcasEsperadas }) {
   const filas = marcas.map(m => {
     const pig = protocoloDeMarca(protocolos, m.marca, 'PIG')
     const pgp = protocoloDeMarca(protocolos, m.marca, 'PGP')
-    const fechaGranallado = pig ? ((pig.amb && pig.amb.fecha) || pig.fecha || null) : null
+    const fechaGranallado = (pig && granalladoHecho(pig)) ? ((pig.amb && pig.amb.fecha) || pig.fecha || null) : null
     const capasTotalPieza = pgp ? (pgp.capas || []).length : 0
     const fechasCapas = Array.from({ length: maxCapas }, (_, i) => {
       const cap = pgp && pgp.capas && pgp.capas[i]
-      return cap && cap.amb ? (cap.amb.fecha || null) : null
+      return (cap && capaHecha(cap)) ? ((cap.amb && cap.amb.fecha) || null) : null
     })
     const capasHechas = fechasCapas.filter(Boolean).length
     const despachada = !!m.despachoId
@@ -1046,7 +1130,14 @@ function TrazabilidadPiezasOT({ ot, onUpdateMarcasEsperadas }) {
     else if (fechaGranallado) { estado = 'Granallado'; colorEstado = '#5A6B85' }
     else if (m.recibida) { estado = 'Recibida'; colorEstado = '#D9600A' }
     else { estado = 'Por llegar'; colorEstado = '#9AA3AD' }
-    return { m, fechaGranallado, fechasCapas, estado, colorEstado }
+    // Vencimiento del lote de esta pieza (si tiene uno con plazo cargado) —
+    // mismo calculo que usa el tablero de Trazabilidad y Alertas, para que
+    // se vea de un vistazo dentro de la propia OT sin tener que ir a
+    // buscarlo a otro modulo.
+    const lote = m.loteId ? partidas.find(p => p.id === m.loteId) : null
+    const vencimiento = (lote && lote.plazoDias && lote.fecha) ? sumarDiasHabiles(lote.fecha, lote.plazoDias) : null
+    const diasRestantes = vencimiento && !despachada ? diasHabilesHasta(vencimiento) : null
+    return { m, fechaGranallado, fechasCapas, estado, colorEstado, vencimiento, diasRestantes }
   })
 
   const filasFiltradas = filas.filter(f => {
@@ -1067,7 +1158,13 @@ function TrazabilidadPiezasOT({ ot, onUpdateMarcasEsperadas }) {
     const desp = despachos.find(d => d.id === despachoId)
     setMarcas(marcas.map(m => m.id === id ? { ...m, despachoId: despachoId || null, fechaDespacho: despachoId ? ((desp && desp.fecha) || hoy()) : null } : m))
   }
-  const cambiarReferencia = (id, valor) => setMarcas(marcas.map(m => m.id === id ? { ...m, referencia: valor } : m))
+  const cambiarReferencia = (id, valor) => {
+    setLocalReferencia(r => ({ ...r, [id]: valor }))
+    clearTimeout(timersReferencia.current[id])
+    timersReferencia.current[id] = setTimeout(() => {
+      setMarcas(marcas.map(m => m.id === id ? { ...m, referencia: valor } : m))
+    }, 700)
+  }
 
   if (!marcas.length) return null
 
@@ -1088,29 +1185,28 @@ function TrazabilidadPiezasOT({ ot, onUpdateMarcasEsperadas }) {
           )}
         </div>
       </div>
-      {marcas.length === 0 ? (
-        <div style={{ fontSize: 12, color: '#9AA3AD' }}>Sin marcas esperadas cargadas todavía.</div>
-      ) : (
+      {(
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-                {['Marca/TAG', 'ID', 'Referencia', 'm²', 'Recibida', 'Granallado', ...Array.from({ length: maxCapas }, (_, i) => 'Capa ' + (i + 1)), 'Estado', 'Lote', 'Despacho'].map((h, i) => (
+                {['Marca/TAG', 'ID', 'Referencia', 'm²', 'Recibida', 'Granallado', ...Array.from({ length: maxCapas }, (_, i) => 'Capa ' + (i + 1)), 'Estado', 'Vence', 'Lote', 'Despacho'].map((h, i) => (
                   <th key={i} style={{ textAlign: 'left', padding: '5px 6px', fontSize: 10.5, color: '#9AA3AD', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filasFiltradas.map(({ m, fechaGranallado, fechasCapas, estado, colorEstado }) => (
-                <tr key={m.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
+              {filasFiltradas.map(({ m, fechaGranallado, fechasCapas, estado, colorEstado, vencimiento, diasRestantes }) => (
+                <tr key={m.id} style={{ borderBottom: '1px solid #EEE9DF', background: diasRestantes != null && diasRestantes < 0 ? '#FDECEC' : 'transparent' }}>
                   <td style={{ padding: '5px 6px', fontWeight: 600, whiteSpace: 'nowrap' }}>{m.tag || m.marca}</td>
                   <td style={{ padding: '5px 6px', color: '#9AA3AD' }}>{m.idPieza || '—'}</td>
-                  <td style={{ padding: '5px 6px' }}><input value={m.referencia || ''} onChange={e => cambiarReferencia(m.id, e.target.value)} placeholder="—" style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '3px 5px', fontSize: 11.5, width: 90 }} /></td>
+                  <td style={{ padding: '5px 6px' }}><input value={localReferencia[m.id] !== undefined ? localReferencia[m.id] : (m.referencia || '')} onChange={e => cambiarReferencia(m.id, e.target.value)} placeholder="—" style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '3px 5px', fontSize: 11.5, width: 90 }} /></td>
                   <td style={{ padding: '5px 6px', color: '#9AA3AD' }}>{m.m2 || '—'}</td>
                   <td style={{ padding: '5px 6px', color: m.recibida ? C.verde : '#9AA3AD', whiteSpace: 'nowrap' }}>{m.fechaRecibida || '—'}</td>
                   <td style={{ padding: '5px 6px', color: fechaGranallado ? '#5A6B85' : '#C9C4B8', whiteSpace: 'nowrap' }}>{fechaGranallado || '—'}</td>
                   {fechasCapas.map((f, i) => <td key={i} style={{ padding: '5px 6px', color: f ? C.teal : '#C9C4B8', whiteSpace: 'nowrap' }}>{f || '—'}</td>)}
                   <td style={{ padding: '5px 6px' }}><span style={{ background: colorEstado, color: '#fff', borderRadius: 10, padding: '2px 8px', fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap' }}>{estado}</span></td>
+                  <td style={{ padding: '5px 6px', whiteSpace: 'nowrap' }}>{vencimiento ? (<span style={{ color: diasRestantes < 0 ? '#C5453D' : diasRestantes <= 2 ? '#D9600A' : '#9AA3AD', fontWeight: diasRestantes < 0 ? 700 : 400 }}>{vencimiento}{diasRestantes < 0 ? ` (vencido, ${Math.abs(diasRestantes)} d.h.)` : ` (${diasRestantes} d.h.)`}</span>) : '—'}</td>
                   <td style={{ padding: '5px 6px' }}>
                     <select value={m.loteId || ''} onChange={e => asignarLote(m.id, e.target.value)} style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '3px 5px', fontSize: 11 }}>
                       <option value="">— sin lote —</option>
@@ -1559,7 +1655,13 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 18 }}>
             <label style={{ fontSize: 12, color: '#9AA3AD' }}>Estado OT
               <select value={ot.estado} onChange={e => onCambiarEstado(ot.id, e.target.value)} style={{ ...inp, width: '100%', marginTop: 4 }}>
-                {ESTADOS_OT.map(s => <option key={s}>{s}</option>)}
+                {/* "Facturada" se saca de las opciones elegibles: el estado de
+                    facturacion ya se calcula solo (ver etiquetaEstado) y elegirlo
+                    a mano dejaba la OT atascada para siempre en "OT activas" sin
+                    entrar nunca a cerradas/facturadas. Si una OT ya quedo con ese
+                    valor de antes, se mantiene visible aca para no romper su
+                    selector, pero no se ofrece para las demas. */}
+                {ESTADOS_OT.filter(s => s !== 'Facturada' || ot.estado === 'Facturada').map(s => <option key={s}>{s}</option>)}
               </select>
               {ot.estado === 'Cerrada' && ot.fechaCierre && <div style={{ fontSize: 11, color: '#9AA3AD', marginTop: 3 }}>Cerrada el {ot.fechaCierre}</div>}
             </label>
@@ -2375,10 +2477,16 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   const [repDesde, setRepDesde] = useState('')
   const [repHasta, setRepHasta] = useState('')
   const [repCliente, setRepCliente] = useState('')
-  const [vista, setVista] = useState('activas')
+  const [vista, setVistaRaw] = useState('activas')
   const [busqueda, setBusqueda] = useState('')
   const [fEstado, setFEstado] = useState('')
   const [fFactura, setFFactura] = useState('')
+  // Cambiar de pestaña (activas/cerradas/facturadas) limpia el filtro de
+  // facturacion — es un desplegable distinto en cada pestaña (opciones de
+  // "cerradas" no existen en "facturadas" y viceversa); sin este reset,
+  // quedaba un valor invisible filtrando la lista a "vacio sin aviso" al
+  // cambiar de pestaña con un filtro puesto.
+  const setVista = v => { setVistaRaw(v); setFFactura('') }
   const [fDesde, setFDesde] = useState('')
   const [fHasta, setFHasta] = useState('')
   const _norm = s => (s || '').trim().toLowerCase()
@@ -2539,7 +2647,12 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   const coincideBusqueda = o => {
     if (!busqueda.trim()) return true
     const q = _norm(busqueda)
-    return [o.numero, o.cliente, o.oc, o.cotizacion].some(v => _norm(v).includes(q))
+    if ([o.numero, o.cliente, o.oc, o.nv, o.cotizacion].some(v => _norm(v).includes(q))) return true
+    // Tambien busca por pieza (marca/TAG, ID o referencia) — antes solo se
+    // podia encontrar una OT por sus datos comerciales, y la pregunta mas
+    // frecuente en planta ("¿donde esta la marca X?") obligaba a abrir OT
+    // por OT para revisar el checklist.
+    return (o.marcasEsperadas || []).some(m => [m.marca, m.idPieza, m.referencia].some(v => _norm(v).includes(q)))
   }
   const coincideFiltros = o => {
     if (fEstado && o.estado !== fEstado) return false
