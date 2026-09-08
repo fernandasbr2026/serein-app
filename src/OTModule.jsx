@@ -2404,7 +2404,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   useEffect(() => { supabase.from('libro_compras').select('ot_id,provider_name,document_number,neto,document_total,emission_date').not('ot_id', 'is', null).then(({ data }) => setLibroCompras(data || [])) }, [])
   const otsAll = otsExt ?? otsInt
   const setOts = setOtsExt ?? setOtsInt
-  const ots = otsAll.filter(o => areasPermitidas.includes(o.area))
+  const ots = otsAll.filter(o => areasPermitidas.includes(o.area) && !o.eliminada)
   const [areaSel, setAreaSel] = useState(areasPermitidas[0])
   const [creando, setCreando] = useState(false)
   const [fCliente, setFCliente] = useState('')
@@ -2551,12 +2551,21 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   // después empujan a la nube sin bloquear la pantalla — igual de rápido
   // para ver el resultado, y la sincronización entre usuarios sigue
   // ocurriendo (push inmediato en vez del debounce de 800ms general).
+  // "Eliminar OT" ahora es un borrado SUAVE: la OT se marca eliminada (con
+  // quien y cuando) y desaparece de todas las vistas, pero el dato no se
+  // destruye — nada en el modulo tenia forma de saber quien borro algo ni
+  // de recuperarlo si fue sin querer, y una empresa con protocolos de
+  // calidad firmados no puede darse el lujo de perder ese rastro. No
+  // cambia nada mas del comportamiento visible: para cualquier vista de
+  // la app, una OT eliminada sigue sin aparecer en ningun lado.
   const eliminar = async id => {
+    let quien = ''
+    try { const { data } = await supabase.auth.getUser(); quien = (data && data.user && data.user.email) || '' } catch (e) {}
     try { await pullState() } catch (e) {}
     let fresco = null
     try { fresco = JSON.parse(localStorage.getItem('serein_ots') || 'null') } catch (e) {}
     const base = Array.isArray(fresco) ? fresco : otsAll
-    const nuevo = base.filter(o => o.id !== id)
+    const nuevo = base.map(o => o.id === id ? { ...o, eliminada: true, eliminadaPor: quien, eliminadaFecha: new Date().toISOString() } : o)
     try { localStorage.setItem('serein_ots', JSON.stringify(nuevo)) } catch (e) {}
     setOts(nuevo)
     pushState()

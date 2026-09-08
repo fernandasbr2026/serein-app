@@ -25,15 +25,23 @@ const CORS = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Escapa cualquier campo antes de meterlo en el HTML del correo — vienen
+// del navegador (numero de guia, cliente, etc.) y sin esto un valor con
+// "<"/">" quedaria interpretado como markup en vez de mostrarse tal cual.
+function escapeHtml(s: unknown) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
+}
+
 function filaHtml(l: any) {
   const color = l.estado === "vencido" ? "#C5453D" : "#D9600A";
   const etiqueta = l.estado === "vencido" ? "VENCIDO" : "POR VENCER";
+  const dias = Number.isFinite(Number(l.diasRestantes)) ? Number(l.diasRestantes) : 0;
   return `<tr>
-    <td style="padding:6px 10px;border-bottom:1px solid #DFE4EA">${l.ot ?? ""}</td>
-    <td style="padding:6px 10px;border-bottom:1px solid #DFE4EA">${l.cliente ?? ""}</td>
-    <td style="padding:6px 10px;border-bottom:1px solid #DFE4EA">${l.numeroGuia || "—"}</td>
-    <td style="padding:6px 10px;border-bottom:1px solid #DFE4EA">${l.vencimiento ?? ""}</td>
-    <td style="padding:6px 10px;border-bottom:1px solid #DFE4EA;color:${color};font-weight:700">${etiqueta} (${l.diasRestantes} d.h.)</td>
+    <td style="padding:6px 10px;border-bottom:1px solid #DFE4EA">${escapeHtml(l.ot)}</td>
+    <td style="padding:6px 10px;border-bottom:1px solid #DFE4EA">${escapeHtml(l.cliente)}</td>
+    <td style="padding:6px 10px;border-bottom:1px solid #DFE4EA">${l.numeroGuia ? escapeHtml(l.numeroGuia) : "—"}</td>
+    <td style="padding:6px 10px;border-bottom:1px solid #DFE4EA">${escapeHtml(l.vencimiento)}</td>
+    <td style="padding:6px 10px;border-bottom:1px solid #DFE4EA;color:${color};font-weight:700">${etiqueta} (${dias} d.h.)</td>
   </tr>`;
 }
 
