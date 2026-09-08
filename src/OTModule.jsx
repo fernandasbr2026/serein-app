@@ -934,6 +934,18 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
   const [addAbono, setAddAbono] = useState(false)
   const [addCosto, setAddCosto] = useState(false)
   const [guardando, setGuardando] = useState(false)
+  // La ficha era un solo scroll largo con todo mezclado (comercial,
+  // produccion, calidad, datos) — se reorganiza en pestanas sin eliminar
+  // ni mover ninguna funcion fuera del alcance, solo se agrupa lo mismo
+  // que ya existia. Nada de esto toca los datos ni los handlers de abajo.
+  const [tab, setTab] = useState('resumen')
+  const TABS_OT = [
+    { id: 'resumen', label: 'Resumen' },
+    { id: 'produccion', label: 'Producción y Trazabilidad' },
+    { id: 'calidad', label: 'Calidad' },
+    { id: 'comercial', label: 'Comercial' },
+    { id: 'datos', label: 'Datos' },
+  ]
   // Botón explícito de guardar, pedido directamente: todo lo que se edita
   // en esta ficha (campos técnicos, partidas/recepción con fotos,
   // despachos, protocolos) ya sube a la nube apenas se hace el cambio,
@@ -1036,6 +1048,15 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
 
       {(abierta || enModal) && (
         <div style={{ borderTop: '1px solid #DFE4EA', padding: 18 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16, borderBottom: '1px solid #DFE4EA', paddingBottom: 12 }}>
+            {TABS_OT.map(t => (
+              <button key={t.id} onClick={() => setTab(t.id)}
+                style={{ background: tab === t.id ? '#F77716' : '#fff', color: tab === t.id ? '#fff' : C.carbon, border: '1px solid ' + (tab === t.id ? '#F77716' : '#DFE4EA'), padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, borderRadius: 4 }}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+          {tab === 'resumen' && (<>
           {/* Datos técnicos editables */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 18 }}>
             <label style={{ fontSize: 12, color: '#9AA3AD' }}>Estado OT
@@ -1061,6 +1082,25 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
             </label>
           </div>
 
+          {/* RESUMEN M2 REALES / EN PLANTA */}
+          {(() => {
+            const m2c = parseFloat(ot.m2) || 0;
+            const r2 = n => Math.round(n * 100) / 100;
+            const m2r = r2((ot.partidas || []).reduce((s, p) => s + (parseFloat(p.m2) || 0), 0));
+            const m2d = r2((ot.despachos || []).reduce((s, p) => s + (parseFloat(p.m2) || 0), 0));
+            const planta = r2(m2r - m2d);
+            const over = m2c > 0 && m2r > m2c;
+            return (
+              <div style={{ marginTop: 16, display:'flex', gap:12, flexWrap:'wrap' }}>
+                <div style={{ flex:'1 1 120px', border:'1px solid #D8DCE5', borderRadius:6, padding:'10px 12px', background:'#F2F4F7' }}><div style={{ fontSize:11, color:'#9AA3AD', textTransform:'uppercase', fontWeight:700 }}>M² cotización</div><div style={{ fontSize:20, fontWeight:700, color:C.carbon }}>{m2c}</div></div>
+                <div style={{ flex:'1 1 120px', border:'1px solid ' + (over ? '#C5453D' : '#D8DCE5'), borderRadius:6, padding:'10px 12px', background: over ? '#FDECEC' : '#F2F4F7' }}><div style={{ fontSize:11, color: over ? '#C5453D' : '#9AA3AD', textTransform:'uppercase', fontWeight:700 }}>M² reales</div><div style={{ fontSize:20, fontWeight:700, color: over ? '#C5453D' : C.carbon }}>{m2r}</div>{over ? <div style={{ fontSize:10.5, color:'#C5453D', fontWeight:700, marginTop:2 }}>⚠ Supera lo cotizado (+{r2(m2r - m2c)} m²)</div> : null}</div>
+                <div style={{ flex:'1 1 120px', border:'1px solid #D8DCE5', borderRadius:6, padding:'10px 12px', background:'#F2F4F7' }}><div style={{ fontSize:11, color:'#9AA3AD', textTransform:'uppercase', fontWeight:700 }}>M² en planta</div><div style={{ fontSize:20, fontWeight:700, color: planta < 0 ? '#C5453D' : C.carbon }}>{planta}</div></div>
+              </div>
+            );
+          })()}
+          </>)}
+
+          {tab === 'datos' && (<>
           {/* Esquema de pintura y servicios (visible para todos) */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10, marginBottom: 16 }}>
             <label style={{ fontSize: 12, color: '#9AA3AD' }}>Esquema de pintura
@@ -1070,7 +1110,9 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
               <textarea value={ot.servicios || ''} onChange={e => onUpdate(ot.id, { servicios: e.target.value })} placeholder="Servicios adicionales, requerimientos y notas para el taller…" style={{ ...inp, width: '100%', marginTop: 4, minHeight: 72, resize: 'vertical', fontFamily: 'inherit' }} />
             </label>
           </div>
+          </>)}
 
+          {tab === 'produccion' && (<>
           {/* MARCAS ESPERADAS (checklist contra el Excel del cliente) */}
           <MarcasEsperadasOT ot={ot} onGuardar={nuevasMarcas => onUpdateMarcasEsperadas ? onUpdateMarcasEsperadas(ot.id, nuevasMarcas) : onUpdate(ot.id, { marcasEsperadas: nuevasMarcas })} />
 
@@ -1079,23 +1121,6 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
 
         {/* ENTREGAS / DESPACHO SEREIN */}
         <DespachoOT ot={ot} onUpdate={onUpdate} onAgregarArray={onAgregarArray} />
-
-        {/* RESUMEN M2 REALES / EN PLANTA */}
-        {(() => {
-          const m2c = parseFloat(ot.m2) || 0;
-          const r2 = n => Math.round(n * 100) / 100;
-          const m2r = r2((ot.partidas || []).reduce((s, p) => s + (parseFloat(p.m2) || 0), 0));
-          const m2d = r2((ot.despachos || []).reduce((s, p) => s + (parseFloat(p.m2) || 0), 0));
-          const planta = r2(m2r - m2d);
-          const over = m2c > 0 && m2r > m2c;
-          return (
-            <div style={{ marginTop: 16, display:'flex', gap:12, flexWrap:'wrap' }}>
-              <div style={{ flex:'1 1 120px', border:'1px solid #D8DCE5', borderRadius:6, padding:'10px 12px', background:'#F2F4F7' }}><div style={{ fontSize:11, color:'#9AA3AD', textTransform:'uppercase', fontWeight:700 }}>M² cotización</div><div style={{ fontSize:20, fontWeight:700, color:C.carbon }}>{m2c}</div></div>
-              <div style={{ flex:'1 1 120px', border:'1px solid ' + (over ? '#C5453D' : '#D8DCE5'), borderRadius:6, padding:'10px 12px', background: over ? '#FDECEC' : '#F2F4F7' }}><div style={{ fontSize:11, color: over ? '#C5453D' : '#9AA3AD', textTransform:'uppercase', fontWeight:700 }}>M² reales</div><div style={{ fontSize:20, fontWeight:700, color: over ? '#C5453D' : C.carbon }}>{m2r}</div>{over ? <div style={{ fontSize:10.5, color:'#C5453D', fontWeight:700, marginTop:2 }}>⚠ Supera lo cotizado (+{r2(m2r - m2c)} m²)</div> : null}</div>
-              <div style={{ flex:'1 1 120px', border:'1px solid #D8DCE5', borderRadius:6, padding:'10px 12px', background:'#F2F4F7' }}><div style={{ fontSize:11, color:'#9AA3AD', textTransform:'uppercase', fontWeight:700 }}>M² en planta</div><div style={{ fontSize:20, fontWeight:700, color: planta < 0 ? '#C5453D' : C.carbon }}>{planta}</div></div>
-            </div>
-          );
-        })()}
 
           {/* ÍTEMS COTIZADOS · AJUSTE DE VENTA POR M² REALES (solo OT que vienen de una cotización aprobada).
               Fuera del gate de verValores a propósito: cargar el m² real medido en
@@ -1159,7 +1184,9 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
               </div>
             )
           })()}
+          </>)}
 
+          {tab === 'comercial' && (<>
           {verValores && (
             <>
               {/* VENTAS */}
@@ -1334,8 +1361,10 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
               )}
             </>
           )}
+          </>)}
 
-          <div style={{ marginTop: 14, borderTop: '1px dashed #DFE4EA', paddingTop: 12 }}>
+          {tab === 'datos' && (
+          <div style={{ marginTop: 14, paddingTop: 12 }}>
             <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase', marginBottom: 8 }}>Datos del encargado</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8 }}>
               <div><div style={{ fontSize: 11, color: '#9AA3AD', marginBottom: 2 }}>Nombre encargo</div><input style={{ padding: '6px 8px', border: '1px solid #DFE4EA', fontSize: 12.5, width: '100%', boxSizing: 'border-box' }} value={ot.nombreEncargo || ''} onChange={e => onUpdate(ot.id, { nombreEncargo: e.target.value })} /></div>
@@ -1345,8 +1374,13 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
               <div><div style={{ fontSize: 11, color: (ot.area === 'Istria' || ot.sede === 'Istria') ? '#C5453D' : '#F77716', fontWeight: 700, marginBottom: 2 }}>OC (Orden de compra)</div><input placeholder="Ej. 4500123456" style={{ padding: '6px 8px', border: '2px solid ' + ((ot.area === 'Istria' || ot.sede === 'Istria') ? '#C5453D' : '#F77716'), fontSize: 12.5, fontWeight: 700, width: '100%', boxSizing: 'border-box' }} value={ot.oc && ot.oc !== '\u2014' ? ot.oc : ''} onChange={e => onUpdate(ot.id, { oc: e.target.value })} /></div>
             </div>
           </div>
-          <ProtocolosOT ot={ot} onUpdate={onUpdateProtocolos || onUpdate} otsAll={otsAll} instrumentos={instrumentos} />
-          <FotosOT ot={ot} onUpdate={onUpdate} />
+          )}
+          {tab === 'calidad' && (
+            <ProtocolosOT ot={ot} onUpdate={onUpdateProtocolos || onUpdate} otsAll={otsAll} instrumentos={instrumentos} />
+          )}
+          <div style={{ marginTop: 14, borderTop: '1px dashed #DFE4EA', paddingTop: 12 }}>
+            <FotosOT ot={ot} onUpdate={onUpdate} />
+          </div>
 
           <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
             <button onClick={() => descargarOTDesdeOT(ot)}
