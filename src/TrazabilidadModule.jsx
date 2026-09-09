@@ -1,8 +1,11 @@
-import React, { useState } from 'react'
-import { AlertTriangle, ArrowRight, CheckCircle2, Mail } from 'lucide-react'
+import React, { useState, useRef, useMemo } from 'react'
+import { AlertTriangle, ArrowRight, CheckCircle2, Mail, Users } from 'lucide-react'
 import { ocNeto, ocTotal, vencOC } from './OrdenesCompraModule.jsx'
 import { supabase } from './supabase.js'
 import { sumarDiasHabiles, diasHabilesHasta } from './plazos.js'
+import { pullState, pushState } from './sync.js'
+import { piezasDelCliente, lotesDelClienteConPlazo, resumenTableroCliente } from './vistaCliente.js'
+import { KpiCard } from './ui.jsx'
 
 // ============================================================
 // MÓDULO: Trazabilidad y Alertas (Gerencia)
@@ -25,7 +28,7 @@ const cobranzaDe = o => { const v = o.ventas || []; if (!v.length) return '—';
 // Junta, de todas las OT, los lotes (partidas de recepcion con plazo
 // comprometido) que todavia tienen piezas sin despachar — un lote con
 // todas sus piezas ya despachadas no genera alarma, ya se cumplio.
-function lotesConPlazo(ots) {
+export function lotesConPlazo(ots) {
   const lotes = []
   ots.forEach(o => {
     ;(o.partidas || []).forEach(p => {
@@ -45,7 +48,157 @@ function lotesConPlazo(ots) {
 const ESTADO_LOTE_LABEL = { vencido: 'Vencido', por_vencer: 'Por vencer', en_plazo: 'En plazo' }
 const ESTADO_LOTE_COLOR = { vencido: '#C5453D', por_vencer: '#D9600A', en_plazo: '#5A6B85' }
 
-export default function TrazabilidadModule({ cotizaciones = [], ots = [], ordenesCompra = [] }) {
+// Guarda un cambio en un campo de UNA pieza (diametro/embalaje/factura) de
+// UNA OT puntual, sin pisar cambios que hayan hecho otras personas en otras
+// piezas mientras tanto — mismo patron seguro "pull-fresh + merge + push"
+// que ya usa actualizarMarcasEsperadas() en OTModule.jsx, aplicado aca
+// porque esta vista cruza piezas de varias OT a la vez.
+async function actualizarPiezaCliente(otsProp, setOts, otId, marcaId, cambios) {
+  try { await pullState() } catch (e) {}
+  let fresco = null
+  try { fresco = JSON.parse(localStorage.getItem('serein_ots') || 'null') } catch (e) {}
+  const base = Array.isArray(fresco) ? fresco : otsProp
+  const nuevo = base.map(o => o.id !== otId ? o : { ...o, marcasEsperadas: (o.marcasEsperadas || []).map(m => m.id === marcaId ? { ...m, ...cambios } : m) })
+  try { localStorage.setItem('serein_ots', JSON.stringify(nuevo)) } catch (e) {}
+  setOts(nuevo)
+  pushState()
+}
+
+// Vista por Cliente (Fase F) — cruza todas las OT activas de un mismo
+// cliente para responder la pregunta real de la usuaria: de todas las
+// piezas de ese cliente, cuales ya se despacharon, en que etapa de pintura
+// estan las que quedan, y cuales ya se facturaron (con su embalaje aparte).
+function VistaPorCliente({ ots, setOts }) {
+  const clientes = useMemo(() => Array.from(new Set(ots.filter(o => !o.eliminada).map(o => o.cliente).filter(Boolean))).sort(), [ots])
+  const [cliente, setCliente] = useState('')
+  const [filtroEstadoPieza, setFiltroEstadoPieza] = useState('')
+  const [localValores, setLocalValores] = useState({})
+  const timers = useRef({})
+
+  const piezas = useMemo(() => cliente ? piezasDelCliente(ots, cliente) : [], [ots, cliente])
+  const lotes = useMemo(() => cliente ? lotesDelClienteConPlazo(ots, cliente) : [], [ots, cliente])
+  const resumen = useMemo(() => resumenTableroCliente(piezas, lotes), [piezas, lotes])
+  const estadosPresentes = Array.from(new Set(piezas.map(f => f.estado)))
+  const piezasFiltradas = filtroEstadoPieza ? piezas.filter(f => f.estado === filtroEstadoPieza) : piezas
+
+  const cambiarCampo = (otId, marcaId, campo, valor) => {
+    const key = otId + '|' + marcaId + '|' + campo
+    setLocalValores(v => ({ ...v, [key]: valor }))
+    clearTimeout(timers.current[key])
+    timers.current[key] = setTimeout(() => {
+      actualizarPiezaCliente(ots, setOts, otId, marcaId, { [campo]: campo === 'embalaje' ? (numDecCliente(valor)) : (valor.trim() || null) })
+    }, 700)
+  }
+  const valorCampo = (otId, marcaId, campo, actual) => {
+    const key = otId + '|' + marcaId + '|' + campo
+    return localValores[key] !== undefined ? localValores[key] : (actual != null ? String(actual) : '')
+  }
+
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 8 }}><Users size={16} /> Vista por cliente</div>
+        <select value={cliente} onChange={e => setCliente(e.target.value)} style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '7px 10px', fontSize: 13, minWidth: 220 }}>
+          <option value="">Elegir cliente…</option>
+          {clientes.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+
+      {!cliente && <div style={{ color: '#9AA3AD', fontSize: 13, marginBottom: 20 }}>Elige un cliente para ver su tablero, lotes y piezas cruzados entre todas sus OT.</div>}
+
+      {cliente && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 16 }}>
+            <KpiCard value={resumen.totalPiezas} label="Piezas totales" />
+            <KpiCard value={resumen.despachadas} label="Despachadas" />
+            <KpiCard value={resumen.m2Total.toLocaleString('es-CL', { maximumFractionDigits: 1 })} label="m² totales" />
+            <KpiCard value={resumen.lotesVencidos} label="Lotes vencidos" iconColor={C.rojo} />
+            <KpiCard value={resumen.lotesPorVencer} label="Lotes por vencer" iconColor={C.ambar} />
+          </div>
+
+          {lotes.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: C.gris, textTransform: 'uppercase', marginBottom: 6 }}>Lotes de {cliente}</div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                  <thead>
+                    <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                      {['OT', 'OC', 'Guía', 'Piezas', 'Vencimiento', 'Estado'].map((h, i) => (
+                        <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lotes.map((l, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>
+                        <td style={{ padding: '6px 8px', fontWeight: 600 }}>{l.ot.numero}</td>
+                        <td style={{ padding: '6px 8px', color: C.gris }}>{l.ot.oc && l.ot.oc !== '—' ? l.ot.oc : '—'}</td>
+                        <td style={{ padding: '6px 8px', color: C.gris }}>{l.partida.numeroGuia || '—'}</td>
+                        <td style={{ padding: '6px 8px', color: C.gris }}>{l.despachadas}/{l.total || '?'}</td>
+                        <td style={{ padding: '6px 8px' }}>{l.vencimiento || '—'}</td>
+                        <td style={{ padding: '6px 8px' }}><span style={{ background: ESTADO_LOTE_COLOR[l.estado], color: '#fff', borderRadius: 10, padding: '2px 8px', fontSize: 10.5, fontWeight: 700 }}>{ESTADO_LOTE_LABEL[l.estado]}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: C.gris, textTransform: 'uppercase' }}>Piezas de {cliente} ({piezasFiltradas.length})</div>
+              <select value={filtroEstadoPieza} onChange={e => setFiltroEstadoPieza(e.target.value)} style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '5px 8px', fontSize: 12 }}>
+                <option value="">Todos los estados</option>
+                {estadosPresentes.map(e => <option key={e} value={e}>{e}</option>)}
+              </select>
+            </div>
+            {piezas.length === 0 ? (
+              <div style={{ color: '#9AA3AD', fontSize: 13 }}>Este cliente todavía no tiene piezas cargadas en ninguna OT.</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                      {['TAG', 'OT', 'OC', 'NV', 'Diámetro', 'm²', 'Estado', 'Despacho', 'Embalaje', 'Factura'].map((h, i) => (
+                        <th key={i} style={{ textAlign: 'left', padding: '5px 6px', fontSize: 10.5, color: '#9AA3AD', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {piezasFiltradas.map(f => (
+                      <tr key={f.ot.id + '|' + f.m.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                        <td style={{ padding: '5px 6px', fontWeight: 600, whiteSpace: 'nowrap' }}>{f.m.tag || f.m.marca}</td>
+                        <td style={{ padding: '5px 6px', whiteSpace: 'nowrap' }}>{f.ot.numero}</td>
+                        <td style={{ padding: '5px 6px', color: '#9AA3AD' }}>{f.ot.oc && f.ot.oc !== '—' ? f.ot.oc : '—'}</td>
+                        <td style={{ padding: '5px 6px', color: '#9AA3AD' }}>{f.ot.nv && f.ot.nv !== '—' ? f.ot.nv : '—'}</td>
+                        <td style={{ padding: '5px 6px' }}>
+                          <input value={valorCampo(f.ot.id, f.m.id, 'diametro', f.m.diametro)} onChange={e => cambiarCampo(f.ot.id, f.m.id, 'diametro', e.target.value)} placeholder="—" style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '3px 5px', fontSize: 11.5, width: 60 }} />
+                        </td>
+                        <td style={{ padding: '5px 6px', color: '#9AA3AD' }}>{f.m.m2 || '—'}</td>
+                        <td style={{ padding: '5px 6px' }}><span style={{ background: f.colorEstado, color: '#fff', borderRadius: 10, padding: '2px 8px', fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap' }}>{f.estado}</span></td>
+                        <td style={{ padding: '5px 6px', color: '#9AA3AD', whiteSpace: 'nowrap' }}>{f.m.fechaDespacho || '—'}</td>
+                        <td style={{ padding: '5px 6px' }}>
+                          <input value={valorCampo(f.ot.id, f.m.id, 'embalaje', f.m.embalaje)} onChange={e => cambiarCampo(f.ot.id, f.m.id, 'embalaje', e.target.value)} placeholder="$" style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '3px 5px', fontSize: 11.5, width: 70 }} />
+                        </td>
+                        <td style={{ padding: '5px 6px' }}>
+                          <input value={valorCampo(f.ot.id, f.m.id, 'facturaFolio', f.m.facturaFolio)} onChange={e => cambiarCampo(f.ot.id, f.m.id, 'facturaFolio', e.target.value)} placeholder="Folio" style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '3px 5px', fontSize: 11.5, width: 70 }} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+const numDecCliente = s => { const v = parseFloat(String(s).replace(/[^\d.,]/g, '').replace(',', '.')); return isNaN(v) ? null : v }
+
+export default function TrazabilidadModule({ cotizaciones = [], ots = [], ordenesCompra = [], setOts }) {
   const [filtroCliente, setFiltroCliente] = useState('')
   const [filtroEstadoLote, setFiltroEstadoLote] = useState('')
   const [enviandoAlertas, setEnviandoAlertas] = useState(false)
@@ -101,6 +254,8 @@ export default function TrazabilidadModule({ cotizaciones = [], ots = [], ordene
 
   return (
     <div>
+      <VistaPorCliente ots={ots} setOts={setOts || (() => {})} />
+
       {/* ALERTAS */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
         <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, textTransform: 'uppercase' }}>Alertas ({alertas.length})</div>

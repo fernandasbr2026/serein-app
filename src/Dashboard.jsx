@@ -843,7 +843,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
         ) : esModuloOC && puedeVer('ORDENES_COMPRA') ? (
           <OrdenesCompraModule pp={pp} setPp={setPp} ots={ots} />
         ) : esModuloTraza && puedeVer('TRAZABILIDAD') ? (
-          <TrazabilidadModule cotizaciones={cotizaciones} ots={ots} ordenesCompra={pp.ocs || []} />
+          <TrazabilidadModule cotizaciones={cotizaciones} ots={ots} setOts={setOts} ordenesCompra={pp.ocs || []} />
         ) : esModuloCartolas && puedeVer('CARTOLAS_BANCARIAS') ? (
           <CartolasBancariasModule esGerencia={esGerencia} />
         ) : (areaSel === 'INVENTARIO') ? (

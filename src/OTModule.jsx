@@ -1108,7 +1108,7 @@ function granalladoHecho(pig) {
 // aparte del componente que las pinta para poder reutilizarlo tal cual en
 // la exportacion a Excel de la OT (descargarOT), sin mantener la misma
 // logica escrita dos veces en dos lugares que se podrian ir desalineando.
-function calcularFilasTrazabilidad(ot) {
+export function calcularFilasTrazabilidad(ot) {
   const marcas = ot.marcasEsperadas || []
   const partidas = ot.partidas || []
   const protocolos = ot.protocolos || []
