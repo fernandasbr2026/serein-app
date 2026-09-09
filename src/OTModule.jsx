@@ -431,7 +431,12 @@ function parseExcelMarcas(file, cb, mapeoManual) {
       const ciMarca = man && man.colMarca != null ? fijo(man.colMarca) : buscar(['marca', 'marcas'], true)
       const ciTag = man && man.colTag != null ? fijo(man.colTag) : buscar(['tag', 'tags', 'tag pieza', 'n tag'], false)
       const ciId = man && man.colId != null ? fijo(man.colId) : buscar(['id', 'id pieza', 'id spool', 'identificador', 'correlativo'], false)
-      const ciM2 = man && man.colM2 != null ? fijo(man.colM2) : buscar(['m2', 'm²', 'mt2', 'metros2', 'superficie', 'area', 'área', 'm2 cliente'], true)
+      // m2: primero los nombres que contienen "m2"/"superficie"/"area" en
+      // cualquier forma; si no aparece ninguno, una segunda pasada con
+      // abreviaturas cortas que NO se pueden buscar por substring sin
+      // arriesgar falsos positivos ("sup" matchearia "supervisor").
+      let ciM2 = man && man.colM2 != null ? fijo(man.colM2) : buscar(['m2', 'm²', 'mt2', 'mts2', 'metros2', 'metros cuadrados', 'superficie', 'area', 'área'], true)
+      if (ciM2 < 0 && !(man && man.colM2 != null)) ciM2 = buscar(['sup', 'sup.', 'metraje', 'sup unit'], false)
       const ciReferencia = man && man.colReferencia != null ? fijo(man.colReferencia) : buscar(['referencia', 'ref', 'plano', 'n plano', 'nro plano', 'dwg'], false)
       if (ciMarca < 0 && ciTag < 0) { cb([], 'No se encontró una columna "marca" ni "TAG" en el Excel — revisa que el encabezado la tenga en las primeras filas, o indica tú las columnas.', headerRow); return }
       const txt = v => String(v == null ? '' : v).trim()
@@ -528,8 +533,22 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
   // null | { modo:'mapeo', file, headerRow, elegidas:{colTag,colMarca,colId,colReferencia,colM2} }
   // | { modo:'preview', items:[{marca,m2,tag,idPieza,referencia,aplicar}], mapeoUsado, esNuevoMapeo, detectado, headerRow }
 
-  const irAPreview = (parsed, mapeoUsado, esNuevoMapeo, detectado, headerRow) => {
-    setPantallaExcel({ modo: 'preview', items: parsed.map(p => ({ ...p, aplicar: true })), mapeoUsado, esNuevoMapeo, detectado: detectado || null, headerRow: headerRow || [] })
+  // `file` se arrastra hasta la vista previa para poder volver al panel de
+  // mapeo y releer el mismo archivo si la deteccion automatica acertó en
+  // unas columnas pero no en otras (el caso tipico: encuentra el TAG pero
+  // no los m², y antes no habia forma de corregirlo sin tocar el Excel).
+  const irAPreview = (parsed, mapeoUsado, esNuevoMapeo, detectado, headerRow, file) => {
+    setPantallaExcel({ modo: 'preview', items: parsed.map(p => ({ ...p, aplicar: true })), mapeoUsado, esNuevoMapeo, detectado: detectado || null, headerRow: headerRow || [], file: file || null })
+  }
+  // Pasa de la vista previa al mapeo manual, precargado con lo que la
+  // deteccion automatica ya habia encontrado.
+  const corregirColumnas = () => {
+    const d = pantallaExcel.detectado || {}
+    const v = i => (i == null || i < 0) ? '' : String(i)
+    setPantallaExcel({
+      modo: 'mapeo', file: pantallaExcel.file, headerRow: pantallaExcel.headerRow || [],
+      elegidas: { colTag: v(d.colTag), colMarca: v(d.colMarca), colId: v(d.colId), colReferencia: v(d.colReferencia), colM2: v(d.colM2) },
+    })
   }
   const subirExcel = e => {
     const fl = e.target.files[0]
@@ -541,10 +560,10 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
       setSubiendo(false)
       if (mapeoGuardado) {
         if (error && !parsed.length) { window.alert('No se pudo leer el archivo con el mapeo guardado para este cliente: ' + error); return }
-        irAPreview(parsed, mapeoGuardado, false, detectado, headerRow)
+        irAPreview(parsed, mapeoGuardado, false, detectado, headerRow, fl)
         return
       }
-      if (!error) { irAPreview(parsed, null, true, detectado, headerRow); return } // deteccion automatica funcionó
+      if (!error) { irAPreview(parsed, null, true, detectado, headerRow, fl); return } // deteccion automatica funcionó
       if (!headerRow || !headerRow.length) { window.alert(error); return }
       setPantallaExcel({ modo: 'mapeo', file: fl, headerRow, elegidas: { colTag: '', colMarca: '', colId: '', colReferencia: '', colM2: '' } })
     }, mapeoGuardado || undefined)
@@ -565,7 +584,7 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
     parseExcelMarcas(file, (parsed, error, headerRow, detectado) => {
       setSubiendo(false)
       if (error && !parsed.length) { window.alert(error); return }
-      irAPreview(parsed, mapeo, true, detectado, headerRow)
+      irAPreview(parsed, mapeo, true, detectado, headerRow, file)
     }, mapeo)
   }
   const confirmarImportacion = () => {
@@ -669,7 +688,7 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
               un Excel mal leido (ej. que tomo "cantidad" como ID) antes de
               importar, en vez de descubrirlo con el checklist ya sucio. */}
           {pantallaExcel.detectado && (
-            <div style={{ fontSize: 11, color: '#5A736A', marginBottom: 8, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ fontSize: 11, color: '#5A736A', marginBottom: 8, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
               {[['colTag', 'TAG'], ['colMarca', 'Marca'], ['colId', 'ID'], ['colM2', 'm²'], ['colReferencia', 'Referencia']].map(([campo, lbl]) => {
                 const ci = pantallaExcel.detectado[campo]
                 const nombre = ci >= 0 ? String((pantallaExcel.headerRow || [])[ci] ?? ('columna ' + (ci + 1))) : null
@@ -679,6 +698,16 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
                   </span>
                 )
               })}
+              {pantallaExcel.file && (
+                <button onClick={corregirColumnas} style={{ background: 'none', border: '1px solid #C2CBD9', borderRadius: 4, padding: '2px 8px', fontSize: 11, color: '#41618A', cursor: 'pointer' }}>
+                  Corregir columnas a mano
+                </button>
+              )}
+            </div>
+          )}
+          {pantallaExcel.detectado && pantallaExcel.detectado.colM2 < 0 && pantallaExcel.file && (
+            <div style={{ fontSize: 11.5, color: '#D9600A', marginBottom: 8 }}>
+              No se encontró la columna de m². Si tu Excel los trae con otro nombre, usa "Corregir columnas a mano" — sin m² no se puede estimar cuánto falta por facturar.
             </div>
           )}
           <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 8 }}>
@@ -746,7 +775,14 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
             return (
             <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 4, background: m.recibida ? '#E6F5EA' : '#fff', border: '1px solid ' + (m.recibida ? '#B7E0C4' : '#EEE9DF'), fontSize: 12.5 }}>
               <input type="checkbox" checked={!!m.recibida} onChange={() => toggleRecibida(m.id)} style={{ cursor: 'pointer' }} />
-              <span onClick={() => toggleRecibida(m.id)} style={{ flex: 1, cursor: 'pointer', fontWeight: m.recibida ? 400 : 600, textDecoration: m.recibida ? 'line-through' : 'none', color: m.recibida ? '#5A736A' : C.carbon }}>{m.marca}</span>
+              {/* TAG e ID en columnas separadas: es como vienen en el Excel
+                  del cliente y como se nombran en planta. El codigo completo
+                  (TAG-ID) sigue siendo el identificador interno de la pieza,
+                  pero mostrarlo pegado hacia imposible leer la lista. */}
+              <span onClick={() => toggleRecibida(m.id)} style={{ flex: 1, cursor: 'pointer', display: 'flex', alignItems: 'baseline', gap: 8, textDecoration: m.recibida ? 'line-through' : 'none', color: m.recibida ? '#5A736A' : C.carbon }}>
+                <span style={{ fontWeight: m.recibida ? 400 : 600 }}>{tagDeMarca(m)}</span>
+                {idDeMarca(m) && <span title="ID de la pieza" style={{ color: '#9AA3AD', fontSize: 11.5 }}>ID {idDeMarca(m)}</span>}
+              </span>
               {m.m2 > 0 && <span title="m² informado por el cliente" style={{ color: '#9AA3AD' }}>{m.m2} m²</span>}
               <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                 <input
@@ -801,16 +837,80 @@ function resumenTiposRecepcion(partidas) {
 // IA se coteja contra las marcas esperadas de la OT: las que calzan se
 // proponen tildadas, las que no se muestran aparte para revision manual
 // (la guia puede traer piezas de otra OT por error, o venir mal leida).
+// TAG e ID de una pieza del checklist. Las piezas cargadas desde un Excel
+// con columnas separadas ya los traen en `tag` e `idPieza`; las cargadas
+// antes de eso solo tienen `marca` (el codigo completo, ej.
+// "2630-SP-32708-10597"), asi que se deducen del texto. Con esto el resto
+// del codigo puede razonar por TAG sin preguntarse de donde vino la pieza.
+export function tagDeMarca(m) {
+  if (m && m.tag) return String(m.tag).trim()
+  const txt = String((m && m.marca) || '').trim()
+  const idp = String((m && m.idPieza) || '').trim()
+  if (idp && txt.toLowerCase().endsWith('-' + idp.toLowerCase())) return txt.slice(0, txt.length - idp.length - 1)
+  return txt
+}
+export function idDeMarca(m) {
+  if (m && m.idPieza) return String(m.idPieza).trim()
+  const txt = String((m && m.marca) || '').trim()
+  const t = m && m.tag ? String(m.tag).trim() : ''
+  if (t && txt.toLowerCase().startsWith(t.toLowerCase() + '-')) return txt.slice(t.length + 1)
+  return ''
+}
+
 // El mismo cotejo sirve para guias y para facturas: lo unico que cambia
 // es que la factura puede traer m2 por linea, que se arrastra en el
 // resultado (m2Leido) sin afectar en nada a quien no lo use.
-function cotejarGuia(marcasLeidas, marcasEsperadas) {
-  return (marcasLeidas || []).map(ml => {
+//
+// Las facturas de venta casi nunca repiten el ID de cada pieza: nombran
+// el TAG una sola vez ("2630-SP-32708") aunque cubran varias piezas de
+// ese TAG, mientras que el checklist las guarda uno por uno con su ID
+// pegado ("2630-SP-32708-10597"). Comparar el texto completo dejaba todo
+// como "no calza". Por eso el cotejo va en tres pasadas, de mas a menos
+// especifica, y solo la ultima —la que calza por TAG— se activa con
+// cruzarPorTag, para no cambiar como se leen las guias de despacho, que
+// si detallan cada pieza.
+//
+// Cuando calza por TAG, una linea de la factura puede corresponder a
+// VARIAS piezas: se devuelve una entrada por pieza (con porTag: true)
+// para que cada una salga con su propio checkbox y se puedan destildar
+// las que esa factura no cubra.
+function cotejarGuia(marcasLeidas, marcasEsperadas, cruzarPorTag) {
+  const esperadas = marcasEsperadas || []
+  const salida = []
+  ;(marcasLeidas || []).forEach(ml => {
+    const m2n = parseFloat(ml.m2)
     const marcaTxt = ml.id ? (ml.tag + '-' + ml.id) : ml.tag
-    const match = (marcasEsperadas || []).find(me => normMarca(me.marca) === normMarca(marcaTxt))
-    const m2Leido = parseFloat(ml.m2)
-    return { tag: ml.tag, id: ml.id || null, marcaTxt, m2Leido: Number.isFinite(m2Leido) && m2Leido > 0 ? m2Leido : null, marcaEsperadaId: match ? match.id : null, aplicar: !!match }
+    const base = { tag: ml.tag, id: ml.id || null, marcaTxt, m2Leido: Number.isFinite(m2n) && m2n > 0 ? m2n : null }
+    // 1. El codigo leido es igual al codigo completo de una pieza.
+    const exacta = esperadas.find(me => normMarca(me.marca) === normMarca(marcaTxt))
+    if (exacta) { salida.push({ ...base, marcaEsperadaId: exacta.id, marcaPieza: exacta.marca, aplicar: true, porTag: false }); return }
+    // 2. La factura trae TAG e ID y la pieza los tiene guardados aparte
+    //    (el codigo completo puede estar escrito distinto).
+    if (ml.id) {
+      const porCampos = esperadas.find(me => normMarca(tagDeMarca(me)) === normMarca(ml.tag) && normMarca(idDeMarca(me)) === normMarca(ml.id))
+      if (porCampos) { salida.push({ ...base, marcaEsperadaId: porCampos.id, marcaPieza: porCampos.marca, aplicar: true, porTag: false }); return }
+    }
+    // 3. La factura nombra solo el TAG: calzan todas las piezas de ese TAG.
+    if (cruzarPorTag && !ml.id) {
+      const t = normMarca(ml.tag)
+      const delTag = esperadas.filter(me => {
+        if (normMarca(tagDeMarca(me)) === t) return true
+        // Piezas cargadas antes de que el Excel separara TAG e ID: solo
+        // tienen `marca` con el codigo completo, asi que no hay de donde
+        // deducir el TAG. Se aceptan si su codigo empieza con el TAG leido
+        // seguido de separador — el separador es lo que evita que el TAG
+        // "2630-SP-3270" se coma a las piezas de "2630-SP-32708".
+        if (!me.tag && !me.idPieza) return normMarca(me.marca).startsWith(t + '-')
+        return false
+      })
+      if (delTag.length) {
+        delTag.forEach(me => salida.push({ ...base, marcaEsperadaId: me.id, marcaPieza: me.marca, aplicar: true, porTag: true, piezasDelTag: delTag.length }))
+        return
+      }
+    }
+    salida.push({ ...base, marcaEsperadaId: null, marcaPieza: null, aplicar: false, porTag: false })
   })
+  return salida
 }
 function PanelRevisionGuia({ revision, setRevision, onAplicar, onDescartar, etiquetaAccion, mostrarPlazo, onAgregarMarcaNueva }) {
   const calzan = revision.marcas.filter(m => m.marcaEsperadaId)
@@ -1253,7 +1353,9 @@ function FacturacionOT({ ot, onAgregarVenta, onUpdateMarcasEsperadas }) {
         folio: { valor: d.folio == null ? '' : String(d.folio), aplicar: !!d.folio },
         fecha: { valor: d.fecha || hoy(), aplicar: true },
         neto: { valor: d.neto == null ? '' : String(Math.round(d.neto)), aplicar: d.neto != null },
-        marcas: cotejarGuia(d.marcas || [], marcasEsperadas),
+        // true = cruzar tambien por TAG, porque las facturas de venta no
+        // repiten el ID de cada pieza.
+        marcas: cotejarGuia(d.marcas || [], marcasEsperadas, true),
       })
     } catch (err) { setError('No se pudo leer la factura: ' + ((err && err.message) || String(err))) }
     setSubiendo(false)
@@ -1369,11 +1471,20 @@ function FacturacionOT({ ot, onAgregarVenta, onUpdateMarcasEsperadas }) {
             {calzan.length > 0 && (
               <div style={{ marginTop: 8 }}>
                 <div style={{ fontSize: 11, color: C.verde, marginBottom: 4, fontWeight: 700 }}>Calzan con marcas esperadas de esta OT ({calzan.length})</div>
-                <div style={{ maxHeight: 140, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {calzan.some(m => m.porTag) && (
+                  <div style={{ fontSize: 11, color: '#41618A', marginBottom: 5 }}>
+                    La factura nombra el TAG sin el ID, así que se marcan <b>todas las piezas de ese TAG</b>. Si la factura cubre solo algunas, destilda las que no correspondan.
+                  </div>
+                )}
+                <div style={{ maxHeight: 160, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
                   {revision.marcas.map((m, idx) => m.marcaEsperadaId ? (
                     <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
                       <input type="checkbox" checked={m.aplicar} onChange={e => setRevision(r => ({ ...r, marcas: r.marcas.map((x, j) => j === idx ? { ...x, aplicar: e.target.checked } : x) }))} />
-                      {m.marcaTxt}
+                      {/* Con cruce por TAG se muestra la pieza real del
+                          checklist, no el texto de la factura: si no, todas
+                          las filas del mismo TAG se verían idénticas. */}
+                      <span style={{ fontWeight: 600 }}>{m.marcaPieza || m.marcaTxt}</span>
+                      {m.porTag && <span style={{ background: '#E2ECF8', color: '#41618A', borderRadius: 3, padding: '1px 5px', fontSize: 10.5 }}>por TAG</span>}
                       {m.m2Leido && <span style={{ color: '#9AA3AD' }}>{m.m2Leido} m² en la factura</span>}
                     </label>
                   ) : null)}
@@ -1433,7 +1544,8 @@ function FacturacionOT({ ot, onAgregarVenta, onUpdateMarcasEsperadas }) {
               return (
                 <label key={m.id} title={m.despachoId ? 'Despachada el ' + (m.fechaDespacho || '—') : (m.recibida ? 'Recibida, sin despachar' : 'Aún no recibida')} style={{ background: sel ? '#E2ECF8' : '#fff', border: '1px solid ' + (sel ? C.azul : '#D8DCE5'), color: C.carbon, borderRadius: 4, padding: '4px 9px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
                   <input type="checkbox" checked={sel} onChange={() => alternar(m.id)} />
-                  {m.marca}
+                  <span style={{ fontWeight: 600 }}>{tagDeMarca(m)}</span>
+                  {idDeMarca(m) && <span title="ID de la pieza" style={{ color: '#9AA3AD', fontSize: 11.5 }}>ID {idDeMarca(m)}</span>}
                   {m2 > 0 ? <span style={{ color: '#9AA3AD' }}>({m2} m²)</span> : <span style={{ color: '#D9600A' }}>(sin m²)</span>}
                   {m.despachoId && <span title="Ya despachada" style={{ color: C.verde, fontWeight: 700 }}>↑</span>}
                 </label>
@@ -1460,7 +1572,7 @@ function FacturacionOT({ ot, onAgregarVenta, onUpdateMarcasEsperadas }) {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 140, overflowY: 'auto' }}>
             {cruce.facturadas.map(m => (
               <span key={m.id} style={{ background: '#E6F5EA', border: '1px solid #B7E0C4', color: '#2F6B44', borderRadius: 4, padding: '3px 4px 3px 8px', fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                {m.marca} · F{m.folioFactura || '—'}
+                {tagDeMarca(m)}{idDeMarca(m) ? ' · ID ' + idDeMarca(m) : ''} · F{m.folioFactura || '—'}
                 <button onClick={() => desligar(m.id)} title="Desligar de la factura (vuelve a pendiente)" style={{ background: 'none', border: 'none', color: '#5A736A', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 2px' }}>×</button>
               </span>
             ))}
