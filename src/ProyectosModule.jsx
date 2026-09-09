@@ -7,6 +7,7 @@ import ProyParametros from './ProyParametros.jsx'
 import ProyCotizador from './ProyCotizador.jsx'
 import ProyComprasLibro from './ProyComprasLibro.jsx'
 import CotizadorIntumescenteModule from './CotizadorIntumescenteModule.jsx'
+import ControlTallerModule from './ControlTallerModule.jsx'
 import { supabase } from './supabase.js'
 import { pullState, pushState } from './sync.js'
 import * as XLSX from 'xlsx'
@@ -983,7 +984,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
       </>)}
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-        {[['tarjetas', 'Tarjetas', LayoutGrid], ...(verCotizadorProy ? [['cotizarProy', 'Cotización Proyecto', Receipt], ['cotizacionesProy', 'Cotizaciones', Receipt], ['cotizarIntumescente', 'Cotización Intumescente', Flame], ['comprasSII', 'Compras SII', ShoppingCart]] : []), ['consolidado', 'Consolidado', Table2], ['cerrados', 'Proyectos cerrados', LayoutGrid], ['facturas', 'Facturas', Receipt], ...(verCotizadorProy ? [['parametros', 'Parámetros Proyectos', Target]] : [])].map(([id, lbl, Icon]) => (
+        {[['tarjetas', 'Tarjetas', LayoutGrid], ...(verCotizadorProy ? [['cotizarProy', 'Cotización Proyecto', Receipt], ['cotizacionesProy', 'Cotizaciones', Receipt], ['cotizarIntumescente', 'Cotización Intumescente', Flame], ['comprasSII', 'Compras SII', ShoppingCart]] : []), ['controlTaller', 'Control de Taller', Hammer], ['consolidado', 'Consolidado', Table2], ['cerrados', 'Proyectos cerrados', LayoutGrid], ['facturas', 'Facturas', Receipt], ...(verCotizadorProy ? [['parametros', 'Parámetros Proyectos', Target]] : [])].map(([id, lbl, Icon]) => (
           <button key={id} onClick={() => setVista(id)} style={{ background: vista === id ? C.carbon : '#fff', color: vista === id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Icon size={14} />{lbl}</button>
         ))}
         {!creando && vista === 'tarjetas' && (
@@ -1018,6 +1019,8 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
         <CotizadorIntumescenteModule clientesSugeridos={clientesSugeridos} />
       ) : (vista === 'comprasSII' && verCotizadorProy) ? (
         <ProyComprasLibro proyectos={proyectos} setProyectos={setProyectos} />
+      ) : vista === 'controlTaller' ? (
+        <ControlTallerModule proyectos={proyectos} setProyectos={setProyectos} />
       ) : vista === 'consolidado' ? (
         <Consolidado proyectos={proyectos} facturasProy={facturasProy} params={params} />
       ) : vista === 'facturas' ? (
