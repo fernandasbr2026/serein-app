@@ -107,6 +107,71 @@ const etiquetaEstado = ot => {
 const m2CotizadoItem = it => numDec(it.cant)
 const m2RealItem = it => (it.m2Real != null && it.m2Real !== '') ? numDec(it.m2Real) : m2CotizadoItem(it)
 const montoItemReal = it => Math.max(0, Math.round((m2RealItem(it) * num(it.pUnitario)) - num(it.descuento)))
+
+// ===== Facturación pieza por pieza =====
+// Cada marca esperada ya venía guardando su paso por recepción (recibida
+// / loteId) y por despacho (despachoId). Facturación es el tercer paso de
+// esa misma cadena y usa el mismo patrón: la marca queda ligada a una
+// venta por facturaId, sin campos nuevos en la OT ni en las ventas más
+// allá de ese vínculo. Una marca sin facturaId es, por definición, una
+// pieza que falta por facturar.
+
+// m² con los que se valoriza una pieza: se prefiere el medido por
+// nosotros en planta (m2Propio) y se cae al informado por el cliente
+// (m2), que es el mismo orden de confianza que usa el resto de la ficha.
+export const m2FacturableDeMarca = m => {
+  const propio = parseFloat(m && m.m2Propio)
+  if (Number.isFinite(propio) && propio > 0) return propio
+  const cliente = parseFloat(m && m.m2)
+  return Number.isFinite(cliente) && cliente > 0 ? cliente : 0
+}
+
+// Precio por m² de referencia para valorizar lo pendiente. Cadena de
+// respaldo, de más a menos preciso: los ítems de la cotización (que ya
+// contemplan m² reales y descuentos), luego el monto cotizado sobre los
+// m² de la OT. Si no hay ninguno de los dos devuelve null y la ficha
+// muestra solo piezas y m², sin inventar un monto.
+export const precioM2DeOT = ot => {
+  const items = ot.itemsCot || []
+  const m2Items = items.reduce((a, it) => a + m2RealItem(it), 0)
+  const montoItems = items.reduce((a, it) => a + montoItemReal(it), 0)
+  if (m2Items > 0 && montoItems > 0) return montoItems / m2Items
+  const m2OT = numDec(ot.m2)
+  const montoOT = num(ot.montoCotizado)
+  if (m2OT > 0 && montoOT > 0) return montoOT / m2OT
+  return null
+}
+
+// Cruce entre el checklist de piezas y las facturas cargadas en la OT.
+// Devuelve siempre la misma forma, así la tarjeta, el panel comercial y
+// cualquier indicador futuro leen exactamente el mismo cálculo.
+export const cruceFacturacionOT = ot => {
+  const marcas = ot.marcasEsperadas || []
+  const ventas = ot.ventas || []
+  // Una marca cuenta como facturada solo si su facturaId sigue existiendo
+  // entre las ventas de la OT: si se borró la factura, la pieza vuelve
+  // sola a pendiente en vez de quedar colgada de un folio fantasma.
+  const idsVentas = new Set(ventas.map(v => v.id).filter(Boolean))
+  const estaFacturada = m => !!m.facturaId && (idsVentas.size === 0 ? false : idsVentas.has(m.facturaId))
+  const facturadas = marcas.filter(estaFacturada)
+  const pendientes = marcas.filter(m => !estaFacturada(m))
+  const m2De = m2FacturableDeMarca
+  const m2Facturado = facturadas.reduce((a, m) => a + m2De(m), 0)
+  const m2Pendiente = pendientes.reduce((a, m) => a + m2De(m), 0)
+  const precio = precioM2DeOT(ot)
+  // Sin m² cargados no se puede valorizar la pieza aunque haya precio:
+  // se listan aparte para que se note que falta el dato, en vez de
+  // sumarlas como $0 y dar un pendiente falsamente bajo.
+  const sinM2 = pendientes.filter(m => m2De(m) <= 0)
+  return {
+    total: marcas.length,
+    facturadas, pendientes, sinM2,
+    m2Facturado, m2Pendiente,
+    precioM2: precio,
+    montoPendienteEstimado: precio != null ? Math.round(m2Pendiente * precio) : null,
+    montoFacturadoEstimado: precio != null ? Math.round(m2Facturado * precio) : null,
+  }
+}
 const montoTotalItemsReal = items => (items || []).reduce((a, it) => a + montoItemReal(it), 0)
 
 // ===== OTs DE EJEMPLO CON DATOS REALES DEL EXCEL (Viman, Santa Rosa) =====
@@ -235,7 +300,10 @@ function FormVenta({ onAdd, onCancel, abonoTotal = 0, ventaTotalActual = 0 }) {
           <option>Pendiente</option><option>Pagado</option><option>Factoring</option>
         </select>
         <input style={{ ...inp, width: 180 }} placeholder="Observación (opcional)" value={f.observacion} onChange={e => setF({ ...f, observacion: e.target.value })} />
-        <button onClick={() => num(f.neta) > 0 && onAdd({ folio: f.folio || 's/f', fecha: f.fecha || '—', neta: num(f.neta), iva, totalBruto, estadoPago: f.estadoPago, observacion: f.observacion || '' })}
+        {/* id: necesario para poder ligarle piezas del checklist (ver
+            FacturacionOT). Las ventas cargadas antes de esta funcion no
+            lo tienen y simplemente no aceptan piezas ligadas. */}
+        <button onClick={() => num(f.neta) > 0 && onAdd({ id: 'vt' + Date.now() + Math.random().toString(36).slice(2, 7), folio: f.folio || 's/f', fecha: f.fecha || '—', neta: num(f.neta), iva, totalBruto, estadoPago: f.estadoPago, observacion: f.observacion || '' })}
           style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Agregar</button>
         <button onClick={onCancel} style={{ ...btnMini, color: '#9AA3AD' }}><X size={16} /></button>
       </div>
@@ -296,16 +364,27 @@ function FormCosto({ onAdd, onCancel }) {
 const ETIQUETAS_FOTO = ['Recepción', 'Proceso', 'Despacho', 'Otro']
 
 // Lee un Excel con las marcas/spool que el cliente informa que deben
-// llegar (columna "marca" obligatoria, "m2"/"m²"/"superficie" opcional) —
-// mismo patron de deteccion de columnas por nombre que ya usa
-// LibroVentasModule.jsx para no depender de un orden fijo de columnas.
-// mapeoManual, si viene, fuerza los indices de columna en vez de adivinarlos
-// (para clientes cuyo Excel no dice "marca" en el encabezado, o que ademas
-// traen columnas de ID/Referencia que la deteccion automatica no adivina
-// sola) — { colMarca, colId, colReferencia, colM2 }, todos indices de
-// columna o -1/null si esa columna no existe. El callback recibe tambien
-// la fila de encabezado cruda (headerRow), para poder mostrarla en un
-// panel de mapeo si hace falta.
+// llegar. Se autodetectan por nombre de encabezado, sin depender de un
+// orden fijo de columnas: TAG, ID, MARCA, M2 y REFERENCIA. Basta con que
+// exista TAG *o* MARCA — el resto es opcional.
+//
+// Como se arma el codigo de la pieza (campo `marca`, que es el que usa
+// todo el resto de la app: checklist, recepcion, despacho, protocolos):
+//   - Si el Excel trae columna "marca", se usa tal cual (TAG e ID quedan
+//     guardados aparte como datos de la pieza). Esto es lo que ya hacia
+//     antes, y se mantiene para no cambiarle el codigo a las marcas de
+//     los clientes que ya estan cargadas.
+//   - Si NO trae columna "marca" pero si TAG, se arma TAG-ID (o solo TAG
+//     si no hay ID), exactamente igual que el alta manual.
+//
+// mapeoManual, si viene, fuerza los indices en vez de adivinarlos (para
+// clientes cuyo Excel usa nombres de encabezado propios) —
+// { colTag, colMarca, colId, colReferencia, colM2 }, cada uno indice de
+// columna o -1/null si esa columna no existe. Los mapeos guardados por
+// clientes antiguos no traen colTag: en ese caso se autodetecta el TAG,
+// asi el mapeo viejo sigue sirviendo y ademas gana la columna nueva.
+// El callback recibe tambien la fila de encabezado cruda (headerRow),
+// para poder mostrarla en un panel de mapeo si hace falta.
 function parseExcelMarcas(file, cb, mapeoManual) {
   const reader = new FileReader()
   reader.onload = e => {
@@ -314,32 +393,73 @@ function parseExcelMarcas(file, cb, mapeoManual) {
       const hoja = wb.SheetNames[0]
       const filas = XLSX.utils.sheet_to_json(wb.Sheets[hoja], { header: 1, raw: true, blankrows: false })
       if (!filas.length) { cb([], 'El archivo está vacío.', null); return }
-      const norm = s => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+      const norm = s => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim()
+      // El encabezado no siempre es la primera fila (los Excel de cliente
+      // suelen traer titulo/logo arriba): se busca en las primeras 10 la
+      // que mencione marca o tag.
       let hi = 0
       for (let i = 0; i < Math.min(filas.length, 10); i++) {
         const t = (filas[i] || []).map(norm).join('|')
-        if (t.includes('marca')) { hi = i; break }
+        if (/(^|\|)[^|]*\b(marca|tag)\b/.test(t) || t.includes('marca')) { hi = i; break }
       }
       const headerRow = filas[hi] || []
       const hdr = headerRow.map(norm)
-      const col = (...nombres) => { for (const n of nombres) { const idx = hdr.findIndex(h => h.includes(n)); if (idx >= 0) return idx } return -1 }
-      const ciMarca = mapeoManual ? (mapeoManual.colMarca ?? -1) : col('marca')
-      const ciM2 = mapeoManual ? (mapeoManual.colM2 ?? -1) : col('m2', 'm²', 'superficie', 'area', 'área')
-      const ciId = mapeoManual ? (mapeoManual.colId ?? -1) : -1
-      const ciReferencia = mapeoManual ? (mapeoManual.colReferencia ?? -1) : -1
-      if (ciMarca < 0) { cb([], 'No se encontró una columna "marca" en el Excel — revisa que el encabezado la tenga en las primeras filas, o indica tú las columnas.', headerRow); return }
+      const usadas = new Set()
+      const marcar = i => { if (i >= 0) usadas.add(i); return i }
+      const libre = i => i >= 0 && !usadas.has(i)
+      // Busca en tres pasadas de menor a mayor riesgo de falso positivo:
+      // igualdad exacta, palabra completa y por ultimo substring. La
+      // ultima solo se usa para nombres largos y poco ambiguos: buscar
+      // "id" por substring matchearia "cantidad", "unidad" o "medida".
+      const buscar = (nombres, permitirSubstring) => {
+        for (const n of nombres) { const i = hdr.findIndex((h, j) => libre(j) && h === n); if (i >= 0) return marcar(i) }
+        for (const n of nombres) {
+          const re = new RegExp('(^|[^a-z0-9])' + n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^a-z0-9]|$)')
+          const i = hdr.findIndex((h, j) => libre(j) && re.test(h))
+          if (i >= 0) return marcar(i)
+        }
+        if (permitirSubstring) {
+          for (const n of nombres) { const i = hdr.findIndex((h, j) => libre(j) && h.includes(n)); if (i >= 0) return marcar(i) }
+        }
+        return -1
+      }
+      const fijo = v => { const i = v == null ? -1 : Number(v); return Number.isFinite(i) && i >= 0 ? marcar(i) : -1 }
+      // Orden importante: primero los mapeos fijos (para que no se los
+      // "robe" la autodeteccion), y dentro de la autodeteccion primero
+      // marca/tag, que son los que definen la identidad de la pieza.
+      const man = mapeoManual || null
+      const ciMarca = man && man.colMarca != null ? fijo(man.colMarca) : buscar(['marca', 'marcas'], true)
+      const ciTag = man && man.colTag != null ? fijo(man.colTag) : buscar(['tag', 'tags', 'tag pieza', 'n tag'], false)
+      const ciId = man && man.colId != null ? fijo(man.colId) : buscar(['id', 'id pieza', 'id spool', 'identificador', 'correlativo'], false)
+      const ciM2 = man && man.colM2 != null ? fijo(man.colM2) : buscar(['m2', 'm²', 'mt2', 'metros2', 'superficie', 'area', 'área', 'm2 cliente'], true)
+      const ciReferencia = man && man.colReferencia != null ? fijo(man.colReferencia) : buscar(['referencia', 'ref', 'plano', 'n plano', 'nro plano', 'dwg'], false)
+      if (ciMarca < 0 && ciTag < 0) { cb([], 'No se encontró una columna "marca" ni "TAG" en el Excel — revisa que el encabezado la tenga en las primeras filas, o indica tú las columnas.', headerRow); return }
+      const txt = v => String(v == null ? '' : v).trim()
+      // Los m2 vienen a veces como texto con separadores en formato
+      // chileno ("1.234,56") y a veces en formato ingles ("1234.56").
+      // Si hay coma, la coma es el decimal y el punto separa miles; si
+      // solo hay puntos, el punto es el decimal.
+      const num = v => {
+        const s = txt(v).replace(/[^0-9.,-]/g, '')
+        if (!s) return 0
+        const limpio = s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s
+        return parseFloat(limpio) || 0
+      }
       const out = []
       for (let i = hi + 1; i < filas.length; i++) {
         const fila = filas[i] || []
-        const marca = String(fila[ciMarca] == null ? '' : fila[ciMarca]).trim()
+        const tag = ciTag >= 0 ? txt(fila[ciTag]) : ''
+        const idPieza = ciId >= 0 ? txt(fila[ciId]) : ''
+        // La columna "marca" manda cuando existe; si no, se arma TAG-ID.
+        const marca = (ciMarca >= 0 ? txt(fila[ciMarca]) : '') || (tag ? (idPieza ? tag + '-' + idPieza : tag) : '')
         if (!marca) continue
-        const m2 = ciM2 >= 0 ? (parseFloat(String(fila[ciM2] == null ? '' : fila[ciM2]).replace(',', '.')) || 0) : 0
-        const idPieza = ciId >= 0 ? String(fila[ciId] == null ? '' : fila[ciId]).trim() : ''
-        const referencia = ciReferencia >= 0 ? String(fila[ciReferencia] == null ? '' : fila[ciReferencia]).trim() : ''
-        out.push({ marca, m2, idPieza: idPieza || null, referencia: referencia || null })
+        const m2 = ciM2 >= 0 ? num(fila[ciM2]) : 0
+        const referencia = ciReferencia >= 0 ? txt(fila[ciReferencia]) : ''
+        out.push({ marca, m2, tag: tag || null, idPieza: idPieza || null, referencia: referencia || null })
       }
-      cb(out, out.length ? '' : 'No se encontraron filas con marca cargada.', headerRow)
-    } catch (err) { cb([], 'No se pudo leer el archivo: ' + ((err && err.message) || String(err)), null) }
+      const detectado = { colTag: ciTag, colMarca: ciMarca, colId: ciId, colReferencia: ciReferencia, colM2: ciM2 }
+      cb(out, out.length ? '' : 'No se encontraron filas con marca o TAG cargados.', headerRow, detectado)
+    } catch (err) { cb([], 'No se pudo leer el archivo: ' + ((err && err.message) || String(err)), null, null) }
   }
   reader.readAsArrayBuffer(file)
 }
@@ -405,11 +525,11 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
   // borra ni resetea lo ya recibido, igual que antes).
   const clienteKey = normClienteKey(ot.cliente)
   const [pantallaExcel, setPantallaExcel] = useState(null)
-  // null | { modo:'mapeo', file, headerRow, elegidas:{colMarca,colId,colReferencia,colM2} }
-  // | { modo:'preview', items:[{marca,m2,idPieza,referencia,aplicar}], mapeoUsado, esNuevoMapeo }
+  // null | { modo:'mapeo', file, headerRow, elegidas:{colTag,colMarca,colId,colReferencia,colM2} }
+  // | { modo:'preview', items:[{marca,m2,tag,idPieza,referencia,aplicar}], mapeoUsado, esNuevoMapeo, detectado, headerRow }
 
-  const irAPreview = (parsed, mapeoUsado, esNuevoMapeo) => {
-    setPantallaExcel({ modo: 'preview', items: parsed.map(p => ({ ...p, aplicar: true })), mapeoUsado, esNuevoMapeo })
+  const irAPreview = (parsed, mapeoUsado, esNuevoMapeo, detectado, headerRow) => {
+    setPantallaExcel({ modo: 'preview', items: parsed.map(p => ({ ...p, aplicar: true })), mapeoUsado, esNuevoMapeo, detectado: detectado || null, headerRow: headerRow || [] })
   }
   const subirExcel = e => {
     const fl = e.target.files[0]
@@ -417,32 +537,35 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
     if (!fl) return
     const mapeoGuardado = leerMapeoExcelCliente(clienteKey)
     setSubiendo(true); setMsg('')
-    parseExcelMarcas(fl, (parsed, error, headerRow) => {
+    parseExcelMarcas(fl, (parsed, error, headerRow, detectado) => {
       setSubiendo(false)
       if (mapeoGuardado) {
         if (error && !parsed.length) { window.alert('No se pudo leer el archivo con el mapeo guardado para este cliente: ' + error); return }
-        irAPreview(parsed, mapeoGuardado, false)
+        irAPreview(parsed, mapeoGuardado, false, detectado, headerRow)
         return
       }
-      if (!error) { irAPreview(parsed, null, true); return } // deteccion automatica funcionó
+      if (!error) { irAPreview(parsed, null, true, detectado, headerRow); return } // deteccion automatica funcionó
       if (!headerRow || !headerRow.length) { window.alert(error); return }
-      setPantallaExcel({ modo: 'mapeo', file: fl, headerRow, elegidas: { colMarca: '', colId: '', colReferencia: '', colM2: '' } })
+      setPantallaExcel({ modo: 'mapeo', file: fl, headerRow, elegidas: { colTag: '', colMarca: '', colId: '', colReferencia: '', colM2: '' } })
     }, mapeoGuardado || undefined)
   }
   const confirmarMapeoManual = () => {
     const { file, elegidas } = pantallaExcel
     const mapeo = {
+      colTag: elegidas.colTag === '' ? -1 : Number(elegidas.colTag),
       colMarca: elegidas.colMarca === '' ? -1 : Number(elegidas.colMarca),
       colId: elegidas.colId === '' ? -1 : Number(elegidas.colId),
       colReferencia: elegidas.colReferencia === '' ? -1 : Number(elegidas.colReferencia),
       colM2: elegidas.colM2 === '' ? -1 : Number(elegidas.colM2),
     }
-    if (mapeo.colMarca < 0) { window.alert('Indica al menos la columna de Marca/TAG.'); return }
+    // Basta con TAG o con Marca: si solo viene TAG, el codigo de la pieza
+    // se arma TAG-ID igual que en el alta manual.
+    if (mapeo.colMarca < 0 && mapeo.colTag < 0) { window.alert('Indica al menos la columna de TAG o la de Marca.'); return }
     setSubiendo(true)
-    parseExcelMarcas(file, (parsed, error) => {
+    parseExcelMarcas(file, (parsed, error, headerRow, detectado) => {
       setSubiendo(false)
       if (error && !parsed.length) { window.alert(error); return }
-      irAPreview(parsed, mapeo, true)
+      irAPreview(parsed, mapeo, true, detectado, headerRow)
     }, mapeo)
   }
   const confirmarImportacion = () => {
@@ -456,11 +579,12 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
       if (idx >= 0) {
         const cambios = {}
         if (p.m2) cambios.m2 = p.m2
+        if (p.tag) cambios.tag = p.tag
         if (p.idPieza) cambios.idPieza = p.idPieza
         if (p.referencia) cambios.referencia = p.referencia
         if (Object.keys(cambios).length) { combinadas[idx] = { ...combinadas[idx], ...cambios }; actualizadas++ }
       } else {
-        combinadas.push({ id: 'me' + Date.now() + Math.random().toString(36).slice(2, 7), marca: p.marca, tag: null, idPieza: p.idPieza || null, referencia: p.referencia || null, m2: p.m2, m2Propio: null, recibida: false, fechaRecibida: null })
+        combinadas.push({ id: 'me' + Date.now() + Math.random().toString(36).slice(2, 7), marca: p.marca, tag: p.tag || null, idPieza: p.idPieza || null, referencia: p.referencia || null, m2: p.m2, m2Propio: null, recibida: false, fechaRecibida: null })
         nuevas++
       }
     })
@@ -520,9 +644,9 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
       {pantallaExcel && pantallaExcel.modo === 'mapeo' && (
         <div style={{ border: '1px dashed #CFC9BC', borderRadius: 6, padding: 10, marginBottom: 12, background: '#FBFAF7' }}>
           <div style={{ fontSize: 11.5, fontWeight: 700, color: '#5A736A', marginBottom: 6, textTransform: 'uppercase' }}>Primera vez con este cliente — indica qué columna es cada dato</div>
-          <div style={{ fontSize: 11.5, color: '#9AA3AD', marginBottom: 8 }}>No se pudo adivinar sola la columna de marca. Este mapeo se guarda para {ot.cliente || 'este cliente'} — la próxima vez no hace falta repetirlo.</div>
+          <div style={{ fontSize: 11.5, color: '#9AA3AD', marginBottom: 8 }}>No se pudo adivinar sola la columna de TAG ni de marca. Indica al menos una de las dos: si solo hay TAG, el código de la pieza se arma <b>TAG-ID</b>. Este mapeo se guarda para {ot.cliente || 'este cliente'} — la próxima vez no hace falta repetirlo.</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-            {[['colMarca', 'Marca/TAG (obligatoria)'], ['colId', 'ID (opcional)'], ['colReferencia', 'Referencia (opcional)'], ['colM2', 'm² (opcional)']].map(([campo, lbl]) => (
+            {[['colTag', 'TAG'], ['colMarca', 'Marca'], ['colId', 'ID'], ['colReferencia', 'Referencia'], ['colM2', 'm²']].map(([campo, lbl]) => (
               <div key={campo} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <label style={{ fontSize: 10, color: '#9AA3AD' }}>{lbl}</label>
                 <select value={pantallaExcel.elegidas[campo]} onChange={e => setPantallaExcel(s => ({ ...s, elegidas: { ...s.elegidas, [campo]: e.target.value } }))} style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '6px 8px', fontSize: 12.5, minWidth: 160 }}>
@@ -541,11 +665,28 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
       {pantallaExcel && pantallaExcel.modo === 'preview' && (
         <div style={{ border: '1px dashed #CFC9BC', borderRadius: 6, padding: 10, marginBottom: 12, background: '#FBFAF7' }}>
           <div style={{ fontSize: 11.5, fontWeight: 700, color: '#5A736A', marginBottom: 6, textTransform: 'uppercase' }}>Vista previa — se van a importar {pantallaExcel.items.filter(it => it.aplicar).length} de {pantallaExcel.items.length} pieza(s)</div>
+          {/* Que columna se leyo para cada dato: sirve para cachar al tiro
+              un Excel mal leido (ej. que tomo "cantidad" como ID) antes de
+              importar, en vez de descubrirlo con el checklist ya sucio. */}
+          {pantallaExcel.detectado && (
+            <div style={{ fontSize: 11, color: '#5A736A', marginBottom: 8, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {[['colTag', 'TAG'], ['colMarca', 'Marca'], ['colId', 'ID'], ['colM2', 'm²'], ['colReferencia', 'Referencia']].map(([campo, lbl]) => {
+                const ci = pantallaExcel.detectado[campo]
+                const nombre = ci >= 0 ? String((pantallaExcel.headerRow || [])[ci] ?? ('columna ' + (ci + 1))) : null
+                return (
+                  <span key={campo} style={{ background: nombre ? '#E6F5EA' : '#F1EEE8', border: '1px solid ' + (nombre ? '#B7E0C4' : '#E4DFD5'), borderRadius: 4, padding: '2px 6px', color: nombre ? '#2F6B44' : '#9AA3AD' }}>
+                    {lbl}: {nombre ? <b>{nombre}</b> : 'no encontrada'}
+                  </span>
+                )
+              })}
+            </div>
+          )}
           <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 8 }}>
             {pantallaExcel.items.map((it, i) => (
               <label key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
                 <input type="checkbox" checked={it.aplicar} onChange={e => setPantallaExcel(s => ({ ...s, items: s.items.map((x, j) => j === i ? { ...x, aplicar: e.target.checked } : x) }))} />
                 <span style={{ fontWeight: 600 }}>{it.marca}</span>
+                {it.tag && it.tag !== it.marca && <span style={{ color: '#9AA3AD' }}>TAG {it.tag}</span>}
                 {it.idPieza && <span style={{ color: '#9AA3AD' }}>ID {it.idPieza}</span>}
                 {it.referencia && <span style={{ color: '#9AA3AD' }}>Ref. {it.referencia}</span>}
                 {it.m2 > 0 && <span style={{ color: '#9AA3AD' }}>{it.m2} m²</span>}
@@ -582,7 +723,7 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
         </div>
       )}
       {total === 0 ? (
-        <div style={{ fontSize: 12, color: '#9AA3AD' }}>Sin marcas cargadas todavía. Sube el Excel con las marcas (y m², si lo tienen) que el cliente informa que deben llegar — columnas "marca" y "m2" — o agrégalas a mano con "+ Agregar marca".</div>
+        <div style={{ fontSize: 12, color: '#9AA3AD' }}>Sin marcas cargadas todavía. Sube el Excel con las piezas que el cliente informa que deben llegar — se leen solas las columnas <b>TAG</b>, <b>marca</b>, <b>ID</b>, <b>m²</b> y <b>referencia</b>, en cualquier orden y con el encabezado en cualquiera de las primeras filas. Basta con que traiga TAG o marca; si el Excel usa otros nombres, la app te pregunta una vez qué columna es cada dato. También puedes agregarlas a mano con "+ Agregar marca".</div>
       ) : (<>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: C.carbon }}>{total} esperadas</span>
@@ -660,11 +801,15 @@ function resumenTiposRecepcion(partidas) {
 // IA se coteja contra las marcas esperadas de la OT: las que calzan se
 // proponen tildadas, las que no se muestran aparte para revision manual
 // (la guia puede traer piezas de otra OT por error, o venir mal leida).
+// El mismo cotejo sirve para guias y para facturas: lo unico que cambia
+// es que la factura puede traer m2 por linea, que se arrastra en el
+// resultado (m2Leido) sin afectar en nada a quien no lo use.
 function cotejarGuia(marcasLeidas, marcasEsperadas) {
   return (marcasLeidas || []).map(ml => {
     const marcaTxt = ml.id ? (ml.tag + '-' + ml.id) : ml.tag
     const match = (marcasEsperadas || []).find(me => normMarca(me.marca) === normMarca(marcaTxt))
-    return { tag: ml.tag, id: ml.id || null, marcaTxt, marcaEsperadaId: match ? match.id : null, aplicar: !!match }
+    const m2Leido = parseFloat(ml.m2)
+    return { tag: ml.tag, id: ml.id || null, marcaTxt, m2Leido: Number.isFinite(m2Leido) && m2Leido > 0 ? m2Leido : null, marcaEsperadaId: match ? match.id : null, aplicar: !!match }
   })
 }
 function PanelRevisionGuia({ revision, setRevision, onAplicar, onDescartar, etiquetaAccion, mostrarPlazo, onAgregarMarcaNueva }) {
@@ -1068,6 +1213,261 @@ function DespachoOT({ ot, onUpdate, onAgregarArray, onUpdateMarcasEsperadas }) {
         </div>
       ))}
     </div>
+  </div>)
+}
+
+// Facturacion de la OT cruzada contra el checklist de piezas. Tercer y
+// ultimo paso de la cadena recepcion -> despacho -> facturacion, y sigue
+// el mismo patron que DespachoOT: se sube el documento, la IA lo lee, se
+// coteja contra las marcas esperadas y recien al confirmar se aplica.
+//
+// Lo unico que se guarda de nuevo es el vinculo marca.facturaId (mas
+// folioFactura/fechaFacturada, informativos para la trazabilidad). No se
+// toca ninguna venta ya cargada: las facturas antiguas simplemente no
+// tienen piezas ligadas, y todas sus piezas aparecen como pendientes
+// hasta que alguien las asocie.
+function FacturacionOT({ ot, onAgregarVenta, onUpdateMarcasEsperadas }) {
+  const marcasEsperadas = ot.marcasEsperadas || []
+  const ventas = ot.ventas || []
+  const cruce = cruceFacturacionOT(ot)
+  const [subiendo, setSubiendo] = useState(false)
+  const [revision, setRevision] = useState(null)
+  const [error, setError] = useState('')
+  const [buscarPend, setBuscarPend] = useState('')
+  const [seleccion, setSeleccion] = useState(() => new Set())
+  const [ventaDestino, setVentaDestino] = useState('')
+  const norm = s => String(s == null ? '' : s).trim().toLowerCase()
+
+  const subirFactura = async e => {
+    const fls = [...e.target.files]
+    e.target.value = ''
+    if (!fls.length) return
+    setSubiendo(true); setError(''); setRevision(null)
+    try {
+      const archivos = await Promise.all(fls.map(async fl => ({ base64: await fileToBase64(fl), mimeType: fl.type || 'application/pdf', filename: fl.name })))
+      const { data, error: errFn } = await supabase.functions.invoke('extraer-factura', { body: { archivos, filename: fls[0].name } })
+      if (errFn) throw errFn
+      if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo leer la factura.')
+      const d = data.datos || {}
+      setRevision({
+        folio: { valor: d.folio == null ? '' : String(d.folio), aplicar: !!d.folio },
+        fecha: { valor: d.fecha || hoy(), aplicar: true },
+        neto: { valor: d.neto == null ? '' : String(Math.round(d.neto)), aplicar: d.neto != null },
+        marcas: cotejarGuia(d.marcas || [], marcasEsperadas),
+      })
+    } catch (err) { setError('No se pudo leer la factura: ' + ((err && err.message) || String(err))) }
+    setSubiendo(false)
+  }
+
+  // Una marca que la factura nombra pero que no esta en el checklist casi
+  // siempre significa que al checklist le falta esa pieza (no que la
+  // factura este mala), asi que se puede agregar en el momento — mismo
+  // gesto que ya existe al leer una guia.
+  //
+  // A diferencia de RecepcionOT/DespachoOT, aca la marca nueva NO se
+  // escribe al tiro: se deja en cola dentro de la revision y se guarda
+  // junto con el resto al confirmar. Guardar al tiro obligaba a esperar
+  // el pullState() de actualizarMarcasEsperadas, y si la persona apretaba
+  // "Crear factura" antes de que volviera, el array de marcas del render
+  // ya estaba viejo y borraba la pieza recien agregada.
+  const agregarMarcaNueva = idx => {
+    const m = revision.marcas[idx]
+    if (!m) return
+    const nuevaId = 'me' + Date.now() + Math.random().toString(36).slice(2, 7)
+    setRevision(r => ({
+      ...r,
+      nuevas: [...(r.nuevas || []), { id: nuevaId, marca: m.marcaTxt, tag: m.tag, idPieza: m.id || null, referencia: null, m2: m.m2Leido || 0, m2Propio: null, recibida: false, fechaRecibida: null }],
+      marcas: r.marcas.map((x, j) => j === idx ? { ...x, marcaEsperadaId: nuevaId, aplicar: true } : x),
+    }))
+  }
+
+  // La IA puede devolver la fecha en cualquier formato pese al prompt; si
+  // no es ISO el <input type="date"> la muestra vacia pero igual se
+  // guardaria tal cual, dejando ventas con fechas que no ordenan ni
+  // filtran. Se cae a hoy() en ese caso.
+  const fechaValida = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? v : null
+
+  const aplicarRevision = async () => {
+    if (!revision) return
+    const folio = revision.folio.aplicar ? String(revision.folio.valor || '').trim() : ''
+    const fecha = (revision.fecha.aplicar && fechaValida(revision.fecha.valor)) || hoy()
+    const neta = revision.neto.aplicar ? num(revision.neto.valor) : 0
+    // Misma guarda que el alta manual de ventas: una factura en $0 se
+    // cuenta igual como "OT facturada" en Trazabilidad y apaga la alerta
+    // de OT terminada sin facturar, asi que no se deja crear.
+    if (!(neta > 0)) { window.alert('Ingresa el monto neto de la factura antes de crearla — una factura en $0 haría figurar la OT como facturada.'); return }
+    const ventaId = 'vt' + Date.now() + Math.random().toString(36).slice(2, 7)
+    // onAgregarVenta valida que el folio no este repetido en otra OT y
+    // devuelve false si lo esta — en ese caso no se liga ninguna pieza.
+    const ok = await onAgregarVenta(ot.id, { id: ventaId, folio: folio || 's/f', fecha, neta, estadoPago: 'Pendiente' })
+    if (!ok) return
+    const idsAplicar = new Set(revision.marcas.filter(m => m.aplicar && m.marcaEsperadaId).map(m => m.marcaEsperadaId))
+    const nuevas = (revision.nuevas || []).filter(n => idsAplicar.has(n.id))
+    const base = [...marcasEsperadas, ...nuevas]
+    if (idsAplicar.size || nuevas.length) {
+      onUpdateMarcasEsperadas(ot.id, base.map(m => idsAplicar.has(m.id) ? { ...m, facturaId: ventaId, folioFactura: folio || 's/f', fechaFacturada: fecha } : m))
+    }
+    setRevision(null)
+  }
+
+  // Asignacion manual: para las facturas que no detallan TAG en el PDF, o
+  // para corregir un cruce que la IA no pillo.
+  const alternar = id => setSeleccion(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const asignarSeleccion = () => {
+    const venta = ventas.find(v => v.id === ventaDestino)
+    if (!venta || !seleccion.size) return
+    onUpdateMarcasEsperadas(ot.id, marcasEsperadas.map(m => seleccion.has(m.id) ? { ...m, facturaId: venta.id, folioFactura: venta.folio || 's/f', fechaFacturada: venta.fecha || hoy() } : m))
+    setSeleccion(new Set())
+    setVentaDestino('')
+  }
+  const desligar = id => onUpdateMarcasEsperadas(ot.id, marcasEsperadas.map(m => m.id === id ? { ...m, facturaId: null, folioFactura: null, fechaFacturada: null } : m))
+
+  const pendFiltradas = buscarPend.trim()
+    ? cruce.pendientes.filter(m => [m.marca, m.idPieza, m.referencia].some(v => norm(v).includes(norm(buscarPend))))
+    : cruce.pendientes
+  // Solo tiene sentido ofrecer asignacion manual si hay facturas con id;
+  // las cargadas antes de esta funcion no lo tienen y no se pueden ligar.
+  const ventasLigables = ventas.filter(v => v.id)
+  // Si la factura elegida se borro mientras el panel estaba abierto, el
+  // select queda en blanco: el destino se recalcula contra las que
+  // realmente existen, para no dejar el boton habilitado sin efecto.
+  const destino = ventasLigables.some(v => v.id === ventaDestino) ? ventaDestino : ''
+  const inp2 = { border: '1px solid #DFE4EA', borderRadius: 4, padding: '6px 8px', fontSize: 12.5, boxSizing: 'border-box' }
+
+  return (<div style={{ marginTop: 18, background: '#F4F7FA', border: '1px solid #D8DCE5', borderLeft: '4px solid ' + C.azul, borderRadius: 6, padding: 12 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+      <span style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: C.azul }}>Facturación por pieza</span>
+      <label style={{ cursor: subiendo ? 'wait' : 'pointer', background: '#fff', color: C.azul, border: '1px solid ' + C.azul, padding: '6px 12px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, opacity: subiendo ? 0.6 : 1 }}>
+        {subiendo ? 'Leyendo…' : 'Subir factura (leer con IA)'}
+        <input type="file" accept="application/pdf,image/*" multiple style={{ display: 'none' }} disabled={subiendo} onChange={subirFactura} />
+      </label>
+    </div>
+    {error && <div style={{ fontSize: 11.5, color: '#C5453D', marginBottom: 8 }}>{error}</div>}
+
+    {revision && (
+      <div style={{ border: '1px dashed #C2CBD9', borderRadius: 6, padding: 10, marginBottom: 10, background: '#FBFCFE' }}>
+        <div style={{ fontSize: 11.5, fontWeight: 700, color: '#5A736A', marginBottom: 8, textTransform: 'uppercase' }}>Revisa lo que leyó la IA antes de crear la factura</div>
+        {[['folio', 'Folio', 'text'], ['fecha', 'Fecha', 'date'], ['neto', 'Neto', 'number']].map(([campo, lbl, tipo]) => (
+          <div key={campo} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <input type="checkbox" checked={revision[campo].aplicar} onChange={e => setRevision(r => ({ ...r, [campo]: { ...r[campo], aplicar: e.target.checked } }))} />
+            <span style={{ fontSize: 11, color: '#9AA3AD', width: 60 }}>{lbl}</span>
+            <input type={tipo} value={revision[campo].valor} onChange={e => setRevision(r => ({ ...r, [campo]: { ...r[campo], valor: e.target.value } }))} style={{ ...inp2, flex: 1 }} />
+            {campo === 'neto' && num(revision.neto.valor) > 0 && <span style={{ fontSize: 11, color: '#9AA3AD', whiteSpace: 'nowrap' }}>Total c/IVA {clp(Math.round(num(revision.neto.valor) * 1.19))}</span>}
+          </div>
+        ))}
+        {(() => {
+          const calzan = revision.marcas.filter(m => m.marcaEsperadaId)
+          const noCalzan = revision.marcas.filter(m => !m.marcaEsperadaId)
+          const yaFacturadas = calzan.filter(m => { const me = marcasEsperadas.find(x => x.id === m.marcaEsperadaId); return me && me.facturaId })
+          return (<>
+            {revision.marcas.length === 0 && (
+              <div style={{ fontSize: 11.5, color: '#D9600A', marginTop: 6 }}>La factura no detalla piezas — se va a crear igual con folio y monto, y luego puedes asignarle piezas a mano desde la lista de pendientes.</div>
+            )}
+            {yaFacturadas.length > 0 && (
+              <div style={{ fontSize: 11.5, color: '#D9600A', marginTop: 6 }}>Ojo: {yaFacturadas.length} pieza(s) de esta factura ya estaban ligadas a otra factura de esta OT. Si las dejas tildadas, quedarán ligadas a la nueva.</div>
+            )}
+            {calzan.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 11, color: C.verde, marginBottom: 4, fontWeight: 700 }}>Calzan con marcas esperadas de esta OT ({calzan.length})</div>
+                <div style={{ maxHeight: 140, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {revision.marcas.map((m, idx) => m.marcaEsperadaId ? (
+                    <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                      <input type="checkbox" checked={m.aplicar} onChange={e => setRevision(r => ({ ...r, marcas: r.marcas.map((x, j) => j === idx ? { ...x, aplicar: e.target.checked } : x) }))} />
+                      {m.marcaTxt}
+                      {m.m2Leido && <span style={{ color: '#9AA3AD' }}>{m.m2Leido} m² en la factura</span>}
+                    </label>
+                  ) : null)}
+                </div>
+              </div>
+            )}
+            {noCalzan.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 11, color: '#D9600A', marginBottom: 4, fontWeight: 700 }}>No calzan con ninguna marca esperada de esta OT ({noCalzan.length}) — puede ser una factura mal leída, piezas de otra OT, o piezas que faltan en el checklist</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {revision.marcas.map((m, idx) => m.marcaEsperadaId ? null : (
+                    <span key={idx} style={{ background: '#FDECDD', color: '#D9600A', borderRadius: 10, padding: '2px 4px 2px 8px', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      {m.marcaTxt}
+                      <button onClick={() => agregarMarcaNueva(idx)} title="Agregar como marca nueva al checklist de esta OT" style={{ background: '#D9600A', color: '#fff', border: 'none', borderRadius: 8, width: 16, height: 16, fontSize: 11, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>)
+        })()}
+        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <button onClick={aplicarRevision} style={{ background: C.verde, color: '#fff', border: 'none', borderRadius: 4, padding: '6px 14px', fontSize: 12.5, cursor: 'pointer' }}>Crear factura y ligar piezas</button>
+          <button onClick={() => setRevision(null)} style={{ background: 'none', border: '1px solid #DFE4EA', borderRadius: 4, padding: '6px 12px', fontSize: 12.5, cursor: 'pointer' }}>Descartar</button>
+        </div>
+      </div>
+    )}
+
+    {marcasEsperadas.length === 0 ? (
+      <div style={{ fontSize: 12, color: '#9AA3AD' }}>Esta OT todavía no tiene piezas en el checklist, así que no hay contra qué cruzar la facturación. Carga las marcas esperadas en Producción y Trazabilidad.</div>
+    ) : (<>
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 10 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: C.carbon }}>{cruce.total} piezas</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: C.verde }}>{cruce.facturadas.length} facturadas · {cruce.m2Facturado.toFixed(2)} m²</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: cruce.pendientes.length ? '#D9600A' : C.verde }}>{cruce.pendientes.length} por facturar · {cruce.m2Pendiente.toFixed(2)} m²</span>
+        {cruce.montoPendienteEstimado != null && cruce.pendientes.length > 0 && (
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#D9600A' }} title={'Estimado con ' + clp(Math.round(cruce.precioM2)) + '/m² de la cotización'}>≈ {clp(cruce.montoPendienteEstimado)} por facturar</span>
+        )}
+      </div>
+      {cruce.precioM2 == null && cruce.pendientes.length > 0 && (
+        <div style={{ fontSize: 11, color: '#9AA3AD', marginBottom: 8 }}>Sin precio por m² en la cotización ni monto cotizado, así que lo pendiente se muestra solo en piezas y m².</div>
+      )}
+      {cruce.sinM2.length > 0 && (
+        <div style={{ fontSize: 11, color: '#D9600A', marginBottom: 8 }}>{cruce.sinM2.length} pieza(s) pendiente(s) sin m² cargados — no suman al monto estimado hasta que se les cargue la superficie.</div>
+      )}
+
+      {cruce.pendientes.length === 0 ? (
+        <div style={{ fontSize: 12, color: C.verde, fontWeight: 600 }}>Todas las piezas del checklist están facturadas.</div>
+      ) : (
+        <div style={{ border: '1px dashed #C2CBD9', borderRadius: 6, padding: 10, background: '#FBFCFE' }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: '#41618A', marginBottom: 6, textTransform: 'uppercase' }}>Falta por facturar ({cruce.pendientes.length})</div>
+          {cruce.pendientes.length > 6 && <input value={buscarPend} onChange={e => setBuscarPend(e.target.value)} placeholder="Buscar pieza por código…" style={{ ...inp2, width: '100%', marginBottom: 6 }} />}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 180, overflowY: 'auto', marginBottom: 8 }}>
+            {pendFiltradas.map(m => {
+              const m2 = m2FacturableDeMarca(m)
+              const sel = seleccion.has(m.id)
+              return (
+                <label key={m.id} title={m.despachoId ? 'Despachada el ' + (m.fechaDespacho || '—') : (m.recibida ? 'Recibida, sin despachar' : 'Aún no recibida')} style={{ background: sel ? '#E2ECF8' : '#fff', border: '1px solid ' + (sel ? C.azul : '#D8DCE5'), color: C.carbon, borderRadius: 4, padding: '4px 9px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <input type="checkbox" checked={sel} onChange={() => alternar(m.id)} />
+                  {m.marca}
+                  {m2 > 0 ? <span style={{ color: '#9AA3AD' }}>({m2} m²)</span> : <span style={{ color: '#D9600A' }}>(sin m²)</span>}
+                  {m.despachoId && <span title="Ya despachada" style={{ color: C.verde, fontWeight: 700 }}>↑</span>}
+                </label>
+              )
+            })}
+            {pendFiltradas.length === 0 && <span style={{ fontSize: 12, color: '#9AA3AD' }}>Sin resultados para "{buscarPend}".</span>}
+          </div>
+          {ventasLigables.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, color: '#9AA3AD' }}>{seleccion.size} seleccionada(s) →</span>
+              <select value={destino} onChange={e => setVentaDestino(e.target.value)} style={{ ...inp2, minWidth: 190 }}>
+                <option value="">— asignar a la factura… —</option>
+                {ventasLigables.map(v => <option key={v.id} value={v.id}>Factura {v.folio} · {v.fecha} · {clp(v.neta)}</option>)}
+              </select>
+              <button onClick={asignarSeleccion} disabled={!seleccion.size || !destino} style={{ background: (seleccion.size && destino) ? C.azul : '#DFE4EA', color: '#fff', border: 'none', borderRadius: 4, padding: '6px 12px', fontSize: 12.5, cursor: (seleccion.size && destino) ? 'pointer' : 'not-allowed' }}>Marcar como facturadas</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {cruce.facturadas.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: '#5A736A', marginBottom: 6, textTransform: 'uppercase' }}>Ya facturadas ({cruce.facturadas.length})</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 140, overflowY: 'auto' }}>
+            {cruce.facturadas.map(m => (
+              <span key={m.id} style={{ background: '#E6F5EA', border: '1px solid #B7E0C4', color: '#2F6B44', borderRadius: 4, padding: '3px 4px 3px 8px', fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                {m.marca} · F{m.folioFactura || '—'}
+                <button onClick={() => desligar(m.id)} title="Desligar de la factura (vuelve a pendiente)" style={{ background: 'none', border: 'none', color: '#5A736A', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 2px' }}>×</button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </>)}
   </div>)
 }
 
@@ -1635,6 +2035,21 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
               {costoM2 && <>Costo: <b>{clp(costoM2)}/m²</b></>}
             </div>
           )}
+          {/* Aviso de facturación pendiente por pieza — sale del mismo
+              cálculo que la pestaña Comercial, para que se vea sin tener
+              que abrirla. Solo aparece si la OT tiene checklist cargado y
+              quedan piezas sin factura. */}
+          {(() => {
+            const cf = cruceFacturacionOT(ot)
+            if (!cf.total || !cf.pendientes.length) return null
+            return (
+              <div style={{ fontSize: 12, color: '#D9600A', marginTop: 4 }}>
+                Falta por facturar: <b>{cf.pendientes.length} de {cf.total} pieza(s)</b>
+                {cf.m2Pendiente > 0 && <> · {cf.m2Pendiente.toFixed(2)} m²</>}
+                {cf.montoPendienteEstimado != null && cf.montoPendienteEstimado > 0 && <> · ≈ <b>{clp(cf.montoPendienteEstimado)}</b></>}
+              </div>
+            )
+          })()}
         </div>
       )}
       {!verValores && <div style={{ padding: '0 18px 14px' }}><span style={{ fontSize: 11.5, color: '#9AA3AD', fontStyle: 'italic' }}>Vista de taller · valores visibles solo para Gerencia.</span></div>}
@@ -1844,7 +2259,7 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-                      {['Folio', 'Fecha', 'Neta', 'IVA', 'Total', 'Pago', ''].map((h, i) => (
+                      {['Folio', 'Fecha', 'Neta', 'IVA', 'Total', 'Piezas', 'Pago', ''].map((h, i) => (
                         <th key={i} style={{ textAlign: ['Neta', 'IVA', 'Total'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>{h}</th>
                       ))}
                     </tr>
@@ -1857,6 +2272,19 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
                         <td style={{ padding: '7px 8px', textAlign: 'right' }}>{clp(v.neta)}</td>
                         <td style={{ padding: '7px 8px', textAlign: 'right', color: '#9AA3AD' }}>{clp(v.neta * 0.19)}</td>
                         <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 500 }}>{clp(v.neta * 1.19)}</td>
+                        {/* Cuantas piezas del checklist respalda esta factura
+                            (ver FacturacionOT). Sin vinculo se muestra "—",
+                            que es el caso de todas las facturas cargadas
+                            antes de que existiera el cruce. */}
+                        {(() => {
+                          const ligadas = v.id ? (ot.marcasEsperadas || []).filter(m => m.facturaId === v.id) : []
+                          const m2Lig = ligadas.reduce((a, m) => a + m2FacturableDeMarca(m), 0)
+                          return (
+                            <td style={{ padding: '7px 8px', fontSize: 12, color: ligadas.length ? C.verde : '#9AA3AD' }} title={ligadas.length ? ligadas.map(m => m.marca).join(', ') : 'Sin piezas ligadas'}>
+                              {ligadas.length ? `${ligadas.length}${m2Lig > 0 ? ` · ${m2Lig.toFixed(1)} m²` : ''}` : '—'}
+                            </td>
+                          )
+                        })()}
                         <td style={{ padding: '7px 8px' }}>
                           <select value={v.estadoPago}
                             onChange={ev => onUpdate(ot.id, { ventas: (ot.ventas || []).map((x, j) => j === i ? { ...x, estadoPago: ev.target.value } : x) })}
@@ -1865,7 +2293,21 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
                           </select>
                         </td>
                         <td style={{ padding: '7px 4px', textAlign: 'right' }}>
-                          <button onClick={() => window.confirm(`¿Eliminar factura ${v.folio} (${clp(v.neta)})?`) && onEliminarVenta(ot.id, i)} style={btnMini}>
+                          {/* Al borrar la factura, las piezas que colgaban
+                              de ella vuelven solas a pendiente: el cruce
+                              (cruceFacturacionOT) exige que el facturaId
+                              siga existiendo entre las ventas de la OT. A
+                              propósito NO se hace una segunda escritura
+                              para limpiar el campo — serían dos guardados
+                              en carrera contra el mismo estado, y el
+                              vínculo huérfano es inofensivo. Solo se avisa
+                              antes, para que no sea una sorpresa. */}
+                          <button onClick={() => {
+                            const ligadas = v.id ? (ot.marcasEsperadas || []).filter(m => m.facturaId === v.id) : []
+                            const aviso = ligadas.length ? `\n\n${ligadas.length} pieza(s) ligada(s) volverán a quedar pendientes de facturación.` : ''
+                            if (!window.confirm(`¿Eliminar factura ${v.folio} (${clp(v.neta)})?${aviso}`)) return
+                            onEliminarVenta(ot.id, i)
+                          }} style={btnMini}>
                             <Trash2 size={14} />
                           </button>
                         </td>
@@ -1875,6 +2317,10 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
                 </table>
               )}
               {addVenta && <FormVenta onAdd={async v => { const ok = await onAgregarVenta(ot.id, v); if (ok) setAddVenta(false) }} onCancel={() => setAddVenta(false)} abonoTotal={abonoTotal} ventaTotalActual={ventaTotal} />}
+
+              {/* Cruce de las facturas contra el checklist de piezas —
+                  que se facturó, qué falta, y cuánto vale lo que falta. */}
+              <FacturacionOT ot={ot} onAgregarVenta={onAgregarVenta} onUpdateMarcasEsperadas={onUpdMarcas} />
 
               {/* ABONOS DE CLIENTES (pagos anticipados, sin IVA) */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0 8px' }}>
