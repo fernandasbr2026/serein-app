@@ -15,7 +15,7 @@ import { TOOLS, interpretarFecha, extraerNumeroOT } from './tools.js'
 
 const _norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 
-const CAPACIDADES = 'Puedo ayudarte con: esquema de pintura de una OT, produccion y m2 por fecha, valor referencial de servicios, cotizaciones pendientes, facturas vencidas y saldos, y como hacer tareas del sistema (ej: como ingreso una compra). Pregunta por tus areas.'
+const CAPACIDADES = 'Puedo ayudarte con: OT activas (por planta si quieres), esquema de pintura de una OT, produccion y m2 por fecha, valor referencial de servicios, cotizaciones pendientes, facturas vencidas y saldos, clientes morosos, proyectos con senales de riesgo, y como hacer tareas del sistema (ej: como ingreso una compra). Pregunta por tus areas.'
 
 export function saludo(nombre) {
   const h = new Date().getHours()
@@ -65,6 +65,24 @@ function detectar(pregunta, contextoPantalla) {
 
   if (/como\s+(ingreso|creo|registro|genero|hago|adjunto|cambio|apruebo|abro)/.test(q) || /(manual|procedimiento|paso a paso|instruccion)/.test(q))
     return { intent: 'procedimiento', tool: 'buscar_manual_procedimiento', args: { pregunta } }
+
+  // Listar/preguntar por OT en plural o "activas" va ANTES del catch-all de OT individual,
+  // si no "que ot tengo activas" cae en obtener_ot_por_numero (numero no indicado) y falla.
+  if (!numOT && /(ot|orden(es)? de trabajo).*(activ|en curso|pendiente)|activ.*(ot|orden(es)? de trabajo)/.test(q)) {
+    const planta = /santa rosa/.test(q) ? 'Santa Rosa' : /istria/.test(q) ? 'Istria' : /proyecto/.test(q) ? 'Proyectos' : null
+    return { intent: 'listar_ot', tool: 'listar_ot_activas', args: { area: planta } }
+  }
+
+  if (/\b(cual|cuales)\b.*(mas|menos).*(m2|metros|grande|chica)|mayor m2|menor m2/.test(q)) {
+    const nums = ((contextoPantalla.memoria && contextoPantalla.memoria.ultimasEntidades) || []).map(e => e.numero)
+    return { intent: 'comparar', tool: 'comparar_entidades', args: { numeros: nums } }
+  }
+
+  if (/cliente.*(moros|atrasad|debe)|(moros|deuda).*cliente|quien.*(debe|atrasad)/.test(q))
+    return { intent: 'clientes_morosos', tool: 'obtener_clientes_morosos', args: {} }
+
+  if (/proyecto.*(riesgo|preocup|problema|atenci[oó]n)|que proyectos.*(mal|complicad)/.test(q))
+    return { intent: 'proyectos_riesgo', tool: 'analizar_proyectos_riesgo', args: {} }
 
   if (numOT || /\bot\b|orden de trabajo/.test(q))
     return { intent: 'ot', tool: 'obtener_ot_por_numero', args: { numero: numOT } }
