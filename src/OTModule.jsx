@@ -2351,7 +2351,12 @@ function ProtoHead({ p, upd, onDel, titulo, equipos, col, onTgl }) {
       // error, sin ninguna forma de saber que paso.
       const blob = await conLimiteTiempo(generarPdfProtocoloBlob(html), 45000, 'No se pudo generar el PDF a tiempo (45s) — puede que una foto o firma cargada esté dañada. Intenta de nuevo; si se repite, avisa cuál protocolo es.')
       const pdfBase64 = await blobToBase64(blob)
-      const filename = `${p.codigo || 'Protocolo'} - ${p.cliente || 'Sin cliente'}.pdf`
+      // El nombre incluye OC y NV cuando existen, para poder ubicar el
+      // archivo en Drive sin tener que abrirlo.
+      const partesNombre = [p.codigo || 'Protocolo', p.cliente || 'Sin cliente']
+      if (p.oc && p.oc !== '—') partesNombre.push('OC ' + p.oc)
+      if (p.nv && p.nv !== '—') partesNombre.push('NV ' + p.nv)
+      const filename = partesNombre.join(' - ') + '.pdf'
       const { data, error } = await conLimiteTiempo(supabase.functions.invoke('subir-protocolo-drive', { body: { pdfBase64, filename, cliente: p.cliente || 'Sin cliente' } }), 30000, 'La subida a Drive no respondió a tiempo (30s). Revisa tu conexión e intenta de nuevo.')
       if (error) throw error
       if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo subir a Drive.')
