@@ -5,7 +5,9 @@ import { supabase } from './supabase.js'
 import { sumarDiasHabiles, diasHabilesHasta } from './plazos.js'
 import { pullState, pushState } from './sync.js'
 import { piezasDelCliente, lotesDelClienteConPlazo, resumenTableroCliente } from './vistaCliente.js'
+import { parseKronosWorkbook, construirPlanImportacion, aplicarPlanImportacion } from './importKronos.js'
 import { KpiCard } from './ui.jsx'
+import { Upload } from 'lucide-react'
 
 // ============================================================
 // MÓDULO: Trazabilidad y Alertas (Gerencia)
@@ -64,6 +66,111 @@ async function actualizarPiezaCliente(otsProp, setOts, otId, marcaId, cambios) {
   pushState()
 }
 
+// Importador del historico de control de planta (Fase F3) — nunca escribe
+// directo: lee el Excel, arma un plan agrupado por OC y lo muestra en una
+// vista previa con checkbox por grupo; solo al confirmar se aplica.
+function ImportadorHistorico({ ots, setOts, cliente }) {
+  const [abierto, setAbierto] = useState(false)
+  const [cargando, setCargando] = useState(false)
+  const [error, setError] = useState('')
+  const [plan, setPlan] = useState(null)
+  const [aplicando, setAplicando] = useState(false)
+  const [msgFinal, setMsgFinal] = useState('')
+
+  const onFile = e => {
+    const file = e.target.files && e.target.files[0]
+    e.target.value = ''
+    if (!file) return
+    setCargando(true); setError(''); setPlan(null); setMsgFinal('')
+    const reader = new FileReader()
+    reader.onload = ev => {
+      try {
+        const datos = parseKronosWorkbook(ev.target.result)
+        if (datos.errores.length && !datos.lotes.length && !datos.piezas.length) { setError(datos.errores.join(' ')); setCargando(false); return }
+        const grupos = construirPlanImportacion(ots, cliente, datos)
+        if (!grupos.length) { setError('No se encontraron filas para importar en el archivo.'); setCargando(false); return }
+        setPlan({ grupos, errores: datos.errores })
+      } catch (err) { setError('No se pudo leer el archivo: ' + ((err && err.message) || String(err))) }
+      setCargando(false)
+    }
+    reader.readAsArrayBuffer(file)
+  }
+
+  const toggleGrupo = oc => setPlan(pl => ({ ...pl, grupos: pl.grupos.map(g => g.oc === oc ? { ...g, aplicar: !g.aplicar } : g) }))
+
+  const confirmar = async () => {
+    if (!plan) return
+    setAplicando(true)
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_ots') || 'null') } catch (e) {}
+    const base = Array.isArray(fresco) ? fresco : ots
+    const gruposAplicar = plan.grupos.filter(g => g.aplicar && g.ot)
+    const nuevo = aplicarPlanImportacion(base, gruposAplicar)
+    try { localStorage.setItem('serein_ots', JSON.stringify(nuevo)) } catch (e) {}
+    setOts(nuevo)
+    pushState()
+    const totalLotes = gruposAplicar.reduce((a, g) => a + g.resumen.lotesNuevos, 0)
+    const totalPiezas = gruposAplicar.reduce((a, g) => a + g.resumen.piezasNuevas + g.resumen.piezasCompletadas, 0)
+    setMsgFinal(`Listo — se procesaron ${totalLotes} lote(s) y ${totalPiezas} pieza(s) de ${gruposAplicar.length} OC.`)
+    setAplicando(false)
+    setPlan(null)
+  }
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <button onClick={() => setAbierto(v => !v)} style={{ background: abierto ? '#EEE9DF' : C.teal, color: abierto ? C.carbon : '#fff', border: 'none', borderRadius: 4, padding: '7px 14px', fontSize: 12.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Upload size={14} /> Importar histórico (Excel de control de planta)
+      </button>
+      {msgFinal && <div style={{ fontSize: 12.5, color: C.verde, marginTop: 8 }}>{msgFinal}</div>}
+      {abierto && (
+        <div style={{ marginTop: 10, border: '1px solid #DFE4EA', borderRadius: 6, padding: 12, background: '#FAFAF8' }}>
+          <div style={{ fontSize: 12, color: C.gris, marginBottom: 8 }}>
+            Sube el Excel de control de planta de {cliente} (hojas "Lotes (producción)" y "Piezas (despacho)"). Se agrupa por N° de OC — solo se importa a una OT que ya exista con esa OC y ese cliente; nada se crea ni se pisa sin que lo confirmes abajo.
+          </div>
+          <label style={{ cursor: cargando ? 'wait' : 'pointer', background: C.carbon, color: '#fff', border: 'none', padding: '7px 14px', fontSize: 12.5, borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 6, opacity: cargando ? 0.7 : 1 }}>
+            {cargando ? 'Leyendo…' : 'Elegir archivo .xlsx'}
+            <input type="file" accept=".xlsx,.xls" onChange={onFile} disabled={cargando} style={{ display: 'none' }} />
+          </label>
+          {error && <div style={{ fontSize: 12.5, color: C.rojo, marginTop: 8 }}>{error}</div>}
+          {plan && (
+            <div style={{ marginTop: 12 }}>
+              {plan.errores.length > 0 && <div style={{ fontSize: 11.5, color: C.ambar, marginBottom: 8 }}>{plan.errores.join(' ')}</div>}
+              <div style={{ fontSize: 11, color: C.gris, marginBottom: 6 }}>Vista previa — revisa antes de confirmar. Solo se aplican los grupos marcados con OT encontrada.</div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                      {['', 'OC', 'OT encontrada', 'Lotes', 'Piezas nuevas', 'Piezas a completar'].map((h, i) => (
+                        <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 10.5, color: '#9AA3AD', textTransform: 'uppercase' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {plan.grupos.map(g => (
+                      <tr key={g.oc || 'sin-oc'} style={{ borderBottom: '1px solid #EEE9DF', opacity: g.ot ? 1 : 0.55 }}>
+                        <td style={{ padding: '5px 8px' }}><input type="checkbox" checked={g.aplicar} disabled={!g.ot} onChange={() => toggleGrupo(g.oc)} /></td>
+                        <td style={{ padding: '5px 8px', fontWeight: 600 }}>{g.oc || '(sin OC)'}</td>
+                        <td style={{ padding: '5px 8px' }}>{g.otNumero || <span style={{ color: C.rojo }}>Sin OT en el sistema — no se importa</span>}</td>
+                        <td style={{ padding: '5px 8px' }}>{g.resumen.lotesNuevos}</td>
+                        <td style={{ padding: '5px 8px' }}>{g.resumen.piezasNuevas}</td>
+                        <td style={{ padding: '5px 8px' }}>{g.resumen.piezasCompletadas}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <button onClick={confirmar} disabled={aplicando || !plan.grupos.some(g => g.aplicar && g.ot)} style={{ marginTop: 10, background: aplicando ? '#9AA3AD' : C.verde, color: '#fff', border: 'none', borderRadius: 4, padding: '8px 16px', fontSize: 12.5, cursor: aplicando ? 'default' : 'pointer' }}>
+                {aplicando ? 'Aplicando…' : 'Confirmar importación'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Vista por Cliente (Fase F) — cruza todas las OT activas de un mismo
 // cliente para responder la pregunta real de la usuaria: de todas las
 // piezas de ese cliente, cuales ya se despacharon, en que etapa de pintura
@@ -108,6 +215,7 @@ function VistaPorCliente({ ots, setOts }) {
 
       {cliente && (
         <>
+          <ImportadorHistorico ots={ots} setOts={setOts} cliente={cliente} />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 16 }}>
             <KpiCard value={resumen.totalPiezas} label="Piezas totales" />
             <KpiCard value={resumen.despachadas} label="Despachadas" />
