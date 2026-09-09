@@ -179,6 +179,7 @@ function VistaPorCliente({ ots, setOts }) {
   const clientes = useMemo(() => Array.from(new Set(ots.filter(o => !o.eliminada).map(o => o.cliente).filter(Boolean))).sort(), [ots])
   const [cliente, setCliente] = useState('')
   const [filtroEstadoPieza, setFiltroEstadoPieza] = useState('')
+  const [buscarPieza, setBuscarPieza] = useState('')
   const [localValores, setLocalValores] = useState({})
   const timers = useRef({})
 
@@ -186,14 +187,28 @@ function VistaPorCliente({ ots, setOts }) {
   const lotes = useMemo(() => cliente ? lotesDelClienteConPlazo(ots, cliente) : [], [ots, cliente])
   const resumen = useMemo(() => resumenTableroCliente(piezas, lotes), [piezas, lotes])
   const estadosPresentes = Array.from(new Set(piezas.map(f => f.estado)))
-  const piezasFiltradas = filtroEstadoPieza ? piezas.filter(f => f.estado === filtroEstadoPieza) : piezas
+  // Despacho por pieza SIEMPRE viene de ot.despachos via despachoId — el
+  // mismo dato que ya escribe DespachoOT dentro de la ficha de cada OT, asi
+  // que apenas alguien despacha una pieza en su OT esta vista lo refleja
+  // solo (no hay una copia separada que sincronizar).
+  const despachoDePieza = f => f.m.despachoId ? (f.ot.despachos || []).find(d => d.id === f.m.despachoId) : null
+  const qBusqueda = buscarPieza.trim().toLowerCase()
+  const piezasFiltradas = piezas.filter(f => {
+    if (filtroEstadoPieza && f.estado !== filtroEstadoPieza) return false
+    if (qBusqueda) {
+      const campos = [f.m.tag, f.m.marca, f.m.idPieza, f.m.referencia, f.ot.numero, f.ot.oc, f.ot.nv]
+      if (!campos.some(v => String(v || '').toLowerCase().includes(qBusqueda))) return false
+    }
+    return true
+  })
 
   const cambiarCampo = (otId, marcaId, campo, valor) => {
     const key = otId + '|' + marcaId + '|' + campo
     setLocalValores(v => ({ ...v, [key]: valor }))
     clearTimeout(timers.current[key])
     timers.current[key] = setTimeout(() => {
-      actualizarPiezaCliente(ots, setOts, otId, marcaId, { [campo]: campo === 'embalaje' ? (numDecCliente(valor)) : (valor.trim() || null) })
+      const esNumerico = campo === 'embalaje' || campo === 'm2'
+      actualizarPiezaCliente(ots, setOts, otId, marcaId, { [campo]: esNumerico ? numDecCliente(valor) : (valor.trim() || null) })
     }, 700)
   }
   const valorCampo = (otId, marcaId, campo, actual) => {
@@ -256,10 +271,13 @@ function VistaPorCliente({ ots, setOts }) {
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
               <div style={{ fontSize: 12.5, fontWeight: 700, color: C.gris, textTransform: 'uppercase' }}>Piezas de {cliente} ({piezasFiltradas.length})</div>
-              <select value={filtroEstadoPieza} onChange={e => setFiltroEstadoPieza(e.target.value)} style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '5px 8px', fontSize: 12 }}>
-                <option value="">Todos los estados</option>
-                {estadosPresentes.map(e => <option key={e} value={e}>{e}</option>)}
-              </select>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <input value={buscarPieza} onChange={e => setBuscarPieza(e.target.value)} placeholder="Buscar por marca, OT, OC, NV…" style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '5px 8px', fontSize: 12, minWidth: 200 }} />
+                <select value={filtroEstadoPieza} onChange={e => setFiltroEstadoPieza(e.target.value)} style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '5px 8px', fontSize: 12 }}>
+                  <option value="">Todos los estados</option>
+                  {estadosPresentes.map(e => <option key={e} value={e}>{e}</option>)}
+                </select>
+              </div>
             </div>
             {piezas.length === 0 ? (
               <div style={{ color: '#9AA3AD', fontSize: 13 }}>Este cliente todavía no tiene piezas cargadas en ninguna OT.</div>
@@ -283,9 +301,11 @@ function VistaPorCliente({ ots, setOts }) {
                         <td style={{ padding: '5px 6px' }}>
                           <input value={valorCampo(f.ot.id, f.m.id, 'diametro', f.m.diametro)} onChange={e => cambiarCampo(f.ot.id, f.m.id, 'diametro', e.target.value)} placeholder="—" style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '3px 5px', fontSize: 11.5, width: 60 }} />
                         </td>
-                        <td style={{ padding: '5px 6px', color: '#9AA3AD' }}>{f.m.m2 || '—'}</td>
+                        <td style={{ padding: '5px 6px' }}>
+                          <input value={valorCampo(f.ot.id, f.m.id, 'm2', f.m.m2)} onChange={e => cambiarCampo(f.ot.id, f.m.id, 'm2', e.target.value)} placeholder="—" style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '3px 5px', fontSize: 11.5, width: 55 }} />
+                        </td>
                         <td style={{ padding: '5px 6px' }}><span style={{ background: f.colorEstado, color: '#fff', borderRadius: 10, padding: '2px 8px', fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap' }}>{f.estado}</span></td>
-                        <td style={{ padding: '5px 6px', color: '#9AA3AD', whiteSpace: 'nowrap' }}>{f.m.fechaDespacho || '—'}</td>
+                        <td style={{ padding: '5px 6px', color: '#9AA3AD', whiteSpace: 'nowrap' }}>{(() => { const d = despachoDePieza(f); return d ? ('Guía ' + (d.numeroGuia || d.detalle || '') + (f.m.fechaDespacho ? ' · ' + f.m.fechaDespacho : '')) : '—' })()}</td>
                         <td style={{ padding: '5px 6px' }}>
                           <input value={valorCampo(f.ot.id, f.m.id, 'embalaje', f.m.embalaje)} onChange={e => cambiarCampo(f.ot.id, f.m.id, 'embalaje', e.target.value)} placeholder="$" style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '3px 5px', fontSize: 11.5, width: 70 }} />
                         </td>
