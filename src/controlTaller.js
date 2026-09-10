@@ -57,3 +57,48 @@ export function resumenTableroTaller(partes) {
   const kgLiberados = partes.reduce((a, p) => a + Math.min(Number(p.avance?.liberado) || 0, Number(p.cantidad) || 0) * (Number(p.pesoUnitario) || 0), 0)
   return { piezasTotales, piezasLiberadas, kgTotales, kgLiberados }
 }
+
+const escHtml = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+// Arma el HTML de la "hoja de avance" imprimible — se pasa tal cual a
+// generarPdfProtocoloBlob() de protocolo-pdf.js (ya existe, reutilizado sin
+// tocarlo: esa función solo necesita un <style> y un <body> con divs
+// .page). Una tabla simple con las columnas ya impresas y 4 casilleros en
+// blanco por fila para que el taller escriba a mano cuántas piezas
+// completaron cada etapa — pensada para que la lectura posterior por IA
+// (extraer-hoja-avance) sea confiable, en vez de rayar el plano técnico
+// completo.
+export function generarHojaAvanceHtml(proyecto, partes) {
+  const filas = partes.map(p => `
+    <tr>
+      <td class="marca">${escHtml(p.marca)}</td>
+      <td>${escHtml(p.perfil || '—')}</td>
+      <td class="cant">${escHtml(p.cantidad ?? '—')}</td>
+      <td class="casillero"></td>
+      <td class="casillero"></td>
+      <td class="casillero"></td>
+      <td class="casillero"></td>
+    </tr>`).join('')
+  return `<style>
+    body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:0}
+    .page{padding:22px}
+    h1{font-size:17px;margin:0 0 3px}
+    .sub{font-size:11px;color:#555;margin-bottom:14px}
+    table{width:100%;border-collapse:collapse;font-size:10.5px}
+    th,td{border:1px solid #333;padding:5px 7px;text-align:left}
+    th{background:#EEE;text-transform:uppercase;font-size:8.5px}
+    td.marca{font-weight:700;white-space:nowrap}
+    td.cant{text-align:center}
+    td.casillero{width:60px;height:22px}
+  </style>
+  <body>
+    <div class="page">
+      <h1>Hoja de avance de taller — ${escHtml(proyecto.nombre || proyecto.ot)}</h1>
+      <div class="sub">Proyecto ${escHtml(proyecto.ot)} · Fecha: _______________ · Escribir la cantidad de piezas de esa marca que completaron cada etapa (dejar en blanco si no se tocó).</div>
+      <table>
+        <thead><tr><th>Marca</th><th>Perfil</th><th>Cant. total</th><th>Dimensionado</th><th>Armado</th><th>Soldado</th><th>Liberado</th></tr></thead>
+        <tbody>${filas}</tbody>
+      </table>
+    </div>
+  </body>`
+}
