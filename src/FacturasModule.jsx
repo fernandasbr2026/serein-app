@@ -323,7 +323,9 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
       folio: x.numero,
       cliente: x.cliente,
       fechaEmision: x.fecha_emision,
-      otOc: x.ot,
+      ot: x.ot,
+      oc: x.oc,
+      nv: x.nv,
       ventaNeta: parseInt(String(x.neto).replace(/\D/g, ''), 10) || 0,
       iva: ivaFacturaDe(x),
       total: montoFacturaDe(x),
@@ -635,6 +637,7 @@ export function CobranzaAtrasadaModule({ area, facturas, setFacturas, usuarioEma
         const bruto = montoFacturaDe(x)
         return {
           folio: x.numero, cliente: x.cliente, fechaEmision: x.fecha_emision, fechaVencimiento: x.vencimiento,
+          ot: x.ot, oc: x.oc, nv: x.nv,
           neto: x.neto, bruto, pagado: bruto - saldo.bruto, saldoNeto: saldo.neto, saldoBruto: saldo.bruto,
           diasMora: diasMoraDe(x), estadoCobranza: estadoCobranzaDe(x), estadoPublicacion: estadoPublicacionDe(x),
           fechaPublicacion: x.boletin && x.boletin.estado === 'publicada' ? x.boletin.fecha : '',
