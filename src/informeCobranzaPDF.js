@@ -17,6 +17,16 @@ const fmtF = v => {
   return m ? `${m[3]}-${m[2]}-${m[1]}` : (t || '—')
 }
 
+// OT, OC y NV en líneas separadas dentro de la misma celda — mismo
+// criterio que informeFacturas.js, se omite el dato que falte.
+const otOcNv = x => {
+  const partes = []
+  if (x.ot) partes.push(`OT ${x.ot}`)
+  if (x.oc) partes.push(`OC ${x.oc}`)
+  if (x.nv) partes.push(`NV ${x.nv}`)
+  return partes.length ? partes.join('<br>') : ''
+}
+
 const ESTADO_COBRANZA_COLOR = { 'Cobranza atrasada': [SEREIN.orangeSoft, SEREIN.orangeDark], 'Corresponde publicar': [SEREIN.redSoft, SEREIN.red] }
 const ESTADO_PUB_COLOR = {
   'No publicada': [SEREIN.fog2, SEREIN.textSoft],
@@ -88,6 +98,7 @@ function htmlInforme({ items, area, filtroDescripcion, periodoDescripcion, usuar
     return `<tr>
       <td>${x.folio || ''}</td>
       <td>${x.cliente || ''}</td>
+      <td>${otOcNv(x)}</td>
       <td>${fmtF(x.fechaEmision)}</td>
       <td>${fmtF(x.fechaVencimiento)}</td>
       <td class="r">${clp(x.neto)}</td>
@@ -129,7 +140,7 @@ function htmlInforme({ items, area, filtroDescripcion, periodoDescripcion, usuar
       <div class="c"><div class="l">Publicadas en Boletín</div><div class="v">${r2.nPublicadas}</div></div>
     </div>
     ${items.length ? `<table class="items"><thead><tr>
-      <th>Factura</th><th>Cliente</th><th>Emisión</th><th>Vencimiento</th><th class="r">Total neto</th><th class="r">Total bruto</th><th class="r">Pagado</th><th class="r">Saldo bruto</th><th class="r">Días mora</th><th>Estado cobranza</th><th>Boletín Comercial</th><th>Fecha publicación</th>
+      <th>Factura</th><th>Cliente</th><th>OT / OC / NV</th><th>Emisión</th><th>Vencimiento</th><th class="r">Total neto</th><th class="r">Total bruto</th><th class="r">Pagado</th><th class="r">Saldo bruto</th><th class="r">Días mora</th><th>Estado cobranza</th><th>Boletín Comercial</th><th>Fecha publicación</th>
     </tr></thead><tbody>${filas}</tbody></table>` : `<div style="padding:16px 0;color:${SEREIN.green};font-weight:600">Sin facturas vencidas para estos filtros.</div>`}
     <div class="aviso">${avisoCliente(r)}</div>
     <div class="datos"><b>Datos de transferencia</b><br/>

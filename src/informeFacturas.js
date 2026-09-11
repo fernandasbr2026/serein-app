@@ -5,8 +5,8 @@ import { EMPRESA } from './CotizacionesModule.jsx'
 // Informe PDF de facturas seleccionadas (Facturas / Libro de Ventas).
 // Recibe una lista ya normalizada: { folio, cliente, fechaEmision,
 // ventaNeta, iva, total, fechaVencimiento, estado, abonos,
-// saldoPendiente, otOc, banco, factoringEntidad, factoringPlazo }.
-// abonos/saldoPendiente/otOc/banco/factoringEntidad/factoringPlazo son
+// saldoPendiente, ot, oc, nv, banco, factoringEntidad, factoringPlazo }.
+// abonos/saldoPendiente/ot/oc/nv/banco/factoringEntidad/factoringPlazo son
 // opcionales — si un llamador no los tiene disponibles, se muestran en
 // blanco en vez de romper el informe.
 // ============================================================
@@ -26,6 +26,16 @@ const ESTADO_COLOR = {
   Pendiente: [SEREIN.orangeSoft, SEREIN.orangeDark],
 }
 const colorEstado = e => ESTADO_COLOR[e] || [SEREIN.fog2, SEREIN.textSoft]
+// OT, OC y NV en líneas separadas dentro de la misma celda — más legible
+// que concatenarlos en un solo texto corrido, y una factura puede no tener
+// los tres datos (se omite el que falte en vez de mostrar "—" tres veces).
+const otOcNv = f => {
+  const partes = []
+  if (f.ot) partes.push(`OT ${f.ot}`)
+  if (f.oc) partes.push(`OC ${f.oc}`)
+  if (f.nv) partes.push(`NV ${f.nv}`)
+  return partes.length ? partes.join('<br>') : ''
+}
 
 function diasMoraDe(f) {
   if (!f.fechaVencimiento || ESTADOS_SIN_MORA.includes(String(f.estado || '').toLowerCase())) return null
@@ -71,7 +81,7 @@ function htmlInforme(items) {
       <td>${fmtF(f.fechaEmision)}</td>
       <td>${f.folio || ''}</td>
       <td>${f.cliente || ''}</td>
-      <td>${f.otOc || ''}</td>
+      <td>${otOcNv(f)}</td>
       <td class="r">${clp(f.ventaNeta)}</td>
       <td class="r">${clp(f.iva)}</td>
       <td class="r">${clp(f.total)}</td>
@@ -96,7 +106,7 @@ function htmlInforme(items) {
       <div class="doc"><div class="t">Informe de facturas</div><div class="f">${filas.length} documento(s) · Emitido el ${fmtF(new Date().toISOString().slice(0, 10))}</div></div>
     </div>
     <table class="items"><thead><tr>
-      <th>Fecha emisión</th><th>Folio</th><th>Cliente</th><th>OT / OC</th><th class="r">Venta neta</th><th class="r">IVA</th><th class="r">Total</th><th>Estado</th><th>Factoring</th><th>Vencimiento</th><th class="r">Días mora</th><th class="r">Abonos</th><th class="r">Saldo pendiente</th><th>Banco depósito</th>
+      <th>Fecha emisión</th><th>Folio</th><th>Cliente</th><th>OT / OC / NV</th><th class="r">Venta neta</th><th class="r">IVA</th><th class="r">Total</th><th>Estado</th><th>Factoring</th><th>Vencimiento</th><th class="r">Días mora</th><th class="r">Abonos</th><th class="r">Saldo pendiente</th><th>Banco depósito</th>
     </tr></thead>
     <tbody>${filasHtml}</tbody>
     <tfoot><tr><td colspan="4">Totales</td><td class="r">${clp(tot.neta)}</td><td class="r">${clp(tot.iva)}</td><td class="r">${clp(tot.total)}</td><td></td><td></td><td></td><td></td><td class="r">${clp(tot.abonos)}</td><td class="r">${clp(tot.saldoPendiente)}</td><td></td></tr></tfoot>
