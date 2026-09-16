@@ -4,9 +4,11 @@
 // ============================================================
 // Recibe el PDF ya armado de un protocolo (generado en el navegador con
 // jsPDF/html-to-image, ver src/protocolo-pdf.js) como base64, y lo sube
-// a la carpeta de Drive de SEREIN, organizada por cliente: crea (o
-// reutiliza) una subcarpeta con el nombre del cliente dentro de la
-// carpeta raiz, y sube el archivo ahi.
+// a la carpeta de Drive de SEREIN, organizada por cliente y, dentro de
+// cada cliente, por NV (nota de venta): crea (o reutiliza) la carpeta del
+// cliente dentro de la raiz, y dentro de esa, si el protocolo trae NV,
+// una subcarpeta con ese NV — el archivo queda ahi. Si no hay NV, queda
+// directo en la carpeta del cliente (mismo comportamiento de antes).
 //
 // Autenticacion: cuenta de servicio de Google Cloud (JWT firmado con su
 // clave privada, cambiado por un access token OAuth2) — no requiere que
@@ -72,20 +74,24 @@ async function tokenDeServicio(credJson: any): Promise<string> {
   return data.access_token;
 }
 
-// Busca la subcarpeta del cliente dentro de la raiz; si no existe, la crea.
-// La raiz es una Unidad compartida (Shared Drive) — las cuentas de servicio
-// no tienen cuota propia para escribir en una carpeta normal de "Mi unidad"
-// (Google lo rechaza con 403), asi que TODAS las llamadas necesitan
+// Busca una subcarpeta por nombre dentro de un padre dado (Unidad
+// compartida); si no existe, la crea. Genérica — se usa tanto para la
+// carpeta del cliente (dentro de la raiz) como para la carpeta del NV
+// (dentro de la del cliente), encadenando llamadas. La raiz es una Unidad
+// compartida (Shared Drive) — las cuentas de servicio no tienen cuota
+// propia para escribir en una carpeta normal de "Mi unidad" (Google lo
+// rechaza con 403), asi que TODAS las llamadas necesitan
 // supportsAllDrives=true (y las de busqueda ademas
 // includeItemsFromAllDrives + corpora=drive + driveId) para que la API
-// funcione dentro de una unidad compartida.
-async function carpetaDelCliente(token: string, rootId: string, cliente: string): Promise<string> {
-  const nombre = (cliente || "Sin cliente").trim() || "Sin cliente";
-  const q = `'${rootId}' in parents and name = '${nombre.replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+// funcione dentro de una unidad compartida — driveId siempre es el id de
+// la Unidad compartida raiz, no el de la carpeta padre inmediata.
+async function buscarOCrearCarpeta(token: string, driveId: string, parentId: string, nombre: string): Promise<string> {
+  const limpio = nombre.trim() || "Sin nombre";
+  const q = `'${parentId}' in parents and name = '${limpio.replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
   const params = new URLSearchParams({
     q, fields: "files(id,name)",
     supportsAllDrives: "true", includeItemsFromAllDrives: "true",
-    corpora: "drive", driveId: rootId,
+    corpora: "drive", driveId,
   });
   const buscar = await fetch(`https://www.googleapis.com/drive/v3/files?${params.toString()}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -96,9 +102,9 @@ async function carpetaDelCliente(token: string, rootId: string, cliente: string)
   const crear = await fetch("https://www.googleapis.com/drive/v3/files?fields=id&supportsAllDrives=true", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
-    body: JSON.stringify({ name: nombre, mimeType: "application/vnd.google-apps.folder", parents: [rootId] }),
+    body: JSON.stringify({ name: limpio, mimeType: "application/vnd.google-apps.folder", parents: [parentId] }),
   });
-  if (!crear.ok) throw new Error("No se pudo crear la carpeta del cliente: " + (await crear.text()).slice(0, 400));
+  if (!crear.ok) throw new Error(`No se pudo crear la carpeta "${limpio}": ` + (await crear.text()).slice(0, 400));
   const creado = await crear.json();
   return creado.id;
 }
@@ -115,12 +121,16 @@ Deno.serve(async (req) => {
     const cred = JSON.parse(credRaw);
     const rootId = Deno.env.get("DRIVE_ROOT_FOLDER_ID") || ROOT_FOLDER_ID_DEFAULT;
 
-    const { pdfBase64, filename, cliente } = await req.json();
+    const { pdfBase64, filename, cliente, nv } = await req.json();
     if (!pdfBase64) throw new Error("Falta pdfBase64 en la solicitud.");
     if (!filename) throw new Error("Falta filename en la solicitud.");
 
     const token = await tokenDeServicio(cred);
-    const folderId = await carpetaDelCliente(token, rootId, cliente);
+    const carpetaCliente = await buscarOCrearCarpeta(token, rootId, rootId, cliente || "Sin cliente");
+    const nvLimpio = String(nv || "").trim();
+    const folderId = (nvLimpio && nvLimpio !== "—")
+      ? await buscarOCrearCarpeta(token, rootId, carpetaCliente, "NV " + nvLimpio)
+      : carpetaCliente;
 
     const pdfBytesBin = atob(pdfBase64);
     const pdfBytes = new Uint8Array(pdfBytesBin.length);
