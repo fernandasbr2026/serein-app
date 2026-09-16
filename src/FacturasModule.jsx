@@ -307,6 +307,18 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
     ocultarFacturasDeLibro(idsLibro, pushState)
     setSel(new Set())
   }
+  // Marcar varias facturas como pagadas de una sola vez — mismo patron
+  // "pull-fresh antes de escribir" que eliminarFresco(), para no pisar
+  // cambios de otra persona si alguien mas edito facturas de esta misma
+  // area mientras tanto. Si una factura no tenia fecha de pago cargada, se
+  // le pone la de hoy (nunca pisa una fecha de pago que ya estaba puesta).
+  const marcarPagadasSel = () => {
+    if (!sel.size) return
+    if (!window.confirm('Se marcaran ' + sel.size + ' factura(s) como Pagada en ' + area + '. Continuar?')) return
+    const hoyISO = new Date().toISOString().slice(0, 10)
+    eliminarFresco(baseLista => baseLista.map(x => sel.has(x.id) ? { ...x, estado: 'Pagado', fecha_pago: x.fecha_pago || hoyISO } : x))
+    setSel(new Set())
+  }
   const vaciarArea = () => {
     if (!lista.length) return
     if (!window.confirm('Se eliminaran TODAS las facturas del area ' + area + ' (' + lista.length + '). Esta accion no se puede deshacer. Continuar?')) return
@@ -444,6 +456,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '0 12px 10px' }}>
           <span style={{ fontSize: 12.5, color: C.gris }}>{sel.size} seleccionada(s)</span>
           <button onClick={descargarInforme} disabled={!sel.size} style={{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5, background: sel.size ? C.azul : '#DFE4EA', color: sel.size ? '#fff' : C.gris, cursor: sel.size ? 'pointer' : 'default' }}>Descargar informe PDF</button>
+          <button onClick={marcarPagadasSel} disabled={!sel.size} style={{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5, background: sel.size ? C.verde : '#DFE4EA', color: sel.size ? '#fff' : C.gris, cursor: sel.size ? 'pointer' : 'default' }}>Marcar pagadas</button>
           <button onClick={eliminarSel} disabled={!sel.size} style={{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5, background: sel.size ? C.rojo : '#DFE4EA', color: sel.size ? '#fff' : C.gris, cursor: sel.size ? 'pointer' : 'default' }}>Eliminar seleccionadas</button>
           <button onClick={vaciarArea} disabled={!lista.length} style={{ background: 'transparent', border: '1px solid ' + C.rojo, color: C.rojo, padding: '7px 12px', borderRadius: 6, fontSize: 12.5, fontWeight: 700, cursor: lista.length ? 'pointer' : 'default' }}>Vaciar area {area}</button>
         </div>
