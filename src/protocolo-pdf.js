@@ -36,24 +36,67 @@ export async function generarPdfProtocoloBlob(fullHtml) {
       // siguientes). Aca no hay ese reparto automatico: si el contenido real
       // mide mas de 297mm, antes se achicaba la pagina COMPLETA para que
       // "cupiera" entera — quedaba angosta y con todo achicado (el bug que
-      // reporto Fernanda). Ahora en vez de achicar se corta en tantas hojas
-      // de 297mm como haga falta, a ancho completo — mismo resultado que
-      // imprimirla de verdad, aunque el corte sea una tijera ciega (puede
-      // partir una tabla o foto justo en el borde; sigue siendo mejor que
-      // todo el documento ilegible por chico).
-      const nCortes = Math.max(1, Math.ceil(altoMm / 297))
-      for (let c = 0; c < nCortes; c++) {
-        const altoCorte = Math.min(297, altoMm - c * 297)
+      // reporto Fernanda). Ahora se corta en tantas hojas de hasta 297mm
+      // como haga falta, a ancho completo — pero el corte YA NO es ciego:
+      // antes de rasterizar se mide en el DOM real donde estan los bloques
+      // marcados como indivisibles en el CSS (.evcard = una evidencia con
+      // sus fotos, .keep-together), y si un corte de 297mm caeria en medio
+      // de uno de esos bloques, el corte se adelanta al borde superior del
+      // bloque — mismo criterio que "page-break-inside:avoid" logra en una
+      // impresion real, pero aplicado a la imagen recortada (reportado:
+      // un bloque de evidencia quedaba partido a la mitad entre 2 hojas).
+      const bloques = medirBloquesIndivisibles(paginas[i], altoMm)
+      const cortes = calcularCortes(altoMm, bloques)
+      cortes.forEach(({ inicio, fin }) => {
         if (!esLaPrimera) pdf.addPage()
         esLaPrimera = false
-        const dataUrlCorte = nCortes === 1 ? dataUrl : recortarImagen(img, (c * 297 / altoMm) * img.naturalHeight, (altoCorte / altoMm) * img.naturalHeight)
-        pdf.addImage(dataUrlCorte, 'PNG', 0, 0, 210, altoCorte)
-      }
+        const alto = fin - inicio
+        const dataUrlCorte = cortes.length === 1 ? dataUrl : recortarImagen(img, (inicio / altoMm) * img.naturalHeight, (alto / altoMm) * img.naturalHeight)
+        pdf.addImage(dataUrlCorte, 'PNG', 0, 0, 210, alto)
+      })
     }
     return pdf.output('blob')
   } finally {
     document.body.removeChild(contenedor)
   }
+}
+
+// Mide, en el DOM real (antes de rasterizar), el rango vertical (en mm,
+// misma escala que altoMm) de cada bloque que el propio CSS del protocolo
+// marca como indivisible (.evcard, .keep-together). getBoundingClientRect
+// devuelve px CSS (no depende del pixelRatio de la captura), y el
+// contenedor siempre mide 794px = 210mm de ancho, asi que la conversion a
+// mm es directa: mm = px * (210/794).
+function medirBloquesIndivisibles(pagina, altoMm) {
+  const PX_A_MM = 210 / 794
+  const base = pagina.getBoundingClientRect()
+  return Array.from(pagina.querySelectorAll('.evcard, .keep-together')).map(el => {
+    const r = el.getBoundingClientRect()
+    return { top: (r.top - base.top) * PX_A_MM, bottom: (r.bottom - base.top) * PX_A_MM }
+  }).filter(b => b.bottom > 0 && b.top < altoMm)
+}
+
+// Arma los cortes de hasta 297mm cada uno, pero si un corte de 297mm
+// caeria en medio de un bloque indivisible, lo adelanta al borde superior
+// de ese bloque (deja algo de espacio en blanco al final de la hoja
+// anterior, igual que haria una impresion real con page-break-inside).
+// Si un bloque es mas alto que una hoja completa no hay forma de
+// evitarlo — se corta igual, no hay otra opcion.
+function calcularCortes(altoMm, bloques) {
+  const MAX = 297
+  const cortes = []
+  let y = 0
+  while (y < altoMm - 0.01) {
+    let fin = Math.min(altoMm, y + MAX)
+    const cruzando = bloques.filter(b => b.top > y + 0.5 && b.top < fin - 0.5 && b.bottom > fin)
+    if (cruzando.length) {
+      const nuevoFin = Math.min(...cruzando.map(b => b.top))
+      if (nuevoFin > y + 0.5) fin = nuevoFin
+    }
+    cortes.push({ inicio: y, fin })
+    y = fin
+  }
+  return cortes
 }
 
 function cargarImagen(dataUrl) {
