@@ -2915,7 +2915,7 @@ function ProtoHead({ p, upd, onDel, titulo, equipos, col, onTgl }) {
       if (p.oc && p.oc !== '—') partesNombre.push('OC ' + p.oc)
       if (p.nv && p.nv !== '—') partesNombre.push('NV ' + p.nv)
       const filename = partesNombre.join(' - ') + '.pdf'
-      const { data, error } = await conLimiteTiempo(supabase.functions.invoke('subir-protocolo-drive', { body: { pdfBase64, filename, cliente: p.cliente || 'Sin cliente' } }), 30000, 'La subida a Drive no respondió a tiempo (30s). Revisa tu conexión e intenta de nuevo.')
+      const { data, error } = await conLimiteTiempo(supabase.functions.invoke('subir-protocolo-drive', { body: { pdfBase64, filename, cliente: p.cliente || 'Sin cliente', nv: p.nv || null } }), 30000, 'La subida a Drive no respondió a tiempo (30s). Revisa tu conexión e intenta de nuevo.')
       if (error) throw error
       if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo subir a Drive.')
       setDriveMsg({ ok: true, link: data.webViewLink })
