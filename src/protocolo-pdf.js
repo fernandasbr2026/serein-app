@@ -25,6 +25,23 @@ export async function generarPdfProtocoloBlob(fullHtml) {
     await new Promise(res => setTimeout(res, 600))
     const paginas = contenedor.querySelectorAll('.page')
     if (!paginas.length) throw new Error('No se encontraron paginas para exportar.')
+    // El margen de hoja (20mm arriba, 15mm a los lados y abajo) lo pone el
+    // @page del navegador al imprimir de verdad — eso NO se captura al
+    // rasterizar el div con html-to-image (el contenido queda pegado al
+    // borde). Se replica a mano como padding antes de capturar, con
+    // box-sizing:border-box para que el contenido se angoste hacia
+    // adentro en vez de ensanchar la pagina (el ancho total sigue siendo
+    // 794px = 210mm, igual que asume el resto de este archivo). Mismos
+    // valores que el @page de PROTO_CSS en OTModule.jsx — si ese margen
+    // cambia algun dia, hay que actualizar este tambien.
+    paginas.forEach(pg => {
+      pg.style.boxSizing = 'border-box'
+      pg.style.width = '794px'
+      pg.style.paddingTop = '20mm'
+      pg.style.paddingLeft = '15mm'
+      pg.style.paddingRight = '15mm'
+      pg.style.paddingBottom = 'calc(15mm + 70px)' // 15mm del margen + los 70px que ya reservaba .page para el pie
+    })
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     let esLaPrimera = true
     for (let i = 0; i < paginas.length; i++) {
