@@ -82,7 +82,12 @@ function useDatos({ cc, facturas, ots, proyectos, cotizaciones, clientes, params
     const pagos7 = num(cc.pagar7)
     const caja = num(cc.caja)
     const saldo7 = caja + cobros7 - pagos7
-    const saldo30 = caja + num(cc.saldoProy)
+    // Antes se llamaba saldo30 y la tarjeta decia "Saldo 30 dias", pero
+    // nunca estuvo acotado a 30 dias — suma TODO lo pendiente (cc.saldoProy
+    // no filtra por fecha) mas la caja actual. en30 se calculaba pero
+    // jamas se uso para filtrar nada. Se renombra para que el nombre ya
+    // no prometa un plazo que el calculo no respeta.
+    const saldoTotal = caja + num(cc.saldoProy)
 
     // Embudo comercial
     // El monto de una cotización solo queda guardado en el objeto (total/montoCotizado) cuando
@@ -117,17 +122,17 @@ function useDatos({ cc, facturas, ots, proyectos, cotizaciones, clientes, params
     // Calendario financiero
     const eventos = []
     ;(fin && fin.gastos || []).filter(g => g.estado !== 'Pagado' && g.estado !== 'Anulado' && g.vencimiento).forEach(g => eventos.push({ fecha: g.vencimiento, tipo: 'Proveedor/Gasto', desc: g.nombre || g.categoria || 'Gasto', monto: num(g.neto) + num(g.iva) }))
-    ;(fin && fin.obligaciones || []).forEach(o => (o.cuotas || []).filter(c => c.estado !== 'Pagada' && c.vencimiento).forEach(c => eventos.push({ fecha: c.vencimiento, tipo: /leasing/i.test(o.tipo || o.nombre || '') ? 'Leasing' : 'Crédito', desc: o.nombre || 'Cuota', monto: num(c.total) })))
+    ;(fin && fin.obligaciones || []).forEach(o => (o.cuotas || []).filter(c => c.estado !== 'Pagada' && c.vencimiento).forEach(c => eventos.push({ fecha: c.vencimiento, tipo: /leasing/i.test(o.tipo || o.institucion || '') ? 'Leasing' : 'Crédito', desc: o.institucion || 'Cuota', monto: num(c.total) })))
     ;(pp && pp.ocs || []).filter(o => !['Pagada', 'Anulada'].includes(o.estadoPago) && (o.vencimiento || o.fecha)).forEach(o => eventos.push({ fecha: o.vencimiento || o.fecha, tipo: 'Proveedor OC', desc: o.proveedor || o.numero || 'OC', monto: ocTotal(o) }))
-    facPend.filter(f => vencDe(f)).forEach(f => eventos.push({ fecha: vencDe(f), tipo: 'Factura por cobrar', desc: (f.cliente || 'Cliente') + ' ' + (f.folio || ''), monto: brutoF(f), entrada: true }))
+    facPend.filter(f => vencDe(f)).forEach(f => eventos.push({ fecha: vencDe(f), tipo: 'Factura por cobrar', desc: (f.cliente || 'Cliente') + ' ' + (f.numero || ''), monto: brutoF(f), entrada: true }))
     eventos.sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''))
     const proximos = eventos.filter(e => e.fecha >= hoy).slice(0, 12)
 
     return {
       hoy, en7, en30, resumen, facVencidas, montoVencidas,
-      otAbiertas: otAbiertas.length, otProceso: otProceso.length, otTerminadas: otTerminadas.length, otFacturadas: otFacturadas.length,
+      otAbiertas: otAbiertas.length, otProceso: otProceso.length, otTerminadas: otTerminadas.length, otFacturadas: otFacturadas.length, otPorFacturarN: otPorFacturar.length,
       montoPorFacturar, prodSR: prodMod('Santa Rosa'), prodIS: prodMod('Istria'), prodPR: prodMod('Proyectos'),
-      cobros7, pagos7, caja, saldo7, saldo30, funnel, topVenta, topDeuda, topAtraso, tasaProm, proximos
+      cobros7, pagos7, caja, saldo7, saldoTotal, funnel, topVenta, topDeuda, topAtraso, tasaProm, proximos
     }
   }, [cc, facturas, ots, proyectos, cotizaciones, clientes, params, fin, pp, ppmPct])
 }
@@ -199,14 +204,14 @@ function ExecutiveSummaryCards({ cc, d }) {
     <SemCard label="Saldo proyectado 7 días" valor={clp(d.saldo7)} sev={sevSaldo(d.saldo7)} />
     <SemCard label="Posición financiera" valor={clp(num(cc.posicionFin))} sev={sevSaldo(num(cc.posicionFin))} />
     <SemCard label="Facturas vencidas" valor={d.facVencidas.length} sub={clp(d.montoVencidas)} sev={d.facVencidas.length > 0 ? 'crit' : 'ok'} />
-    <SemCard label="OT listas para facturar" valor={d.otTerminadas} sub={clp(d.montoPorFacturar)} sev={d.otTerminadas > 0 ? 'warn' : 'ok'} />
+    <SemCard label="OT listas para facturar" valor={d.otPorFacturarN} sub={clp(d.montoPorFacturar)} sev={d.otPorFacturarN > 0 ? 'warn' : 'ok'} />
   </div>)
 }
 
 function AISereinPanel({ cc, d }) {
   const msgs = []
   if (d.facVencidas.length > 0) msgs.push({ t: 'Hay facturas vencidas por ' + clp(d.montoVencidas) + ' (' + d.facVencidas.length + ' documento(s)).', s: 'crit' })
-  if (d.montoPorFacturar > 0) msgs.push({ t: 'Existen OT listas para facturar por ' + clp(d.montoPorFacturar) + ' (' + d.otTerminadas + ' OT).', s: 'warn' })
+  if (d.montoPorFacturar > 0) msgs.push({ t: 'Existen OT listas para facturar por ' + clp(d.montoPorFacturar) + ' (' + d.otPorFacturarN + ' OT).', s: 'warn' })
   msgs.push({ t: 'La caja proyectada a 7 días es ' + (d.saldo7 >= 0 ? 'positiva' : 'negativa') + ': ' + clp(d.saldo7) + '.', s: d.saldo7 >= 0 ? 'ok' : 'crit' })
   if (d.pagos7 > d.cobros7) msgs.push({ t: 'Los pagos próximos (7 días) superan a los cobros esperados por ' + clp(d.pagos7 - d.cobros7) + '.', s: 'warn' })
   if (num(cc.netoTotalFact) > 0) msgs.push({ t: 'El factoring acumulado representa ' + num(cc.pctFactorizado).toFixed(1) + '% de la venta.', s: num(cc.pctFactorizado) > 40 ? 'warn' : 'ok' })
@@ -229,7 +234,7 @@ function CriticalAlertsPanel({ cc, d }) {
   if (d.topDeuda[0] && d.topDeuda[0].deuda > 0) A.push({ s: d.topDeuda[0].deuda > 5000000 ? 'crit' : 'warn', t: 'Cliente con mayor deuda: ' + d.topDeuda[0].cliente, x: clp(d.topDeuda[0].deuda), ir: 'CLIENTES' })
   if (d.pagos7 > 0) A.push({ s: 'warn', t: 'Pagos que vencen en 7 días', x: clp(d.pagos7), ir: 'PAGOS' })
   if ((d.resumen.cuotasVencidas || []).length > 0) A.push({ s: 'crit', t: 'Cuotas crédito/leasing vencidas', x: d.resumen.cuotasVencidas.length + ' cuota(s)', ir: 'FINANZAS' })
-  if (d.otTerminadas > 0) A.push({ s: 'warn', t: 'OT terminadas sin facturar', x: d.otTerminadas + ' OT · ' + clp(d.montoPorFacturar), ir: 'GESTION_OT' })
+  if (d.otPorFacturarN > 0) A.push({ s: 'warn', t: 'OT terminadas sin facturar', x: d.otPorFacturarN + ' OT · ' + clp(d.montoPorFacturar), ir: 'GESTION_OT' })
   if (num(cc.pctFactorizado) > 40) A.push({ s: 'warn', t: 'Factoring elevado sobre la venta', x: num(cc.pctFactorizado).toFixed(1) + '% · costo ' + clp(num(cc.kPerd)), ir: 'FINANZAS' })
   const orden = { crit: 0, warn: 1, ok: 2 }
   A.sort((a, b) => orden[a.s] - orden[b.s])
@@ -262,7 +267,7 @@ function CashFlowPanel({ cc, d }) {
     </div>
     <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 6, background: pos ? SEREIN.greenSoft : SEREIN.redSoft, border: '1px solid ' + (pos ? C.verde : C.rojo), display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
       <span style={{ fontSize: 13, fontWeight: 600, color: pos ? C.verde : C.rojo }}>{pos ? 'La empresa se proyecta POSITIVA' : 'Atención: proyección NEGATIVA'}</span>
-      <span style={{ fontSize: 14, fontWeight: 700, color: pos ? C.verde : C.rojo }}>Saldo 30 días: {clp(d.saldo30)}</span>
+      <span style={{ fontSize: 14, fontWeight: 700, color: pos ? C.verde : C.rojo }}>Posición total proyectada (caja + saldo): {clp(d.saldoTotal)}</span>
     </div>
   </Card>)
 }
@@ -301,7 +306,7 @@ function ProductionStatusPanel({ d }) {
       {box(d.otAbiertas, 'Abiertas', C.azul)}
       {box(d.otProceso, 'En proceso', C.teal)}
       {box(d.otTerminadas, 'Terminadas', C.ambar)}
-      {box(d.otTerminadas, 'Listas facturar', C.orange)}
+      {box(d.otPorFacturarN, 'Listas facturar', C.orange)}
       {box(d.otFacturadas, 'Facturadas', C.verde)}
     </div>
     <Fila label="Monto por facturar" valor={clp(d.montoPorFacturar)} color={C.orange} fuerte />
@@ -445,15 +450,29 @@ export default function ConsolidadoModule(props) {
       let lv = [], lcx = []
       try { lv = JSON.parse(localStorage.getItem('serein_libroVentasXlsx') || '[]') } catch (e) {}
       try { lcx = JSON.parse(localStorage.getItem('serein_libroComprasXlsx') || '[]') } catch (e) {}
-      let db = []
-      try { const res = await supabase.from('libro_compras').select('document_number, provider_rut, neto, iva, document_total, exenta'); db = (res && res.data) || [] } catch (e) {}
+      let db = [], dbV = []
+      // document_type faltaba en este select: sin el, toda compra
+      // quedaba con sgn()=1 siempre (el signo -1 de una Nota de Credito
+      // nunca se aplicaba), asi que una NC de compra se sumaba en vez de
+      // restarse.
+      try { const res = await supabase.from('libro_compras').select('document_number, provider_rut, neto, iva, document_total, document_type, exenta'); db = (res && res.data) || [] } catch (e) {}
+      // Ventas no traia su tabla real (libro_ventas) — solo leia el cache
+      // local serein_libroVentasXlsx, asi que en cualquier navegador donde
+      // nadie hubiera vuelto a subir el Excel ahi mismo, "Venta neta
+      // (Libro de Ventas)" y "Resultado" quedaban en $0 o desactualizados,
+      // aunque los datos reales existieran. Ahora se trae de la base igual
+      // que Compras ya hacia, con el mismo patron de dedupe.
+      try { const resV = await supabase.from('libro_ventas').select('document_number, neto, iva, total, document_type, oculto'); dbV = (resV && resV.data) || [] } catch (e) {}
       if (!vivo) return
       const key = r => (r.document_number || '') + '|' + (r.provider_rut || '')
       const vistos = new Set(db.map(key))
       const compras = [...db, ...lcx.filter(r => !vistos.has(key(r)))]
+      const keyV = r => String(r.document_number || '')
+      const vistosV = new Set(dbV.map(keyV))
+      const ventas = [...dbV, ...lv.filter(r => !vistosV.has(keyV(r)))]
       const sgn = r => (String(r.document_type || '').trim() === '61' ? -1 : 1)
       let vNeta = 0, vBruta = 0, ivaDeb = 0
-      for (const r of lv) { if (r.oculto) continue; const g = sgn(r); vNeta += g * num(r.neto); vBruta += g * (num(r.total) || (num(r.neto) + num(r.iva))); ivaDeb += g * num(r.iva) }
+      for (const r of ventas) { if (r.oculto) continue; const g = sgn(r); vNeta += g * num(r.neto); vBruta += g * (num(r.total) || (num(r.neto) + num(r.iva))); ivaDeb += g * num(r.iva) }
       let cNeto = 0, cTotal = 0, ivaCred = 0
       for (const r of compras) { if (r.oculto) continue; const g = sgn(r); const base = r.exenta ? (num(r.document_total) || num(r.neto)) : num(r.neto); cNeto += g * base; cTotal += g * num(r.document_total); ivaCred += g * num(r.iva) }
       const fin = props.fin || {}
@@ -471,7 +490,7 @@ export default function ConsolidadoModule(props) {
       for (const o of (fin.obligaciones || [])) for (const c of (o.cuotas || [])) { if ((c.vencimiento || '').slice(0, 7) === mesAct && c.estado !== 'Pagada' && c.aCargo !== 'tercero_reembolsa') cuotasMes += num(c.total) }
       let sinDoc = 0
       try { const rs = await supabase.from('compras_sin_doc').select('monto'); sinDoc = ((rs && rs.data) || []).reduce((a, x) => a + num(x.monto), 0) } catch (e) {}
-      setLibroCons({ vNeta, vBruta, nV: lv.length, cNeto, cTotal, nC: compras.length, ivaDeb, ivaCred, gastosOp, cuotasMes, sinDoc })
+      setLibroCons({ vNeta, vBruta, nV: ventas.length, cNeto, cTotal, nC: compras.length, ivaDeb, ivaCred, gastosOp, cuotasMes, sinDoc })
     })()
     return () => { vivo = false }
   }, [])
