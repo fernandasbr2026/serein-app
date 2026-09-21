@@ -15,7 +15,33 @@
 -- ============================================================
 
 -- ---------------------------------------------------------------
--- 1) Piezas de Control de Taller (reemplaza p.partes[] del blob)
+-- 1) Qué OT puede ver/editar cada persona externa en Control de Taller
+-- (va PRIMERO porque las políticas de taller_partes/taller_lecturas la
+-- consultan — Postgres exige que la tabla ya exista al crear una
+-- política que la referencia, a diferencia de una función).
+-- ---------------------------------------------------------------
+create table if not exists public.taller_asignaciones (
+  id uuid primary key default gen_random_uuid(),
+  perfil_id uuid not null references public.perfiles(id) on delete cascade,
+  ot text not null,
+  created_at timestamptz not null default now(),
+  unique (perfil_id, ot)
+);
+alter table public.taller_asignaciones enable row level security;
+
+drop policy if exists "taller_asignaciones_leer" on public.taller_asignaciones;
+create policy "taller_asignaciones_leer"
+  on public.taller_asignaciones for select
+  using (perfil_id = auth.uid() or public.es_gerencia_o_admin());
+
+drop policy if exists "taller_asignaciones_escribir" on public.taller_asignaciones;
+create policy "taller_asignaciones_escribir"
+  on public.taller_asignaciones for all
+  using (public.es_gerencia_o_admin())
+  with check (public.es_gerencia_o_admin());
+
+-- ---------------------------------------------------------------
+-- 2) Piezas de Control de Taller (reemplaza p.partes[] del blob)
 -- ---------------------------------------------------------------
 create table if not exists public.taller_partes (
   id uuid primary key default gen_random_uuid(),
@@ -54,7 +80,7 @@ create policy "taller_partes_escribir"
   );
 
 -- ---------------------------------------------------------------
--- 2) Historial de lecturas de hoja de avance (reemplaza p.historialLecturas[])
+-- 3) Historial de lecturas de hoja de avance (reemplaza p.historialLecturas[])
 -- ---------------------------------------------------------------
 create table if not exists public.taller_lecturas (
   id uuid primary key default gen_random_uuid(),
@@ -82,33 +108,6 @@ create policy "taller_lecturas_insertar"
     public.es_gerencia_o_admin()
     or exists (select 1 from public.taller_asignaciones a where a.perfil_id = auth.uid() and a.ot = taller_lecturas.ot)
   );
-
--- ---------------------------------------------------------------
--- 3) Qué OT puede ver/editar cada persona externa en Control de Taller
--- (nota: esta tabla la referencian las políticas de arriba, así que se
--- crea recién acá — Postgres no exige orden de creación para políticas
--- que se agregan después, pero el orden natural de lectura del archivo
--- es este)
--- ---------------------------------------------------------------
-create table if not exists public.taller_asignaciones (
-  id uuid primary key default gen_random_uuid(),
-  perfil_id uuid not null references public.perfiles(id) on delete cascade,
-  ot text not null,
-  created_at timestamptz not null default now(),
-  unique (perfil_id, ot)
-);
-alter table public.taller_asignaciones enable row level security;
-
-drop policy if exists "taller_asignaciones_leer" on public.taller_asignaciones;
-create policy "taller_asignaciones_leer"
-  on public.taller_asignaciones for select
-  using (perfil_id = auth.uid() or public.es_gerencia_o_admin());
-
-drop policy if exists "taller_asignaciones_escribir" on public.taller_asignaciones;
-create policy "taller_asignaciones_escribir"
-  on public.taller_asignaciones for all
-  using (public.es_gerencia_o_admin())
-  with check (public.es_gerencia_o_admin());
 
 -- ---------------------------------------------------------------
 -- 4) Copia lo que ya exista en el blob (app_state->serein_proyectos) a
