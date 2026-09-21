@@ -13,6 +13,7 @@ import { Check, X, UserPlus, FileText } from 'lucide-react'
 import { supabase } from './supabase.js'
 import { SEREIN } from './theme-serein.js'
 import { CC_DEFS } from './proyectos-data.js'
+import { blobToBase64 } from './protocolo-pdf.js'
 
 const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
@@ -53,6 +54,21 @@ function FilaPendiente({ f, onAddCompra, onDecidido }) {
         proveedor: f.proveedor, detalle: f.detalle, fecha: f.fecha || '—', monto: f.monto,
         cc: f.cc, folio: f.folio, rut: f.rut, exento: !!f.exento, abonado: abonadoFinal,
       })
+      // Sube el PDF (ya guardado en el bucket propio de Franco) a Drive,
+      // organizado COMPRAS / OT / Centro de Costo — misma Edge Function
+      // que ya usa el "Subir factura" de la ficha de proyecto, recien al
+      // aceptar (no cuando Franco lo sube, todavia puede rechazarse).
+      try {
+        const { data: descarga, error: errDescarga } = await supabase.storage.from('facturas-subcontrato').download(f.pdf_path)
+        if (errDescarga) throw errDescarga
+        const pdfBase64 = await blobToBase64(descarga)
+        const filename = (f.folio ? f.folio + ' - ' : '') + (f.proveedor || 'Proveedor') + '.pdf'
+        const { data: subida, error: errSubida } = await supabase.functions.invoke('subir-factura-compra-drive', { body: { pdfBase64, filename, ot: f.ot, centroCosto: f.cc_nombre || f.cc } })
+        if (errSubida) throw errSubida
+        if (!subida || !subida.ok) throw new Error((subida && subida.error) || 'No se pudo subir a Drive.')
+      } catch (err) {
+        window.alert('La factura quedó aceptada y agregada a Compras, pero no se pudo subir el PDF a Drive: ' + ((err && err.message) || String(err)))
+      }
       onDecidido()
     } catch (err) { window.alert('No se pudo aceptar la factura: ' + ((err && err.message) || String(err))) }
     setProcesando(false)
