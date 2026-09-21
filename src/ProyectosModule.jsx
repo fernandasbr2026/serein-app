@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { ChevronDown, ChevronUp, Target, Receipt, Hammer, ShoppingCart, Pencil, Plus, Trash2, X, AlertTriangle, LayoutGrid, Table2, Flame, Upload } from 'lucide-react'
+import { ChevronDown, ChevronUp, Target, Receipt, Hammer, ShoppingCart, Pencil, Plus, Trash2, X, AlertTriangle, LayoutGrid, Table2, Flame, Upload, UserCheck } from 'lucide-react'
 import { PROYECTOS, CC_DEFS } from './proyectos-data.js'
 import { calcularPerdidaFactoring, perdidaFactoringFactura } from './ParametrosModule.jsx'
 import FacturasModule from './FacturasModule.jsx'
@@ -8,6 +8,7 @@ import ProyCotizador from './ProyCotizador.jsx'
 import ProyComprasLibro from './ProyComprasLibro.jsx'
 import CotizadorIntumescenteModule from './CotizadorIntumescenteModule.jsx'
 import ControlTallerModule from './ControlTallerModule.jsx'
+import SubcontratistasModule from './SubcontratistasModule.jsx'
 import { supabase } from './supabase.js'
 import { pullState, pushState } from './sync.js'
 import { fileToBase64 } from './protocolo-pdf.js'
@@ -1085,6 +1086,15 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
     })()
     return true
   }
+  // Puente entre una factura de subcontratista aceptada (SubcontratistasModule,
+  // que solo conoce el N° de OT, no el id interno del proyecto) y
+  // agregarCompra() de siempre — busca el proyecto por ot y reusa el mismo
+  // camino que si la compra se hubiera cargado a mano.
+  const agregarCompraPorOT = (ot, compra) => {
+    const proy = proyectos.find(p => p.ot === ot)
+    if (!proy) { window.alert(`No se encontró ningún proyecto con OT "${ot}" — la factura quedó aceptada pero no se pudo agregar a Compras. Avisa para revisarlo a mano.`); return }
+    agregarCompra(proy.id, compra)
+  }
 
   const totVenta = proyectos.reduce((a, p) => a + ventaDe(p, facturasProy), 0)
   const totFact = proyectos.reduce((a, p) => a + facturadoDe(p, facturasProy), 0)
@@ -1146,7 +1156,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
       </>)}
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-        {[['tarjetas', 'Tarjetas', LayoutGrid], ...(verCotizadorProy ? [['cotizarProy', 'Cotización Proyecto', Receipt], ['cotizacionesProy', 'Cotizaciones', Receipt], ['cotizarIntumescente', 'Cotización Intumescente', Flame], ['comprasSII', 'Compras SII', ShoppingCart]] : []), ['controlTaller', 'Control de Taller', Hammer], ['consolidado', 'Consolidado', Table2], ['cerrados', 'Proyectos cerrados', LayoutGrid], ['facturas', 'Facturas', Receipt], ...(verCotizadorProy ? [['parametros', 'Parámetros Proyectos', Target]] : [])].map(([id, lbl, Icon]) => (
+        {[['tarjetas', 'Tarjetas', LayoutGrid], ...(verCotizadorProy ? [['cotizarProy', 'Cotización Proyecto', Receipt], ['cotizacionesProy', 'Cotizaciones', Receipt], ['cotizarIntumescente', 'Cotización Intumescente', Flame], ['comprasSII', 'Compras SII', ShoppingCart]] : []), ['controlTaller', 'Control de Taller', Hammer], ['subcontratistas', 'Subcontratistas', UserCheck], ['consolidado', 'Consolidado', Table2], ['cerrados', 'Proyectos cerrados', LayoutGrid], ['facturas', 'Facturas', Receipt], ...(verCotizadorProy ? [['parametros', 'Parámetros Proyectos', Target]] : [])].map(([id, lbl, Icon]) => (
           <button key={id} onClick={() => setVista(id)} style={{ background: vista === id ? C.carbon : '#fff', color: vista === id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Icon size={14} />{lbl}</button>
         ))}
         {!creando && vista === 'tarjetas' && (
@@ -1183,6 +1193,8 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
         <ProyComprasLibro proyectos={proyectos} setProyectos={setProyectos} />
       ) : vista === 'controlTaller' ? (
         <ControlTallerModule proyectos={proyectos} setProyectos={setProyectos} />
+      ) : vista === 'subcontratistas' ? (
+        <SubcontratistasModule onAddCompraPorOT={agregarCompraPorOT} />
       ) : vista === 'consolidado' ? (
         <Consolidado proyectos={proyectos} facturasProy={facturasProy} params={params} />
       ) : vista === 'facturas' ? (
