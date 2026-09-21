@@ -96,6 +96,34 @@ export const saldoActivoDeOT = ot => {
   if (abonado > 0) return { monto: Math.max(0, venta - abonado) }
   return { monto: venta }
 }
+// Resumen financiero de UN área completa (Fase K del plan) — sin los
+// filtros de cliente/fecha que sí tiene la pestaña de Órdenes de Trabajo
+// (esa se queda exactamente igual, esto es para mostrarlo también en la
+// pantalla de inicio, sin tener que cambiar de pestaña). Mismo cálculo
+// exacto que ya usa cada tarjeta de OT y la tarjeta "Utilidad estimada"
+// de la cabecera de esta pestaña — una sola fuente, no una fórmula aparte.
+export function resumenOTArea(ots, area, { ordenesCompra = [], mo = null } = {}) {
+  const delArea = (ots || []).filter(o => o.area === area && !o.eliminada)
+  const activasArea = delArea.filter(o => o.estado !== 'Cerrada')
+  const cerradasTodas = delArea.filter(o => o.estado === 'Cerrada')
+  const cerradasArea = cerradasTodas.filter(o => estadoFacturacionDeOT(o) !== 'Totalmente facturada')
+  const facturadasArea = cerradasTodas.filter(o => estadoFacturacionDeOT(o) === 'Totalmente facturada')
+
+  const ventaEnProceso = activasArea.reduce((a, o) => a + saldoActivoDeOT(o).monto, 0)
+  const cerradasPorFacturarMonto = cerradasArea.reduce((a, o) => a + saldoPorFacturarDeOT(o), 0)
+  const facturadoPorPercibirMonto = facturadasArea.filter(o => saldoPorPercibirDeOT(o) > 0).reduce((a, o) => a + saldoPorPercibirDeOT(o), 0)
+
+  const detalle = delArea.map(o => {
+    const venta = (o.ventas || []).reduce((a, v) => a + (v.neta || 0), 0)
+    const costo = (o.costos || []).reduce((a, c) => a + (c.monto || 0), 0) + costoOCdeOT(ordenesCompra, o.numero) + costoMOdeOT(mo, o.numero)
+    return { venta, utilidad: venta - costo }
+  })
+  const ventaTotal = detalle.reduce((a, x) => a + x.venta, 0)
+  const utilidadTotal = detalle.reduce((a, x) => a + x.utilidad, 0)
+  const margenProm = ventaTotal > 0 ? (utilidadTotal / ventaTotal) * 100 : 0
+
+  return { otActivas: activasArea.length, ventaEnProceso, cerradasPorFacturarMonto, facturadoPorPercibirMonto, utilidadTotal, margenProm }
+}
 // Etiqueta de presentacion para el estado — el valor guardado en ot.estado
 // no cambia, solo cambia como se muestra (para no afectar a ningun otro
 // modulo que ya depende de los strings reales).
