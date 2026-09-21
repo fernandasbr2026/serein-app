@@ -7,7 +7,7 @@ import { DATA } from './data.js'
 import LogoSerein from './LogoSerein.jsx'
 import { Sidebar, PageHeader, THEME, GlobalStyles, MontoNetoBruto } from './ui.jsx'
 import ProyectosModule from './ProyectosModule.jsx'
-import OTModule, { OTS_INICIALES } from './OTModule.jsx'
+import OTModule, { OTS_INICIALES, resumenOTArea } from './OTModule.jsx'
 import PipelineOT from './PipelineOT.jsx'
 import PipelineProyectos from './PipelineProyectos.jsx'
 import ManoObraModule from './ManoObraModule.jsx'
@@ -885,6 +885,22 @@ export default function Dashboard({ perfil, email, onLogout }) {
 
         {(areaSel === 'Santa Rosa' || areaSel === 'Istria') && resumenFinancieroArea(areaSel)}
 
+        {(areaSel === 'Santa Rosa' || areaSel === 'Istria') && (() => {
+          const r = resumenOTArea(ots, areaSel, { ordenesCompra: pp.ocs || [], mo })
+          return (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase', color: '#9AA3AD', marginBottom: 8 }}>Órdenes de Trabajo — cartera y utilidad</div>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <Kpi label="OT activas" valor={r.otActivas} color={C.azul} icon={TrendingUp} />
+                <Kpi label="Venta en proceso" valor={clp(r.ventaEnProceso)} color={C.ambar} icon={Wallet} />
+                <Kpi label="Cerradas por facturar" valor={clp(r.cerradasPorFacturarMonto)} color={C.ambar} icon={AlertTriangle} />
+                <Kpi label="Facturado por percibir" valor={clp(r.facturadoPorPercibirMonto)} color={C.verde} icon={Wallet} />
+                <Kpi label="Utilidad estimada" valor={clp(r.utilidadTotal)} sub={`${r.margenProm.toFixed(0)}% margen`} color={r.margenProm >= 15 ? C.verde : C.rojo} icon={TrendingUp} />
+              </div>
+            </div>
+          )
+        })()}
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16, marginBottom: 16 }}>
           <div style={{ gridColumn: 'span 1' }}>
             {(areaSel === 'Santa Rosa' || areaSel === 'Istria') ? (
@@ -946,6 +962,43 @@ export default function Dashboard({ perfil, email, onLogout }) {
 
         {areaSel !== 'TODAS' && (
           <>
+            {/* Riesgo de cobro primero, contexto de clientes después — lectura
+                más propia de finanzas (Fase K del plan). */}
+            <div style={{ marginBottom: 16 }}>
+              {(areaSel === 'Santa Rosa' || areaSel === 'Istria') ? (
+                <CobranzaAtrasadaModule area={areaSel} facturas={facturas} setFacturas={setFacturas} usuarioEmail={email} />
+              ) : (
+              <Panel title="Cobranza atrasada" right={<span style={{ fontSize: 12, color: C.rojo }}>{vista.atrasadas.length} facturas</span>}>
+                {vista.atrasadas.length === 0 ? (
+                  <div style={{ color: C.verde, fontSize: 14, padding: '10px 0' }}>✓ Sin facturas atrasadas en esta área.</div>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                          <th style={{ textAlign: 'left', padding: '6px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>Cliente</th>
+                          <th style={{ textAlign: 'right', padding: '6px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>Pendiente</th>
+                          <th style={{ textAlign: 'right', padding: '6px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>Días</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {vista.atrasadas.map((r, i) => (
+                          <tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>
+                            <td style={{ padding: 8 }}>{r.cliente}</td>
+                            <td style={{ padding: 8, textAlign: 'right' }}>{clp(r.pendiente)}</td>
+                            <td style={{ padding: 8, textAlign: 'right' }}>
+                              <span style={{ background: r.dias > 30 ? '#FCEBEA' : '#FDECDD', color: r.dias > 30 ? C.rojo : C.ambar, padding: '2px 8px', fontWeight: 600 }}>{r.dias}d</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Panel>
+              )}
+            </div>
+
             <div style={{ marginBottom: 16 }}>
               <Panel title="Principales clientes">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -967,39 +1020,6 @@ export default function Dashboard({ perfil, email, onLogout }) {
                 </div>
               </Panel>
             </div>
-
-            {(areaSel === 'Santa Rosa' || areaSel === 'Istria') ? (
-              <CobranzaAtrasadaModule area={areaSel} facturas={facturas} setFacturas={setFacturas} usuarioEmail={email} />
-            ) : (
-            <Panel title="Cobranza atrasada" right={<span style={{ fontSize: 12, color: C.rojo }}>{vista.atrasadas.length} facturas</span>}>
-              {vista.atrasadas.length === 0 ? (
-                <div style={{ color: C.verde, fontSize: 14, padding: '10px 0' }}>✓ Sin facturas atrasadas en esta área.</div>
-              ) : (
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                    <thead>
-                      <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-                        <th style={{ textAlign: 'left', padding: '6px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>Cliente</th>
-                        <th style={{ textAlign: 'right', padding: '6px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>Pendiente</th>
-                        <th style={{ textAlign: 'right', padding: '6px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>Días</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {vista.atrasadas.map((r, i) => (
-                        <tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>
-                          <td style={{ padding: 8 }}>{r.cliente}</td>
-                          <td style={{ padding: 8, textAlign: 'right' }}>{clp(r.pendiente)}</td>
-                          <td style={{ padding: 8, textAlign: 'right' }}>
-                            <span style={{ background: r.dias > 30 ? '#FCEBEA' : '#FDECDD', color: r.dias > 30 ? C.rojo : C.ambar, padding: '2px 8px', fontWeight: 600 }}>{r.dias}d</span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </Panel>
-            )}
           </>
         )}
         {(areaSel === 'Santa Rosa' || areaSel === 'Istria') && (
