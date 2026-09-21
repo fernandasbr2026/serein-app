@@ -547,18 +547,19 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
   const remIvaVenta = Math.round(facturasOT.reduce((a, f) => a + ((f.monto || Math.round((f.neto || 0) * 1.19)) - (f.neto || 0)), 0))
   const remIvaCompra = Math.round((p.compras || []).reduce((a, c) => a + (c.exento ? 0 : (+c.monto || 0)), 0) * 0.19)
   const remIva = remIvaVenta - remIvaCompra
-  // Estimado a pagar en TODO el proyecto (no solo lo ya cargado): usa el
-  // presupuesto de cada Centro de Costo (tope), no el consumo real — así
-  // proyecta el IVA de compra que todavía falta por generar, respetando
-  // los CC marcados "exento" (esos no generan crédito de IVA). Se resta
-  // del mismo IVA de venta real (remIvaVenta) — la usuaria ya sabe cuánto
-  // lleva facturado, quiere saber cuánto le va a quedar por pagar en total
-  // una vez ejecutado todo el presupuesto de costos.
+  // Estimado a pagar en TODO el proyecto (no solo lo ya cargado): ambos lados
+  // se proyectan a la venta/costo TOTAL del proyecto, no solo lo ya facturado
+  // o comprado — si no, se compara venta parcial real contra costo total
+  // proyectado y el resultado no significa nada.
+  // Venta: IVA sobre la venta cotizada completa (no solo las facturas ya emitidas).
+  // Compra: usa el presupuesto (tope) de cada Centro de Costo, no el consumo
+  // real, respetando los CC marcados "exento" (esos no generan crédito de IVA).
+  const ivaVentaEstimado = Math.round(ventaDe(p, facturasProy) * 0.19)
   const ivaCompraEstimadoCC = Math.round(ccCodigos(p).reduce((a, id) => {
     if ((p.ccIva && p.ccIva[id]) === 'exento') return a
     return a + topeCC(p, id)
   }, 0) * 0.19)
-  const ivaEstimadoPagar = remIvaVenta - ivaCompraEstimadoCC
+  const ivaEstimadoPagar = ivaVentaEstimado - ivaCompraEstimadoCC
   const [abierto, setAbierto] = useState(false)
   const [addEdp, setAddEdp] = useState(false)
   const [addCompra, setAddCompra] = useState(false)
@@ -657,8 +658,8 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
           <div style={{ background: ivaEstimadoPagar >= 0 ? '#FDECDD' : '#E6F7EE', border: '1px solid ' + (ivaEstimadoPagar >= 0 ? C.ambar : '#1B9E5D'), borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: C.gris, letterSpacing: '.03em' }}>IVA estimado a pagar del proyecto completo</div>
-              <div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>IVA ventas {clp(remIvaVenta)} − IVA compras estimado según presupuesto CC {clp(ivaCompraEstimadoCC)}</div>
-              <div style={{ fontSize: 10.5, color: C.gris, marginTop: 2 }}>A diferencia del remanente de arriba (solo compras ya cargadas), este usa el TOPE de cada Centro de Costo — proyecta el IVA que falta por generar en compras, respetando los CC marcados "Exento".</div>
+              <div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>IVA ventas (sobre venta cotizada total) {clp(ivaVentaEstimado)} − IVA compras estimado según presupuesto CC {clp(ivaCompraEstimadoCC)}</div>
+              <div style={{ fontSize: 10.5, color: C.gris, marginTop: 2 }}>A diferencia del remanente de arriba (solo lo ya facturado y comprado), este proyecta TODO el proyecto: IVA sobre la venta cotizada completa y sobre el TOPE de cada Centro de Costo, respetando los CC marcados "Exento".</div>
             </div>
             <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 22, color: ivaEstimadoPagar >= 0 ? C.rojo : C.verde }}>{clp(ivaEstimadoPagar)}</div>
           </div>
