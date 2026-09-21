@@ -11,7 +11,7 @@ import OTModule, { OTS_INICIALES, resumenOTArea } from './OTModule.jsx'
 import PipelineOT from './PipelineOT.jsx'
 import PipelineProyectos from './PipelineProyectos.jsx'
 import ManoObraModule from './ManoObraModule.jsx'
-import FinanzasModule, { FIN_SEED, calcularResumenFin, resumenGastosPeriodoArea } from './FinanzasModule.jsx'
+import FinanzasModule, { FIN_SEED, calcularResumenFin, resumenGastosPeriodoArea, netoEf } from './FinanzasModule.jsx'
 import CotizadorModule from './CotizadorModule.jsx'
 import CotizacionesModule from './CotizacionesModule.jsx'
 import ProduccionModule, { AVANCES_SEED } from './ProduccionModule.jsx'
@@ -475,7 +475,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
       const AR = ['Santa Rosa', 'Istria', 'Proyectos']
       const gastos = (fin && fin.gastos) || []
       const fac = facturas || {}
-      const fijoDe = a => gastos.filter(g => g.tipo === 'fijo' && g.estado !== 'Anulado').reduce((s, g) => { const dd = (g.dist || []).find(x => x.area === a); return s + (g.neto || 0) * ((dd && dd.pct) || 0) / 100 }, 0)
+      const fijoDe = a => gastos.filter(g => g.tipo === 'fijo' && g.estado !== 'Anulado').reduce((s, g) => { const dd = (g.dist || []).find(x => x.area === a); return s + netoEf(g, fin.ufValor) * ((dd && dd.pct) || 0) / 100 }, 0)
       const compraDe = a => (lc || []).reduce((s, r) => { const ar = asig[r.id] || []; return ar.includes(a) ? s + (r.neto || 0) / ar.length : s }, 0)
       const ventaDe = a => ((fac[a]) || []).reduce((s, f) => s + (f.neto || 0), 0)
       const rows = AR.map(a => { const fj = fijoDe(a), cp = compraDe(a), vt = ventaDe(a); return { a, fj, cp, vt, ut: vt - fj - cp } })

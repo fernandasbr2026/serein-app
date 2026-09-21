@@ -154,7 +154,7 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
     return { n: a.n + 1, neto: a.neto + nt * p, total: a.total + (nt + (g.iva || 0)) * p }
   }, { n: 0, neto: 0, total: 0 })
 
-  function duplicarMesSiguiente(g) {
+  async function duplicarMesSiguiente(g) {
     const d = new Date(g.vencimiento + 'T12:00:00')
     d.setMonth(d.getMonth() + 1)
     const nuevo = { ...g, id: 'g' + Date.now(), vencimiento: d.toISOString().slice(0, 10), estado: 'Pendiente' }
@@ -162,16 +162,35 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
     // Si al duplicar se dejara la fila original también como "Mensual", ambas seguirían sumando el mismo
     // gasto para siempre. Por eso la fila original se cierra a "Única" (solo cuenta su propio mes) y la
     // nueva fila queda como la "Mensual" vigente hacia adelante.
-    setFin({
-      ...fin,
-      gastos: [nuevo, ...fin.gastos.map(x => x.id === g.id && x.frecuencia === 'Mensual' ? { ...x, frecuencia: 'Única' } : x)],
-    })
+    // Antes esto solo llamaba setFin(...) — nunca escribía en localStorage
+    // ni llamaba pushState(), a diferencia de agregarGastoFresco/eliminarGastoFresco
+    // de aquí mismo. La fila duplicada vivía solo en memoria: se perdía al
+    // refrescar la página y nunca llegaba a otros dispositivos/sesiones.
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_fin') || 'null') } catch (e) {}
+    const baseFin = fresco && typeof fresco === 'object' ? fresco : fin
+    const nuevoFin = {
+      ...baseFin,
+      gastos: [nuevo, ...(baseFin.gastos || []).map(x => x.id === g.id && x.frecuencia === 'Mensual' ? { ...x, frecuencia: 'Única' } : x)],
+    }
+    try { localStorage.setItem('serein_fin', JSON.stringify(nuevoFin)) } catch (e) {}
+    setFin(nuevoFin)
+    pushState()
   }
 
-  function cambiarEstadoGasto(id, estado) {
-    const nuevo = { ...fin, gastos: fin.gastos.map(g => g.id === id ? { ...g, estado } : g) }
-    try { localStorage.setItem('serein_fin', JSON.stringify(nuevo)) } catch (e) {}
-    setFin(nuevo)
+  // Al igual que el resto de los handlers de este archivo, trae lo más
+  // fresco antes de escribir: sin este pullState(), cambiar el estado de un
+  // gasto desde un dispositivo podía pisar (con la copia local, potencialmente
+  // atrasada) un gasto agregado/editado desde otro dispositivo segundos antes.
+  async function cambiarEstadoGasto(id, estado) {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_fin') || 'null') } catch (e) {}
+    const baseFin = fresco && typeof fresco === 'object' ? fresco : fin
+    const nuevoFin = { ...baseFin, gastos: (baseFin.gastos || []).map(g => g.id === id ? { ...g, estado } : g) }
+    try { localStorage.setItem('serein_fin', JSON.stringify(nuevoFin)) } catch (e) {}
+    setFin(nuevoFin)
     pushState()
   }
 
@@ -230,7 +249,7 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
                 <td style={{ padding: '8px', color: C.gris }}>{g.categoria}</td>
                 <td style={{ padding: '8px', color: C.gris }}>{g.proveedor || '—'}</td>
                 <td style={{ padding: '8px', textAlign: 'right' }}>{clp(netoEf(g, fin.ufValor))}{g.esUF ? <span style={{ fontSize: 10, color: '#9AA3AD', display: 'block' }}>{g.uf} UF</span> : null}</td>
-                <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600 }}>{clp(g.neto + g.iva)}</td>
+                <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600 }}>{clp(netoEf(g, fin.ufValor) + g.iva)}</td>
                 <td style={{ padding: '8px', color: C.gris, whiteSpace: 'nowrap' }}>{g.vencimiento}</td>
                 <td style={{ padding: '8px', color: C.gris, fontSize: 12 }}>{g.frecuencia}</td>
                 <td style={{ padding: '8px' }}>
@@ -239,7 +258,7 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
                     {ESTADOS_GASTO.map(x => <option key={x}>{x}</option>)}
                   </select>
                 </td>
-                <td style={{ padding: '8px', fontSize: 12 }}>{g.dist.map(d => <div key={d.area}>{d.area}: {d.pct}% ({clp((g.neto) * d.pct / 100)})</div>)}</td>
+                <td style={{ padding: '8px', fontSize: 12 }}>{g.dist.map(d => <div key={d.area}>{d.area}: {d.pct}% ({clp(netoEf(g, fin.ufValor) * d.pct / 100)})</div>)}</td>
                 <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>
                   <button title="Duplicar al mes siguiente" onClick={() => duplicarMesSiguiente(g)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Copy size={14} /></button>
                   <button title="Eliminar" onClick={() => window.confirm(`¿Eliminar "${g.nombre}"?`) && eliminarGastoFresco(g.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
@@ -496,7 +515,7 @@ function CreditosLeasing({ fin, setFin }) {
 }
 
 // ================= RESUMEN MENSUAL =================
-const netoEf = (g, uf) => g.esUF ? Math.round((g.uf || 0) * (uf || 0)) : (g.neto || 0)
+export const netoEf = (g, uf) => g.esUF ? Math.round((g.uf || 0) * (uf || 0)) : (g.neto || 0)
 const flujoDe = c => (c.estado === 'Pagada' || c.aCargo === 'tercero_reembolsa') ? 0 : (c.total || 0)
 
 export function calcularResumenFin(fin, mes) {
@@ -542,16 +561,27 @@ export function resumenGastosPeriodoArea(fin, meses, area) {
 function ProyeccionFin({ fin }) {
   const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
   const now = new Date()
-  const nowMes = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0')
-  const r0 = calcularResumenFin(fin, nowMes)
-  const fijoM = r0.fijos || 0, varM = r0.variables || 0, totalM = fijoM + varM
+  // Antes calcularResumenFin() se llamaba UNA sola vez para el mes vigente
+  // (r0) y ese mismo total (fijoM/varM) se repetía tal cual en las 12
+  // barras/filas — la "proyección" mostraba el mismo número para todos los
+  // meses en vez de un forecast real. calcularResumenFin(fin, mes) ya sabe
+  // calcular la cifra correcta para CUALQUIER mes (filtra gastos Mensual/
+  // Anual/Única por vencimiento y frecuencia, y cuotas por su propio
+  // vencimiento), así que ahora se llama una vez POR mes futuro — igual que
+  // ya hace ResumenMensual para el mes que el usuario elige ahí.
   const meses = []
-  for (let k = 0; k < 12; k++) { const d = new Date(now.getFullYear(), now.getMonth() + k, 1); meses.push({ key: k, etiqueta: d.toLocaleDateString('es-CL', { month: 'short', year: '2-digit' }), fijos: fijoM, total: totalM }) }
-  const max = Math.max(1, totalM)
+  for (let k = 0; k < 12; k++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + k, 1)
+    const mesKey = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+    const r = calcularResumenFin(fin, mesKey)
+    const fijos = r.fijos || 0, total = fijos + (r.variables || 0)
+    meses.push({ key: k, etiqueta: d.toLocaleDateString('es-CL', { month: 'short', year: '2-digit' }), fijos, total })
+  }
+  const max = Math.max(1, ...meses.map(m => m.total))
   return (
     <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18, marginTop: 16 }}>
       <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Proyeccion a 12 meses</div>
-      <div style={{ fontSize: 12, color: '#9AA3AD', marginBottom: 14 }}>Forecast informativo: gastos fijos proyectados, y fijos + variables (promedio del mes vigente). Se actualiza a medida que cargas mas gastos.</div>
+      <div style={{ fontSize: 12, color: '#9AA3AD', marginBottom: 14 }}>Forecast informativo: gastos fijos y variables proyectados mes a mes segun vencimiento y frecuencia cargada (los Mensuales y Anuales se repiten hacia adelante). Se actualiza a medida que cargas mas gastos.</div>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 140, marginBottom: 8 }}>
         {meses.map(m => (
           <div key={m.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 0 }}>

@@ -184,7 +184,7 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
       const add = (sev, area, icono, titulo, detalle, recomendacion, ir) => alertas.push({ sev, area, icono, titulo, detalle, recomendacion, ir })
       const r = calcularResumenFin(fin, mes)
       const cuotasVenc = r.cuotasVencidas || []
-      if (cuotasVenc.length > 0) { const monto = cuotasVenc.reduce((a, c) => a + (+c.monto || +c.cuota || 0), 0); add('rojo', 'Caja', 'alert', cuotasVenc.length + ' cuota(s) de credito/leasing vencida(s)', 'Suman ' + clp(monto) + ' sin pagar.', 'Regulariza con el banco o reprograma para evitar mora e intereses.', 'FINANZAS') }
+      if (cuotasVenc.length > 0) { const monto = cuotasVenc.reduce((a, c) => a + (+c.total || 0), 0); add('rojo', 'Caja', 'alert', cuotasVenc.length + ' cuota(s) de credito/leasing vencida(s)', 'Suman ' + clp(monto) + ' sin pagar.', 'Regulariza con el banco o reprograma para evitar mora e intereses.', 'FINANZAS') }
       const gastos = fin.gastos || []
       const fijosPend = gastos.filter(g => g.tipo === 'fijo' && g.estado !== 'Pagada' && g.estado !== 'Anulado')
       const en7 = sumarDias(hoyStr, 7)
