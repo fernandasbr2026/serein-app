@@ -3,7 +3,6 @@ import { calcularResumenFin } from './FinanzasModule.jsx'
 import { totales as totalesCot } from './CotizacionesModule.jsx'
 import { ocTotal } from './OrdenesCompraModule.jsx'
 import { supabase } from './supabase.js'
-import { pullState } from './sync.js'
 import { AlertTriangle, TrendingUp, TrendingDown, Wallet, Landmark, Receipt, Sparkles, CheckCircle2, ShieldAlert, Info } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { SEREIN } from './theme-serein.js'
@@ -59,7 +58,7 @@ function useDatos({ cc, facturas, ots, proyectos, cotizaciones, clientes, params
     const facs = areasFact.flatMap(a => ((facturas || {})[a] || []).map(f => ({ ...f, area: a })))
     const vencDe = f => f.vencimiento || f.fechaVencimiento || f.fecha_venc || ((f.fecha_emision || f.fecha) ? addDias(f.fecha_emision || f.fecha, num(f.plazo) || 30) : null)
     const brutoF = f => num(f.monto) || (num(f.neto) + Math.round(num(f.neto) * 0.19))
-    const facPend = facs.filter(f => f.estado !== 'Pagado' && f.estado !== 'Anulada' && f.estado !== 'Factoring' && !/factor/i.test(f.medio || ''))
+    const facPend = facs.filter(f => f.estado !== 'Pagado' && f.estado !== 'Anulada' && f.estado !== 'Factoring' && !/factor/i.test(f.medioPago || ''))
     const facVencidas = facPend.filter(f => { const v = vencDe(f); return v && v < hoy })
     const montoVencidas = facVencidas.reduce((a, f) => a + brutoF(f), 0)
 
@@ -205,6 +204,8 @@ function ExecutiveSummaryCards({ cc, d }) {
     <SemCard label="Posición financiera" valor={clp(num(cc.posicionFin))} sev={sevSaldo(num(cc.posicionFin))} />
     <SemCard label="Facturas vencidas" valor={d.facVencidas.length} sub={clp(d.montoVencidas)} sev={d.facVencidas.length > 0 ? 'crit' : 'ok'} />
     <SemCard label="OT listas para facturar" valor={d.otPorFacturarN} sub={clp(d.montoPorFacturar)} sev={d.otPorFacturarN > 0 ? 'warn' : 'ok'} />
+    {/* Valor total de trabajo en curso (cotizada + en ejecucion + terminada), no solo lo que ya esta listo para facturar arriba — ya se calculaba en Dashboard.jsx (cc.otEnCursoTotal) y llegaba hasta aca sin mostrarse en ningun lado, era codigo muerto en la practica. */}
+    <SemCard label="OT en curso (valor total)" valor={clp(num(cc.otEnCursoTotal))} sub="cotizada + en ejecución + terminada" sev="ok" />
   </div>)
 }
 
@@ -228,7 +229,7 @@ function AISereinPanel({ cc, d }) {
   </Card>)
 }
 
-function CriticalAlertsPanel({ cc, d }) {
+function CriticalAlertsPanel({ cc, d, onIr }) {
   const A = []
   if (d.facVencidas.length > 0) A.push({ s: 'crit', t: 'Facturas vencidas', x: d.facVencidas.length + ' doc · ' + clp(d.montoVencidas), ir: 'PAGOS' })
   if (d.topDeuda[0] && d.topDeuda[0].deuda > 0) A.push({ s: d.topDeuda[0].deuda > 5000000 ? 'crit' : 'warn', t: 'Cliente con mayor deuda: ' + d.topDeuda[0].cliente, x: clp(d.topDeuda[0].deuda), ir: 'CLIENTES' })
@@ -241,7 +242,7 @@ function CriticalAlertsPanel({ cc, d }) {
   return (<Card titulo="Alertas críticas" icon={ShieldAlert} borde={C.rojo}>
     {A.length === 0 && <div style={{ fontSize: 13, color: C.verde, display: 'flex', gap: 6, alignItems: 'center' }}><CheckCircle2 size={16} /> Sin alertas críticas.</div>}
     <div style={{ display: 'grid', gap: 8 }}>
-      {A.map((a, i) => (<div key={i} onClick={() => a.ir && a.onIr} style={{ display: 'flex', alignItems: 'center', gap: 10, borderLeft: '4px solid ' + SEV[a.s], background: C.soft, borderRadius: 4, padding: '8px 10px' }}>
+      {A.map((a, i) => (<div key={i} onClick={() => a.ir && onIr && onIr(a.ir)} style={{ display: 'flex', alignItems: 'center', gap: 10, borderLeft: '4px solid ' + SEV[a.s], background: C.soft, borderRadius: 4, padding: '8px 10px', cursor: a.ir ? 'pointer' : 'default' }}>
         <AlertTriangle size={15} color={SEV[a.s]} />
         <span style={{ fontSize: 13, fontWeight: 600, color: C.carbon }}>{a.t}</span>
         <span style={{ marginLeft: 'auto', fontSize: 12.5, fontWeight: 700, color: SEV[a.s] }}>{a.x}</span>
@@ -406,43 +407,17 @@ function AreaCostPanel({ rows, tot }) {
   )
 }
 
+// costosArea (utilidad real por area: venta - costos fijos - compras
+// asignadas) ahora se calcula una sola vez en Dashboard.jsx y llega como
+// prop — se comparte con el "Rentabilidad estimada" del panel principal
+// para que nunca muestren dos numeros de utilidad distintos. Antes se
+// calculaba aca adentro; ver Dashboard.jsx (busca "costosArea") si hace
+// falta tocar la formula.
 export default function ConsolidadoModule(props) {
   const d = useDatos(props)
   const cc = props.cc || {}
+  const costosArea = props.costosArea || null
   const [libroCons, setLibroCons] = useState(null)
-  // Utilidad real por area: venta (facturas) - costos fijos (arriendo +
-  // sueldos administrativos y de trabajadores, ya vienen en fin.gastos con
-  // tipo:'fijo' y su distribucion por area) - compras asignadas (Libro de
-  // Compras). Se calcula una sola vez aca y se pasa a ProfitabilityPanel Y
-  // AreaCostPanel para que muestren siempre el mismo numero.
-  //
-  // pullState() antes de leer serein_comprasAreas: esa asignacion se
-  // guarda con pushState() desde LibroComprasModule, pero si este
-  // navegador nunca la trajo de la nube, localStorage la ve vacia y
-  // "compras asignadas" quedaba siempre en $0 aunque la asignacion real
-  // existiera en otro equipo — inflando la utilidad calculada aca.
-  const [costosArea, setCostosArea] = useState(null)
-  useEffect(() => {
-    let vivo = true
-    ;(async () => {
-      try { await pullState() } catch (e) {}
-      if (!vivo) return
-      let asig = {}
-      try { asig = JSON.parse(localStorage.getItem('serein_comprasAreas') || '{}') } catch (e) {}
-      const { data: lc } = await supabase.from('libro_compras').select('id, neto')
-      if (!vivo) return
-      const AR = ['Santa Rosa', 'Istria', 'Proyectos']
-      const gastos = (props.fin && props.fin.gastos) || []
-      const fac = props.facturas || {}
-      const fijoDe = a => gastos.filter(g => g.tipo === 'fijo' && g.estado !== 'Anulado').reduce((s, g) => { const dd = (g.dist || []).find(x => x.area === a); return s + (g.neto || 0) * ((dd && dd.pct) || 0) / 100 }, 0)
-      const compraDe = a => (lc || []).reduce((s, r) => { const ar = asig[r.id] || []; return ar.includes(a) ? s + (r.neto || 0) / ar.length : s }, 0)
-      const ventaDe = a => ((fac[a]) || []).reduce((s, f) => s + (f.neto || 0), 0)
-      const rows = AR.map(a => { const fj = fijoDe(a), cp = compraDe(a), vt = ventaDe(a); return { a, fj, cp, vt, ut: vt - fj - cp } })
-      const tot = rows.reduce((t, r) => ({ fj: t.fj + r.fj, cp: t.cp + r.cp, vt: t.vt + r.vt, ut: t.ut + r.ut }), { fj: 0, cp: 0, vt: 0, ut: 0 })
-      setCostosArea({ rows, tot })
-    })()
-    return () => { vivo = false }
-  }, [props.fin, props.facturas])
   useEffect(() => {
     let vivo = true
     ;(async () => {
@@ -541,7 +516,7 @@ export default function ConsolidadoModule(props) {
     <ExecutiveSummaryCards cc={cc} d={d} />
     <VentasInformePanel facturas={props.facturas} />
     <AISereinPanel cc={cc} d={d} />
-    <CriticalAlertsPanel cc={cc} d={d} />
+    <CriticalAlertsPanel cc={cc} d={d} onIr={props.onIr} />
     <CashFlowPanel cc={cc} d={d} />
     <div style={dosCol}>
       <ProfitabilityPanel cc={cc} d={d} costosArea={costosArea} />
