@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from './supabase.js'
 import Login from './Login.jsx'
 import Dashboard from './Dashboard.jsx'
+import SubcontratoApp from './SubcontratoApp.jsx'
 import LogoSerein from './LogoSerein.jsx'
 import { pullState, pushState, obtenerEstadoGuardado } from './sync.js'
 import { SEREIN } from './theme-serein.js'
@@ -84,7 +85,7 @@ export default function App() {
     let vivo = true
     supabase
       .from('perfiles')
-      .select('nombre, rol, areas, tipo, modulos, sin_valores, proyectos_ids, ocultar_inventario')
+      .select('id, nombre, rol, areas, tipo, modulos, sin_valores, proyectos_ids, ocultar_inventario')
       .eq('id', session.user.id)
       .single()
       .then(({ data, error }) => {
@@ -107,7 +108,16 @@ export default function App() {
   // por pieza, para poder aplicarlo sin remontar nada ni interrumpir a nadie
   // a mitad de una tarea.
   useEffect(() => {
+    // Un perfil "subcontrato" (Portal de Subcontratistas, ver
+    // SubcontratoApp.jsx) NUNCA debe traer el blob de app_state — es
+    // justo la razon de que ese portal exista aparte: app_state hoy se
+    // puede leer completo por cualquier autenticado (ver comentario en
+    // supabase/migrations/2026-07-25-fix-permisos-app-state.sql), y un
+    // subcontratista es externo. Se marca "sincronizado" igual, sin
+    // pullState/pushState, para no dejarlo colgado en la pantalla de
+    // carga.
     if (!perfil) return
+    if (perfil.tipo === 'subcontrato') { setSincronizado(true); return }
     let vivo = true
     pullState().then(res => { if (res.ok && res.n === 0) pushState() }).finally(() => { if (vivo) setSincronizado(true) })
     const id = setInterval(() => { pushState() }, 5000)
@@ -159,6 +169,10 @@ export default function App() {
     />
   )
   if (!perfil) return <Pantalla msg="Verificando tu perfil…" />
+  // Portal de Subcontratistas: app completamente aparte, nunca monta
+  // Dashboard.jsx ni nada que dependa de app_state (ver comentario del
+  // useEffect de sincronizacion, arriba).
+  if (perfil.tipo === 'subcontrato') return <SubcontratoApp perfil={perfil} email={session.user.email} onLogout={salir} />
   if (!sincronizado) return <Pantalla msg="Sincronizando datos con la nube..." />
   return (
     <ErrorBoundary>
