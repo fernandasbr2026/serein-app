@@ -3,6 +3,7 @@ import { calcularResumenFin } from './FinanzasModule.jsx'
 import { totales as totalesCot } from './CotizacionesModule.jsx'
 import { ocTotal } from './OrdenesCompraModule.jsx'
 import { supabase } from './supabase.js'
+import { pullState } from './sync.js'
 import { AlertTriangle, TrendingUp, TrendingDown, Wallet, Landmark, Receipt, Sparkles, CheckCircle2, ShieldAlert, Info } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { SEREIN } from './theme-serein.js'
@@ -266,18 +267,27 @@ function CashFlowPanel({ cc, d }) {
   </Card>)
 }
 
-function ProfitabilityPanel({ cc, d }) {
+// Antes esta tarjeta mostraba cc.utilidad/cc.rentab — un numero congelado
+// desde una foto historica de DATA.global (data.js), nunca recalculado.
+// Ahora recibe costosArea.tot (el mismo total en vivo que arma
+// AreaCostPanel mas abajo: venta real por factura - costos fijos con
+// distribucion por area, sueldos incluidos - compras asignadas del Libro
+// de Compras) para que ambas tarjetas de la pantalla muestren siempre el
+// mismo numero, en vez de dos calculos de "utilidad" que podian divergir.
+function ProfitabilityPanel({ cc, d, costosArea }) {
   const venta = num(cc.kVenta)
-  const util = num(cc.utilidad)
-  const costos = venta > 0 && util !== 0 ? venta - util : null
+  const tot = costosArea && costosArea.tot
+  const costos = tot ? tot.fj + tot.cp : null
+  const util = tot ? tot.ut : null
+  const rentab = tot && tot.vt > 0 ? (tot.ut / tot.vt) * 100 : 0
   const costoFin = num(d.resumen.interesMes)
   return (<Card titulo="Rentabilidad" icon={TrendingUp} borde={C.teal}>
     <Fila label="Venta neta" valor={clp(venta)} color={C.azul} />
-    <Fila label="Costos operacionales (estimado)" valor={costos !== null ? clp(costos) : 'pendiente de integrar'} color={costos !== null ? C.carbon : C.gray} />
+    <Fila label="Costos operacionales (fijos + sueldos + compras asignadas)" valor={costos !== null ? clp(costos) : 'cargando…'} color={costos !== null ? C.carbon : C.gray} />
     <Fila label="Costos financieros (interés mes)" valor={clp(costoFin)} color={C.rojo} />
     <Fila label="Pérdida factoring" valor={clp(num(cc.kPerd))} color={C.ambar} />
-    <Fila label="Utilidad estimada" valor={util ? clp(util) : 'pendiente de integrar'} color={util >= 0 ? C.verde : C.rojo} fuerte />
-    <Fila label="Margen estimado" valor={num(cc.rentab).toFixed(1) + '%'} color={num(cc.rentab) >= 0 ? C.verde : C.rojo} fuerte />
+    <Fila label="Utilidad estimada" valor={util !== null ? clp(util) : 'cargando…'} color={util >= 0 ? C.verde : C.rojo} fuerte />
+    <Fila label="Margen estimado" valor={tot ? rentab.toFixed(1) + '%' : '—'} color={rentab >= 0 ? C.verde : C.rojo} fuerte />
   </Card>)
 }
 
@@ -366,19 +376,12 @@ function FinancialCalendarPanel({ d }) {
   </Card>)
 }
 
-function AreaCostPanel({ fin, facturas }) {
+// rows/tot vienen de ConsolidadoModule (ver cargarCostosArea) — se calculan
+// una sola vez ahi y se comparten con ProfitabilityPanel, para que las dos
+// tarjetas de la pantalla nunca muestren una "utilidad" distinta.
+function AreaCostPanel({ rows, tot }) {
   const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
-  const AR = ['Santa Rosa', 'Istria', 'Proyectos']
-  const [lc, setLc] = useState([])
-  useEffect(() => { let v = true; supabase.from('libro_compras').select('id, neto').then(({ data }) => { if (v) setLc(data || []) }); return () => { v = false } }, [])
-  let asig = {}; try { asig = JSON.parse(localStorage.getItem('serein_comprasAreas') || '{}') } catch (e) {}
-  const gastos = (fin && fin.gastos) || []
-  const fac = facturas || {}
-  const fijoDe = a => gastos.filter(g => g.tipo === 'fijo' && g.estado !== 'Anulado').reduce((s, g) => { const d = (g.dist || []).find(x => x.area === a); return s + (g.neto || 0) * ((d && d.pct) || 0) / 100 }, 0)
-  const compraDe = a => (lc || []).reduce((s, r) => { const ar = asig[r.id] || []; return ar.includes(a) ? s + (r.neto || 0) / ar.length : s }, 0)
-  const ventaDe = a => ((fac[a]) || []).reduce((s, f) => s + (f.neto || 0), 0)
-  const rows = AR.map(a => { const fj = fijoDe(a), cp = compraDe(a), vt = ventaDe(a); return { a, fj, cp, vt, ut: vt - fj - cp } })
-  const tot = rows.reduce((t, r) => ({ fj: t.fj + r.fj, cp: t.cp + r.cp, vt: t.vt + r.vt, ut: t.ut + r.ut }), { fj: 0, cp: 0, vt: 0, ut: 0 })
+  if (!rows) return null
   const th = { textAlign: 'right', padding: '8px 10px', fontSize: 11, color: SEREIN.textFaint, textTransform: 'uppercase' }
   const td = { padding: '8px 10px', textAlign: 'right', whiteSpace: 'nowrap' }
   return (
@@ -402,6 +405,39 @@ export default function ConsolidadoModule(props) {
   const d = useDatos(props)
   const cc = props.cc || {}
   const [libroCons, setLibroCons] = useState(null)
+  // Utilidad real por area: venta (facturas) - costos fijos (arriendo +
+  // sueldos administrativos y de trabajadores, ya vienen en fin.gastos con
+  // tipo:'fijo' y su distribucion por area) - compras asignadas (Libro de
+  // Compras). Se calcula una sola vez aca y se pasa a ProfitabilityPanel Y
+  // AreaCostPanel para que muestren siempre el mismo numero.
+  //
+  // pullState() antes de leer serein_comprasAreas: esa asignacion se
+  // guarda con pushState() desde LibroComprasModule, pero si este
+  // navegador nunca la trajo de la nube, localStorage la ve vacia y
+  // "compras asignadas" quedaba siempre en $0 aunque la asignacion real
+  // existiera en otro equipo — inflando la utilidad calculada aca.
+  const [costosArea, setCostosArea] = useState(null)
+  useEffect(() => {
+    let vivo = true
+    ;(async () => {
+      try { await pullState() } catch (e) {}
+      if (!vivo) return
+      let asig = {}
+      try { asig = JSON.parse(localStorage.getItem('serein_comprasAreas') || '{}') } catch (e) {}
+      const { data: lc } = await supabase.from('libro_compras').select('id, neto')
+      if (!vivo) return
+      const AR = ['Santa Rosa', 'Istria', 'Proyectos']
+      const gastos = (props.fin && props.fin.gastos) || []
+      const fac = props.facturas || {}
+      const fijoDe = a => gastos.filter(g => g.tipo === 'fijo' && g.estado !== 'Anulado').reduce((s, g) => { const dd = (g.dist || []).find(x => x.area === a); return s + (g.neto || 0) * ((dd && dd.pct) || 0) / 100 }, 0)
+      const compraDe = a => (lc || []).reduce((s, r) => { const ar = asig[r.id] || []; return ar.includes(a) ? s + (r.neto || 0) / ar.length : s }, 0)
+      const ventaDe = a => ((fac[a]) || []).reduce((s, f) => s + (f.neto || 0), 0)
+      const rows = AR.map(a => { const fj = fijoDe(a), cp = compraDe(a), vt = ventaDe(a); return { a, fj, cp, vt, ut: vt - fj - cp } })
+      const tot = rows.reduce((t, r) => ({ fj: t.fj + r.fj, cp: t.cp + r.cp, vt: t.vt + r.vt, ut: t.ut + r.ut }), { fj: 0, cp: 0, vt: 0, ut: 0 })
+      setCostosArea({ rows, tot })
+    })()
+    return () => { vivo = false }
+  }, [props.fin, props.facturas])
   useEffect(() => {
     let vivo = true
     ;(async () => {
@@ -489,7 +525,7 @@ export default function ConsolidadoModule(props) {
     <CriticalAlertsPanel cc={cc} d={d} />
     <CashFlowPanel cc={cc} d={d} />
     <div style={dosCol}>
-      <ProfitabilityPanel cc={cc} d={d} />
+      <ProfitabilityPanel cc={cc} d={d} costosArea={costosArea} />
       <FactoringSummaryPanel cc={cc} d={d} />
     </div>
     <div style={dosCol}>
@@ -498,6 +534,6 @@ export default function ConsolidadoModule(props) {
     </div>
     <CustomerRiskPanel d={d} />
     <FinancialCalendarPanel d={d} />
-    <AreaCostPanel fin={props.fin} facturas={props.facturas} />
+    <AreaCostPanel rows={costosArea && costosArea.rows} tot={costosArea && costosArea.tot} />
   </div>)
 }
