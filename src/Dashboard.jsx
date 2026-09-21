@@ -170,85 +170,6 @@ function GraficoVentaConEquilibrio({ af, area, color, clp }) {
 }
 
 
-function ResumenFinancieroCard({ fin, onIr }) {
-  const mes = new Date().toISOString().slice(0, 7)
-  const r = calcularResumenFin(fin, mes)
-  const item = (label, valor, color) => (
-    <div>
-      <div style={{ fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>{label}</div>
-      <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 22, fontWeight: 600, color: color || '#101315', whiteSpace: 'nowrap' }}>{valor}</div>
-    </div>
-  )
-  return (
-    <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: '4px solid #101315', marginBottom: 16 }}>
-      <div style={{ padding: '14px 18px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-        <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>💰 Resumen financiero del mes</span>
-        <button onClick={onIr} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '5px 12px', cursor: 'pointer', fontSize: 12 }}>Ver módulo Finanzas →</button>
-      </div>
-      <div style={{ padding: '0 18px 16px', display: 'flex', gap: 28, flexWrap: 'wrap' }}>
-        {item('Gastos fijos + variables', clp(r.fijos + r.variables))}
-        {item('Cuotas créditos/leasing', clp(r.totalCuotasMes), '#F77716')}
-        {item('Salida de caja proyectada', clp(r.salidaCaja), '#C5453D')}
-        {item('Deuda vigente', clp(r.deudaVigente))}
-        {item('Cuotas vencidas', r.cuotasVencidas.length, r.cuotasVencidas.length > 0 ? '#C5453D' : '#1B9E5D')}
-      </div>
-    </div>
-  )
-}
-
-function CardModulo({ titulo, color, abiertasN, abiertasMonto, porFacturar, facturadoPorCobrar }) {
-  const it = (label, val, col) => (
-    <div style={{ marginBottom: 8 }}>
-      <div style={{ fontSize: 10.5, color: '#9AA3AD', textTransform: 'uppercase' }}>{label}</div>
-      <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 18, fontWeight: 600, color: col || '#101315', whiteSpace: 'nowrap' }}>{val}</div>
-    </div>
-  )
-  return (
-    <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: `4px solid ${color}`, padding: '14px 16px' }}>
-      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 12 }}>{titulo}</div>
-      {it(`Abiertas · ${abiertasN} en curso`, clp(abiertasMonto) + ' por facturar', color)}
-      {it('Cerradas por facturar', clp(porFacturar), '#F77716')}
-      {it('Facturado, aún por cobrar', clp(facturadoPorCobrar), '#C5453D')}
-    </div>
-  )
-}
-
-function ResumenModulos({ ots, proyectos }) {
-  const meOT = o => (o.montoCotizado > 0 ? o.montoCotizado : (o.ventas || []).reduce((a, v) => a + (v.neta || 0), 0))
-  const areaData = a => {
-    const list = (ots || []).filter(o => o.area === a)
-    const abiertas = list.filter(o => ['Cotizada', 'En ejecución'].includes(o.estado))
-    const terminadas = list.filter(o => o.estado === 'Terminada')
-    const facturadas = list.filter(o => ['Facturada', 'Cerrada'].includes(o.estado))
-    return {
-      abiertasN: abiertas.length,
-      abiertasMonto: abiertas.reduce((s, o) => s + meOT(o), 0),
-      porFacturar: terminadas.reduce((s, o) => s + meOT(o), 0),
-      facturadoPorCobrar: facturadas.reduce((s, o) => s + (o.ventas || []).filter(v => v.estadoPago === 'Pendiente').reduce((x, v) => x + (v.neta || 0), 0), 0),
-    }
-  }
-  const facturadoDe = p => (p.edps || []).reduce((a, e) => a + (e.venta || 0), 0)
-  const proyList = proyectos || []
-  const saldoP = p => (p.venta_cotizada > 0) ? Math.max(0, p.venta_cotizada - facturadoDe(p)) : null
-  const proyAbiertas = proyList.filter(p => { const s = saldoP(p); return (s !== null && s > 0) || (s === null && p.avance < 100) })
-  const proyData = {
-    abiertasN: proyAbiertas.length,
-    abiertasMonto: proyAbiertas.reduce((a, p) => a + (saldoP(p) || 0), 0),
-    porFacturar: proyList.reduce((a, p) => a + (saldoP(p) || 0), 0),
-    facturadoPorCobrar: proyList.reduce((a, p) => a + (p.edps || []).filter(e => e.estado !== 'Pagado').reduce((x, e) => x + (e.venta || 0), 0), 0),
-  }
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>OT y proyectos por módulo</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
-        <CardModulo titulo="Santa Rosa" color="#D9600A" {...areaData('Santa Rosa')} />
-        <CardModulo titulo="Istria" color="#101315" {...areaData('Istria')} />
-        <CardModulo titulo="Proyectos" color="#F77716" {...proyData} />
-      </div>
-    </div>
-  )
-}
-
 export default function Dashboard({ perfil, email, onLogout }) {
   const areasUsuario = perfil.areas || []
   const modulosPerfil = Array.isArray(perfil.modulos) ? perfil.modulos : null
@@ -480,7 +401,6 @@ export default function Dashboard({ perfil, email, onLogout }) {
     }))
   }, [params.uf && params.uf.valor])
   const vista = useMemo(() => (esGerencia && areaSel === 'TODAS') ? DATA.global : (DATA.areas[areaSel] || DATA.global), [areaSel, esGerencia])
-  const rentab = vista.venta > 0 ? (vista.utilidad / vista.venta) * 100 : 0
 
   const mesesVista = useMemo(() => {
     // Gráfico desde las FACTURAS reales (agrupadas por fecha_emision), no desde DATA.meses semilla.
@@ -507,18 +427,73 @@ export default function Dashboard({ perfil, email, onLogout }) {
     return out
   }, [areaSel, esGerencia, facturas])
 
-  const estados = Object.entries(vista.estados || {})
-  const totalEst = estados.reduce((a, [, n]) => a + n, 0) || 1
+
+  // "Venta Neta" del panel principal podia quedar pisada por el cache
+  // local del Excel de Ventas (serein_libroVentasXlsx) sin traer nunca la
+  // tabla real libro_ventas — mismo bug ya encontrado y arreglado en
+  // ConsolidadoModule (ver su comentario en la funcion que carga
+  // libroCons), nunca replicado aca. En cualquier navegador donde nadie
+  // hubiera vuelto a subir el Excel ahi mismo, la cifra quedaba
+  // desactualizada o pisada por datos viejos aunque la tabla real tuviera
+  // la informacion correcta.
+  const [libroVentasDb, setLibroVentasDb] = useState(null)
+  useEffect(() => {
+    let vivo = true
+    ;(async () => {
+      try { await pullState() } catch (e) {}
+      if (!vivo) return
+      let lv = []
+      try { lv = JSON.parse(localStorage.getItem('serein_libroVentasXlsx') || '[]') } catch (e) {}
+      let db = []
+      try { const res = await supabase.from('libro_ventas').select('document_number, neto, iva, total, document_type, oculto'); db = (res && res.data) || [] } catch (e) {}
+      if (!vivo) return
+      const key = r => String(r.document_number || '')
+      const vistos = new Set(db.map(key))
+      setLibroVentasDb([...db, ...lv.filter(r => !vistos.has(key(r)))])
+    })()
+    return () => { vivo = false }
+  }, [])
+
+  // Utilidad real por area (venta - costos fijos, sueldos incluidos, -
+  // compras asignadas del Libro de Compras) — se calcula UNA vez aca y se
+  // pasa a ConsolidadoModule Y se usa para "Rentabilidad estimada" del
+  // panel principal, para que ambas pantallas muestren siempre el mismo
+  // numero de utilidad en vez de dos calculos que podian divergir (o, como
+  // pasaba antes con "Rentabilidad estimada", uno de los dos ni siquiera
+  // estaba en vivo). Formula igual a la que ya se uso y probo en
+  // ConsolidadoModule/AreaCostPanel.
+  const [costosArea, setCostosArea] = useState(null)
+  useEffect(() => {
+    let vivo = true
+    ;(async () => {
+      try { await pullState() } catch (e) {}
+      if (!vivo) return
+      let asig = {}
+      try { asig = JSON.parse(localStorage.getItem('serein_comprasAreas') || '{}') } catch (e) {}
+      const { data: lc } = await supabase.from('libro_compras').select('id, neto')
+      if (!vivo) return
+      const AR = ['Santa Rosa', 'Istria', 'Proyectos']
+      const gastos = (fin && fin.gastos) || []
+      const fac = facturas || {}
+      const fijoDe = a => gastos.filter(g => g.tipo === 'fijo' && g.estado !== 'Anulado').reduce((s, g) => { const dd = (g.dist || []).find(x => x.area === a); return s + (g.neto || 0) * ((dd && dd.pct) || 0) / 100 }, 0)
+      const compraDe = a => (lc || []).reduce((s, r) => { const ar = asig[r.id] || []; return ar.includes(a) ? s + (r.neto || 0) / ar.length : s }, 0)
+      const ventaDe = a => ((fac[a]) || []).reduce((s, f) => s + (f.neto || 0), 0)
+      const rows = AR.map(a => { const fj = fijoDe(a), cp = compraDe(a), vt = ventaDe(a); return { a, fj, cp, vt, ut: vt - fj - cp } })
+      const tot = rows.reduce((t, r) => ({ fj: t.fj + r.fj, cp: t.cp + r.cp, vt: t.vt + r.vt, ut: t.ut + r.ut }), { fj: 0, cp: 0, vt: 0, ut: 0 })
+      setCostosArea({ rows, tot })
+    })()
+    return () => { vivo = false }
+  }, [fin, facturas])
 
   // ----- Consolidado y áreas: suman desde las FACTURAS consolidadas (Venta Neta) -----
   const areasFact = ['Santa Rosa', 'Istria', 'Proyectos']
   const facNeto = a => (facturas[a] || []).filter(x => x.estado !== 'Anulada').reduce((s, x) => s + (x.neto || 0), 0)
-  const facCobN = a => (facturas[a] || []).filter(x => x.estado === 'Pagado' || x.estado === 'Factoring' || /factor/i.test(x.medio || '')).reduce((s, x) => s + (x.neto || 0), 0)
+  const facCobN = a => (facturas[a] || []).filter(x => x.estado === 'Pagado' || x.estado === 'Factoring' || /factor/i.test(x.medioPago || '')).reduce((s, x) => s + (x.neto || 0), 0)
   const facCount = a => (facturas[a] || []).length
   const esTODAS = esGerencia && areaSel === 'TODAS'
   const esAreaFact = areasFact.includes(areaSel)
   let kVenta = esTODAS ? areasFact.reduce((s, a) => s + facNeto(a), 0) : (esAreaFact ? facNeto(areaSel) : vista.venta)
-  const _lvR = (() => { try { return JSON.parse(localStorage.getItem('serein_libroVentasXlsx') || '[]') } catch (e) { return [] } })()
+  const _lvR = libroVentasDb || []
   const _sgnR = r => (String(r.document_type || '').trim() === '61' ? -1 : 1)
   let kVentaLibroBruto = 0, kNFactLibro = 0, _kvLibro = 0
   for (const _r of _lvR) { if (_r.oculto) continue; const _g = _sgnR(_r); _kvLibro += _g * (Number(_r.neto) || 0); kVentaLibroBruto += _g * ((Number(_r.total) || 0) || ((Number(_r.neto) || 0) + (Number(_r.iva) || 0))); kNFactLibro++ }
@@ -529,6 +504,30 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const kPerd = esTODAS ? areasFact.reduce((s, a) => s + perdFactArea(a), 0) : (esAreaFact ? perdFactArea(areaSel) : vista.perdidaFact)
   const kNFact = esTODAS ? areasFact.reduce((s, a) => s + facCount(a), 0) : (esAreaFact ? facCount(areaSel) : vista.nFacturas)
   const ventaAreaLive = areasFact.map(a => ({ area: a, venta: facNeto(a) }))
+
+  // "Rentabilidad estimada" y "Estado facturas" del panel principal
+  // mostraban vista.utilidad/vista.estados — la misma foto fija de data.js
+  // que ya se reemplazo en ConsolidadoModule, nunca replicada aca. Ahora
+  // usan datos en vivo: rentab sale de costosArea (mismo calculo que
+  // ConsolidadoModule/AreaCostPanel, para no mostrar dos numeros de
+  // utilidad distintos), y estados cuenta las facturas reales del area
+  // seleccionada (o las 3 areas si es TODAS).
+  const rentabArea = esTODAS ? (costosArea && costosArea.tot) : (costosArea && (costosArea.rows || []).find(r => r.a === areaSel))
+  const rentab = rentabArea && rentabArea.vt > 0 ? (rentabArea.ut / rentabArea.vt) * 100 : 0
+  const estadosMap = {}
+  const facsParaEstados = esTODAS ? areasFact.flatMap(a => facturas[a] || []) : (esAreaFact ? (facturas[areaSel] || []) : [])
+  for (const f of facsParaEstados) { const e = f.estado || 'Sin estado'; estadosMap[e] = (estadosMap[e] || 0) + 1 }
+  const estados = Object.entries(estadosMap)
+  const totalEst = estados.reduce((a, [, n]) => a + n, 0) || 1
+
+  // "Principales clientes" (Santa Rosa/Istria) mostraba vista.topClientes,
+  // el mismo ranking congelado de data.js — ahora se arma en vivo desde
+  // las facturas reales del area.
+  const topClientesLive = (() => {
+    const mapa = {}
+    for (const f of (facturas[areaSel] || [])) { const k = (f.cliente || '-').toString().trim(); mapa[k] = (mapa[k] || 0) + (f.neto || 0) }
+    return Object.entries(mapa).map(([cliente, venta]) => ({ cliente, venta })).sort((a, b) => b.venta - a.venta).slice(0, 5)
+  })()
 
   // ----- Flujo de caja proyectado (consolidado): lo que se debe pagar vs lo que va a entrar -----
   const _hoy = new Date().toISOString().slice(0, 10)
@@ -552,9 +551,14 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const saldoProy = totalEntrar - totalPagar
 
   // ===== RESUMEN FINANCIERO TOTAL (montos con IVA / bruto) =====
-  const brutoF = f => f.monto || (f.iva === 'exenta' ? (f.neto || 0) : (f.neto || 0) + Math.round((f.neto || 0) * 0.19))
-  const noPagada = f => f.estado !== 'Pagado' && f.estado !== 'Anulada' && f.estado !== 'Factoring' && !/factor/i.test(f.medio || '')
-  const esPagada = f => f.estado === 'Pagado' || f.estado === 'Factoring' || /factor/i.test(f.medio || '')
+  // Antes esta funcion usaba f.monto (si estaba cargado) o un 19% fijo
+  // sobre el neto, mientras que analisisFinancieroDe (mas abajo, vista por
+  // area) ya usaba montoFacturaDe — dos formulas de "venta bruta" que
+  // podian no coincidir para una factura importada donde f.monto no
+  // calzara con neto*1.19 exacto. Se unifica en la misma funcion.
+  const brutoF = f => montoFacturaDe(f)
+  const noPagada = f => f.estado !== 'Pagado' && f.estado !== 'Anulada' && f.estado !== 'Factoring' && !/factor/i.test(f.medioPago || '')
+  const esPagada = f => f.estado === 'Pagado' || f.estado === 'Factoring' || /factor/i.test(f.medioPago || '')
   const facBrutoArea = (a, filtro) => (facturas[a] || []).filter(filtro).reduce((s, f) => s + brutoF(f), 0)
   // Cuentas por cobrar (bruto): facturas no pagadas de las tres áreas
   const cxcTotal = areasFact.reduce((s, a) => s + facBrutoArea(a, noPagada), 0)
@@ -577,7 +581,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const caja = (pp.saldoInicial || 0) + cobrosReg - pagosReg
   const posicionFin = caja + cxcTotal - cxpTotal + otEnCursoTotal
   // % factorizado sobre venta neta total
-  const netoFactTotal = areasFact.reduce((s, a) => s + (facturas[a] || []).filter(f => f.estado === 'Factoring' || /factor/i.test(f.medio || '')).reduce((x, f) => x + (f.neto || 0), 0), 0)
+  const netoFactTotal = areasFact.reduce((s, a) => s + (facturas[a] || []).filter(f => f.estado === 'Factoring' || /factor/i.test(f.medioPago || '')).reduce((x, f) => x + (f.neto || 0), 0), 0)
   const netoTotalFact = areasFact.reduce((s, a) => s + facNeto(a), 0)
   const pctFactorizado = netoTotalFact > 0 ? (netoFactTotal / netoTotalFact * 100) : 0
   // Cuentas por pagar atribuidas a un área (para el resumen por módulo)
@@ -762,13 +766,6 @@ export default function Dashboard({ perfil, email, onLogout }) {
     )
   }
 
-  const flujoItem = (label, valor, color) => (
-    <div>
-      <div style={{ fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>{label}</div>
-      <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 22, fontWeight: 600, color: color || '#101315', whiteSpace: 'nowrap' }}>{valor}</div>
-    </div>
-  )
-
   const nombreTab = t => t === 'ASESOR' ? 'Asesor IA' : t === 'TODAS' ? 'Consolidado' : t === 'ORGANIGRAMA' ? '🗂️ Organigrama' : t === 'CRM' ? '📞 CRM' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'ORDENES_COMPRA' ? '🧾 Órdenes de Compra' : t === 'TRAZABILIDAD' ? '🔗 Trazabilidad y Alertas' : t === 'INVENTARIO' ? '📦 Inventario' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Resumen ventas por cliente' : t === 'CONTACTOS' ? '📇 Clientes y Proveedores' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t === 'LIBRO_COMPRAS' ? 'Libro de Compras' : t === 'LIBRO_VENTAS' ? 'Libro de Ventas' : t === 'CARTOLAS_BANCARIAS' ? 'Cartolas Bancarias' : t
 
   return (
@@ -875,42 +872,16 @@ export default function Dashboard({ perfil, email, onLogout }) {
         </div>
         )}
 
-        {esGerencia && areaSel === 'TODAS' && (<ConsolidadoModule cc={{ caja, cxcTotal, cxpTotal, otEnCursoTotal, posicionFin, totalPagar, pagar7, totalEntrar, saldoProy, netoFactTotal, netoTotalFact, pctFactorizado, kVenta, kCobrado, kPend, kPerd, rentab, utilidad: vista.utilidad }} facturas={facturas} ots={ots} proyectos={proyectos} cotizaciones={cotizaciones} clientes={clientes} params={params} fin={fin} pp={pp} ppmPct={ppmPct} onIr={setAreaSel} />)}
-            {false && esGerencia && areaSel === 'TODAS' && (
-          <>
-            <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: `4px solid ${C.verde}`, marginBottom: 16 }}>
-              <div style={{ padding: '14px 18px 6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-                <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>📊 Resumen financiero total</span>
-                <span style={{ fontSize: 11, color: '#9AA3AD' }}>caja + por cobrar − por pagar + OT en curso · montos con IVA</span>
-              </div>
-              <div style={{ padding: '0 18px 16px', display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                {flujoItem('Caja', clp(caja), caja >= 0 ? C.verde : C.rojo)}
-                {flujoItem('Cuentas por cobrar', clp(cxcTotal), C.azul)}
-                {flujoItem('Cuentas por pagar', clp(cxpTotal), C.rojo)}
-                {flujoItem('OT en curso (por facturar)', clp(otEnCursoTotal), C.ambar)}
-                <div style={{ borderLeft: '2px solid #DFE4EA', paddingLeft: 20 }}>
-                  {flujoItem('Posición financiera', clp(posicionFin), posicionFin >= 0 ? C.verde : C.rojo)}
-                </div>
-              </div>
-            </div>
-
-            <ResumenModulos ots={ots} proyectos={proyectos} />
-
-            <ResumenFinancieroCard fin={fin} onIr={() => setAreaSel('FINANZAS')} />
-            <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: `4px solid ${C.verde}`, marginBottom: 16 }}>
-              <div style={{ padding: '14px 18px 6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-                <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>💵 Flujo de caja proyectado · todas las áreas</span>
-                <span style={{ fontSize: 11, color: '#9AA3AD' }}>pagos: gastos + cuotas + proveedores · ingresos: cobros + facturas por cobrar</span>
-              </div>
-              <div style={{ padding: '0 18px 16px', display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                {flujoItem('Total a pagar', clp(totalPagar), C.rojo)}
-                {flujoItem('Vence en 7 días', clp(pagar7), C.ambar)}
-                {flujoItem('Total a entrar', clp(totalEntrar), C.verde)}
-                {flujoItem('Saldo proyectado', clp(saldoProy), saldoProy >= 0 ? C.verde : C.rojo)}
-              </div>
-            </div>
-          </>
-        )}
+        {esGerencia && areaSel === 'TODAS' && (<ConsolidadoModule cc={{ caja, cxcTotal, cxpTotal, otEnCursoTotal, posicionFin, totalPagar, pagar7, totalEntrar, saldoProy, netoFactTotal, netoTotalFact, pctFactorizado, kVenta, kCobrado, kPend, kPerd }} costosArea={costosArea} facturas={facturas} ots={ots} proyectos={proyectos} cotizaciones={cotizaciones} clientes={clientes} params={params} fin={fin} pp={pp} ppmPct={ppmPct} onIr={setAreaSel} />)}
+        {/* La version en vivo de este bloque (caja, cxc, cxp, saldo proyectado,
+            posicion financiera) ya la muestra ConsolidadoModule arriba, con
+            los mismos datos. Este bloque quedaba deshabilitado con
+            "{false && ...}" — nunca se renderizaba — y las funciones que
+            usaba (ResumenFinancieroCard, CardModulo, ResumenModulos) no
+            tenian ninguna otra referencia en el archivo. Se elimina como
+            limpieza; "OT en curso (por facturar)" es lo unico que no tenia
+            equivalente en vivo en ningun lado — se agrego a las tarjetas del
+            resumen ejecutivo de ConsolidadoModule. */}
 
         {(areaSel === 'Santa Rosa' || areaSel === 'Istria') && resumenFinancieroArea(areaSel)}
 
@@ -978,8 +949,9 @@ export default function Dashboard({ perfil, email, onLogout }) {
             <div style={{ marginBottom: 16 }}>
               <Panel title="Principales clientes">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {vista.topClientes.map((c, i) => {
-                    const max = vista.topClientes[0].venta
+                  {topClientesLive.length === 0 && <div style={{ fontSize: 12.5, color: '#9AA3AD' }}>Sin facturas registradas en esta área todavía.</div>}
+                  {topClientesLive.map((c, i) => {
+                    const max = topClientesLive[0].venta || 1
                     return (
                       <div key={i}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 3 }}>
