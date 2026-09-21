@@ -2019,7 +2019,7 @@ function TileOT({ ot, onOpen, onDragStart, onDropOn, verValores }) {
   )
 }
 
-function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, onDelete, onCambiarEstado, onAgregarVenta, onEliminarVenta, onAgregarArray, verValores = true, ordenesCompra = [], mo = null, otsAll = [], instrumentos = null, libroCompras = [], enModal = false }) {
+function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateProtocolo, onUpdateMarcasEsperadas, onDelete, onCambiarEstado, onAgregarVenta, onEliminarVenta, onAgregarArray, verValores = true, ordenesCompra = [], mo = null, otsAll = [], instrumentos = null, libroCompras = [], enModal = false }) {
   const [abierta, setAbierta] = useState(false)
   const [addVenta, setAddVenta] = useState(false)
   const [addAbono, setAddAbono] = useState(false)
@@ -2610,7 +2610,7 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
           </div>
           )}
           {tab === 'calidad' && (
-            <ProtocolosOT ot={ot} onUpdate={onUpdateProtocolos || onUpdate} otsAll={otsAll} instrumentos={instrumentos} />
+            <ProtocolosOT ot={ot} onUpdate={onUpdateProtocolos || onUpdate} onUpdateProtocolo={onUpdateProtocolo} otsAll={otsAll} instrumentos={instrumentos} />
           )}
           <div style={{ marginTop: 14, borderTop: '1px dashed #DFE4EA', paddingTop: 12 }}>
             <FotosOT ot={ot} onUpdate={onUpdate} />
@@ -3055,7 +3055,7 @@ function ProtoPGPForm({ p: pProp, upd: updRemoto, onDel, instrumentos, marcasEsp
   const addCapa = () => upd({ ...p, capas: [...capas, nuevaCapa('Capa ' + (capas.length + 1))] })
   const delCapa = id => upd({ ...p, capas: capas.filter(c => c.id !== id) }); const [col, setCol] = useState(false)
   return (<div style={{ marginTop: 12, border: '1px solid #DFE4EA', borderTop: '3px solid #101315', padding: 14 }}><ProtoHead p={p} upd={upd} onDel={onDel} titulo="Protocolo Granallado y Pintura" equipos={instrumentos} col={col} onTgl={() => setCol(!col)} />{!col && (<><div style={{ margin: '10px 0 4px' }}><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '6px 0 4px' }}>Descripción</div><input style={ip} value={p.descripcion || ''} onChange={e => set('descripcion', e.target.value)} /><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '10px 0 4px' }}>Esquema del proyecto</div><textarea style={{ ...ip, minHeight: 54, resize: 'vertical' }} value={p.esquemaProyecto || ''} onChange={e => set('esquemaProyecto', e.target.value)} placeholder="Sistema de pintura, espesores, normas, alcance..." /></div><MarcasPiezaBlock marcas={p.marcas} onChange={v => set('marcas', v)} marcasEsperadas={marcasEsperadas} usadasEnOtros={usadasEnOtros} /><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '10px 0 4px' }}><span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase' }}>Instrumentos (desde Parametros)</span><button onClick={() => { var df = { espMarca: 'ELCOMETER', espSerie: 'MH11472', rugMarca: 'ELCOMETER', rugSerie: 'NE30319', termoMarca: 'ELCOMETER', termoSerie: 'KCA721' }; var s = instrumentos || {}; upd({ ...p, instr: { espMarca: s.espMarca || df.espMarca, espSerie: s.espSerie || df.espSerie, rugMarca: s.rugMarca || df.rugMarca, rugSerie: s.rugSerie || df.rugSerie, termoMarca: s.termoMarca || df.termoMarca, termoSerie: s.termoSerie || df.termoSerie } }) }} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>Cargar de Parametros</button></div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8 }}><PF label="Medidor espesor - marca"><input style={ip} value={p.instr.espMarca} onChange={e => setInstr('espMarca', e.target.value)} /></PF><PF label="Medidor espesor - serie"><input style={ip} value={p.instr.espSerie} onChange={e => setInstr('espSerie', e.target.value)} /></PF><PF label="Rugosimetro - marca"><input style={ip} value={p.instr.rugMarca} onChange={e => setInstr('rugMarca', e.target.value)} /></PF><PF label="Rugosimetro - serie"><input style={ip} value={p.instr.rugSerie} onChange={e => setInstr('rugSerie', e.target.value)} /></PF><PF label="Termohigrometro - marca"><input style={ip} value={p.instr.termoMarca} onChange={e => setInstr('termoMarca', e.target.value)} /></PF><PF label="Termohigrometro - serie"><input style={ip} value={p.instr.termoSerie} onChange={e => setInstr('termoSerie', e.target.value)} /></PF></div><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '10px 0 4px' }}>Condiciones ambientales</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px,1fr))', gap: 8 }}><PF label="Fecha"><input type="date" style={ip} value={p.amb.fecha} onChange={e => setAmb('fecha', e.target.value)} /></PF><PF label="% Humedad"><input style={ip} value={p.amb.humedad} onChange={e => setAmb('humedad', e.target.value)} /></PF><PF label="T. Ambiente"><input style={ip} value={p.amb.tAmbiente} onChange={e => setAmb('tAmbiente', e.target.value)} /></PF><PF label="C Pieza"><input style={ip} value={p.amb.tPieza} onChange={e => setAmb('tPieza', e.target.value)} /></PF><PF label="Pto. Rocio"><input style={ip} value={p.amb.ptoRocio} onChange={e => setAmb('ptoRocio', e.target.value)} /></PF><PF label="Hora inicio"><input style={ip} value={p.amb.horaInicio} onChange={e => setAmb('horaInicio', e.target.value)} /></PF></div><div style={{ marginTop: 8 }}>{(p.ambExtra || []).map((c, i) => (<div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}><input style={{ ...ip, flex: '1 1 140px' }} placeholder="Condición" value={c.label || ''} onChange={e => set('ambExtra', (p.ambExtra || []).map((x, j) => j === i ? { ...x, label: e.target.value } : x))} /><input style={{ ...ip, flex: '1 1 100px' }} placeholder="Valor" value={c.valor || ''} onChange={e => set('ambExtra', (p.ambExtra || []).map((x, j) => j === i ? { ...x, valor: e.target.value } : x))} /><button onClick={() => set('ambExtra', (p.ambExtra || []).filter((_, j) => j !== i))} style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '4px 8px', color: '#D9600A' }}>×</button></div>))}<button onClick={() => set('ambExtra', [...(p.ambExtra || []), { label: '', valor: '' }])} style={{ background: C.teal, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, marginTop: 2 }}>+ Agregar condición ambiental</button></div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8, marginTop: 8 }}><PF label="Limpieza superficial"><input style={ip} value={p.limpiezaSSPC} onChange={e => set('limpiezaSSPC', e.target.value)} /></PF><PF label="Perfil de anclaje"><input style={ip} value={p.perfilSolicitado} onChange={e => set('perfilSolicitado', e.target.value)} /></PF></div><TablaMedidas titulo="Perfil de rugosidad" filas={Array.isArray(p.perfilFilas) ? p.perfilFilas : []} ncols={5} onSetCell={setPerfil} onAuto={autoPerfil} resumen="Perfil obtenido (prom.)" /><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '12px 0 4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span>Esquema de pintura - capas ({capas.length})</span><button onClick={addCapa} style={{ background: '#F77716', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 12 }}>+ Agregar capa</button></div>{capas.map((cap, ci) => (<CapaBlock key={cap.id} cap={cap} acum={acumRango(capas, ci)} onSet={(k, v) => setCapa(cap.id, k, v)} onSetAmb={(k, v) => setAmbCapa(cap.id, k, v)} onCell={(r, c, v) => cellCapa(cap.id, r, c, v)} onAuto={() => autoCapa(cap.id)} onAddFila={() => addFila(cap.id)} onDelFila={() => delFila(cap.id)} onFotos={v => fotosCapa(cap.id, v)} onDel={() => delCapa(cap.id)} />))}<FotoSlots label="Fotos inicio de granalla" fotos={p.fotosGranalla || []} max={4} onChange={v => set('fotosGranalla', v)} /><FirmasBlock firmas={p.firmas} onChange={v => set('firmas', v)} /></>)}</div>) }
-function ProtocolosOT({ ot, onUpdate, otsAll = [], instrumentos = null }) {
+function ProtocolosOT({ ot, onUpdate, onUpdateProtocolo, otsAll = [], instrumentos = null }) {
   const lista = ot.protocolos || []
   // Overlay local mientras se llena un protocolo campo por campo — mismo
   // patron que cambiarM2Propio() en MarcasEsperadasOT. onUpdate (=
@@ -3069,14 +3069,28 @@ function ProtocolosOT({ ot, onUpdate, otsAll = [], instrumentos = null }) {
   const listaMostrada = listaLocal || lista
   const timerRef = useRef(null)
   useEffect(() => { setListaLocal(null) }, [ot.id])
-  const gen = tipo => { setListaLocal(null); onUpdate(ot.id, { protocolos: [...lista, nuevoProtocolo(tipo, ot, nextCorrelativoProt(otsAll), instrumentos)] }) }
+  const gen = tipo => { clearTimeout(timerRef.current); setListaLocal(null); onUpdate(ot.id, { protocolos: [...lista, nuevoProtocolo(tipo, ot, nextCorrelativoProt(otsAll), instrumentos)] }) }
+  // Guarda UN solo protocolo (np), nunca el arreglo completo tal cual se
+  // veia en pantalla en ese instante — antes, si dos ediciones (de este
+  // protocolo o de otro de la misma OT) quedaban en cola por el debounce
+  // de 700ms y se resolvian fuera de orden (por ejemplo, la mas vieja
+  // termina su pullState() DESPUES que la mas nueva), la mas vieja
+  // reescribia el arreglo COMPLETO con una foto antigua de todos los
+  // protocolos, borrando marcas recien tildadas sin ningun aviso. Ahora
+  // onUpdateProtocolo (= actualizarUnProtocolo) trae lo mas fresco de la
+  // nube y fusiona SOLO este protocolo por id, asi que no importa el
+  // orden en que terminen los guardados en cola: ninguno puede pisar un
+  // cambio de otro protocolo ni volver a una version vieja de este.
   const updP = np => {
-    const nueva = listaMostrada.map(x => x.id === np.id ? np : x)
-    setListaLocal(nueva)
+    setListaLocal(prev => (prev || lista).map(x => x.id === np.id ? np : x))
     clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => { onUpdate(ot.id, { protocolos: nueva }); setListaLocal(null) }, 700)
+    timerRef.current = setTimeout(() => {
+      if (onUpdateProtocolo) onUpdateProtocolo(ot.id, np)
+      else onUpdate(ot.id, { protocolos: (listaLocal || lista).map(x => x.id === np.id ? np : x) })
+      setListaLocal(null)
+    }, 700)
   }
-  const delP = id => { if (!window.confirm('Eliminar este protocolo?')) return; setListaLocal(null); onUpdate(ot.id, { protocolos: lista.filter(x => x.id !== id) }) }
+  const delP = id => { if (!window.confirm('Eliminar este protocolo?')) return; clearTimeout(timerRef.current); setListaLocal(null); onUpdate(ot.id, { protocolos: lista.filter(x => x.id !== id) }) }
   return (<div style={{ marginTop: 14, borderTop: '1px dashed #DFE4EA', paddingTop: 12 }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase' }}>Protocolos de calidad ({listaMostrada.length})</div><div style={{ display: 'flex', gap: 8 }}><button onClick={() => gen('PIG')} style={{ background: '#F77716', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>+ Generar PIG</button><button onClick={() => gen('PGP')} style={{ background: '#101315', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>+ Generar PGP</button></div></div>{listaMostrada.map(p => { const usadasEnOtros = listaMostrada.filter(x => x.id !== p.id).flatMap(x => x.marcas || []); const mEsp = ot.marcasEsperadas || []; return p.tipo === 'PIG' ? <ProtoPIGForm key={p.id} p={p} upd={updP} onDel={() => delP(p.id)} instrumentos={instrumentos} marcasEsperadas={mEsp} usadasEnOtros={usadasEnOtros} /> : <ProtoPGPForm key={p.id} p={p} upd={updP} onDel={() => delP(p.id)} instrumentos={instrumentos} marcasEsperadas={mEsp} usadasEnOtros={usadasEnOtros} /> })}</div>) }
 
 export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], ots: otsExt, setOts: setOtsExt, verValores = true, clientes = [], ordenesCompra = [], mo = null, instrumentos = null }) {
@@ -3290,6 +3304,36 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
     try { fresco = JSON.parse(localStorage.getItem('serein_ots') || 'null') } catch (e) {}
     const base = Array.isArray(fresco) ? fresco : otsAll
     const nuevo = base.map(o => o.id === id ? { ...o, protocolos: cambios.protocolos } : o)
+    try { localStorage.setItem('serein_ots', JSON.stringify(nuevo)) } catch (e) {}
+    setOts(nuevo)
+    pushState()
+  }
+
+  // Guarda UN solo protocolo (por id), fusionandolo sobre lo mas fresco de
+  // la nube — a diferencia de actualizarProtocolos() de arriba, NUNCA
+  // reemplaza el arreglo completo con una copia que el navegador tenia en
+  // memoria. Esto es lo que le pide ProtocolosOT.updP() en cada guardado
+  // por tecleo/tilde: como cada protocolo de una misma OT dispara su
+  // propio guardado en cola (debounce de 700ms), dos guardados en cola
+  // podian terminar fuera de orden (uno tarda mas por red) y el mas
+  // antiguo, al escribir el arreglo COMPLETO que el tenia armado en ese
+  // momento, borraba sin aviso los cambios que el guardado mas nuevo ya
+  // habia dejado en otro protocolo (o en el mismo, si alcanzaba a
+  // reabrirse). Fusionando por id sobre la version recien traida de la
+  // nube, no importa el orden en que terminen: ninguno puede pisar el
+  // trabajo de otro.
+  const actualizarUnProtocolo = async (id, protocolo) => {
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_ots') || 'null') } catch (e) {}
+    const base = Array.isArray(fresco) ? fresco : otsAll
+    const nuevo = base.map(o => {
+      if (o.id !== id) return o
+      const existentes = o.protocolos || []
+      const idx = existentes.findIndex(x => x.id === protocolo.id)
+      const protocolos = idx >= 0 ? existentes.map((x, i) => i === idx ? protocolo : x) : [...existentes, protocolo]
+      return { ...o, protocolos }
+    })
     try { localStorage.setItem('serein_ots', JSON.stringify(nuevo)) } catch (e) {}
     setOts(nuevo)
     pushState()
@@ -3561,7 +3605,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
                 <button onClick={() => setSel(null)} style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><X size={15} /> Cerrar</button>
               </div>
               <div style={{ padding: 12 }}>
-                <TarjetaOT ot={so} onUpdate={actualizar} onUpdateProtocolos={actualizarProtocolos} onUpdateMarcasEsperadas={actualizarMarcasEsperadas} onDelete={id => { eliminar(id); setSel(null) }} onCambiarEstado={cambiarEstado} onAgregarVenta={agregarVenta} onEliminarVenta={eliminarVenta} onAgregarArray={agregarAArray} verValores={verValores} ordenesCompra={ordenesCompra} mo={mo} otsAll={otsAll} instrumentos={instrumentos} libroCompras={libroCompras} enModal />
+                <TarjetaOT ot={so} onUpdate={actualizar} onUpdateProtocolos={actualizarProtocolos} onUpdateProtocolo={actualizarUnProtocolo} onUpdateMarcasEsperadas={actualizarMarcasEsperadas} onDelete={id => { eliminar(id); setSel(null) }} onCambiarEstado={cambiarEstado} onAgregarVenta={agregarVenta} onEliminarVenta={eliminarVenta} onAgregarArray={agregarAArray} verValores={verValores} ordenesCompra={ordenesCompra} mo={mo} otsAll={otsAll} instrumentos={instrumentos} libroCompras={libroCompras} enModal />
               </div>
             </div>
           </div>
