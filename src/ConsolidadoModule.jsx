@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import { calcularResumenFin } from './FinanzasModule.jsx'
 import { totales as totalesCot } from './CotizacionesModule.jsx'
+import { ocTotal } from './OrdenesCompraModule.jsx'
 import { supabase } from './supabase.js'
 import { AlertTriangle, TrendingUp, TrendingDown, Wallet, Landmark, Receipt, Sparkles, CheckCircle2, ShieldAlert, Info } from 'lucide-react'
 import * as XLSX from 'xlsx'
@@ -55,7 +56,7 @@ function useDatos({ cc, facturas, ots, proyectos, cotizaciones, clientes, params
     try { resumen = calcularResumenFin(fin || {}, mes) || resumen } catch (e) { }
     const areasFact = ['Santa Rosa', 'Istria', 'Proyectos']
     const facs = areasFact.flatMap(a => ((facturas || {})[a] || []).map(f => ({ ...f, area: a })))
-    const vencDe = f => f.vencimiento || f.fechaVencimiento || f.fecha_venc || (f.fecha ? addDias(f.fecha, num(f.plazo) || 30) : null)
+    const vencDe = f => f.vencimiento || f.fechaVencimiento || f.fecha_venc || ((f.fecha_emision || f.fecha) ? addDias(f.fecha_emision || f.fecha, num(f.plazo) || 30) : null)
     const brutoF = f => num(f.monto) || (num(f.neto) + Math.round(num(f.neto) * 0.19))
     const facPend = facs.filter(f => f.estado !== 'Pagado' && f.estado !== 'Anulada' && f.estado !== 'Factoring' && !/factor/i.test(f.medio || ''))
     const facVencidas = facPend.filter(f => { const v = vencDe(f); return v && v < hoy })
@@ -75,7 +76,7 @@ function useDatos({ cc, facturas, ots, proyectos, cotizaciones, clientes, params
 
     // Cobros 7 dias
     const cobros = (pp && pp.cobros || []).filter(c => c.estado === 'Pendiente' || c.estado === 'Factoring')
-    const cobros7 = cobros.filter(c => { const v = c.fecha_vencimiento || c.vencimiento || c.fecha; return v && v >= hoy && v <= en7 }).reduce((a, c) => a + num(c.total), 0)
+    const cobros7 = cobros.filter(c => { const v = c.fecha_estimada || c.fecha_vencimiento || c.vencimiento || c.fecha; return v && v >= hoy && v <= en7 }).reduce((a, c) => a + num(c.total), 0)
       + facPend.filter(f => { const v = vencDe(f); return v && v >= hoy && v <= en7 }).reduce((a, f) => a + brutoF(f), 0)
     const pagos7 = num(cc.pagar7)
     const caja = num(cc.caja)
@@ -116,7 +117,7 @@ function useDatos({ cc, facturas, ots, proyectos, cotizaciones, clientes, params
     const eventos = []
     ;(fin && fin.gastos || []).filter(g => g.estado !== 'Pagado' && g.estado !== 'Anulado' && g.vencimiento).forEach(g => eventos.push({ fecha: g.vencimiento, tipo: 'Proveedor/Gasto', desc: g.nombre || g.categoria || 'Gasto', monto: num(g.neto) + num(g.iva) }))
     ;(fin && fin.obligaciones || []).forEach(o => (o.cuotas || []).filter(c => c.estado !== 'Pagada' && c.vencimiento).forEach(c => eventos.push({ fecha: c.vencimiento, tipo: /leasing/i.test(o.tipo || o.nombre || '') ? 'Leasing' : 'Crédito', desc: o.nombre || 'Cuota', monto: num(c.total) })))
-    ;(pp && pp.ocs || []).filter(o => !['Pagada', 'Anulada'].includes(o.estadoPago) && (o.vencimiento || o.fecha)).forEach(o => eventos.push({ fecha: o.vencimiento || o.fecha, tipo: 'Proveedor OC', desc: o.proveedor || o.numero || 'OC', monto: num(o.total) }))
+    ;(pp && pp.ocs || []).filter(o => !['Pagada', 'Anulada'].includes(o.estadoPago) && (o.vencimiento || o.fecha)).forEach(o => eventos.push({ fecha: o.vencimiento || o.fecha, tipo: 'Proveedor OC', desc: o.proveedor || o.numero || 'OC', monto: ocTotal(o) }))
     facPend.filter(f => vencDe(f)).forEach(f => eventos.push({ fecha: vencDe(f), tipo: 'Factura por cobrar', desc: (f.cliente || 'Cliente') + ' ' + (f.folio || ''), monto: brutoF(f), entrada: true }))
     eventos.sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''))
     const proximos = eventos.filter(e => e.fecha >= hoy).slice(0, 12)
