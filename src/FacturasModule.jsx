@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react'
-import { Plus, Trash2, Receipt, Upload, Search } from 'lucide-react'
+import { Plus, Trash2, Receipt, Upload, Search, FileText } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { calcularPerdidaFactoring, perdidaFactoringFactura } from './ParametrosModule.jsx'
 import Paginador, { paginar } from './Paginador.jsx'
@@ -7,6 +7,8 @@ import { pullState, pushState } from './sync.js'
 import { descargarInformeFacturas } from './informeFacturas.js'
 import { ocultarFacturasDeLibro } from './facturasOcultas.js'
 import { descargarInformeCobranza as descargarInformeCobranzaPDF } from './informeCobranzaPDF.js'
+import { supabase } from './supabase.js'
+import { fileToBase64 } from './protocolo-pdf.js'
 export { FACTURAS_SEED } from './facturas-data.js'
 const CONDICIONES_DIAS = [{ label: '30 días', dias: 30 }, { label: '45 días', dias: 45 }, { label: '60 días', dias: 60 }, { label: '90 días', dias: 90 }]
 const norm = s => (s || '').toString().toLowerCase()
@@ -136,6 +138,14 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
   const nueva = () => ({ numero: '', cliente: '', ot: '', oc: '', cc: '', proyecto: '', nv: '', fecha_emision: '', vencimiento: '', neto: '', monto: '', iva: 'afecta', estado: 'Pendiente', fecha_pago: '', banco: '', medioPago: '', numeroCheque: '', comentarios: '', vendedor: 'General' })
   const comisionDe = x => x.vendedor === 'Mario' ? Math.round((x.neto || x.monto || 0) * (comisionPct / 100)) : 0
   const [f, setF] = useState(nueva())
+  // PDF de la factura de venta pendiente de subir a Drive: se guarda al leerla
+  // con IA y se sube recién cuando la persona confirma el alta (agregar()),
+  // igual que el patrón ya usado para facturas de compra en ProyectosModule.jsx.
+  const [facturaPdf, setFacturaPdf] = useState(null)
+  const [subiendoPdf, setSubiendoPdf] = useState(false)
+  const [errorPdf, setErrorPdf] = useState('')
+  const [msgDrive, setMsgDrive] = useState('')
+  const fileFacturaRef = useRef(null)
   const [busca, setBusca] = useState('')
   const [fCli, setFCli] = useState('')
   const [fEst, setFEst] = useState('')
@@ -205,12 +215,55 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
     }, 700)
   }
   const actualizar = (id, campo, valor) => guardarCambiosFactura(id, { [campo]: valor })
+  // Lee una factura de venta en PDF/foto con IA (folio, fecha, neto, IVA,
+  // OC) y precarga el formulario de "Nueva factura" — cliente y OT los
+  // sigue eligiendo la persona, la IA no los propone. El archivo se guarda
+  // en facturaPdf y se sube a Drive recién al confirmar en agregar().
+  const subirYLeerFactura = async e => {
+    const fl = e.target.files && e.target.files[0]
+    e.target.value = ''
+    if (!fl) return
+    setSubiendoPdf(true); setErrorPdf(''); setMsgDrive('')
+    try {
+      const base64 = await fileToBase64(fl)
+      const { data, error: err } = await supabase.functions.invoke('extraer-factura', { body: { archivos: [{ base64, mimeType: fl.type || 'application/pdf', filename: fl.name }], filename: fl.name } })
+      if (err) throw err
+      if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo leer la factura.')
+      const d = data.datos || {}
+      setF({
+        ...nueva(),
+        numero: d.folio != null ? String(d.folio) : '',
+        fecha_emision: /^\d{4}-\d{2}-\d{2}$/.test(String(d.fecha || '')) ? d.fecha : '',
+        neto: d.neto != null ? String(Math.round(d.neto)) : '',
+        iva: (d.iva === 0 || d.iva == null) && d.total != null && d.neto != null && Math.round(d.total) === Math.round(d.neto) ? 'exenta' : 'afecta',
+        oc: d.ordenCompra || '',
+      })
+      setFacturaPdf({ base64, filename: fl.name })
+      setCreando(true)
+    } catch (err) { setErrorPdf('No se pudo leer la factura: ' + ((err && err.message) || String(err))) }
+    setSubiendoPdf(false)
+  }
+  // Sube el PDF ya leído a Drive, en VENTAS/<OT>, con el N° y cliente ya
+  // confirmados por la persona. Nunca bloquea el alta de la factura: si
+  // Drive falla, la factura queda igual agregada, solo se avisa.
+  const subirFacturaADrive = async (factura, pdf) => {
+    try {
+      const filename = (factura.numero ? factura.numero + ' - ' : '') + (factura.cliente || 'Cliente') + '.pdf'
+      const { data, error: err } = await supabase.functions.invoke('subir-factura-venta-drive', { body: { pdfBase64: pdf.base64, filename, ot: factura.ot || 'Sin OT' } })
+      if (err) throw err
+      if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo subir a Drive.')
+      setMsgDrive('Factura subida a Drive (VENTAS · ' + (factura.ot || 'Sin OT') + ').')
+    } catch (err) {
+      window.alert('La factura quedó agregada, pero no se pudo subir el PDF a Drive: ' + ((err && err.message) || String(err)))
+    }
+  }
   function agregar() {
     const nt = num(f.neto)
     if (!f.numero || nt <= 0) return
     if (lista.some(x => claveFacturaDup(x) === claveFacturaDup(f))) { window.alert('Ya existe una factura con ese N°, cliente y tipo en ' + area + '. No se agrego (duplicado).'); return }
     setLista([{ id: 'f' + Date.now(), ...f, neto: nt, monto: f.iva === 'exenta' ? nt : brutoDe(nt) }, ...lista])
-    setF(nueva()); setCreando(false)
+    if (facturaPdf) subirFacturaADrive(f, facturaPdf)
+    setF(nueva()); setCreando(false); setFacturaPdf(null)
   }
   // Al cambiar el neto, recalcula el bruto automáticamente (IVA 19%) —
   // monto depende también de si la factura es exenta (x.iva), por eso se
@@ -427,9 +480,14 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
             {hayFiltro && <button onClick={() => { setBusca(''); setFCli(''); setFEst(''); setFMes(''); setFProy('') }} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '5px 8px', cursor: 'pointer', fontSize: 12 }}>Limpiar</button>}
             <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.xls" style={{ display: 'none' }} onChange={e => { const file = e.target.files[0]; if (file) importarExcel(file); e.target.value = '' }} />
             <button onClick={() => fileRef.current && fileRef.current.click()} style={{ background: C.carbon, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Upload size={13} /> Importar Excel</button>
+            <input ref={fileFacturaRef} type="file" accept="application/pdf,image/*" style={{ display: 'none' }} onChange={subirYLeerFactura} disabled={subiendoPdf} />
+            <button onClick={() => fileFacturaRef.current && fileFacturaRef.current.click()} disabled={subiendoPdf} style={{ background: subiendoPdf ? '#9AA3AD' : C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: subiendoPdf ? 'default' : 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><FileText size={13} /> {subiendoPdf ? 'Leyendo…' : 'Subir factura (PDF)'}</button>
             {!creando && <button onClick={() => setCreando(true)} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Nueva factura</button>}
           </div>
         </div>
+        {(errorPdf || msgDrive) && (
+          <div style={{ padding: '6px 16px', fontSize: 12, color: errorPdf ? C.rojo : C.verde, borderBottom: '1px solid #DFE4EA' }}>{errorPdf || msgDrive}</div>
+        )}
 
         <div style={{ padding: '10px 16px', display: 'flex', gap: 26, flexWrap: 'wrap', borderBottom: '1px solid #DFE4EA', background: '#F2F4F7' }}>
           <div>
@@ -499,6 +557,11 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
 
         {creando && (
           <div style={{ background: '#F2F4F7', padding: 12, borderBottom: '1px solid #DFE4EA' }}>
+            {facturaPdf && (
+              <div style={{ fontSize: 11.5, color: C.teal, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <FileText size={13} /> {facturaPdf.filename} — se subirá a Drive en VENTAS/{f.ot || 'Sin OT'} al confirmar. Completa cliente y OT antes de agregar.
+              </div>
+            )}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8 }}>
               <input style={inp} placeholder="N° factura *" value={f.numero} onChange={e => setF({ ...f, numero: e.target.value })} />
               <input style={inp} placeholder="Cliente" list={dlId} value={f.cliente} onChange={e => setF({ ...f, cliente: e.target.value })} />
@@ -518,7 +581,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
             <input style={{ ...inp, width: '100%', marginTop: 8 }} placeholder="Observación / comentario (opcional)" value={f.comentarios} onChange={e => setF({ ...f, comentarios: e.target.value })} />
             <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
               <button onClick={agregar} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Agregar</button>
-              <button onClick={() => { setF(nueva()); setCreando(false) }} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+              <button onClick={() => { setF(nueva()); setCreando(false); setFacturaPdf(null) }} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
             </div>
           </div>
         )}
