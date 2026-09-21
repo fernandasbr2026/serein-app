@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
-import { ChevronDown, ChevronUp, Plus, Trash2, X, Ruler, Paintbrush, FileText, Receipt, ShoppingCart, CircleDollarSign, Download, Camera, Search, RotateCcw, Lock, Unlock, CalendarDays, Save } from 'lucide-react'
+import { ChevronDown, ChevronUp, Plus, Trash2, X, Ruler, Paintbrush, FileText, Receipt, ShoppingCart, CircleDollarSign, Download, Camera, Search, RotateCcw, Lock, Unlock, CalendarDays, Save, TrendingUp } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { descargarOTDesdeOT } from './CotizacionesModule.jsx'
 import { costoOCdeOT } from './OrdenesCompraModule.jsx'
@@ -16,6 +16,14 @@ import { PILL_VARIANT } from './theme-serein.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves de siempre,
 // solo cambian los valores hex. La logica de abajo no se toca.
 const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
+// Umbral de margen objetivo (bueno >=30%, regular 15-30%, bajo <15%) —
+// una sola fuente para los varios lugares que lo pintan (barra de venta
+// vs. costo, "Utilidad real" de cada OT), para no desincronizar el
+// criterio si el umbral cambia algún día.
+const colorMargen = (margen, colores = {}) => {
+  const nivel = margen >= 30 ? 'bueno' : margen >= 15 ? 'regular' : 'bajo'
+  return colores[nivel] || (nivel === 'bueno' ? C.verde : nivel === 'regular' ? C.ambar : C.rojo)
+}
 const clp = n => '$' + Math.round(n).toLocaleString('es-CL')
 const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
 const numDec = s => { const v = parseFloat(String(s).replace(',', '.')); return isNaN(v) ? 0 : v }
@@ -2118,7 +2126,7 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
           {verValores && (
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>Utilidad real</div>
-              <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 17, color: margen >= 30 ? C.verde : margen >= 15 ? C.ambar : C.rojo }}>
+              <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 17, color: colorMargen(margen) }}>
                 {clp(utilidad)} <span style={{ fontSize: 13 }}>({margen.toFixed(0)}%)</span>
               </div>
             </div>
@@ -2140,7 +2148,7 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
             <span>Venta {clp(ventaTotal)}</span>
             <span>Costos {clp(costoTotal)}</span>
           </div>
-          <Barra pct={ventaTotal > 0 ? (costoTotal / ventaTotal) * 100 : 0} color={margen >= 30 ? C.teal : margen >= 15 ? C.ambar : C.rojo} />
+          <Barra pct={ventaTotal > 0 ? (costoTotal / ventaTotal) * 100 : 0} color={colorMargen(margen, { bueno: C.teal })} />
           {(precioM2 || costoM2) && (
             <div style={{ fontSize: 12, color: '#9AA3AD', marginTop: 4 }}>
               {precioM2 && <>Venta: <b>{clp(precioM2)}/m²</b></>}{precioM2 && costoM2 && ' · '}
@@ -2542,7 +2550,7 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateMarcasEsperadas, 
                 {facturaReal && saldoPercibirOT > 0 && <span>Saldo por percibir: <b style={{ color: C.rojo }}>{clp(saldoPercibirOT)}</b></span>}
                 <span>Costos: <b>{clp(costoTotal)}</b></span>{costoMO > 0 && <span style={{ color: '#9AA3AD' }}>(incluye {clp(costoMO)} de mano de obra)</span>}
                 {costoOC > 0 && <span style={{ color: C.teal }}>(incluye {clp(costoOC)} de OC proveedores)</span>}
-                <span>Utilidad real: <b style={{ color: margen >= 30 ? C.verde : margen >= 15 ? C.ambar : C.rojo }}>{clp(utilidad)} ({margen.toFixed(1)}%)</b></span>
+                <span>Utilidad real: <b style={{ color: colorMargen(margen) }}>{clp(utilidad)} ({margen.toFixed(1)}%)</b></span>
               </div>
               <div style={{ marginTop: 8, padding: '10px 14px', background: '#fff', border: '1px dashed #DFE4EA', fontSize: 12, display: 'flex', gap: 18, flexWrap: 'wrap', color: '#9AA3AD' }}>
                 <span>Facturación: <b style={{ color: C.carbon }}>{estadoFacturacionDeOT(ot)}</b></span>
@@ -3138,7 +3146,11 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
       : ['N° OT', 'Cliente', 'Área', 'Estado', 'Fecha', 'Cotización', 'Esquema', 'N° partidas']
     const rows = lista.map(o => {
       const venta = (o.ventas || []).reduce((a, v) => a + (v.neta || 0), 0)
-      const costo = (o.costos || []).reduce((a, c) => a + (c.monto || 0), 0)
+      // Mismo cálculo que la tarjeta de la OT en pantalla (línea ~2070):
+      // costos directos + OC de proveedor asignadas + mano de obra —
+      // antes este informe solo sumaba o.costos y mostraba una utilidad
+      // más optimista que la que ve la persona al abrir la OT.
+      const costo = (o.costos || []).reduce((a, c) => a + (c.monto || 0), 0) + costoOCdeOT(ordenesCompra, o.numero) + costoMOdeOT(mo, o.numero)
       const base = [o.numero, o.cliente, o.area, o.estado, otFecha(o), o.cotizacion || '']
       return verValores ? [...base, o.montoCotizado || 0, venta, costo, venta - costo, o.esquema || '', (o.partidas || []).length] : [...base, o.esquema || '', (o.partidas || []).length]
     })
@@ -3349,6 +3361,20 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
     .filter(ab => (!fDesde || (ab.fecha && ab.fecha !== '—' && ab.fecha >= fDesde)) && (!fHasta || (ab.fecha && ab.fecha !== '—' && ab.fecha <= fHasta)))
   const cobradoPeriodo = abonosPeriodo.reduce((a, ab) => a + (ab.monto || 0), 0)
   const [verDesgloseCobrado, setVerDesgloseCobrado] = useState(false)
+  // Utilidad/margen consolidados del área — antes solo se veían OT por OT
+  // (había que abrir cada una), sin ningún número de un vistazo a nivel
+  // de sede. Mismo cálculo exacto que usa cada tarjeta de OT (venta de
+  // ot.ventas menos costos directos + costoOCdeOT + costoMOdeOT), sobre
+  // todas las OT del área que pasan el filtro actual — una sola fuente,
+  // no una fórmula aparte.
+  const utilidadAreaDetalle = delArea.map(o => {
+    const ventaOT = (o.ventas || []).reduce((a, v) => a + (v.neta || 0), 0)
+    const costoOT = (o.costos || []).reduce((a, c) => a + (c.monto || 0), 0) + costoOCdeOT(ordenesCompra, o.numero) + costoMOdeOT(mo, o.numero)
+    return { ot: o, venta: ventaOT, costo: costoOT, utilidad: ventaOT - costoOT }
+  })
+  const ventaAreaTotal = utilidadAreaDetalle.reduce((a, x) => a + x.venta, 0)
+  const utilidadAreaTotal = utilidadAreaDetalle.reduce((a, x) => a + x.utilidad, 0)
+  const margenAreaProm = ventaAreaTotal > 0 ? (utilidadAreaTotal / ventaAreaTotal) * 100 : 0
 
   return (
     <div>
@@ -3388,6 +3414,10 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
             label={`Cobrado del periodo · ${abonosPeriodo.length} pagos`}
             explicacion="Suma de abonos/pagos registrados en el rango de fechas del filtro (o histórico completo si no hay fechas)."
             onClick={() => setVerDesgloseCobrado(v => !v)} />
+          <KpiCardOT icon={TrendingUp} iconBg={margenAreaProm >= 15 ? SEREIN.greenSoft : '#FDECEC'} iconColor={colorMargen(margenAreaProm)} value={clp(utilidadAreaTotal)}
+            label={`Utilidad estimada · ${margenAreaProm.toFixed(0)}% margen`}
+            advertencia={margenAreaProm < 15 && ventaAreaTotal > 0 ? 'Margen bajo el objetivo (15%)' : null}
+            explicacion="Suma de (venta − costos directos − OC de proveedor asignadas − mano de obra) de todas las OT del área con el filtro actual. Mismo cálculo que 'Utilidad real' dentro de cada OT." />
         </div>
       ) : (
         <div style={{ marginBottom: 18 }}><KpiCardOT icon={FileText} value={nOTs.activas} label="OT activas" onClick={() => { setVista('activas'); setPage(1) }} /></div>

@@ -77,6 +77,14 @@ export function estadoPagoDe(x) {
 }
 
 // ————— Cobranza atrasada / Boletín Comercial —————
+// Clave de "misma factura" — folio + cliente + tipo de documento (afecta/
+// exenta). Ya se usaba solo dentro de agregar() para bloquear el alta
+// manual de un duplicado; se saca a nivel de módulo para reusarla también
+// en el detector de duplicados (que si barre facturas ya cargadas, incluida
+// la sincronización automática desde el Libro de Ventas, que no pasa por
+// agregar() y por eso puede dejar duplicados sin que nadie los bloquee).
+const claveFacturaDup = x => (x.numero || '').trim().toLowerCase() + '|' + (x.cliente || '').trim().toLowerCase() + '|' + (x.iva || 'afecta')
+
 // Días de mora reales: solo cuentan mientras la factura mantenga saldo
 // pendiente y tenga fecha de vencimiento cargada. En cuanto el saldo
 // llega a 0 (por abono, pago total o anulación), deja de acumular días
@@ -200,8 +208,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
   function agregar() {
     const nt = num(f.neto)
     if (!f.numero || nt <= 0) return
-    const claveF = x => (x.numero || '').trim().toLowerCase() + '|' + (x.cliente || '').trim().toLowerCase() + '|' + (x.iva || 'afecta')
-    if (lista.some(x => claveF(x) === claveF(f))) { window.alert('Ya existe una factura con ese N°, cliente y tipo en ' + area + '. No se agrego (duplicado).'); return }
+    if (lista.some(x => claveFacturaDup(x) === claveFacturaDup(f))) { window.alert('Ya existe una factura con ese N°, cliente y tipo en ' + area + '. No se agrego (duplicado).'); return }
     setLista([{ id: 'f' + Date.now(), ...f, neto: nt, monto: f.iva === 'exenta' ? nt : brutoDe(nt) }, ...lista])
     setF(nueva()); setCreando(false)
   }
@@ -266,7 +273,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
           nuevas.push({ id: 'imp' + r, numero, cliente, ot: String(row[ci.oc] ?? '').trim(), fecha_emision: excelDate(row[ci.fecha]), neto: toInt(row[ci.neto]) || toInt(row[ci.total]), monto: toInt(row[ci.total]) || toInt(row[ci.neto]), estado: estadoN(row[ci.est]), fecha_pago: '', banco: String(row[ci.ent] ?? '').trim(), vencimiento: excelDate(row[ci.venc]), comentarios: String(row[ci.obs] ?? '').trim() })
         }
         if (!nuevas.length) { window.alert('No se encontraron facturas en la hoja "' + sheet + '".'); return }
-        if (window.confirm('Se importarán ' + nuevas.length + ' facturas de la hoja "' + sheet + '" y reemplazarán las de ' + area + '. ¿Continuar?')) { const vistos = new Set(); const sinDup = nuevas.filter(x => { const k = (x.numero || '').trim().toLowerCase() + '|' + (x.cliente || '').trim().toLowerCase() + '|' + (x.iva || 'afecta'); if (vistos.has(k)) return false; vistos.add(k); return true }); if (sinDup.length < nuevas.length) window.alert('Se omitieron ' + (nuevas.length - sinDup.length) + ' factura(s) duplicada(s) en el archivo.'); setLista(sinDup) }
+        if (window.confirm('Se importarán ' + nuevas.length + ' facturas de la hoja "' + sheet + '" y reemplazarán las de ' + area + '. ¿Continuar?')) { const vistos = new Set(); const sinDup = nuevas.filter(x => { const k = claveFacturaDup(x); if (vistos.has(k)) return false; vistos.add(k); return true }); if (sinDup.length < nuevas.length) window.alert('Se omitieron ' + (nuevas.length - sinDup.length) + ' factura(s) duplicada(s) en el archivo.'); setLista(sinDup) }
       } catch (err) { window.alert('No se pudo leer el Excel: ' + err) }
     }
     reader.readAsArrayBuffer(file)
@@ -318,6 +325,36 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
     const hoyISO = new Date().toISOString().slice(0, 10)
     eliminarFresco(baseLista => baseLista.map(x => sel.has(x.id) ? { ...x, estado: 'Pagado', fecha_pago: x.fecha_pago || hoyISO } : x))
     setSel(new Set())
+  }
+  // Detecta posibles duplicados dentro de esta área — mismo criterio
+  // (folio+cliente+tipo de documento) que ya bloquea el alta manual en
+  // agregar(), pero acá barre TODA la lista ya cargada, incluida la que
+  // se sincroniza sola desde el Libro de Ventas (esa vía no pasa por ese
+  // bloqueo, así que ahí sí pueden colarse duplicados reales). Nunca
+  // borra directo: arma grupos con una preselección razonable (conserva
+  // la que tenga más abonos o esté marcada Pagada — nunca la que tiene
+  // plata registrada encima) para que la persona revise y confirme.
+  const [duplicados, setDuplicados] = useState(null)
+  const detectarDuplicados = () => {
+    const grupos = {}
+    lista.forEach(x => { const k = claveFacturaDup(x); (grupos[k] = grupos[k] || []).push(x) })
+    const conDuplicados = Object.values(grupos).filter(g => g.length > 1).map(g => {
+      const puntuar = x => (x.abonos || []).length * 10 + (x.estado === 'Pagado' ? 5 : 0) + (x.fecha_pago ? 1 : 0)
+      const ordenadas = [...g].sort((a, b) => puntuar(b) - puntuar(a))
+      return ordenadas.map((x, i) => ({ ...x, _eliminar: i > 0 }))
+    })
+    if (!conDuplicados.length) { window.alert('No se encontraron facturas duplicadas en ' + area + ' (mismo N°, cliente y tipo de documento).'); return }
+    setDuplicados(conDuplicados)
+  }
+  const toggleEliminarDup = (gi, fi) => setDuplicados(gs => gs.map((g, i) => i !== gi ? g : g.map((x, j) => j === fi ? { ...x, _eliminar: !x._eliminar } : x)))
+  const confirmarEliminarDuplicados = () => {
+    const aEliminar = new Set(duplicados.flat().filter(x => x._eliminar).map(x => x.id))
+    if (!aEliminar.size) { setDuplicados(null); return }
+    if (!window.confirm('Se eliminaran ' + aEliminar.size + ' factura(s) duplicada(s) en ' + area + '. Esta accion no se puede deshacer. Continuar?')) return
+    const idsLibro = lista.filter(x => aEliminar.has(x.id) && x.origen === 'libroVentas' && x.libroId).map(x => x.libroId)
+    eliminarFresco(baseLista => baseLista.filter(x => !aEliminar.has(x.id)))
+    ocultarFacturasDeLibro(idsLibro, pushState)
+    setDuplicados(null)
   }
   const vaciarArea = () => {
     if (!lista.length) return
@@ -427,6 +464,39 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
           </div>
         )}
 
+        {duplicados && (
+          <div style={{ background: '#FFF7E6', padding: 12, borderBottom: '1px solid #DFE4EA' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{duplicados.length} grupo(s) de posibles duplicadas en {area}</div>
+            <div style={{ fontSize: 11.5, color: C.gris, marginBottom: 10 }}>Mismo N° de factura, cliente y tipo de documento. Se preseleccionó para eliminar la que tiene menos abonos/estado de pago registrado — revisa antes de confirmar, puedes destildar cualquiera.</div>
+            {duplicados.map((grupo, gi) => (
+              <div key={gi} style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 6, padding: 10, marginBottom: 8 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead><tr style={{ borderBottom: '1px solid #DFE4EA' }}>{['', 'Folio', 'Cliente', 'OT', 'Fecha', 'Neto', 'Estado', 'Abonos', 'Origen'].map((h, i) => <th key={i} style={{ textAlign: 'left', padding: '3px 6px', fontSize: 10, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {grupo.map((x, fi) => (
+                      <tr key={x.id} style={{ borderBottom: fi < grupo.length - 1 ? '1px solid #EEE9DF' : 'none' }}>
+                        <td style={{ padding: '3px 6px' }}><input type="checkbox" checked={x._eliminar} onChange={() => toggleEliminarDup(gi, fi)} /></td>
+                        <td style={{ padding: '3px 6px', fontWeight: 600 }}>{x.numero}</td>
+                        <td style={{ padding: '3px 6px' }}>{x.cliente}</td>
+                        <td style={{ padding: '3px 6px' }}>{x.ot || '—'}</td>
+                        <td style={{ padding: '3px 6px' }}>{x.fecha_emision || '—'}</td>
+                        <td style={{ padding: '3px 6px' }}>{clp(x.neto)}</td>
+                        <td style={{ padding: '3px 6px' }}>{x.estado}</td>
+                        <td style={{ padding: '3px 6px' }}>{(x.abonos || []).length}</td>
+                        <td style={{ padding: '3px 6px', color: C.gris }}>{x.origen === 'libroVentas' ? 'Libro de Ventas' : 'Manual'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+            <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+              <button onClick={confirmarEliminarDuplicados} style={{ background: C.rojo, color: '#fff', border: 'none', padding: '7px 14px', borderRadius: 6, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>Eliminar tildadas</button>
+              <button onClick={() => setDuplicados(null)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', borderRadius: 6, fontSize: 12.5, cursor: 'pointer' }}>Cancelar</button>
+            </div>
+          </div>
+        )}
+
         {creando && (
           <div style={{ background: '#F2F4F7', padding: 12, borderBottom: '1px solid #DFE4EA' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8 }}>
@@ -459,6 +529,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
           <button onClick={marcarPagadasSel} disabled={!sel.size} style={{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5, background: sel.size ? C.verde : '#DFE4EA', color: sel.size ? '#fff' : C.gris, cursor: sel.size ? 'pointer' : 'default' }}>Marcar pagadas</button>
           <button onClick={eliminarSel} disabled={!sel.size} style={{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5, background: sel.size ? C.rojo : '#DFE4EA', color: sel.size ? '#fff' : C.gris, cursor: sel.size ? 'pointer' : 'default' }}>Eliminar seleccionadas</button>
           <button onClick={vaciarArea} disabled={!lista.length} style={{ background: 'transparent', border: '1px solid ' + C.rojo, color: C.rojo, padding: '7px 12px', borderRadius: 6, fontSize: 12.5, fontWeight: 700, cursor: lista.length ? 'pointer' : 'default' }}>Vaciar area {area}</button>
+          <button onClick={detectarDuplicados} disabled={!lista.length} style={{ background: 'transparent', border: '1px solid ' + C.azul, color: C.azul, padding: '7px 12px', borderRadius: 6, fontSize: 12.5, fontWeight: 700, cursor: lista.length ? 'pointer' : 'default' }}>Detectar duplicadas</button>
         </div>
         <div style={{ overflowX: 'auto', padding: 12 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
