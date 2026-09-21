@@ -1,7 +1,16 @@
-import React, { useState, useMemo, useRef } from 'react'
+// Control de Taller (Fase G, adaptado en Fase J para poder darle acceso
+// aislado a una persona externa — ver plan). Los datos de piezas/avance
+// (antes p.partes/p.historialLecturas dentro del blob de app_state, que
+// cualquier autenticado podía leer completo) ahora viven en tablas reales
+// con RLS: taller_partes / taller_lecturas, filtradas por `ot` — ver
+// supabase/migrations/2026-09-21-taller-externo.sql. Los tres bloques de
+// trabajo (importar Listado de Partes, generar hoja, leer avance por
+// foto) reciben solo un `ot` (string) + `nombreProyecto`, nunca el objeto
+// `proyecto` completo del blob — así se reutilizan tal cual en
+// TallerExternoApp.jsx (Fase J3) sin duplicar nada.
+import React, { useState, useMemo, useRef, useEffect } from 'react'
 import { Upload, Hammer, FileDown, Camera } from 'lucide-react'
 import { supabase } from './supabase.js'
-import { pullState, pushState } from './sync.js'
 import { fileToBase64, generarPdfProtocoloBlob } from './protocolo-pdf.js'
 import { normMarcaTaller, estadoDeParte, etapaBucket, ETAPA_BUCKET_LABEL, ETAPAS_TALLER, ETAPA_LABEL, resumenTableroTaller, generarHojaAvanceHtml } from './controlTaller.js'
 import { KpiCard } from './ui.jsx'
@@ -12,19 +21,17 @@ const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const kg = n => Math.round(n || 0).toLocaleString('es-CL') + ' kg'
 const hoy = () => new Date().toISOString().slice(0, 10)
 
-// Guardado seguro de p.partes (+ opcionalmente una lectura nueva al
-// historial) — mismo patrón "pull-fresh + merge + push" que
-// actualizarMarcasEsperadas() en OTModule.jsx, aplicado acá sobre
-// serein_proyectos para no pisar cambios de otra persona en otro proyecto.
-async function actualizarPartesProyecto(proyectosProp, setProyectos, proyectoId, partes, lectura) {
-  try { await pullState() } catch (e) {}
-  let fresco = null
-  try { fresco = JSON.parse(localStorage.getItem('serein_proyectos') || 'null') } catch (e) {}
-  const base = Array.isArray(fresco) ? fresco : proyectosProp
-  const nuevo = base.map(p => p.id === proyectoId ? { ...p, partes, ...(lectura ? { historialLecturas: [...(p.historialLecturas || []), lectura] } : {}) } : p)
-  try { localStorage.setItem('serein_proyectos', JSON.stringify(nuevo)) } catch (e) {}
-  setProyectos(nuevo)
-  pushState()
+// taller_partes usa snake_case (peso_unitario) — se mapea una sola vez acá
+// al shape camelCase que ya usan controlTaller.js y toda la UI existente,
+// para no tener que tocar esas funciones puras.
+function filaAParte(row) {
+  return { id: row.id, marca: row.marca, perfil: row.perfil, cantidad: row.cantidad, material: row.material, largo: row.largo, pesoUnitario: row.peso_unitario, avance: row.avance || { dimensionado: 0, armado: 0, soldado: 0, liberado: 0 } }
+}
+
+async function cargarPartesDeOT(ot) {
+  const { data, error } = await supabase.from('taller_partes').select('*').eq('ot', ot).order('marca')
+  if (error) throw error
+  return (data || []).map(filaAParte)
 }
 
 // Sube la foto de la hoja de avance a Storage (bucket "fotos-ot", el mismo
@@ -62,8 +69,11 @@ function subirFotoHojaAvance(file) {
 
 // Importador del Listado de Partes — clon del patrón subirOC/revisionOC/
 // aplicarRevisionOC de OTModule.jsx: nunca escribe directo, siempre pasa
-// por una vista previa con checkbox + valor editable por fila.
-function ImportadorListadoPartes({ proyectos, setProyectos, proyecto }) {
+// por una vista previa con checkbox + valor editable por fila. El upsert
+// final nunca incluye `avance` en el payload, así que un conflicto (ot,
+// marca) actualiza los datos del Listado de Partes sin tocar el avance ya
+// registrado.
+function ImportadorListadoPartes({ ot, nombreProyecto, partes, onAplicado }) {
   const [abierto, setAbierto] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
   const [error, setError] = useState('')
@@ -81,7 +91,7 @@ function ImportadorListadoPartes({ proyectos, setProyectos, proyecto }) {
       if (err) throw err
       if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo leer el documento.')
       const d = data.datos || {}
-      const existentes = new Set((proyecto.partes || []).map(p => normMarcaTaller(p.marca)))
+      const existentes = new Set(partes.map(p => normMarcaTaller(p.marca)))
       setRevision({
         marcas: (d.marcas || []).map(m => ({
           ...m,
@@ -96,28 +106,19 @@ function ImportadorListadoPartes({ proyectos, setProyectos, proyecto }) {
   const aplicar = async () => {
     if (!revision) return
     const seleccionadas = revision.marcas.filter(m => m.aplicar && m.marca)
-    const actuales = [...(proyecto.partes || [])]
-    let nuevas = 0, actualizadas = 0
-    seleccionadas.forEach(m => {
-      const key = normMarcaTaller(m.marca)
-      const idx = actuales.findIndex(p => normMarcaTaller(p.marca) === key)
-      if (idx >= 0) {
-        // Nunca toca el avance ya registrado — solo actualiza los datos
-        // del Listado de Partes en sí (perfil/cantidad/material/largo/peso).
-        actuales[idx] = { ...actuales[idx], perfil: m.perfil || actuales[idx].perfil, cantidad: m.cantidad ?? actuales[idx].cantidad, material: m.material || actuales[idx].material, largo: m.largo ?? actuales[idx].largo, pesoUnitario: m.pesoUnitario ?? actuales[idx].pesoUnitario }
-        actualizadas++
-      } else {
-        actuales.push({
-          id: 'pt' + Date.now() + Math.random().toString(36).slice(2, 7),
-          marca: m.marca, perfil: m.perfil || null, cantidad: m.cantidad || 0, material: m.material || null, largo: m.largo || null, pesoUnitario: m.pesoUnitario || null,
-          avance: { dimensionado: 0, armado: 0, soldado: 0, liberado: 0 },
-        })
-        nuevas++
-      }
-    })
-    await actualizarPartesProyecto(proyectos, setProyectos, proyecto.id, actuales)
-    setMsg(`Listo — ${nuevas} marca(s) nueva(s), ${actualizadas} actualizada(s). El avance ya registrado no se tocó.`)
-    setRevision(null)
+    if (!seleccionadas.length) { setRevision(null); return }
+    try {
+      const filas = seleccionadas.map(m => ({
+        ot, marca: m.marca, perfil: m.perfil || null, cantidad: m.cantidad ?? null,
+        material: m.material || null, largo: m.largo ?? null, peso_unitario: m.pesoUnitario ?? null,
+      }))
+      const { error } = await supabase.from('taller_partes').upsert(filas, { onConflict: 'ot,marca' })
+      if (error) throw error
+      const nuevas = seleccionadas.filter(m => m.esNueva).length
+      setMsg(`Listo — ${nuevas} marca(s) nueva(s), ${seleccionadas.length - nuevas} actualizada(s). El avance ya registrado no se tocó.`)
+      setRevision(null)
+      onAplicado()
+    } catch (err) { window.alert('No se pudo aplicar el Listado de Partes: ' + ((err && err.message) || String(err))) }
   }
 
   return (
@@ -129,7 +130,7 @@ function ImportadorListadoPartes({ proyectos, setProyectos, proyecto }) {
       {abierto && (
         <div style={{ marginTop: 10, border: '1px solid #DFE4EA', borderRadius: 6, padding: 12, background: '#FAFAF8' }}>
           <div style={{ fontSize: 12, color: C.gris, marginBottom: 8 }}>
-            Sube el PDF del Listado de Partes de {proyecto.nombre || proyecto.ot}. Se agrega cada marca nueva y se actualizan los datos de las que ya existían — el avance de fabricación ya registrado nunca se pisa.
+            Sube el PDF del Listado de Partes de {nombreProyecto}. Se agrega cada marca nueva y se actualizan los datos de las que ya existían — el avance de fabricación ya registrado nunca se pisa.
           </div>
           <label style={{ cursor: subiendo ? 'wait' : 'pointer', background: C.carbon, color: '#fff', border: 'none', padding: '7px 14px', fontSize: 12.5, borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 6, opacity: subiendo ? 0.7 : 1 }}>
             {subiendo ? 'Leyendo…' : 'Elegir archivo PDF'}
@@ -175,17 +176,17 @@ function ImportadorListadoPartes({ proyectos, setProyectos, proyecto }) {
 // Genera la hoja de avance imprimible y dispara la descarga — reutiliza
 // generarPdfProtocoloBlob() de protocolo-pdf.js tal cual (ya sabe cortar en
 // varias hojas A4 si la tabla es larga), solo se le pasa un HTML distinto.
-function BotonGenerarHoja({ proyecto, partes }) {
+function BotonGenerarHoja({ ot, nombreProyecto, partes }) {
   const [generando, setGenerando] = useState(false)
   const [error, setError] = useState('')
   const generar = async () => {
     setGenerando(true); setError('')
     try {
-      const html = generarHojaAvanceHtml(proyecto, partes)
+      const html = generarHojaAvanceHtml({ ot, nombre: nombreProyecto }, partes)
       const blob = await generarPdfProtocoloBlob(html)
       const objUrl = URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href = objUrl; a.download = `Hoja de avance - ${proyecto.nombre || proyecto.ot}.pdf`
+      a.href = objUrl; a.download = `Hoja de avance - ${nombreProyecto}.pdf`
       document.body.appendChild(a); a.click(); document.body.removeChild(a)
       setTimeout(() => URL.revokeObjectURL(objUrl), 15000)
     } catch (err) { setError('No se pudo generar el PDF: ' + ((err && err.message) || String(err))) }
@@ -207,7 +208,7 @@ function BotonGenerarHoja({ proyecto, partes }) {
 // nunca escribe directo. Al aplicar, cada etapa marcada FIJA el conteo
 // (es una lectura fresca de la hoja completa, no un incremento) — nunca
 // toca una etapa que la hoja dejó en blanco.
-function LecturaHojaAvance({ proyectos, setProyectos, proyecto }) {
+function LecturaHojaAvance({ ot, nombreProyecto, partes, onAplicado }) {
   const [abierto, setAbierto] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
   const [error, setError] = useState('')
@@ -226,7 +227,6 @@ function LecturaHojaAvance({ proyectos, setProyectos, proyecto }) {
       if (err) throw err
       if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo leer la foto.')
       const d = data.datos || {}
-      const partes = proyecto.partes || []
       const filas = (d.filas || []).map(f => {
         const parte = partes.find(p => normMarcaTaller(p.marca) === normMarcaTaller(f.marca))
         const cambios = {}
@@ -250,27 +250,33 @@ function LecturaHojaAvance({ proyectos, setProyectos, proyecto }) {
 
   const aplicar = async () => {
     if (!revision) return
-    const partes = [...(proyecto.partes || [])]
-    const filasLectura = []
-    revision.filas.forEach(f => {
-      const idx = partes.findIndex(p => p.id === f.parte.id)
-      if (idx < 0) return
-      const avanceNuevo = { ...partes[idx].avance }
-      Object.entries(f.cambios).forEach(([etapa, c]) => {
-        if (!c.aplicar) return
-        avanceNuevo[etapa] = c.valor
-        filasLectura.push({ marca: f.marca, etapa, cantidad: c.valor })
-      })
-      partes[idx] = { ...partes[idx], avance: avanceNuevo }
-    })
-    const lectura = { id: 'la' + Date.now() + Math.random().toString(36).slice(2, 7), fecha: hoy(), fotoUrl: revision.fotoUrl, filas: filasLectura, confirmadoPor: '' }
     try {
-      const { data } = await supabase.auth.getUser()
-      lectura.confirmadoPor = (data && data.user && data.user.email) || ''
-    } catch (e) {}
-    await actualizarPartesProyecto(proyectos, setProyectos, proyecto.id, partes, lectura)
-    setMsg(`Listo — se actualizó el avance de ${new Set(filasLectura.map(f => f.marca)).size} marca(s).`)
-    setRevision(null)
+      const filasLectura = []
+      const actualizaciones = []
+      revision.filas.forEach(f => {
+        const avanceNuevo = { ...f.parte.avance }
+        let cambio = false
+        Object.entries(f.cambios).forEach(([etapa, c]) => {
+          if (!c.aplicar) return
+          avanceNuevo[etapa] = c.valor
+          filasLectura.push({ marca: f.marca, etapa, cantidad: c.valor })
+          cambio = true
+        })
+        if (cambio) actualizaciones.push(supabase.from('taller_partes').update({ avance: avanceNuevo, updated_at: new Date().toISOString() }).eq('id', f.parte.id))
+      })
+      const resultados = await Promise.all(actualizaciones)
+      const conError = resultados.find(r => r.error)
+      if (conError) throw conError.error
+
+      let confirmadoPor = ''
+      try { const { data } = await supabase.auth.getUser(); confirmadoPor = (data && data.user && data.user.email) || '' } catch (e) {}
+      const { error: errLectura } = await supabase.from('taller_lecturas').insert({ ot, fecha: hoy(), foto_url: revision.fotoUrl, filas: filasLectura, confirmado_por: confirmadoPor })
+      if (errLectura) throw errLectura
+
+      setMsg(`Listo — se actualizó el avance de ${new Set(filasLectura.map(f => f.marca)).size} marca(s).`)
+      setRevision(null)
+      onAplicado()
+    } catch (err) { window.alert('No se pudo aplicar la lectura: ' + ((err && err.message) || String(err))) }
   }
 
   return (
@@ -328,21 +334,102 @@ function LecturaHojaAvance({ proyectos, setProyectos, proyecto }) {
   )
 }
 
-export default function ControlTallerModule({ proyectos = [], setProyectos = () => {} }) {
-  const [proyectoId, setProyectoId] = useState('')
+// Tablero + tabla de partes de UN proyecto — común a la vista de gerencia
+// (ControlTallerModule, selector de proyecto de toda la empresa) y a la de
+// una persona externa (TallerExternoApp, selector limitado a sus OT
+// asignados). Recibe `ot`/`nombreProyecto` en vez de un objeto proyecto
+// del blob, para poder usarse en ambas.
+export function TableroControlTaller({ ot, nombreProyecto }) {
+  const [partes, setPartes] = useState([])
+  const [cargando, setCargando] = useState(true)
+  const [error, setError] = useState('')
   const [buscar, setBuscar] = useState('')
   const [filtroEtapa, setFiltroEtapa] = useState('')
 
-  const proyecto = proyectos.find(p => p.id === proyectoId) || null
-  const partes = (proyecto && proyecto.partes) || []
-  const resumen = useMemo(() => resumenTableroTaller(partes), [partes])
+  const cargar = async () => {
+    setCargando(true); setError('')
+    try { setPartes(await cargarPartesDeOT(ot)) }
+    catch (err) { setError('No se pudieron cargar las partes: ' + ((err && err.message) || String(err))) }
+    setCargando(false)
+  }
+  useEffect(() => { cargar() }, [ot])
 
+  const resumen = useMemo(() => resumenTableroTaller(partes), [partes])
   const q = buscar.trim().toLowerCase()
   const partesFiltradas = partes.filter(p => {
     if (filtroEtapa && etapaBucket(p) !== filtroEtapa) return false
     if (q && !String(p.marca || '').toLowerCase().includes(q) && !String(p.perfil || '').toLowerCase().includes(q)) return false
     return true
   })
+
+  if (cargando) return <div style={{ color: C.gris, fontSize: 13 }}>Cargando…</div>
+  if (error) return <div style={{ color: C.rojo, fontSize: 13 }}>{error}</div>
+
+  return (
+    <div>
+      <ImportadorListadoPartes ot={ot} nombreProyecto={nombreProyecto} partes={partes} onAplicado={cargar} />
+      <div style={{ marginBottom: 16 }}>
+        <BotonGenerarHoja ot={ot} nombreProyecto={nombreProyecto} partes={partes} />
+        <LecturaHojaAvance ot={ot} nombreProyecto={nombreProyecto} partes={partes} onAplicado={cargar} />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 16 }}>
+        <KpiCard value={resumen.piezasTotales} label="Piezas totales" />
+        <KpiCard value={resumen.piezasLiberadas} label="Piezas liberadas" iconColor={C.verde} />
+        <KpiCard value={kg(resumen.kgTotales)} label="Kg totales" />
+        <KpiCard value={kg(resumen.kgLiberados)} label="Kg liberados" iconColor={C.verde} />
+        <KpiCard value={resumen.piezasTotales > 0 ? Math.round((resumen.piezasLiberadas / resumen.piezasTotales) * 100) + '%' : '0%'} label="% liberado" iconColor={C.verde} />
+      </div>
+
+      {partes.length === 0 ? (
+        <div style={{ color: '#9AA3AD', fontSize: 13 }}>Este proyecto todavía no tiene un Listado de Partes importado.</div>
+      ) : (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: C.gris, textTransform: 'uppercase' }}>Partes ({partesFiltradas.length})</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <input value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="Buscar por marca o perfil…" style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '5px 8px', fontSize: 12, minWidth: 200 }} />
+              <select value={filtroEtapa} onChange={e => setFiltroEtapa(e.target.value)} style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '5px 8px', fontSize: 12 }}>
+                <option value="">Todas las etapas</option>
+                {Object.entries(ETAPA_BUCKET_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                  {['Marca', 'Perfil', 'Cant.', 'Material', 'Peso/ud', 'Estado'].map((h, i) => (
+                    <th key={i} style={{ textAlign: 'left', padding: '5px 6px', fontSize: 10.5, color: '#9AA3AD', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {partesFiltradas.map(p => {
+                  const est = estadoDeParte(p)
+                  return (
+                    <tr key={p.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
+                      <td style={{ padding: '5px 6px', fontWeight: 600, whiteSpace: 'nowrap' }}>{p.marca}</td>
+                      <td style={{ padding: '5px 6px', color: '#9AA3AD' }}>{p.perfil || '—'}</td>
+                      <td style={{ padding: '5px 6px' }}>{p.cantidad ?? '—'}</td>
+                      <td style={{ padding: '5px 6px', color: '#9AA3AD' }}>{p.material || '—'}</td>
+                      <td style={{ padding: '5px 6px', color: '#9AA3AD' }}>{p.pesoUnitario ?? '—'}</td>
+                      <td style={{ padding: '5px 6px' }}><span style={{ background: est.color, color: '#fff', borderRadius: 10, padding: '2px 8px', fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap' }}>{est.label}</span></td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function ControlTallerModule({ proyectos = [] }) {
+  const [proyectoId, setProyectoId] = useState('')
+  const proyecto = proyectos.find(p => p.id === proyectoId) || null
 
   return (
     <div>
@@ -354,67 +441,10 @@ export default function ControlTallerModule({ proyectos = [], setProyectos = () 
         </select>
       </div>
 
-      {!proyecto && <div style={{ color: '#9AA3AD', fontSize: 13, marginBottom: 20 }}>Elige un proyecto para ver el avance de fabricación de sus marcas.</div>}
-
-      {proyecto && (
-        <>
-          <ImportadorListadoPartes proyectos={proyectos} setProyectos={setProyectos} proyecto={proyecto} />
-          <div style={{ marginBottom: 16 }}>
-            <BotonGenerarHoja proyecto={proyecto} partes={partes} />
-            <LecturaHojaAvance proyectos={proyectos} setProyectos={setProyectos} proyecto={proyecto} />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 16 }}>
-            <KpiCard value={resumen.piezasTotales} label="Piezas totales" />
-            <KpiCard value={resumen.piezasLiberadas} label="Piezas liberadas" iconColor={C.verde} />
-            <KpiCard value={kg(resumen.kgTotales)} label="Kg totales" />
-            <KpiCard value={kg(resumen.kgLiberados)} label="Kg liberados" iconColor={C.verde} />
-            <KpiCard value={resumen.piezasTotales > 0 ? Math.round((resumen.piezasLiberadas / resumen.piezasTotales) * 100) + '%' : '0%'} label="% liberado" iconColor={C.verde} />
-          </div>
-
-          {partes.length === 0 ? (
-            <div style={{ color: '#9AA3AD', fontSize: 13 }}>Este proyecto todavía no tiene un Listado de Partes importado.</div>
-          ) : (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: C.gris, textTransform: 'uppercase' }}>Partes ({partesFiltradas.length})</div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <input value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="Buscar por marca o perfil…" style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '5px 8px', fontSize: 12, minWidth: 200 }} />
-                  <select value={filtroEtapa} onChange={e => setFiltroEtapa(e.target.value)} style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '5px 8px', fontSize: 12 }}>
-                    <option value="">Todas las etapas</option>
-                    {Object.entries(ETAPA_BUCKET_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-                      {['Marca', 'Perfil', 'Cant.', 'Material', 'Peso/ud', 'Estado'].map((h, i) => (
-                        <th key={i} style={{ textAlign: 'left', padding: '5px 6px', fontSize: 10.5, color: '#9AA3AD', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {partesFiltradas.map(p => {
-                      const est = estadoDeParte(p)
-                      return (
-                        <tr key={p.id} style={{ borderBottom: '1px solid #EEE9DF' }}>
-                          <td style={{ padding: '5px 6px', fontWeight: 600, whiteSpace: 'nowrap' }}>{p.marca}</td>
-                          <td style={{ padding: '5px 6px', color: '#9AA3AD' }}>{p.perfil || '—'}</td>
-                          <td style={{ padding: '5px 6px' }}>{p.cantidad ?? '—'}</td>
-                          <td style={{ padding: '5px 6px', color: '#9AA3AD' }}>{p.material || '—'}</td>
-                          <td style={{ padding: '5px 6px', color: '#9AA3AD' }}>{p.pesoUnitario ?? '—'}</td>
-                          <td style={{ padding: '5px 6px' }}><span style={{ background: est.color, color: '#fff', borderRadius: 10, padding: '2px 8px', fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap' }}>{est.label}</span></td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </>
+      {!proyecto ? (
+        <div style={{ color: '#9AA3AD', fontSize: 13, marginBottom: 20 }}>Elige un proyecto para ver el avance de fabricación de sus marcas.</div>
+      ) : (
+        <TableroControlTaller key={proyecto.ot} ot={proyecto.ot} nombreProyecto={proyecto.nombre || proyecto.ot} />
       )}
     </div>
   )

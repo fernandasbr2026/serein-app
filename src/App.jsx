@@ -3,6 +3,7 @@ import { supabase } from './supabase.js'
 import Login from './Login.jsx'
 import Dashboard from './Dashboard.jsx'
 import SubcontratoApp from './SubcontratoApp.jsx'
+import TallerExternoApp from './TallerExternoApp.jsx'
 import LogoSerein from './LogoSerein.jsx'
 import { pullState, pushState, obtenerEstadoGuardado } from './sync.js'
 import { SEREIN } from './theme-serein.js'
@@ -117,7 +118,7 @@ export default function App() {
     // pullState/pushState, para no dejarlo colgado en la pantalla de
     // carga.
     if (!perfil) return
-    if (perfil.tipo === 'subcontrato') { setSincronizado(true); return }
+    if (perfil.tipo === 'subcontrato' || perfil.tipo === 'taller_externo') { setSincronizado(true); return }
     let vivo = true
     pullState().then(res => { if (res.ok && res.n === 0) pushState() }).finally(() => { if (vivo) setSincronizado(true) })
     const id = setInterval(() => { pushState() }, 5000)
@@ -173,6 +174,7 @@ export default function App() {
   // Dashboard.jsx ni nada que dependa de app_state (ver comentario del
   // useEffect de sincronizacion, arriba).
   if (perfil.tipo === 'subcontrato') return <SubcontratoApp perfil={perfil} email={session.user.email} onLogout={salir} />
+  if (perfil.tipo === 'taller_externo') return <TallerExternoApp perfil={perfil} email={session.user.email} onLogout={salir} />
   if (!sincronizado) return <Pantalla msg="Sincronizando datos con la nube..." />
   return (
     <ErrorBoundary>

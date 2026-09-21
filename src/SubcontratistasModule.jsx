@@ -183,6 +183,79 @@ function PanelAsignar({ proyectos = [] }) {
   )
 }
 
+// Asignar OT de Control de Taller a una persona externa (Fase J4) — mismo
+// patrón que PanelAsignar de arriba, pero sin Centro de Costo (Control de
+// Taller no tiene ese concepto) y sobre taller_asignaciones en vez de
+// subcontrato_asignaciones.
+function PanelAsignarTaller({ proyectos = [] }) {
+  const [personas, setPersonas] = useState([])
+  const [asignaciones, setAsignaciones] = useState([])
+  const [perfilId, setPerfilId] = useState('')
+  const [proyectoId, setProyectoId] = useState('')
+  const [msg, setMsg] = useState('')
+
+  const cargar = async () => {
+    const [p, a] = await Promise.all([
+      supabase.from('perfiles').select('id,nombre').eq('tipo', 'taller_externo'),
+      supabase.from('taller_asignaciones').select('*').order('created_at', { ascending: false }),
+    ])
+    setPersonas(p.data || [])
+    setAsignaciones(a.data || [])
+  }
+  useEffect(() => { cargar() }, [])
+
+  const agregar = async () => {
+    const proyecto = proyectos.find(p => p.id === proyectoId)
+    if (!perfilId || !proyecto) { window.alert('Elige la persona y el proyecto.'); return }
+    const { error } = await supabase.from('taller_asignaciones').insert({ perfil_id: perfilId, ot: proyecto.ot })
+    if (error) { window.alert('No se pudo agregar: ' + error.message); return }
+    setMsg('Asignación agregada.')
+    cargar()
+  }
+  const quitar = async id => {
+    if (!window.confirm('¿Quitar esta asignación?')) return
+    await supabase.from('taller_asignaciones').delete().eq('id', id)
+    cargar()
+  }
+
+  const nombreDe = pid => (personas.find(s => s.id === pid) || {}).nombre || pid
+
+  if (!personas.length) {
+    return <div style={{ fontSize: 13, color: C.gris }}>No hay ningún perfil con tipo "taller_externo" todavía — créalo primero (ver migración de Control de Taller para externos).</div>
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
+        <select value={perfilId} onChange={e => setPerfilId(e.target.value)} style={inp}>
+          <option value="">Persona…</option>
+          {personas.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+        </select>
+        <select value={proyectoId} onChange={e => setProyectoId(e.target.value)} style={{ ...inp, minWidth: 220 }}>
+          <option value="">Proyecto / OT…</option>
+          {proyectos.filter(p => !p.cerrado).map(p => <option key={p.id} value={p.id}>{p.nombre || p.ot} · {p.ot}</option>)}
+        </select>
+        <button onClick={agregar} style={{ background: C.teal, color: '#fff', border: 'none', borderRadius: 4, padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 5 }}><UserPlus size={13} /> Asignar</button>
+      </div>
+      {msg && <div style={{ fontSize: 12, color: C.verde, marginBottom: 8 }}>{msg}</div>}
+      {asignaciones.length > 0 && (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+          <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Persona', 'OT', ''].map((h, i) => <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {asignaciones.map(a => (
+              <tr key={a.id} style={{ borderBottom: '1px solid #DFE4EA' }}>
+                <td style={{ padding: '5px 8px' }}>{nombreDe(a.perfil_id)}</td>
+                <td style={{ padding: '5px 8px' }}>{a.ot}</td>
+                <td style={{ padding: '5px 8px', textAlign: 'right' }}><button onClick={() => quitar(a.id)} style={{ background: 'none', border: 'none', color: C.rojo, cursor: 'pointer' }}><X size={14} /></button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
+}
+
 export default function SubcontratistasModule({ onAddCompraPorOT, proyectos = [] }) {
   const [pendientes, setPendientes] = useState([])
   const [cargando, setCargando] = useState(true)
@@ -210,6 +283,9 @@ export default function SubcontratistasModule({ onAddCompraPorOT, proyectos = []
 
       <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, textTransform: 'uppercase', marginBottom: 10 }}>Asignar subcontratista a OT / Centro de Costo</div>
       <PanelAsignar proyectos={proyectos} />
+
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, textTransform: 'uppercase', margin: '24px 0 10px' }}>Asignar Control de Taller (acceso externo)</div>
+      <PanelAsignarTaller proyectos={proyectos} />
     </div>
   )
 }

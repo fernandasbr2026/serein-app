@@ -1192,7 +1192,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
       ) : (vista === 'comprasSII' && verCotizadorProy) ? (
         <ProyComprasLibro proyectos={proyectos} setProyectos={setProyectos} />
       ) : vista === 'controlTaller' ? (
-        <ControlTallerModule proyectos={proyectos} setProyectos={setProyectos} />
+        <ControlTallerModule proyectos={proyectos} />
       ) : vista === 'subcontratistas' ? (
         <SubcontratistasModule onAddCompraPorOT={agregarCompraPorOT} proyectos={proyectos} />
       ) : vista === 'consolidado' ? (
