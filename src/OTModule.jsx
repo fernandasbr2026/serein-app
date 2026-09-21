@@ -2873,8 +2873,17 @@ function MarcasPiezaBlock({ marcas, onChange, marcasEsperadas = [], usadasEnOtro
   const norm = s => String(s == null ? '' : s).trim().toLowerCase()
   const usadasSet = new Set(usadasEnOtros.map(norm))
   const arrSet = new Set(arr.map(norm))
-  const espSet = new Set(marcasEsperadas.map(m => norm(m.marca)))
   const candidatas = marcasEsperadas.filter(m => !usadasSet.has(norm(m.marca)))
+  // OJO: espSet se arma desde candidatas (las que SÍ se ven como
+  // casillero acá abajo), no desde marcasEsperadas completo. Una marca
+  // que este protocolo ya tiene guardada pero que quedó "usada en otro
+  // protocolo" de la misma OT no aparece en candidatas (para no
+  // ofrecerla dos veces) — si espSet igual la contara, esta marca
+  // quedaría invisible en toda la pantalla (ni casillero ni fila de
+  // texto) aunque el PDF la siga imprimiendo (rptMarcas no filtra nada).
+  // Con candidatas, cualquier marca "atrapada" así cae en la lista de
+  // abajo, visible y con botón para sacarla si corresponde.
+  const espSet = new Set(candidatas.map(m => norm(m.marca)))
   const toggle = marcaTxt => {
     const key = norm(marcaTxt)
     if (arrSet.has(key)) onChange(arr.filter(s => norm(s) !== key))
@@ -2901,6 +2910,7 @@ function MarcasPiezaBlock({ marcas, onChange, marcasEsperadas = [], usadasEnOtro
     )}
     {arr.map((m, i) => espSet.has(norm(m)) ? null : (<div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
       <input style={ip} placeholder="Marca de pieza (ej. 2610-SP-32301)" value={m} onChange={e => onChange(arr.map((x, j) => j === i ? e.target.value : x))} />
+      {m && usadasSet.has(norm(m)) && <span title="Esta marca ya quedó asignada a otro protocolo de esta OT — por eso no aparece como casillero. Si es un error, quítala con la ×." style={{ fontSize: 10.5, color: '#D9600A', whiteSpace: 'nowrap' }}>⚠ ya usada en otro protocolo</span>}
       <button onClick={() => onChange(arr.filter((_, j) => j !== i))} style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '4px 8px', color: '#D9600A' }}>×</button>
     </div>))}
     <button onClick={() => onChange([...arr, ''])} style={{ background: C.teal, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, marginTop: 2 }}>+ Agregar marca a mano</button>
