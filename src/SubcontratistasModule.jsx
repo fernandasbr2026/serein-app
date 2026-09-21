@@ -12,11 +12,20 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { Check, X, UserPlus, FileText } from 'lucide-react'
 import { supabase } from './supabase.js'
 import { SEREIN } from './theme-serein.js'
+import { CC_DEFS } from './proyectos-data.js'
 
 const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', borderRadius: 4, fontSize: 13, boxSizing: 'border-box' }
 const montoBruto = f => f.exento ? (f.monto || 0) : Math.round((f.monto || 0) * 1.19)
+// Mismo criterio que ccCodigos()/nombreCC() de ProyectosModule.jsx (no
+// exportados de ahí, se duplica la misma lógica chica — igual que
+// normMarca() se duplica entre módulos en el resto de la app) para poder
+// mostrar los Centros de Costo REALES de cada proyecto en vez de que la
+// persona tenga que adivinar/escribir el código a mano.
+const nombreDefaultCC = id => (CC_DEFS.find(c => c.id === id) || {}).nombre || id
+const nombreCC = (p, id) => (p.ccNombres && p.ccNombres[id]) || nombreDefaultCC(id)
+const ccCodigos = p => [...new Set([...CC_DEFS.map(c => c.id), ...Object.keys(p.cc || {}), ...(p.compras || []).map(c => c.cc)])].filter(Boolean)
 
 function FilaPendiente({ f, onAddCompra, onDecidido }) {
   const [abonado, setAbonado] = useState('')
@@ -81,13 +90,12 @@ function FilaPendiente({ f, onAddCompra, onDecidido }) {
   )
 }
 
-function PanelAsignar() {
+function PanelAsignar({ proyectos = [] }) {
   const [subcontratistas, setSubcontratistas] = useState([])
   const [asignaciones, setAsignaciones] = useState([])
   const [perfilId, setPerfilId] = useState('')
-  const [ot, setOt] = useState('')
+  const [proyectoId, setProyectoId] = useState('')
   const [cc, setCc] = useState('')
-  const [ccNombre, setCcNombre] = useState('')
   const [msg, setMsg] = useState('')
 
   const cargar = async () => {
@@ -100,11 +108,14 @@ function PanelAsignar() {
   }
   useEffect(() => { cargar() }, [])
 
+  const proyecto = proyectos.find(p => p.id === proyectoId) || null
+  const ccsDelProyecto = proyecto ? ccCodigos(proyecto) : []
+
   const agregar = async () => {
-    if (!perfilId || !ot.trim() || !cc.trim()) { window.alert('Elige el subcontratista y completa OT y Centro de Costo.'); return }
-    const { error } = await supabase.from('subcontrato_asignaciones').insert({ perfil_id: perfilId, ot: ot.trim(), cc: cc.trim(), cc_nombre: ccNombre.trim() || cc.trim() })
+    if (!perfilId || !proyecto || !cc) { window.alert('Elige el subcontratista, el proyecto y el centro de costo.'); return }
+    const { error } = await supabase.from('subcontrato_asignaciones').insert({ perfil_id: perfilId, ot: proyecto.ot, cc, cc_nombre: nombreCC(proyecto, cc) })
     if (error) { window.alert('No se pudo agregar: ' + error.message); return }
-    setOt(''); setCc(''); setCcNombre(''); setMsg('Asignación agregada.')
+    setCc(''); setMsg('Asignación agregada.')
     cargar()
   }
   const quitar = async id => {
@@ -126,9 +137,14 @@ function PanelAsignar() {
           <option value="">Subcontratista…</option>
           {subcontratistas.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
         </select>
-        <input value={ot} onChange={e => setOt(e.target.value)} placeholder="OT (ej. OT-2026-102)" style={{ ...inp, width: 150 }} />
-        <input value={cc} onChange={e => setCc(e.target.value)} placeholder="Código CC (ej. A1)" style={{ ...inp, width: 120 }} />
-        <input value={ccNombre} onChange={e => setCcNombre(e.target.value)} placeholder="Nombre CC (ej. Pintura)" style={{ ...inp, width: 140 }} />
+        <select value={proyectoId} onChange={e => { setProyectoId(e.target.value); setCc('') }} style={{ ...inp, minWidth: 220 }}>
+          <option value="">Proyecto / OT…</option>
+          {proyectos.filter(p => !p.cerrado).map(p => <option key={p.id} value={p.id}>{p.nombre || p.ot} · {p.ot}</option>)}
+        </select>
+        <select value={cc} onChange={e => setCc(e.target.value)} disabled={!proyecto} style={inp}>
+          <option value="">{proyecto ? 'Centro de costo…' : 'Elige un proyecto primero'}</option>
+          {ccsDelProyecto.map(id => <option key={id} value={id}>{id} · {nombreCC(proyecto, id)}</option>)}
+        </select>
         <button onClick={agregar} style={{ background: C.teal, color: '#fff', border: 'none', borderRadius: 4, padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 5 }}><UserPlus size={13} /> Asignar</button>
       </div>
       {msg && <div style={{ fontSize: 12, color: C.verde, marginBottom: 8 }}>{msg}</div>}
@@ -151,7 +167,7 @@ function PanelAsignar() {
   )
 }
 
-export default function SubcontratistasModule({ onAddCompraPorOT }) {
+export default function SubcontratistasModule({ onAddCompraPorOT, proyectos = [] }) {
   const [pendientes, setPendientes] = useState([])
   const [cargando, setCargando] = useState(true)
 
@@ -177,7 +193,7 @@ export default function SubcontratistasModule({ onAddCompraPorOT }) {
       )}
 
       <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, textTransform: 'uppercase', marginBottom: 10 }}>Asignar subcontratista a OT / Centro de Costo</div>
-      <PanelAsignar />
+      <PanelAsignar proyectos={proyectos} />
     </div>
   )
 }

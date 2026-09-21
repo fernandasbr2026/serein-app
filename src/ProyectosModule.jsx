@@ -1194,7 +1194,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
       ) : vista === 'controlTaller' ? (
         <ControlTallerModule proyectos={proyectos} setProyectos={setProyectos} />
       ) : vista === 'subcontratistas' ? (
-        <SubcontratistasModule onAddCompraPorOT={agregarCompraPorOT} />
+        <SubcontratistasModule onAddCompraPorOT={agregarCompraPorOT} proyectos={proyectos} />
       ) : vista === 'consolidado' ? (
         <Consolidado proyectos={proyectos} facturasProy={facturasProy} params={params} />
       ) : vista === 'facturas' ? (
