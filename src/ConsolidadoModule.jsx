@@ -407,6 +407,58 @@ function AreaCostPanel({ rows, tot }) {
   )
 }
 
+// Desglose operativo de OT/proyectos por area — abiertas (cotizada + en
+// ejecucion), terminadas sin facturar, y facturado aun por cobrar. Existia
+// antes como ResumenModulos/CardModulo en Dashboard.jsx pero vivia dentro
+// de un bloque nunca renderizado ("{false && ...}") — se reconstruye acá,
+// en vivo, con el mismo criterio de calculo que tenia esa version.
+function OTPorAreaPanel({ ots, proyectos }) {
+  const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
+  const meOT = o => (num(o.montoCotizado) > 0 ? num(o.montoCotizado) : (o.ventas || []).reduce((a, v) => a + num(v.neta), 0))
+  const areaData = a => {
+    const list = (ots || []).filter(o => o.area === a)
+    const abiertas = list.filter(o => ['Cotizada', 'En ejecución'].includes(o.estado))
+    const terminadas = list.filter(o => o.estado === 'Terminada')
+    const facturadas = list.filter(o => ['Facturada', 'Cerrada'].includes(o.estado))
+    return {
+      area: a,
+      abiertasN: abiertas.length,
+      abiertasMonto: abiertas.reduce((s, o) => s + meOT(o), 0),
+      porFacturar: terminadas.reduce((s, o) => s + meOT(o), 0),
+      facturadoPorCobrar: facturadas.reduce((s, o) => s + (o.ventas || []).filter(v => v.estadoPago === 'Pendiente').reduce((x, v) => x + num(v.neta), 0), 0),
+    }
+  }
+  const facturadoDeP = p => (p.edps || []).reduce((a, e) => a + num(e.venta), 0)
+  const proyList = proyectos || []
+  const saldoP = p => (num(p.venta_cotizada) > 0) ? Math.max(0, num(p.venta_cotizada) - facturadoDeP(p)) : null
+  const proyAbiertas = proyList.filter(p => { const s = saldoP(p); return (s !== null && s > 0) || (s === null && num(p.avance) < 100) })
+  const rows = [areaData('Santa Rosa'), areaData('Istria'), {
+    area: 'Proyectos',
+    abiertasN: proyAbiertas.length,
+    abiertasMonto: proyAbiertas.reduce((a, p) => a + (saldoP(p) || 0), 0),
+    porFacturar: proyList.reduce((a, p) => a + (saldoP(p) || 0), 0),
+    facturadoPorCobrar: proyList.reduce((a, p) => a + (p.edps || []).filter(e => e.estado !== 'Pagado').reduce((x, e) => x + num(e.venta), 0), 0),
+  }]
+  const tot = rows.reduce((t, r) => ({ abiertasN: t.abiertasN + r.abiertasN, abiertasMonto: t.abiertasMonto + r.abiertasMonto, porFacturar: t.porFacturar + r.porFacturar, facturadoPorCobrar: t.facturadoPorCobrar + r.facturadoPorCobrar }), { abiertasN: 0, abiertasMonto: 0, porFacturar: 0, facturadoPorCobrar: 0 })
+  const th = { textAlign: 'right', padding: '8px 10px', fontSize: 11, color: SEREIN.textFaint, textTransform: 'uppercase' }
+  const td = { padding: '8px 10px', textAlign: 'right', whiteSpace: 'nowrap' }
+  return (
+    <div style={{ background: SEREIN.paper, border: '1px solid ' + SEREIN.line, borderRadius: SEREIN.radius, boxShadow: SEREIN.shadow, padding: 18, marginTop: 16 }}>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 14, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 4 }}>OT y proyectos por área</div>
+      <div style={{ fontSize: 12, color: SEREIN.textFaint, marginBottom: 12 }}>Abiertas (cotizada + en ejecución), terminadas sin facturar, y facturado aún por cobrar — por área.</div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead><tr style={{ borderBottom: '2px solid ' + SEREIN.ink }}><th style={{ ...th, textAlign: 'left' }}>Área</th><th style={th}>Abiertas</th><th style={th}>Monto abiertas</th><th style={th}>Terminadas por facturar</th><th style={th}>Facturado por cobrar</th></tr></thead>
+          <tbody>
+            {rows.map(r => (<tr key={r.area} style={{ borderBottom: '1px solid ' + SEREIN.fog2 }}><td style={{ padding: '8px 10px', fontWeight: 600 }}>{r.area}</td><td style={td}>{r.abiertasN}</td><td style={td}>{clp(r.abiertasMonto)}</td><td style={{ ...td, color: r.porFacturar > 0 ? SEREIN.orange : SEREIN.text }}>{clp(r.porFacturar)}</td><td style={{ ...td, color: r.facturadoPorCobrar > 0 ? SEREIN.red : SEREIN.text }}>{clp(r.facturadoPorCobrar)}</td></tr>))}
+            <tr style={{ borderTop: '2px solid ' + SEREIN.ink, fontWeight: 700 }}><td style={{ padding: '8px 10px' }}>Total</td><td style={td}>{tot.abiertasN}</td><td style={td}>{clp(tot.abiertasMonto)}</td><td style={td}>{clp(tot.porFacturar)}</td><td style={td}>{clp(tot.facturadoPorCobrar)}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 // costosArea (utilidad real por area: venta - costos fijos - compras
 // asignadas) ahora se calcula una sola vez en Dashboard.jsx y llega como
 // prop — se comparte con el "Rentabilidad estimada" del panel principal
@@ -529,5 +581,6 @@ export default function ConsolidadoModule(props) {
     <CustomerRiskPanel d={d} />
     <FinancialCalendarPanel d={d} />
     <AreaCostPanel rows={costosArea && costosArea.rows} tot={costosArea && costosArea.tot} />
+    <OTPorAreaPanel ots={props.ots} proyectos={props.proyectos} />
   </div>)
 }
