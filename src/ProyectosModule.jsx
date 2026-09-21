@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { ChevronDown, ChevronUp, Target, Receipt, Hammer, ShoppingCart, Pencil, Plus, Trash2, X, AlertTriangle, LayoutGrid, Table2, Flame } from 'lucide-react'
+import { ChevronDown, ChevronUp, Target, Receipt, Hammer, ShoppingCart, Pencil, Plus, Trash2, X, AlertTriangle, LayoutGrid, Table2, Flame, Upload } from 'lucide-react'
 import { PROYECTOS, CC_DEFS } from './proyectos-data.js'
 import { calcularPerdidaFactoring, perdidaFactoringFactura } from './ParametrosModule.jsx'
 import FacturasModule from './FacturasModule.jsx'
@@ -10,6 +10,7 @@ import CotizadorIntumescenteModule from './CotizadorIntumescenteModule.jsx'
 import ControlTallerModule from './ControlTallerModule.jsx'
 import { supabase } from './supabase.js'
 import { pullState, pushState } from './sync.js'
+import { fileToBase64 } from './protocolo-pdf.js'
 import * as XLSX from 'xlsx'
 // Cotizador de Proyectos visible solo para estos correos (el resto ve la gestion normal de OT)
 const COTIZADOR_PROY_EMAILS = ['administracion@sereinspa.com', 'mario@sereinspa.com']
@@ -155,6 +156,99 @@ function FormCompra({ p, onAdd, onCancel }) {
           style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Agregar compra</button>
         <button onClick={onCancel} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
       </div>
+    </div>
+  )
+}
+
+// Subir una factura de compra (PDF) y que la IA proponga proveedor/RUT/
+// folio/fecha/monto — clon del patron subirOC/revisionOC/aplicarRevisionOC
+// de OTModule.jsx: nunca escribe directo, siempre pasa por una vista
+// previa editable. El centro de costo NUNCA lo propone la IA — es la
+// unica decision que queda siempre a mano de la persona. Al confirmar,
+// se agrega la compra (mismo onAdd que ya usa FormCompra, con su
+// anti-duplicado por folio+RUT) y ademas se sube el PDF a Drive,
+// organizado OT / Centro de Costo.
+function ImportadorFacturaCompra({ p, onAdd }) {
+  const [abierto, setAbierto] = useState(false)
+  const [subiendo, setSubiendo] = useState(false)
+  const [error, setError] = useState('')
+  const [revision, setRevision] = useState(null)
+  const [guardando, setGuardando] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  const subir = async e => {
+    const fl = e.target.files && e.target.files[0]
+    e.target.value = ''
+    if (!fl) return
+    setSubiendo(true); setError(''); setRevision(null); setMsg('')
+    try {
+      const base64 = await fileToBase64(fl)
+      const { data, error: err } = await supabase.functions.invoke('extraer-factura-compra', { body: { archivos: [{ base64, mimeType: fl.type || 'application/pdf', filename: fl.name }], filename: fl.name } })
+      if (err) throw err
+      if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo leer el documento.')
+      const d = data.datos || {}
+      setRevision({
+        pdfBase64: base64,
+        proveedor: d.proveedor || '', rut: d.rut || '', folio: d.folio || '',
+        fecha: d.fecha || '', monto: d.neto != null ? String(d.neto) : '', exento: !!d.exento,
+        detalle: d.detalle || '', cc: ccCodigos(p)[0] || CC_DEFS[0].id,
+      })
+    } catch (err) { setError('No se pudo leer la factura: ' + ((err && err.message) || String(err))) }
+    setSubiendo(false)
+  }
+
+  const confirmar = async () => {
+    if (!revision) return
+    if (!revision.proveedor.trim() || !(num(revision.monto) > 0)) { window.alert('Falta el proveedor o el monto no es válido — revisa antes de confirmar.'); return }
+    const agregada = onAdd({ proveedor: revision.proveedor, detalle: revision.detalle, fecha: revision.fecha || '—', monto: num(revision.monto), cc: revision.cc, folio: revision.folio, rut: revision.rut, exento: !!revision.exento })
+    if (!agregada) return // anti-duplicado ya avisó (folio+RUT repetido) — la persona decide, no se sube a Drive de vuelta
+    setGuardando(true)
+    try {
+      const filename = (revision.folio ? revision.folio + ' - ' : '') + (revision.proveedor || 'Proveedor') + '.pdf'
+      const { data, error: err } = await supabase.functions.invoke('subir-factura-compra-drive', { body: { pdfBase64: revision.pdfBase64, filename, ot: p.ot || p.nombre || 'Sin OT', centroCosto: nombreCC(p, revision.cc) } })
+      if (err) throw err
+      if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo subir a Drive.')
+      setMsg('Compra agregada y factura subida a Drive.')
+    } catch (err) { setMsg('La compra quedó agregada, pero no se pudo subir el PDF a Drive: ' + ((err && err.message) || String(err))) }
+    setGuardando(false)
+    setRevision(null)
+    setAbierto(false)
+  }
+
+  return (
+    <div style={{ display: 'inline-block' }}>
+      <button onClick={() => setAbierto(v => !v)} style={{ background: abierto ? '#EEE9DF' : C.teal, color: abierto ? C.carbon : '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Upload size={13} /> Subir factura</button>
+      {msg && <div style={{ fontSize: 12, color: C.verde, marginTop: 6 }}>{msg}</div>}
+      {abierto && (
+        <div style={{ background: '#F2F4F7', padding: 12, marginTop: 8, minWidth: 320 }}>
+          <label style={{ cursor: subiendo ? 'wait' : 'pointer', background: C.carbon, color: '#fff', border: 'none', padding: '7px 14px', fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 6, opacity: subiendo ? 0.7 : 1 }}>
+            {subiendo ? 'Leyendo…' : 'Elegir PDF de la factura'}
+            <input type="file" accept="application/pdf,image/*" onChange={subir} disabled={subiendo} style={{ display: 'none' }} />
+          </label>
+          {error && <div style={{ fontSize: 12, color: C.rojo, marginTop: 8 }}>{error}</div>}
+          {revision && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 11, color: C.gris, marginBottom: 6 }}>Revisa antes de confirmar — el centro de costo lo eliges tú, la IA no lo propone.</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                <input style={{ ...inp, width: 130 }} placeholder="Proveedor" value={revision.proveedor} onChange={e => setRevision(r => ({ ...r, proveedor: e.target.value }))} />
+                <input style={{ ...inp, width: 100 }} placeholder="N° doc / folio" value={revision.folio} onChange={e => setRevision(r => ({ ...r, folio: e.target.value }))} />
+                <input style={{ ...inp, width: 110 }} placeholder="RUT proveedor" value={revision.rut} onChange={e => setRevision(r => ({ ...r, rut: e.target.value }))} />
+                <select style={{ ...inp, background: '#FFF7E6', fontWeight: 700 }} value={revision.cc} onChange={e => setRevision(r => ({ ...r, cc: e.target.value }))}>
+                  {ccCodigos(p).map(id => <option key={id} value={id}>{id} · {nombreCC(p, id)}</option>)}
+                </select>
+                <input style={{ ...inp, width: 160 }} placeholder="Detalle" value={revision.detalle} onChange={e => setRevision(r => ({ ...r, detalle: e.target.value }))} />
+                <input style={{ ...inp, width: 120 }} type="date" value={revision.fecha} onChange={e => setRevision(r => ({ ...r, fecha: e.target.value }))} />
+                <input style={{ ...inp, width: 120 }} placeholder="Monto neto CLP" value={revision.monto} onChange={e => setRevision(r => ({ ...r, monto: e.target.value }))} />
+                <label style={{ fontSize: 12, color: C.gris, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" checked={!!revision.exento} onChange={e => setRevision(r => ({ ...r, exento: e.target.checked }))} /> Exenta (sin IVA)</label>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button onClick={confirmar} disabled={guardando} style={{ background: guardando ? '#9AA3AD' : C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: guardando ? 'default' : 'pointer', fontSize: 13 }}>{guardando ? 'Guardando…' : 'Confirmar y subir a Drive'}</button>
+                <button onClick={() => setRevision(null)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -608,7 +702,10 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
           {/* COMPRAS */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0 8px' }}>
             <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.gris, display: 'flex', alignItems: 'center', gap: 5 }}><ShoppingCart size={13} /> Compras imputadas (por CC)</span>
-            <button onClick={() => setAddCompra(true)} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Agregar compra</button>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <ImportadorFacturaCompra p={p} onAdd={c => onAddCompra(p.id, c)} />
+              <button onClick={() => setAddCompra(true)} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Agregar compra</button>
+            </div>
           </div>
           {(p.compras || []).length === 0 ? (
             <div style={{ fontSize: 13, color: C.gris }}>Sin compras imputadas.</div>
