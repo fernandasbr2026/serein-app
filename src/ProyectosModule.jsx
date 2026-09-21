@@ -273,6 +273,93 @@ function ImportadorFacturaCompra({ p, onAdd }) {
   )
 }
 
+// Sube el PDF/foto de una factura de VENTA directo desde la ficha del
+// proyecto: la IA (extraer-factura, misma que ya usa Facturas por área)
+// lee folio/fecha/neto, la persona revisa, y al confirmar se agrega a
+// p.facturasManuales (mismo destino que "Agregar factura manual", así
+// cuenta igual en venta/facturado/cobrado) y se sube a Drive en
+// VENTAS/<OT> — el OT y el cliente ya se conocen porque estamos dentro
+// de esta ficha, no hace falta tipearlos de nuevo.
+function ImportadorFacturaVenta({ p, onUpdate }) {
+  const [abierto, setAbierto] = useState(false)
+  const [subiendo, setSubiendo] = useState(false)
+  const [error, setError] = useState('')
+  const [revision, setRevision] = useState(null)
+  const [guardando, setGuardando] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  const subir = async e => {
+    const fl = e.target.files && e.target.files[0]
+    e.target.value = ''
+    if (!fl) return
+    setSubiendo(true); setError(''); setRevision(null); setMsg('')
+    try {
+      const base64 = await fileToBase64(fl)
+      const { data, error: err } = await supabase.functions.invoke('extraer-factura', { body: { archivos: [{ base64, mimeType: fl.type || 'application/pdf', filename: fl.name }], filename: fl.name } })
+      if (err) throw err
+      if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo leer el documento.')
+      const d = data.datos || {}
+      setRevision({
+        pdfBase64: base64,
+        folio: d.folio != null ? String(d.folio) : '',
+        fecha: /^\d{4}-\d{2}-\d{2}$/.test(String(d.fecha || '')) ? d.fecha : '',
+        neto: d.neto != null ? String(Math.round(d.neto)) : '',
+      })
+    } catch (err) { setError('No se pudo leer la factura: ' + ((err && err.message) || String(err))) }
+    setSubiendo(false)
+  }
+
+  const confirmar = async () => {
+    if (!revision) return
+    const folio = (revision.folio || '').trim()
+    const neta = num(revision.neto)
+    if (!folio || !(neta > 0)) { window.alert('Falta el N° de factura o el monto neto no es válido — revisa antes de confirmar.'); return }
+    const facturaId = 'fm' + Date.now() + Math.random().toString(36).slice(2, 7)
+    onUpdate(p.id, { facturasManuales: [...(p.facturasManuales || []), { id: facturaId, numero: folio, fecha_emision: revision.fecha || '', neto: neta, notaCredito: false, refNumero: '' }] })
+    setGuardando(true)
+    try {
+      const filename = (folio ? folio + ' - ' : '') + (p.cliente || 'Cliente') + '.pdf'
+      const { data, error: err } = await supabase.functions.invoke('subir-factura-venta-drive', { body: { pdfBase64: revision.pdfBase64, filename, ot: p.ot || p.nombre || 'Sin OT' } })
+      if (err) throw err
+      if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo subir a Drive.')
+      setMsg('Factura agregada y subida a Drive (VENTAS · ' + (p.ot || p.nombre || 'Sin OT') + ').')
+    } catch (err) { setMsg('La factura quedó agregada, pero no se pudo subir el PDF a Drive: ' + ((err && err.message) || String(err))) }
+    setGuardando(false)
+    setRevision(null)
+    setAbierto(false)
+  }
+
+  return (
+    <div style={{ display: 'inline-block' }}>
+      <button onClick={() => setAbierto(v => !v)} style={{ background: abierto ? '#EEE9DF' : C.teal, color: abierto ? C.carbon : '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 5 }}><Upload size={12} /> Subir factura de venta (PDF)</button>
+      {msg && <div style={{ fontSize: 11.5, color: C.verde, marginTop: 6 }}>{msg}</div>}
+      {abierto && (
+        <div style={{ background: '#F2F4F7', padding: 10, marginTop: 8, minWidth: 300 }}>
+          <label style={{ cursor: subiendo ? 'wait' : 'pointer', background: C.carbon, color: '#fff', border: 'none', padding: '6px 12px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6, opacity: subiendo ? 0.7 : 1 }}>
+            {subiendo ? 'Leyendo…' : 'Elegir PDF de la factura'}
+            <input type="file" accept="application/pdf,image/*" onChange={subir} disabled={subiendo} style={{ display: 'none' }} />
+          </label>
+          {error && <div style={{ fontSize: 12, color: C.rojo, marginTop: 8 }}>{error}</div>}
+          {revision && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 11, color: C.gris, marginBottom: 6 }}>Revisa antes de confirmar — se sube a Drive en VENTAS/{p.ot || p.nombre || 'Sin OT'}.</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                <input style={{ ...inp, width: 110 }} placeholder="N° factura" value={revision.folio} onChange={e => setRevision(r => ({ ...r, folio: e.target.value }))} />
+                <input style={{ ...inp, width: 120 }} type="date" value={revision.fecha} onChange={e => setRevision(r => ({ ...r, fecha: e.target.value }))} />
+                <input style={{ ...inp, width: 130 }} placeholder="Monto neto CLP" value={revision.neto} onChange={e => setRevision(r => ({ ...r, neto: e.target.value }))} />
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button onClick={confirmar} disabled={guardando} style={{ background: guardando ? '#9AA3AD' : C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: guardando ? 'default' : 'pointer', fontSize: 13 }}>{guardando ? 'Guardando…' : 'Confirmar y subir a Drive'}</button>
+                <button onClick={() => setRevision(null)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ---------- Bloque de centros de costo (nombre + tope editables) ----------
 function BloqueCC({ p, onUpdate }) {
   const [editando, setEditando] = useState(false)
@@ -667,7 +754,10 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
           <div style={{ marginBottom: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
               <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.teal }}>🧾 Facturas de esta OT · Estados de pago (EDP)</div>
-              <button onClick={() => setAddFactManual(v => !v)} style={{ background: C.teal, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={12} /> Agregar factura manual</button>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <ImportadorFacturaVenta p={p} onUpdate={onUpdate} />
+                <button onClick={() => setAddFactManual(v => !v)} style={{ background: C.teal, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={12} /> Agregar factura manual</button>
+              </div>
             </div>
             {addFactManual && (
               <div style={{ marginBottom: 10, padding: 10, background: '#F2F4F7' }}>
