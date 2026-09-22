@@ -657,45 +657,144 @@ function ResumenMensual({ fin }) {
   )
 }
 
-// ================= INFORME EXCEL: PROYECCIÓN DE CUENTAS POR PAGAR =================
-// Junta en un solo archivo lo que hoy vive repartido en 2 pantallas
-// (Gastos fijos/variables pendientes + Créditos y Leasing): una lista
-// plana de todo lo que falta pagar ordenada por fecha, más la proyección
-// mensual (reutiliza calcularResumenFin, la misma fuente que ya usa
-// "Resumen mensual" y "Proyección" en pantalla — un solo cálculo, no dos
-// versiones que puedan desalinearse) y el detalle de cada crédito/leasing.
-// Las cuotas "a cargo de un tercero que reembolsa" se excluyen de
-// "Cuentas por pagar" (mismo criterio que flujoDe(): no son una salida de
-// caja real de Serein), igual que ya se excluyen del resto de los KPIs.
-function descargarInformeCuentasPorPagar(fin) {
+// ================= CUENTAS POR PAGAR: FUENTE ÚNICA =================
+// Lista plana de todo lo pendiente por pagar (gastos fijos/variables +
+// cuotas de créditos/leasing), ordenada por vencimiento. Reutilizada por
+// la pantalla "Por pagar" y por el informe Excel — un solo cálculo, para
+// que nunca se desalineen entre sí. Excluye lo Anulado/Pagado y las
+// cuotas a cargo de un tercero que reembolsa (mismo criterio que
+// flujoDe(): no son una salida de caja real de Serein).
+function itemsPorPagar(fin) {
   const areasDe = dist => (dist || []).map(d => `${d.area} ${d.pct}%`).join(', ')
-
-  const pendientes = []
+  const items = []
   fin.gastos.filter(g => g.estado !== 'Anulado' && g.estado !== 'Pagado').forEach(g => {
-    pendientes.push({
-      Vencimiento: g.vencimiento || '',
-      Tipo: g.tipo === 'fijo' ? 'Gasto fijo' : 'Gasto variable',
-      Detalle: g.nombre || g.categoria || '',
-      Proveedor: g.proveedor || '',
-      Área: areasDe(g.dist),
-      'Monto neto': Math.round(netoEf(g, fin.ufValor)),
-      Estado: (g.vencimiento && g.vencimiento < hoy() && g.estado !== 'Pagado') ? 'Vencido' : (g.estado || 'Pendiente'),
+    items.push({
+      id: 'g-' + g.id,
+      vencimiento: g.vencimiento || '',
+      tipo: g.tipo === 'fijo' ? 'Gasto fijo' : 'Gasto variable',
+      detalle: g.nombre || g.categoria || '',
+      proveedor: g.proveedor || '',
+      area: areasDe(g.dist),
+      monto: Math.round(netoEf(g, fin.ufValor)),
+      tabDestino: g.tipo === 'fijo' ? 'fijos' : 'variables',
     })
   })
   fin.obligaciones.forEach(o => {
     (o.cuotas || []).filter(c => c.estado !== 'Pagada' && c.aCargo !== 'tercero_reembolsa').forEach(c => {
-      pendientes.push({
-        Vencimiento: c.vencimiento || '',
-        Tipo: o.tipo || 'Crédito',
-        Detalle: (o.producto || o.institucion || '') + ' · cuota ' + c.n + '/' + o.nCuotas,
-        Proveedor: o.institucion || '',
-        Área: areasDe(o.dist),
-        'Monto neto': Math.round(c.total || 0),
-        Estado: (c.vencimiento && c.vencimiento < hoy()) ? 'Vencida' : 'Pendiente',
+      items.push({
+        id: 'c-' + o.id + '-' + c.n,
+        vencimiento: c.vencimiento || '',
+        tipo: o.tipo || 'Crédito',
+        detalle: (o.producto || o.institucion || '') + ' · cuota ' + c.n + '/' + o.nCuotas,
+        proveedor: o.institucion || '',
+        area: areasDe(o.dist),
+        monto: Math.round(c.total || 0),
+        tabDestino: 'creditos',
       })
     })
   })
-  pendientes.sort((a, b) => String(a.Vencimiento).localeCompare(String(b.Vencimiento)))
+  items.sort((a, b) => a.vencimiento.localeCompare(b.vencimiento))
+  return items
+}
+
+// ================= PANTALLA: POR PAGAR (hub de entrada al módulo) =================
+// Responde al pedido "ver de manera amigable lo que debo pagar, lo que
+// está por vencer" — agrupa itemsPorPagar() por urgencia real (vencido /
+// esta semana / resto del mes / más adelante) en vez de por tipo de
+// dato, que es como estaba organizado el módulo antes (había que saber
+// de antemano si algo era "fijo" o "variable" para encontrarlo). Los
+// botones de abajo llevan a la pestaña correspondiente para cargar un
+// gasto o crédito nuevo — no duplican los formularios que ya existen.
+function PorPagar({ fin, irA }) {
+  const items = itemsPorPagar(fin)
+  const h = hoy()
+  const en7 = new Date(); en7.setDate(en7.getDate() + 7)
+  const en7s = en7.toISOString().slice(0, 10)
+  const mesActual = h.slice(0, 7)
+  const grupos = [
+    { id: 'vencido', label: 'Vencido', color: C.rojo, filtro: x => !!x.vencimiento && x.vencimiento < h },
+    { id: 'semana', label: 'Esta semana', color: C.naranja, filtro: x => x.vencimiento >= h && x.vencimiento <= en7s },
+    { id: 'mes', label: 'Resto del mes', color: '#0E7A8F', filtro: x => x.vencimiento > en7s && mesDe(x.vencimiento) === mesActual },
+    { id: 'despues', label: 'Más adelante', color: C.gris, filtro: x => x.vencimiento > en7s && mesDe(x.vencimiento) !== mesActual },
+  ]
+  const totalGeneral = items.reduce((a, x) => a + x.monto, 0)
+  const totalVencido = items.filter(grupos[0].filtro).reduce((a, x) => a + x.monto, 0)
+  const totalSemana = items.filter(grupos[1].filtro).reduce((a, x) => a + x.monto, 0)
+  const kpiCard = (label, valor, color) => (
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: `3px solid ${color}`, padding: '12px 16px', flex: '1 1 180px' }}>
+      <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase', letterSpacing: 0.3 }}>{label}</div>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 22, color, marginTop: 2 }}>{clp(valor)}</div>
+    </div>
+  )
+  const btnAgregar = { background: 'none', border: `1px dashed #C9C4B8`, color: C.carbon, padding: '8px 14px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+        {kpiCard('Total por pagar', totalGeneral, C.carbon)}
+        {kpiCard('Vencido', totalVencido, C.rojo)}
+        {kpiCard('Por vencer esta semana', totalSemana, C.naranja)}
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+        <button onClick={() => irA('fijos')} style={btnAgregar}><Plus size={13} /> Gasto fijo</button>
+        <button onClick={() => irA('variables')} style={btnAgregar}><Plus size={13} /> Gasto variable</button>
+        <button onClick={() => irA('creditos')} style={btnAgregar}><Plus size={13} /> Crédito / Leasing</button>
+      </div>
+      {items.length === 0 && <div style={{ fontSize: 13, color: C.gris, background: '#fff', border: '1px solid #DFE4EA', padding: 16 }}>No hay cuentas por pagar pendientes.</div>}
+      {grupos.map(g => {
+        const filas = items.filter(g.filtro)
+        if (!filas.length) return null
+        const subtotal = filas.reduce((a, x) => a + x.monto, 0)
+        return (
+          <div key={g.id} style={{ marginBottom: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: `4px solid ${g.color}`, paddingLeft: 10, marginBottom: 8 }}>
+              <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 13, textTransform: 'uppercase', color: g.color }}>{g.label} ({filas.length})</span>
+              <span style={{ fontWeight: 700, fontFamily: SEREIN.fontDisplay }}>{clp(subtotal)}</span>
+            </div>
+            <div style={{ background: '#fff', border: '1px solid #DFE4EA', overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead><tr style={{ borderBottom: '1px solid #DFE4EA' }}>
+                  {['Vencimiento', 'Tipo', 'Detalle', 'Área', 'Monto'].map(hh => (
+                    <th key={hh} style={{ textAlign: hh === 'Monto' ? 'right' : 'left', padding: '6px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{hh}</th>
+                  ))}
+                </tr></thead>
+                <tbody>
+                  {filas.map(x => (
+                    <tr key={x.id} style={{ borderBottom: '1px solid #F2F4F7' }}>
+                      <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>{x.vencimiento}</td>
+                      <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>{x.tipo}</td>
+                      <td style={{ padding: '6px 10px' }}>{x.detalle}</td>
+                      <td style={{ padding: '6px 10px', color: C.gris, fontSize: 12 }}>{x.area}</td>
+                      <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600 }}>{clp(x.monto)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ================= INFORME EXCEL: PROYECCIÓN DE CUENTAS POR PAGAR =================
+// Reutiliza itemsPorPagar() (misma fuente que la pantalla "Por pagar")
+// para la primera hoja, más la proyección mensual (reutiliza
+// calcularResumenFin, la misma fuente que ya usa "Resumen mensual" y
+// "Proyección" en pantalla) y el detalle de cada crédito/leasing.
+function descargarInformeCuentasPorPagar(fin) {
+  const areasDe = dist => (dist || []).map(d => `${d.area} ${d.pct}%`).join(', ')
+  const h = hoy()
+
+  const pendientes = itemsPorPagar(fin).map(x => ({
+    Vencimiento: x.vencimiento,
+    Tipo: x.tipo,
+    Detalle: x.detalle,
+    Proveedor: x.proveedor,
+    Área: x.area,
+    'Monto neto': x.monto,
+    Estado: (x.vencimiento && x.vencimiento < h) ? 'Vencido' : 'Pendiente',
+  }))
   const totalPendiente = pendientes.reduce((a, x) => a + (x['Monto neto'] || 0), 0)
   pendientes.push({ Vencimiento: '', Tipo: '', Detalle: '', Proveedor: '', Área: '', 'Monto neto': '', Estado: '' })
   pendientes.push({ Vencimiento: '', Tipo: '', Detalle: 'TOTAL CUENTAS POR PAGAR', Proveedor: '', Área: '', 'Monto neto': totalPendiente, Estado: '' })
@@ -748,13 +847,14 @@ export default function FinanzasModule({ otsDisponibles = [], fin: finExt, setFi
   const setFin = setFinExt ?? setFinInt
 
   const tabs = [
+    { id: 'porpagar', label: 'Por pagar', icono: <CalendarClock size={13} /> },
     { id: 'resumen', label: 'Resumen mensual', icono: <BarChart3 size={13} /> },
     { id: 'fijos', label: 'Gastos fijos', icono: <ReceiptText size={13} /> },
     { id: 'variables', label: 'Gastos variables', icono: <ReceiptText size={13} /> },
-    { id: 'plantillas', label: 'Reglas de distribución', icono: <PieIcon size={13} /> },
     { id: 'creditos', label: 'Créditos y Leasing', icono: <Landmark size={13} /> },
+    { id: 'plantillas', label: 'Reglas de distribución', icono: <PieIcon size={13} /> },
   ]
-  const [tab, setTab] = useState('resumen')
+  const [tab, setTab] = useState('porpagar')
 
   return (
     <div>
@@ -772,6 +872,7 @@ export default function FinanzasModule({ otsDisponibles = [], fin: finExt, setFi
           <Download size={13} /> Descargar Excel
         </button>
       </div>
+      {tab === 'porpagar' && <PorPagar fin={fin} irA={setTab} />}
       {tab === 'resumen' && <><ResumenMensual fin={fin} /><ProyeccionFin fin={fin} /></>}
       {tab === 'fijos' && <ListaGastos tipo="fijo" fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} />}
       {tab === 'variables' && <ListaGastos tipo="variable" fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} />}
