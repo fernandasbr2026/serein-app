@@ -2760,6 +2760,8 @@ function nuevoProtocolo(tipo, ot, correlativo, instrumentos) {
       dollyMaterial: 'Acero Inoxidable',
       criterioAceptacion: 35,
       ensayos: [{ id: 'ens' + Date.now(), dolly: 1, marcaPintura: '', valorKgCm2: '', falla1: '', falla2: '' }],
+      espesorRequerido: '',
+      espesorFilas: [['', '', '', '', '', '', '', '', '', '']],
       fotosEquipo: [],
       observaciones: '',
       firmas: [{ rol: 'Ejecutado por', quien: 'Boris Gomez', fecha: '' }, { rol: 'Aprobado por', quien: 'Luis Soto', fecha: '' }, { rol: 'Recepcionado por', quien: 'Jefe Dpto. QA/QC', fecha: '' }, { rol: 'Aprobado por', quien: 'Inspector Cliente', fecha: '' }],
@@ -2881,7 +2883,12 @@ function htmlEA(p, equipos) {
     return ['' + (en.dolly || ''), esc(en.marcaPintura), (en.valorKgCm2 !== '' && en.valorKgCm2 != null ? esc(en.valorKgCm2) + ' kg/cm2' : ''), esc(en.falla1), esc(en.falla2), badge]
   })
   var ensayosTbl = rptTable(['Dolly', 'Marca pintura', 'Valor', 'Falla 1 / Localizacion', 'Falla 2 / Localizacion', 'Resultado (' + (p.criterioAceptacion || 0) + ' kg/cm2)'], filasEnsayo)
-  var page1 = '<div class="page">' + rptHeader('REGISTRO ENSAYO DE ADHERENCIA', 'PULL-OFF · ' + (p.estandarAplicado || 'ASTM D4541'), [['Codigo', p.codigo || ''], ['Documento N', p.docNro || '']], p.logoCliente) + rptInfo(info, equipos) + '<div class="keep-together">' + rptSection('Parametros principales') + params + '</div>' + (capasTbl ? '<div class="keep-together">' + rptSection('Denominaciones (esquema de pintura)') + capasTbl + '</div>' : '') + '<div class="keep-together">' + rptSection('Registro de ensayos') + ensayosTbl + '</div>' + (p.observaciones ? rptSection('Observaciones') + '<div style="font-size:11px;color:#101828;line-height:1.55;margin:2px 0 12px">' + esc(p.observaciones) + '</div>' : '') + '<div class="keep-together">' + rptSection('Firmas') + rptSign(p.firmas, equipos) + '</div>' + rptFooter() + '</div>'
+  var espesorFilas = Array.isArray(p.espesorFilas) ? p.espesorFilas : []
+  var espesorProms = espesorFilas.map(promArr).filter(Boolean)
+  var espesorProm = espesorProms.length ? (espesorProms.reduce(function (a, b) { return a + b }, 0) / espesorProms.length) : null
+  var espesorTbl = espesorFilas.length ? tablaMedHTML(espesorFilas) : ''
+  var espesorTituloExtra = (p.espesorRequerido ? '  (Requerido ' + esc(p.espesorRequerido) : '') + (espesorProm != null ? (p.espesorRequerido ? '  /  ' : '  (') + 'Verificado (prom.) ' + espesorProm.toFixed(2) + ' mils' : '') + ((p.espesorRequerido || espesorProm != null) ? ')' : '')
+  var page1 = '<div class="page">' + rptHeader('REGISTRO ENSAYO DE ADHERENCIA', 'PULL-OFF · ' + (p.estandarAplicado || 'ASTM D4541'), [['Codigo', p.codigo || ''], ['Documento N', p.docNro || '']], p.logoCliente) + rptInfo(info, equipos) + '<div class="keep-together">' + rptSection('Parametros principales') + params + '</div>' + (capasTbl ? '<div class="keep-together">' + rptSection('Denominaciones (esquema de pintura)') + capasTbl + '</div>' : '') + '<div class="keep-together">' + rptSection('Registro de ensayos') + ensayosTbl + '</div>' + (espesorTbl ? '<div class="keep-together">' + rptSection('Verificacion de espesores' + espesorTituloExtra) + espesorTbl + '</div>' : '') + (p.observaciones ? rptSection('Observaciones') + '<div style="font-size:11px;color:#101828;line-height:1.55;margin:2px 0 12px">' + esc(p.observaciones) + '</div>' : '') + '<div class="keep-together">' + rptSection('Firmas') + rptSign(p.firmas, equipos) + '</div>' + rptFooter() + '</div>'
   var ev = '', en2 = 0
   if ((p.fotosEquipo || []).length) { en2++; ev += rptEvidence(en2, 'Equipo de ensayo de adherencia', '', p.fotosEquipo) }
   var info2 = [['Elaborado por', p.preparadoPor], ['Revisado por', p.revisadoPor], ['Cliente', p.cliente], ['Proyecto', p.proyecto], ['Fecha', p.fecha]]
@@ -3155,6 +3162,12 @@ function ProtoEAForm({ p: pProp, upd: updRemoto, onDel, instrumentos, protocolos
   // Date.now() dentro del map, porque varias capas de protocolos
   // distintos se generan en el mismo tick y Date.now() repetiria el
   // mismo valor para todas, chocando entre si.
+  // Ademas de las capas, calcula el espesor REQUERIDO acumulado (suma de
+  // los rangos "solicitado" de cada capa traida, mismo criterio que
+  // acumRango() ya usa dentro del PGP) y precarga espesorRequerido — solo
+  // con las capas que de verdad traen un rango cargado, para no rellenar
+  // con el default [2, 2.5] de parseRango() cuando una capa vino sin
+  // "solicitado". Sigue editable a mano despues igual que todo lo demas.
   const traerCapasDeVinculados = () => {
     const ids = new Set(p.pgpVinculadoIds || [])
     const protos = protocolosHermanos.filter(x => ids.has(x.id))
@@ -3162,10 +3175,18 @@ function ProtoEAForm({ p: pProp, upd: updRemoto, onDel, instrumentos, protocolos
     const nuevasCapas = protos.flatMap(proto => (proto.capas || []).map(c => {
       const proms = (c.filas || []).map(promArr).filter(Boolean)
       const prom = proms.length ? (proms.reduce((a, b) => a + b, 0) / proms.length) : null
-      return { id: 'eac-' + proto.id + '-' + (c.id || Math.random().toString(36).slice(2, 8)), nombre: c.nombre || '', producto: c.producto || '', mils: prom != null ? prom.toFixed(2) : (c.solicitado || ''), origen: proto.codigo }
+      return { id: 'eac-' + proto.id + '-' + (c.id || Math.random().toString(36).slice(2, 8)), nombre: c.nombre || '', producto: c.producto || '', mils: prom != null ? prom.toFixed(2) : (c.solicitado || ''), solicitado: c.solicitado || '', origen: proto.codigo }
     }))
-    upd({ ...p, capas: nuevasCapas })
+    const conRango = nuevasCapas.filter(c => c.solicitado)
+    const totalReq = conRango.reduce((acc, c) => { const r = parseRango(c.solicitado); return [acc[0] + r[0], acc[1] + r[1]] }, [0, 0])
+    const espReq = conRango.length ? totalReq[0].toFixed(1) + ' a ' + totalReq[1].toFixed(1) + ' mils' : p.espesorRequerido
+    upd({ ...p, capas: nuevasCapas, espesorRequerido: espReq })
   }
+  const espesorFilas = Array.isArray(p.espesorFilas) && p.espesorFilas.length ? p.espesorFilas : [Array(10).fill('')]
+  const setEspesorCell = (r, c, v) => upd({ ...p, espesorFilas: espesorFilas.map((row, ri) => ri === r ? row.map((x, ci) => ci === c ? v : x) : row) })
+  const addEspesorFila = () => upd({ ...p, espesorFilas: [...espesorFilas, Array(10).fill('')] })
+  const delEspesorFila = () => upd({ ...p, espesorFilas: espesorFilas.slice(0, -1) })
+  const autoEspesor = () => { const [lo, hi] = parseRango(p.espesorRequerido); upd({ ...p, espesorFilas: espesorFilas.map(row => autoFila(row, lo, hi)) }) }
   const [col, setCol] = useState(false)
   return (<div style={{ marginTop: 12, border: '1px solid #DFE4EA', borderTop: '3px solid #0E7A8F', padding: 14 }}>
     <ProtoHead p={p} upd={upd} onDel={onDel} titulo="Ensayo de Adherencia Pull-Off" equipos={instrumentos} col={col} onTgl={() => setCol(!col)} />
@@ -3247,6 +3268,10 @@ function ProtoEAForm({ p: pProp, upd: updRemoto, onDel, instrumentos, protocolos
           </tbody>
         </table>
       </div>
+
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '14px 0 4px' }}>Verificación de Espesores</div>
+      <PF label="Espesor requerido según esquema de la OT (acumulado)"><input style={ip} value={p.espesorRequerido || ''} onChange={e => set('espesorRequerido', e.target.value)} placeholder="ej. 8.0 a 11.5 mils" /></PF>
+      <TablaMedidas titulo="Mediciones de espesor (DFT)" filas={espesorFilas} ncols={10} onSetCell={setEspesorCell} onAuto={autoEspesor} onAddFila={addEspesorFila} onDelFila={delEspesorFila} resumen="Espesor verificado (prom.)" />
 
       <FotoSlots label="Fotos equipo de ensayo de adherencia" fotos={p.fotosEquipo || []} max={4} onChange={v => set('fotosEquipo', v)} />
       <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '12px 0 4px' }}>Observaciones</div>
