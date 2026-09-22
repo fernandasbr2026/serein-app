@@ -2736,6 +2736,35 @@ function nuevoProtocolo(tipo, ot, correlativo, instrumentos) {
   const esquemaOt = (ot.esquema && ot.esquema !== '—') ? ot.esquema : ''
   const base = { id: 'pr' + Date.now() + Math.floor(Math.random() * 999), tipo, correlativo, codigo: tipo + ' ' + cod, pgpCodigo: 'PGP ' + cod, docNro: tipo === 'PIG' ? 'RC-GP-1' : 'RC-PG-6', ot: ot.numero || '', area: ot.area || '', oc: ot.oc || '', nv: ot.nv || '', cliente: ot.cliente || '', proyecto: '', esquemaProyecto: esquemaOt, preparadoPor: 'Boris Gomez', revisadoPor: 'Luis Soto', aprobadoPor: 'Luis Soto', fecha: h, marcas: [], logoCliente: '', firmas: [{ rol: 'Aprobado', quien: 'Boris Gomez', fecha: '' }, { rol: 'Recepcionado', quien: 'Cliente', fecha: '' }, { rol: 'Aprobado', quien: 'Inspector Cliente', fecha: '' }] }
   if (tipo === 'PIG') { return Object.assign(base, { descripcion: 'Proceso de inicio de granallado para pintura.', checks: [{ nombre: 'Control aire presurizado norma ASTM D4285', cumple: 'SI', obs: 'Sin presencia de humedad u otros contaminantes.', fotos: [] }, { nombre: 'Verificacion limpieza de granalla ASTM D7393', cumple: 'SI', obs: 'Sin presencia de sales, aceites u otros contaminantes.', fotos: [] }, { nombre: 'Inspeccion visual pieza granallada', cumple: 'SI', obs: '', fotos: [] }, { nombre: 'Medicion perfil de rugosidad norma ASTM D4417', cumple: 'SI', obs: '', fotos: [] }], limpiezaSSPC: 'SP10', perfilSolicitado: '1 a 3 mils', medidas: ['', '', ''], perfilObtenido: '', perfilCumple: 'SI', amb: { fecha: h, humedad: '', tAmbiente: '', tPieza: '', ptoRocio: '', horaInicio: '' }, fotosGranalla: [] }) }
+  // EA = Ensayo de Adherencia Pull-Off (ASTM D4541). A diferencia de
+  // PIG/PGP no vuelve a medir espesores ni condiciones ambientales: se
+  // vincula a un PGP/PIG ya cargado en la misma OT (pgpVinculadoId) y
+  // trae de ahi el esquema de capas ya registrado (ver
+  // "traerCapasDeVinculado" en ProtoEAForm) — evita re-tipear a mano el
+  // mismo esquema de pintura que ya quedo en el PGP. Todos los campos
+  // quedan igual de editables despues, como el resto de los protocolos.
+  if (tipo === 'EA') {
+    var dfA = (instrumentos && instrumentos.adhMarca) ? instrumentos : { adhMarca: 'DEFELSKO', adhSerie: '' }
+    return Object.assign(base, {
+      docNro: 'RC-EA-1',
+      itemInspeccionar: 'PROBETA',
+      fechaEjecucion: h,
+      lugarEjecucion: '', solicitadoPor: ot.cliente || '',
+      pgpVinculadoId: '',
+      equipoMarca: dfA.adhMarca || '', equipoSerie: dfA.adhSerie || '',
+      estandarAplicado: 'ASTM D4541', sustrato: 'Acero Carbono',
+      fechaPegadoDolly: '', fechaEnsayo: h,
+      pegamento: 'POXIPOL', tiempoCurado: '',
+      sistemaPintura: '',
+      capas: [],
+      dollyMaterial: 'Acero Inoxidable',
+      criterioAceptacion: 35,
+      ensayos: [{ id: 'ens' + Date.now(), dolly: 1, marcaPintura: '', valorKgCm2: '', falla1: '', falla2: '' }],
+      fotosEquipo: [],
+      observaciones: '',
+      firmas: [{ rol: 'Ejecutado por', quien: 'Boris Gomez', fecha: '' }, { rol: 'Aprobado por', quien: 'Luis Soto', fecha: '' }, { rol: 'Recepcionado por', quien: 'Jefe Dpto. QA/QC', fecha: '' }, { rol: 'Aprobado por', quien: 'Inspector Cliente', fecha: '' }],
+    })
+  }
   var dfI = { espMarca: 'ELCOMETER', espSerie: 'MH11472', rugMarca: 'ELCOMETER', rugSerie: 'NE30319', termoMarca: 'ELCOMETER', termoSerie: 'KCA721' }; var inS = instrumentos || {}; const instr = { espMarca: inS.espMarca || dfI.espMarca, espSerie: inS.espSerie || dfI.espSerie, rugMarca: inS.rugMarca || dfI.rugMarca, rugSerie: inS.rugSerie || dfI.rugSerie, termoMarca: inS.termoMarca || dfI.termoMarca, termoSerie: inS.termoSerie || dfI.termoSerie }
   return Object.assign(base, { instr, amb: { fecha: h, humedad: '', tAmbiente: '', tPieza: '', ptoRocio: '', horaInicio: '' }, limpiezaSSPC: 'sspc-sP 10', perfilSolicitado: '2 a 2,5 Mils', perfilFilas: [['', '', '', '', ''], ['', '', '', '', ''], ['', '', '', '', ''], ['', '', '', '', '']], capas: [nuevaCapa('Primera capa')], fotosGranalla: [] })
 }
@@ -2824,6 +2853,41 @@ function htmlPGP(p, equipos) {
   var page2 = ''; if (en) page2 = '<div class="page">' + rptHeader('PROTOCOLO GRANALLADO Y PINTURA', 'ANEXO IMAGENES EVIDENCIA', [['Documento N', p.docNro || ''], ['Orden de Trabajo', p.ot || ''], ['Pagina', '2/2']], p.logoCliente) + rptInfo(info2, equipos) + rptSection('Anexo imagenes evidencia') + ev + rptSection('Firmas') + rptSign(p.firmas, equipos) + rptFooter() + '</div>';
   var pageEq = '<div class="page">' + rptHeader('PROTOCOLO GRANALLADO Y PINTURA', 'EQUIPOS DE MEDICION', [['Documento N', p.docNro || ''], ['Orden de Trabajo', p.ot || '']], p.logoCliente) + rptSection('Equipos de medicion') + rptEquipos(equipos) + rptFooter() + '</div>'; return '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(p.codigo || 'PGP') + '</title><style>' + PROTO_CSS + '</style></head><body>' + page1 + page2 + pageEq + '</body></html>';
 }
+// Ensayo de Adherencia Pull-Off (ASTM D4541) — no repite el chequeo de
+// espesores/condiciones ambientales de un PGP: es un ensayo aparte sobre
+// un esquema de pintura ya aplicado. "Resultado" se calcula solo,
+// comparando el valor medido contra el criterio de aceptacion cargado
+// en el protocolo (nunca texto fijo como "35 KG/CM2" pegado en el
+// encabezado, que fue el problema detectado en el formato Excel
+// original).
+function resultadoEnsayoOk(valor, criterio) {
+  var v = parseFloat(String(valor == null ? '' : valor).replace(',', '.'))
+  if (isNaN(v)) return null
+  return v >= (parseFloat(criterio) || 0)
+}
+function htmlEA(p, equipos) {
+  var info = [['Orden de Trabajo', p.ot], ['Cliente', p.cliente], ['Proyecto', p.proyecto], ['Item a inspeccionar', p.itemInspeccionar], ['Fecha ejecucion', p.fechaEjecucion], ['Lugar de ejecucion', p.lugarEjecucion], ['Solicitado por', p.solicitadoPor], ['Elaborado por', p.preparadoPor], ['Revisado por', p.revisadoPor], ['Fecha', p.fecha]]
+  var params = rptTable(['Parametro', 'Valor', 'Parametro', 'Valor'], [
+    ['Equipo utilizado', esc((p.equipoMarca || '') + (p.equipoSerie ? '  /  Serie ' + p.equipoSerie : '')), 'Estandar aplicado', esc(p.estandarAplicado)],
+    ['Sustrato', esc(p.sustrato), 'Dolly (material)', esc(p.dollyMaterial)],
+    ['Fecha pegado Dolly', esc(p.fechaPegadoDolly), 'Fecha Ensayo', esc(p.fechaEnsayo)],
+    ['Pegamento utilizado', esc(p.pegamento), 'Tiempo de curado', esc(p.tiempoCurado)],
+    ['Sistema de pintura', esc(p.sistemaPintura), 'Criterio de aceptacion', esc((p.criterioAceptacion || 0) + ' kg/cm2')],
+  ])
+  var capasTbl = (p.capas || []).length ? rptTable(['Capa', 'Producto', 'Mils'], (p.capas || []).map(function (c) { return [esc(c.nombre), esc(c.producto), esc(c.mils)] })) : ''
+  var filasEnsayo = (p.ensayos || []).map(function (en) {
+    var ok = resultadoEnsayoOk(en.valorKgCm2, p.criterioAceptacion)
+    var badge = ok == null ? '' : (ok ? '<span class="badge badge-ok">CUMPLE</span>' : '<span class="badge badge-no">NO CUMPLE</span>')
+    return ['' + (en.dolly || ''), esc(en.marcaPintura), (en.valorKgCm2 !== '' && en.valorKgCm2 != null ? esc(en.valorKgCm2) + ' kg/cm2' : ''), esc(en.falla1), esc(en.falla2), badge]
+  })
+  var ensayosTbl = rptTable(['Dolly', 'Marca pintura', 'Valor', 'Falla 1 / Localizacion', 'Falla 2 / Localizacion', 'Resultado (' + (p.criterioAceptacion || 0) + ' kg/cm2)'], filasEnsayo)
+  var page1 = '<div class="page">' + rptHeader('REGISTRO ENSAYO DE ADHERENCIA', 'PULL-OFF · ' + (p.estandarAplicado || 'ASTM D4541'), [['Codigo', p.codigo || ''], ['Documento N', p.docNro || '']], p.logoCliente) + rptInfo(info, equipos) + '<div class="keep-together">' + rptSection('Parametros principales') + params + '</div>' + (capasTbl ? '<div class="keep-together">' + rptSection('Denominaciones (esquema de pintura)') + capasTbl + '</div>' : '') + '<div class="keep-together">' + rptSection('Registro de ensayos') + ensayosTbl + '</div>' + (p.observaciones ? rptSection('Observaciones') + '<div style="font-size:11px;color:#101828;line-height:1.55;margin:2px 0 12px">' + esc(p.observaciones) + '</div>' : '') + '<div class="keep-together">' + rptSection('Firmas') + rptSign(p.firmas, equipos) + '</div>' + rptFooter() + '</div>'
+  var ev = '', en2 = 0
+  if ((p.fotosEquipo || []).length) { en2++; ev += rptEvidence(en2, 'Equipo de ensayo de adherencia', '', p.fotosEquipo) }
+  var info2 = [['Elaborado por', p.preparadoPor], ['Revisado por', p.revisadoPor], ['Cliente', p.cliente], ['Proyecto', p.proyecto], ['Fecha', p.fecha]]
+  var page2 = en2 ? '<div class="page">' + rptHeader('REGISTRO ENSAYO DE ADHERENCIA', 'ANEXO IMAGENES EVIDENCIA', [['Documento N', p.docNro || ''], ['Orden de Trabajo', p.ot || ''], ['Pagina', '2/2']], p.logoCliente) + rptInfo(info2, equipos) + rptSection('Anexo imagenes evidencia') + ev + rptSection('Firmas') + rptSign(p.firmas, equipos) + rptFooter() + '</div>' : ''
+  return '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(p.codigo || 'EA') + '</title><style>' + PROTO_CSS + '</style></head><body>' + page1 + page2 + '</body></html>'
+}
 var PROTO_CSS = '@page{size:A4;margin:20mm 15mm 15mm 15mm}*{box-sizing:border-box}body{font-family:Inter,Arial,Helvetica,sans-serif;color:#101828;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.page{position:relative;padding-bottom:70px}.page+.page{page-break-before:always}.rhead{position:relative;display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #061A40;padding:4px 0 10px;overflow:hidden}.logo{display:flex;align-items:baseline}.lg-a{color:#061A40;font-weight:800;font-size:22px;letter-spacing:1px}.lg-b{color:#FF6B00;font-weight:800;font-size:22px;margin-left:5px;letter-spacing:1px}.rh-mid{flex:1;text-align:center}.rh-title{color:#061A40;font-weight:800;font-size:17px;letter-spacing:.5px}.rh-sub{color:#FF6B00;font-weight:700;font-size:10px;letter-spacing:2px;margin-top:2px}.codebox{background:#061A40;color:#fff;padding:8px 12px;border-radius:6px;font-size:10px;min-width:160px}.cb-row{display:flex;justify-content:space-between;gap:12px;padding:1px 0}.cb-k{color:#9fb0cf}.cb-v{font-weight:700}.stripe{position:absolute;top:-10px;right:120px;width:60px;height:130%;background:#FF6B00;opacity:.10;transform:skewX(-22deg)}.infogrid{display:grid;grid-template-columns:1fr 1fr;gap:0 26px;margin:14px 0 4px}.info-item{display:flex;justify-content:space-between;border-bottom:1px solid #D8DCE5;padding:5px 2px;font-size:11px}.info-k{color:#5a6b85}.info-v{font-weight:700;color:#101828;text-align:right}.sec-title{color:#061A40;font-weight:800;font-size:12px;text-transform:uppercase;border-left:4px solid #FF6B00;padding-left:9px;margin:16px 0 7px;letter-spacing:.4px;page-break-after:avoid}.sub-sec-title{color:#5a6b85;font-weight:700;font-size:10.5px;text-transform:uppercase;margin:8px 0 4px;letter-spacing:.3px}.keep-together{page-break-inside:avoid}.marcas-list{columns:3;column-gap:24px;-webkit-columns:3;margin:0 0 14px;padding-left:18px;font-size:11px;line-height:1.75;color:#101828}.marcas-list li{break-inside:avoid-column}table.dt{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px}table.dt th{background:#061A40;color:#fff;padding:6px 8px;text-align:left;font-weight:700;font-size:10px}table.dt td{border:1px solid #D8DCE5;padding:6px 8px}table.dt td.c{text-align:center}.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700}.badge-ok{background:#e6f7ec;color:#16A34A}.badge-no{background:#fdeaea;color:#DC2626}.prom-badge{display:inline-block;background:#FF6B00;color:#fff;padding:2px 9px;border-radius:4px;font-weight:700;font-size:10.5px}.norm{display:inline-block;padding:1px 7px;border:1px solid #D8DCE5;border-radius:4px;font-size:9px;color:#5a6b85;background:#F5F7FA}.sign-cell{height:32px}.rfooter{display:flex;margin-top:20px;border-radius:6px;overflow:hidden;border:1px solid #D8DCE5}.rf-navy{background:#061A40;color:#fff;flex:1;display:flex;gap:20px;justify-content:center;align-items:center;padding:10px;font-size:10px;font-weight:600}.rf-web{background:#FF6B00;color:#fff;padding:0 16px;font-weight:700;font-size:11px;display:flex;align-items:center}.evcard{border:1px solid #D8DCE5;border-radius:8px;padding:12px 14px;margin-bottom:12px;display:flex;gap:16px;page-break-inside:avoid;background:#fff}.ev-left{width:36%}.ev-title{color:#FF6B00;font-weight:800;font-size:12px}.ev-desc{margin:5px 0;font-size:11px;font-weight:600;color:#101828}.ev-obs{font-size:10.5px;color:#344054;line-height:1.4}.ev-right{flex:1;display:grid;gap:6px}.ev-right.g1{grid-template-columns:1fr}.ev-right.g2{grid-template-columns:repeat(2,1fr)}.ev-right.g3{grid-template-columns:repeat(3,1fr)}.ev-right.g4{grid-template-columns:repeat(2,1fr)}.imgframe{border:2px solid #061A40;border-radius:4px;overflow:hidden;height:150px;background:#F5F7FA;display:flex;align-items:center;justify-content:center}.imgframe img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block}.equipos{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:8px}.eq-col{border:1px solid #D8DCE5;border-radius:8px;padding:10px;text-align:center}.eq-name{color:#061A40;font-weight:800;font-size:12px}.eq-code{color:#FF6B00;font-weight:800;font-size:13px;margin:2px 0}.eq-sub{color:#5a6b85;font-size:10px;margin-bottom:8px}.eq-img{border:2px solid #061A40;border-radius:4px;overflow:hidden;height:130px;background:#F5F7FA;margin-bottom:6px;display:flex;align-items:center;justify-content:center}.eq-img img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain}'
 // Certificados de calibracion de los instrumentos (cargados en Parametros):
 // se descargan solos al descargar el protocolo. Antes se intentaba con
@@ -2856,7 +2920,8 @@ async function descargarCertificadosInstrumentos(equipos, soloKeys) {
     } catch (e) { /* se omite — el link manual del certificado sigue disponible */ }
   }
 }
-function descargarProto(p, equipos, certsKeys) { const w = window.open('', '_blank'); if (!w) { window.alert('Habilita las ventanas emergentes.'); return } try{var _i=localStorage.getItem('serein_logoIstria')||'',_sv=null,_sw=0;if(_i&&String(p.area||'').toLowerCase().indexOf('istria')>=0){_sv=localStorage.getItem('serein_logo');localStorage.setItem('serein_logo',_i);_sw=1;window.__sereinProtoIstria=true}}catch(e){} w.document.write(p.tipo === 'PIG' ? htmlPIG(p, equipos) : htmlPGP(p, equipos)); try{if(_sw){if(_sv==null)localStorage.removeItem('serein_logo');else localStorage.setItem('serein_logo',_sv);window.__sereinProtoIstria=false;}}catch(e){} w.document.close(); if (certsKeys && certsKeys.length) descargarCertificadosInstrumentos(equipos, certsKeys); setTimeout(function () { w.focus(); w.print() }, 400) }
+function htmlDeProtocolo(p, equipos) { return p.tipo === 'PIG' ? htmlPIG(p, equipos) : p.tipo === 'EA' ? htmlEA(p, equipos) : htmlPGP(p, equipos) }
+function descargarProto(p, equipos, certsKeys) { const w = window.open('', '_blank'); if (!w) { window.alert('Habilita las ventanas emergentes.'); return } try{var _i=localStorage.getItem('serein_logoIstria')||'',_sv=null,_sw=0;if(_i&&String(p.area||'').toLowerCase().indexOf('istria')>=0){_sv=localStorage.getItem('serein_logo');localStorage.setItem('serein_logo',_i);_sw=1;window.__sereinProtoIstria=true}}catch(e){} w.document.write(htmlDeProtocolo(p, equipos)); try{if(_sw){if(_sv==null)localStorage.removeItem('serein_logo');else localStorage.setItem('serein_logo',_sv);window.__sereinProtoIstria=false;}}catch(e){} w.document.close(); if (certsKeys && certsKeys.length) descargarCertificadosInstrumentos(equipos, certsKeys); setTimeout(function () { w.focus(); w.print() }, 400) }
 function PF({ label, children }) { return (<div><div style={{ fontSize: 11, color: '#9AA3AD', marginBottom: 2, marginTop: 4 }}>{label}</div>{children}</div>) }
 // Checklist de marcas de pieza para un protocolo: las candidatas salen de
 // las "marcas esperadas" cargadas por Excel en la OT (ver MarcasEsperadasOT
@@ -2928,7 +2993,7 @@ function TablaMedidas({ titulo, filas, ncols, onSetCell, onAuto, onAddFila, onDe
 // al apretar "Descargar PDF" solo los que esten tildados, no es todo o
 // nada. El link de cada certificado queda clickeable siempre, tildado o no,
 // para bajar uno solo a mano cuando se quiera.
-var CERT_LABELS = [['espCertificado', 'Medidor de espesor'], ['rugCertificado', 'Rugosimetro'], ['termoCertificado', 'Termohigrometro'], ['granallaCertificado', 'Granalla'], ['galgasCertificado', 'Galgas de calibracion']]
+var CERT_LABELS = [['espCertificado', 'Medidor de espesor'], ['rugCertificado', 'Rugosimetro'], ['termoCertificado', 'Termohigrometro'], ['granallaCertificado', 'Granalla'], ['galgasCertificado', 'Galgas de calibracion'], ['adhCertificado', 'Equipo de adherencia']]
 function ProtoHead({ p, upd, onDel, titulo, equipos, col, onTgl }) {
   const ip = { padding: '6px 8px', border: '1px solid #DFE4EA', fontSize: 12.5, boxSizing: 'border-box', width: '100%' }
   const set = (k, v) => upd({ ...p, [k]: v })
@@ -2947,7 +3012,7 @@ function ProtoHead({ p, upd, onDel, titulo, equipos, col, onTgl }) {
   const cerrarYSubirDrive = async () => {
     setSubiendoDrive(true); setDriveMsg(null)
     try {
-      const html = p.tipo === 'PIG' ? htmlPIG(p, equipos) : htmlPGP(p, equipos)
+      const html = htmlDeProtocolo(p, equipos)
       // Con limite de tiempo: generar la imagen de cada pagina (html-to-image)
       // podia quedarse colgada para siempre si alguna imagen embebida (foto,
       // firma, logo) fallaba en silencio al renderizar — sin este limite, el
@@ -3055,6 +3120,122 @@ function ProtoPGPForm({ p: pProp, upd: updRemoto, onDel, instrumentos, marcasEsp
   const addCapa = () => upd({ ...p, capas: [...capas, nuevaCapa('Capa ' + (capas.length + 1))] })
   const delCapa = id => upd({ ...p, capas: capas.filter(c => c.id !== id) }); const [col, setCol] = useState(false)
   return (<div style={{ marginTop: 12, border: '1px solid #DFE4EA', borderTop: '3px solid #101315', padding: 14 }}><ProtoHead p={p} upd={upd} onDel={onDel} titulo="Protocolo Granallado y Pintura" equipos={instrumentos} col={col} onTgl={() => setCol(!col)} />{!col && (<><div style={{ margin: '10px 0 4px' }}><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '6px 0 4px' }}>Descripción</div><input style={ip} value={p.descripcion || ''} onChange={e => set('descripcion', e.target.value)} /><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '10px 0 4px' }}>Esquema del proyecto</div><textarea style={{ ...ip, minHeight: 54, resize: 'vertical' }} value={p.esquemaProyecto || ''} onChange={e => set('esquemaProyecto', e.target.value)} placeholder="Sistema de pintura, espesores, normas, alcance..." /></div><MarcasPiezaBlock marcas={p.marcas} onChange={v => set('marcas', v)} marcasEsperadas={marcasEsperadas} usadasEnOtros={usadasEnOtros} /><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '10px 0 4px' }}><span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase' }}>Instrumentos (desde Parametros)</span><button onClick={() => { var df = { espMarca: 'ELCOMETER', espSerie: 'MH11472', rugMarca: 'ELCOMETER', rugSerie: 'NE30319', termoMarca: 'ELCOMETER', termoSerie: 'KCA721' }; var s = instrumentos || {}; upd({ ...p, instr: { espMarca: s.espMarca || df.espMarca, espSerie: s.espSerie || df.espSerie, rugMarca: s.rugMarca || df.rugMarca, rugSerie: s.rugSerie || df.rugSerie, termoMarca: s.termoMarca || df.termoMarca, termoSerie: s.termoSerie || df.termoSerie } }) }} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>Cargar de Parametros</button></div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8 }}><PF label="Medidor espesor - marca"><input style={ip} value={p.instr.espMarca} onChange={e => setInstr('espMarca', e.target.value)} /></PF><PF label="Medidor espesor - serie"><input style={ip} value={p.instr.espSerie} onChange={e => setInstr('espSerie', e.target.value)} /></PF><PF label="Rugosimetro - marca"><input style={ip} value={p.instr.rugMarca} onChange={e => setInstr('rugMarca', e.target.value)} /></PF><PF label="Rugosimetro - serie"><input style={ip} value={p.instr.rugSerie} onChange={e => setInstr('rugSerie', e.target.value)} /></PF><PF label="Termohigrometro - marca"><input style={ip} value={p.instr.termoMarca} onChange={e => setInstr('termoMarca', e.target.value)} /></PF><PF label="Termohigrometro - serie"><input style={ip} value={p.instr.termoSerie} onChange={e => setInstr('termoSerie', e.target.value)} /></PF></div><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '10px 0 4px' }}>Condiciones ambientales</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px,1fr))', gap: 8 }}><PF label="Fecha"><input type="date" style={ip} value={p.amb.fecha} onChange={e => setAmb('fecha', e.target.value)} /></PF><PF label="% Humedad"><input style={ip} value={p.amb.humedad} onChange={e => setAmb('humedad', e.target.value)} /></PF><PF label="T. Ambiente"><input style={ip} value={p.amb.tAmbiente} onChange={e => setAmb('tAmbiente', e.target.value)} /></PF><PF label="C Pieza"><input style={ip} value={p.amb.tPieza} onChange={e => setAmb('tPieza', e.target.value)} /></PF><PF label="Pto. Rocio"><input style={ip} value={p.amb.ptoRocio} onChange={e => setAmb('ptoRocio', e.target.value)} /></PF><PF label="Hora inicio"><input style={ip} value={p.amb.horaInicio} onChange={e => setAmb('horaInicio', e.target.value)} /></PF></div><div style={{ marginTop: 8 }}>{(p.ambExtra || []).map((c, i) => (<div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}><input style={{ ...ip, flex: '1 1 140px' }} placeholder="Condición" value={c.label || ''} onChange={e => set('ambExtra', (p.ambExtra || []).map((x, j) => j === i ? { ...x, label: e.target.value } : x))} /><input style={{ ...ip, flex: '1 1 100px' }} placeholder="Valor" value={c.valor || ''} onChange={e => set('ambExtra', (p.ambExtra || []).map((x, j) => j === i ? { ...x, valor: e.target.value } : x))} /><button onClick={() => set('ambExtra', (p.ambExtra || []).filter((_, j) => j !== i))} style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '4px 8px', color: '#D9600A' }}>×</button></div>))}<button onClick={() => set('ambExtra', [...(p.ambExtra || []), { label: '', valor: '' }])} style={{ background: C.teal, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5, marginTop: 2 }}>+ Agregar condición ambiental</button></div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8, marginTop: 8 }}><PF label="Limpieza superficial"><input style={ip} value={p.limpiezaSSPC} onChange={e => set('limpiezaSSPC', e.target.value)} /></PF><PF label="Perfil de anclaje"><input style={ip} value={p.perfilSolicitado} onChange={e => set('perfilSolicitado', e.target.value)} /></PF></div><TablaMedidas titulo="Perfil de rugosidad" filas={Array.isArray(p.perfilFilas) ? p.perfilFilas : []} ncols={5} onSetCell={setPerfil} onAuto={autoPerfil} resumen="Perfil obtenido (prom.)" /><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '12px 0 4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span>Esquema de pintura - capas ({capas.length})</span><button onClick={addCapa} style={{ background: '#F77716', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 12 }}>+ Agregar capa</button></div>{capas.map((cap, ci) => (<CapaBlock key={cap.id} cap={cap} acum={acumRango(capas, ci)} onSet={(k, v) => setCapa(cap.id, k, v)} onSetAmb={(k, v) => setAmbCapa(cap.id, k, v)} onCell={(r, c, v) => cellCapa(cap.id, r, c, v)} onAuto={() => autoCapa(cap.id)} onAddFila={() => addFila(cap.id)} onDelFila={() => delFila(cap.id)} onFotos={v => fotosCapa(cap.id, v)} onDel={() => delCapa(cap.id)} />))}<FotoSlots label="Fotos inicio de granalla" fotos={p.fotosGranalla || []} max={4} onChange={v => set('fotosGranalla', v)} /><FirmasBlock firmas={p.firmas} onChange={v => set('firmas', v)} /></>)}</div>) }
+// Ensayo de Adherencia Pull-Off (ASTM D4541). Mismo patron de estado
+// local + debounce que PIG/PGP. "Traer capas del protocolo vinculado"
+// copia el esquema de pintura (nombre/producto/mils promedio medido) ya
+// cargado en un PGP/PIG de la misma OT — evita re-tipear a mano lo que
+// ya quedo registrado ahi; queda igual de editable despues.
+function ProtoEAForm({ p: pProp, upd: updRemoto, onDel, instrumentos, protocolosHermanos = [] }) {
+  const [p, setPLocal] = useState(pProp)
+  useEffect(() => { setPLocal(pProp) }, [pProp.id])
+  const timerProto = useRef(null)
+  const upd = np => {
+    setPLocal(np)
+    clearTimeout(timerProto.current)
+    timerProto.current = setTimeout(() => updRemoto(np), 700)
+  }
+  const ip = { padding: '6px 8px', border: '1px solid #DFE4EA', fontSize: 12.5, boxSizing: 'border-box', width: '100%' }
+  const set = (k, v) => upd({ ...p, [k]: v })
+  const capas = Array.isArray(p.capas) ? p.capas : []
+  const setCapaCampo = (id, k, v) => upd({ ...p, capas: capas.map(c => c.id === id ? { ...c, [k]: v } : c) })
+  const addCapaEA = () => upd({ ...p, capas: [...capas, { id: 'eac' + Date.now() + Math.floor(Math.random() * 999), nombre: '', producto: '', mils: '' }] })
+  const delCapaEA = id => upd({ ...p, capas: capas.filter(c => c.id !== id) })
+  const ensayos = Array.isArray(p.ensayos) ? p.ensayos : []
+  const setEnsayoCampo = (id, k, v) => upd({ ...p, ensayos: ensayos.map(x => x.id === id ? { ...x, [k]: v } : x) })
+  const addEnsayo = () => upd({ ...p, ensayos: [...ensayos, { id: 'ens' + Date.now() + Math.floor(Math.random() * 999), dolly: ensayos.length + 1, marcaPintura: '', valorKgCm2: '', falla1: '', falla2: '' }] })
+  const delEnsayo = id => upd({ ...p, ensayos: ensayos.filter(x => x.id !== id) })
+  const traerCapasDeVinculado = () => {
+    const proto = protocolosHermanos.find(x => x.id === p.pgpVinculadoId)
+    if (!proto) return
+    const nuevasCapas = (proto.capas || []).map(c => {
+      const proms = (c.filas || []).map(promArr).filter(Boolean)
+      const prom = proms.length ? (proms.reduce((a, b) => a + b, 0) / proms.length) : null
+      return { id: 'eac' + Date.now() + Math.floor(Math.random() * 999), nombre: c.nombre || '', producto: c.producto || '', mils: prom != null ? prom.toFixed(2) : (c.solicitado || '') }
+    })
+    upd({ ...p, capas: nuevasCapas })
+  }
+  const [col, setCol] = useState(false)
+  return (<div style={{ marginTop: 12, border: '1px solid #DFE4EA', borderTop: '3px solid #0E7A8F', padding: 14 }}>
+    <ProtoHead p={p} upd={upd} onDel={onDel} titulo="Ensayo de Adherencia Pull-Off" equipos={instrumentos} col={col} onTgl={() => setCol(!col)} />
+    {!col && (<>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8, marginTop: 10 }}>
+        <PF label="Item a inspeccionar"><input style={ip} value={p.itemInspeccionar || ''} onChange={e => set('itemInspeccionar', e.target.value)} /></PF>
+        <PF label="Fecha de ejecución"><input type="date" style={ip} value={p.fechaEjecucion || ''} onChange={e => set('fechaEjecucion', e.target.value)} /></PF>
+        <PF label="Lugar de ejecución"><input style={ip} value={p.lugarEjecucion || ''} onChange={e => set('lugarEjecucion', e.target.value)} /></PF>
+        <PF label="Solicitado por"><input style={ip} value={p.solicitadoPor || ''} onChange={e => set('solicitadoPor', e.target.value)} /></PF>
+      </div>
+
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '12px 0 4px' }}>Protocolo vinculado (esquema de pintura)</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <select style={{ ...ip, width: 'auto', minWidth: 220 }} value={p.pgpVinculadoId || ''} onChange={e => set('pgpVinculadoId', e.target.value)}>
+          <option value="">Sin vincular — cargar denominaciones a mano</option>
+          {protocolosHermanos.map(x => <option key={x.id} value={x.id}>{x.codigo}</option>)}
+        </select>
+        <button onClick={traerCapasDeVinculado} disabled={!p.pgpVinculadoId} style={{ background: p.pgpVinculadoId ? C.teal : '#DFE4EA', color: '#fff', border: 'none', padding: '6px 12px', cursor: p.pgpVinculadoId ? 'pointer' : 'default', fontSize: 12 }}>Traer capas del protocolo vinculado</button>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '12px 0 4px' }}>
+        <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase' }}>Equipo de adherencia (desde Parametros)</span>
+        <button onClick={() => { const s = instrumentos || {}; upd({ ...p, equipoMarca: s.adhMarca || p.equipoMarca, equipoSerie: s.adhSerie || p.equipoSerie }) }} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>Cargar de Parametros</button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8 }}>
+        <PF label="Equipo - marca"><input style={ip} value={p.equipoMarca || ''} onChange={e => set('equipoMarca', e.target.value)} /></PF>
+        <PF label="Equipo - serie"><input style={ip} value={p.equipoSerie || ''} onChange={e => set('equipoSerie', e.target.value)} /></PF>
+        <PF label="Estándar aplicado"><input style={ip} value={p.estandarAplicado || ''} onChange={e => set('estandarAplicado', e.target.value)} /></PF>
+        <PF label="Sustrato"><input style={ip} value={p.sustrato || ''} onChange={e => set('sustrato', e.target.value)} /></PF>
+        <PF label="Fecha pegado Dolly"><input type="date" style={ip} value={p.fechaPegadoDolly || ''} onChange={e => set('fechaPegadoDolly', e.target.value)} /></PF>
+        <PF label="Fecha Ensayo"><input type="date" style={ip} value={p.fechaEnsayo || ''} onChange={e => set('fechaEnsayo', e.target.value)} /></PF>
+        <PF label="Pegamento utilizado"><input style={ip} value={p.pegamento || ''} onChange={e => set('pegamento', e.target.value)} /></PF>
+        <PF label="Tiempo de curado"><input style={ip} value={p.tiempoCurado || ''} onChange={e => set('tiempoCurado', e.target.value)} /></PF>
+        <PF label="Sistema de pintura"><input style={ip} value={p.sistemaPintura || ''} onChange={e => set('sistemaPintura', e.target.value)} /></PF>
+        <PF label="Dolly (material)"><input style={ip} value={p.dollyMaterial || ''} onChange={e => set('dollyMaterial', e.target.value)} /></PF>
+        <PF label="Criterio de aceptación (kg/cm²)"><input style={ip} value={p.criterioAceptacion || ''} onChange={e => set('criterioAceptacion', e.target.value)} /></PF>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '12px 0 4px' }}>
+        <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase' }}>Denominaciones — esquema de pintura ({capas.length})</span>
+        <button onClick={addCapaEA} style={{ background: C.teal, color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5 }}>+ Agregar capa</button>
+      </div>
+      {capas.map(c => (
+        <div key={c.id} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input style={{ ...ip, flex: '1 1 140px' }} placeholder="Nombre (ej. Primera capa)" value={c.nombre || ''} onChange={e => setCapaCampo(c.id, 'nombre', e.target.value)} />
+          <input style={{ ...ip, flex: '1 1 160px' }} placeholder="Producto" value={c.producto || ''} onChange={e => setCapaCampo(c.id, 'producto', e.target.value)} />
+          <input style={{ ...ip, width: 100 }} placeholder="Mils" value={c.mils || ''} onChange={e => setCapaCampo(c.id, 'mils', e.target.value)} />
+          <button onClick={() => delCapaEA(c.id)} style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '4px 8px', color: '#D9600A' }}>×</button>
+        </div>
+      ))}
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '14px 0 4px' }}>
+        <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase' }}>Registro de ensayos ({ensayos.length})</span>
+        <button onClick={addEnsayo} style={{ background: '#F77716', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer', fontSize: 11.5 }}>+ Agregar dolly</button>
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+          <thead><tr style={{ borderBottom: '1px solid #DFE4EA' }}>{['Dolly', 'Marca pintura', 'Valor (kg/cm²)', 'Falla 1 / Localización', 'Falla 2 / Localización', 'Resultado', ''].map(h => <th key={h} style={{ textAlign: 'left', padding: '4px 6px', fontSize: 10.5, color: '#9AA3AD', textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {ensayos.map(en => {
+              const ok = resultadoEnsayoOk(en.valorKgCm2, p.criterioAceptacion)
+              return (<tr key={en.id} style={{ borderBottom: '1px solid #F2F4F7' }}>
+                <td style={{ padding: 4, width: 60 }}><input style={{ ...ip, width: 50 }} value={en.dolly || ''} onChange={e => setEnsayoCampo(en.id, 'dolly', e.target.value)} /></td>
+                <td style={{ padding: 4 }}><input style={{ ...ip, width: 120 }} value={en.marcaPintura || ''} onChange={e => setEnsayoCampo(en.id, 'marcaPintura', e.target.value)} /></td>
+                <td style={{ padding: 4 }}><input style={{ ...ip, width: 90 }} value={en.valorKgCm2 || ''} onChange={e => setEnsayoCampo(en.id, 'valorKgCm2', e.target.value)} /></td>
+                <td style={{ padding: 4 }}><input style={{ ...ip, width: 150 }} value={en.falla1 || ''} onChange={e => setEnsayoCampo(en.id, 'falla1', e.target.value)} /></td>
+                <td style={{ padding: 4 }}><input style={{ ...ip, width: 150 }} value={en.falla2 || ''} onChange={e => setEnsayoCampo(en.id, 'falla2', e.target.value)} /></td>
+                <td style={{ padding: 4 }}>{ok == null ? <span style={{ fontSize: 11, color: '#9AA3AD' }}>—</span> : <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: ok ? '#E6F7EE' : '#FCEBEA', color: ok ? '#16A34A' : '#DC2626' }}>{ok ? 'CUMPLE' : 'NO CUMPLE'}</span>}</td>
+                <td style={{ padding: 4 }}><button onClick={() => delEnsayo(en.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#D9600A' }}>×</button></td>
+              </tr>)
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <FotoSlots label="Fotos equipo de ensayo de adherencia" fotos={p.fotosEquipo || []} max={4} onChange={v => set('fotosEquipo', v)} />
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '12px 0 4px' }}>Observaciones</div>
+      <textarea style={{ ...ip, minHeight: 54, resize: 'vertical' }} value={p.observaciones || ''} onChange={e => set('observaciones', e.target.value)} />
+      <FirmasBlock firmas={p.firmas} onChange={v => set('firmas', v)} />
+    </>)}
+  </div>)
+}
 function ProtocolosOT({ ot, onUpdate, onUpdateProtocolo, otsAll = [], instrumentos = null }) {
   const lista = ot.protocolos || []
   // Overlay local mientras se llena un protocolo campo por campo — mismo
@@ -3091,7 +3272,8 @@ function ProtocolosOT({ ot, onUpdate, onUpdateProtocolo, otsAll = [], instrument
     }, 700)
   }
   const delP = id => { if (!window.confirm('Eliminar este protocolo?')) return; clearTimeout(timerRef.current); setListaLocal(null); onUpdate(ot.id, { protocolos: lista.filter(x => x.id !== id) }) }
-  return (<div style={{ marginTop: 14, borderTop: '1px dashed #DFE4EA', paddingTop: 12 }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase' }}>Protocolos de calidad ({listaMostrada.length})</div><div style={{ display: 'flex', gap: 8 }}><button onClick={() => gen('PIG')} style={{ background: '#F77716', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>+ Generar PIG</button><button onClick={() => gen('PGP')} style={{ background: '#101315', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>+ Generar PGP</button></div></div>{listaMostrada.map(p => { const usadasEnOtros = listaMostrada.filter(x => x.id !== p.id).flatMap(x => x.marcas || []); const mEsp = ot.marcasEsperadas || []; return p.tipo === 'PIG' ? <ProtoPIGForm key={p.id} p={p} upd={updP} onDel={() => delP(p.id)} instrumentos={instrumentos} marcasEsperadas={mEsp} usadasEnOtros={usadasEnOtros} /> : <ProtoPGPForm key={p.id} p={p} upd={updP} onDel={() => delP(p.id)} instrumentos={instrumentos} marcasEsperadas={mEsp} usadasEnOtros={usadasEnOtros} /> })}</div>) }
+  const protocolosHermanos = listaMostrada.filter(x => x.tipo === 'PGP' || x.tipo === 'PIG')
+  return (<div style={{ marginTop: 14, borderTop: '1px dashed #DFE4EA', paddingTop: 12 }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase' }}>Protocolos de calidad ({listaMostrada.length})</div><div style={{ display: 'flex', gap: 8 }}><button onClick={() => gen('PIG')} style={{ background: '#F77716', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>+ Generar PIG</button><button onClick={() => gen('PGP')} style={{ background: '#101315', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>+ Generar PGP</button><button onClick={() => gen('EA')} style={{ background: '#0E7A8F', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>+ Generar Ensayo Adherencia</button></div></div>{listaMostrada.map(p => { const usadasEnOtros = listaMostrada.filter(x => x.id !== p.id).flatMap(x => x.marcas || []); const mEsp = ot.marcasEsperadas || []; return p.tipo === 'PIG' ? <ProtoPIGForm key={p.id} p={p} upd={updP} onDel={() => delP(p.id)} instrumentos={instrumentos} marcasEsperadas={mEsp} usadasEnOtros={usadasEnOtros} /> : p.tipo === 'EA' ? <ProtoEAForm key={p.id} p={p} upd={updP} onDel={() => delP(p.id)} instrumentos={instrumentos} protocolosHermanos={protocolosHermanos.filter(x => x.id !== p.id)} /> : <ProtoPGPForm key={p.id} p={p} upd={updP} onDel={() => delP(p.id)} instrumentos={instrumentos} marcasEsperadas={mEsp} usadasEnOtros={usadasEnOtros} /> })}</div>) }
 
 export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], ots: otsExt, setOts: setOtsExt, verValores = true, clientes = [], ordenesCompra = [], mo = null, instrumentos = null }) {
   const [otsInt, setOtsInt] = useState(OTS_INICIALES)

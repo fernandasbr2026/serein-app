@@ -161,6 +161,7 @@ export function protocoloCompleto(p) {
   let hayFotos = (p.fotosGranalla || []).length > 0
   if (!hayFotos && p.tipo === 'PIG') hayFotos = (p.checks || []).some(c => (c.fotos || []).length > 0)
   if (!hayFotos && p.tipo === 'PGP') hayFotos = (p.capas || []).some(c => (c.fotos || []).length > 0)
+  if (!hayFotos && p.tipo === 'EA') hayFotos = (p.fotosEquipo || []).length > 0
   const faltantes = []
   if (!firmasOk) faltantes.push('firmas (falta fecha en alguna)')
   if (!hayFotos) faltantes.push('fotos de evidencia')
