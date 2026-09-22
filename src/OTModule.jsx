@@ -2738,7 +2738,7 @@ function nuevoProtocolo(tipo, ot, correlativo, instrumentos) {
   if (tipo === 'PIG') { return Object.assign(base, { descripcion: 'Proceso de inicio de granallado para pintura.', checks: [{ nombre: 'Control aire presurizado norma ASTM D4285', cumple: 'SI', obs: 'Sin presencia de humedad u otros contaminantes.', fotos: [] }, { nombre: 'Verificacion limpieza de granalla ASTM D7393', cumple: 'SI', obs: 'Sin presencia de sales, aceites u otros contaminantes.', fotos: [] }, { nombre: 'Inspeccion visual pieza granallada', cumple: 'SI', obs: '', fotos: [] }, { nombre: 'Medicion perfil de rugosidad norma ASTM D4417', cumple: 'SI', obs: '', fotos: [] }], limpiezaSSPC: 'SP10', perfilSolicitado: '1 a 3 mils', medidas: ['', '', ''], perfilObtenido: '', perfilCumple: 'SI', amb: { fecha: h, humedad: '', tAmbiente: '', tPieza: '', ptoRocio: '', horaInicio: '' }, fotosGranalla: [] }) }
   // EA = Ensayo de Adherencia Pull-Off (ASTM D4541). A diferencia de
   // PIG/PGP no vuelve a medir espesores ni condiciones ambientales: se
-  // vincula a un PGP/PIG ya cargado en la misma OT (pgpVinculadoId) y
+  // vincula a uno o mas PGP/PIG ya cargados en la misma OT (pgpVinculadoIds) y
   // trae de ahi el esquema de capas ya registrado (ver
   // "traerCapasDeVinculado" en ProtoEAForm) — evita re-tipear a mano el
   // mismo esquema de pintura que ya quedo en el PGP. Todos los campos
@@ -2750,7 +2750,7 @@ function nuevoProtocolo(tipo, ot, correlativo, instrumentos) {
       itemInspeccionar: 'PROBETA',
       fechaEjecucion: h,
       lugarEjecucion: '', solicitadoPor: ot.cliente || '',
-      pgpVinculadoId: '',
+      pgpVinculadoIds: [],
       equipoMarca: dfA.adhMarca || '', equipoSerie: dfA.adhSerie || '',
       estandarAplicado: 'ASTM D4541', sustrato: 'Acero Carbono',
       fechaPegadoDolly: '', fechaEnsayo: h,
@@ -3144,14 +3144,26 @@ function ProtoEAForm({ p: pProp, upd: updRemoto, onDel, instrumentos, protocolos
   const setEnsayoCampo = (id, k, v) => upd({ ...p, ensayos: ensayos.map(x => x.id === id ? { ...x, [k]: v } : x) })
   const addEnsayo = () => upd({ ...p, ensayos: [...ensayos, { id: 'ens' + Date.now() + Math.floor(Math.random() * 999), dolly: ensayos.length + 1, marcaPintura: '', valorKgCm2: '', falla1: '', falla2: '' }] })
   const delEnsayo = id => upd({ ...p, ensayos: ensayos.filter(x => x.id !== id) })
-  const traerCapasDeVinculado = () => {
-    const proto = protocolosHermanos.find(x => x.id === p.pgpVinculadoId)
-    if (!proto) return
-    const nuevasCapas = (proto.capas || []).map(c => {
+  const toggleVinculado = id => {
+    const actuales = new Set(p.pgpVinculadoIds || [])
+    actuales.has(id) ? actuales.delete(id) : actuales.add(id)
+    upd({ ...p, pgpVinculadoIds: [...actuales] })
+  }
+  // Trae las capas de TODOS los protocolos tildados (una OT puede tener
+  // mas de un PGP/PIG con esquemas distintos, ej. piezas separadas) — el
+  // id de cada capa copiada se arma con proto.id + capa.id, nunca con
+  // Date.now() dentro del map, porque varias capas de protocolos
+  // distintos se generan en el mismo tick y Date.now() repetiria el
+  // mismo valor para todas, chocando entre si.
+  const traerCapasDeVinculados = () => {
+    const ids = new Set(p.pgpVinculadoIds || [])
+    const protos = protocolosHermanos.filter(x => ids.has(x.id))
+    if (!protos.length) return
+    const nuevasCapas = protos.flatMap(proto => (proto.capas || []).map(c => {
       const proms = (c.filas || []).map(promArr).filter(Boolean)
       const prom = proms.length ? (proms.reduce((a, b) => a + b, 0) / proms.length) : null
-      return { id: 'eac' + Date.now() + Math.floor(Math.random() * 999), nombre: c.nombre || '', producto: c.producto || '', mils: prom != null ? prom.toFixed(2) : (c.solicitado || '') }
-    })
+      return { id: 'eac-' + proto.id + '-' + (c.id || Math.random().toString(36).slice(2, 8)), nombre: c.nombre || '', producto: c.producto || '', mils: prom != null ? prom.toFixed(2) : (c.solicitado || ''), origen: proto.codigo }
+    }))
     upd({ ...p, capas: nuevasCapas })
   }
   const [col, setCol] = useState(false)
@@ -3165,14 +3177,20 @@ function ProtoEAForm({ p: pProp, upd: updRemoto, onDel, instrumentos, protocolos
         <PF label="Solicitado por"><input style={ip} value={p.solicitadoPor || ''} onChange={e => set('solicitadoPor', e.target.value)} /></PF>
       </div>
 
-      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '12px 0 4px' }}>Protocolo vinculado (esquema de pintura)</div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <select style={{ ...ip, width: 'auto', minWidth: 220 }} value={p.pgpVinculadoId || ''} onChange={e => set('pgpVinculadoId', e.target.value)}>
-          <option value="">Sin vincular — cargar denominaciones a mano</option>
-          {protocolosHermanos.map(x => <option key={x.id} value={x.id}>{x.codigo}</option>)}
-        </select>
-        <button onClick={traerCapasDeVinculado} disabled={!p.pgpVinculadoId} style={{ background: p.pgpVinculadoId ? C.teal : '#DFE4EA', color: '#fff', border: 'none', padding: '6px 12px', cursor: p.pgpVinculadoId ? 'pointer' : 'default', fontSize: 12 }}>Traer capas del protocolo vinculado</button>
-      </div>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase', margin: '12px 0 4px' }}>Protocolos vinculados (esquema de pintura)</div>
+      {protocolosHermanos.length === 0 ? (
+        <div style={{ fontSize: 11.5, color: '#9AA3AD', marginBottom: 8 }}>Esta OT todavía no tiene ningún PGP/PIG cargado — genera uno primero, o carga las denominaciones a mano abajo.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8, border: '1px solid #EEE9DF', borderRadius: 4, padding: 8, maxHeight: 150, overflowY: 'auto' }}>
+          {protocolosHermanos.map(x => (
+            <label key={x.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, cursor: 'pointer' }}>
+              <input type="checkbox" checked={(p.pgpVinculadoIds || []).includes(x.id)} onChange={() => toggleVinculado(x.id)} style={{ cursor: 'pointer' }} />
+              <span>{x.codigo} <span style={{ color: '#9AA3AD' }}>({x.tipo}{(x.capas || []).length ? ' · ' + x.capas.length + ' capa(s)' : ''})</span></span>
+            </label>
+          ))}
+        </div>
+      )}
+      <button onClick={traerCapasDeVinculados} disabled={!(p.pgpVinculadoIds || []).length} style={{ background: (p.pgpVinculadoIds || []).length ? C.teal : '#DFE4EA', color: '#fff', border: 'none', padding: '6px 12px', cursor: (p.pgpVinculadoIds || []).length ? 'pointer' : 'default', fontSize: 12 }}>Traer capas de los protocolos tildados</button>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '12px 0 4px' }}>
         <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, textTransform: 'uppercase' }}>Equipo de adherencia (desde Parametros)</span>
@@ -3201,6 +3219,7 @@ function ProtoEAForm({ p: pProp, upd: updRemoto, onDel, instrumentos, protocolos
           <input style={{ ...ip, flex: '1 1 140px' }} placeholder="Nombre (ej. Primera capa)" value={c.nombre || ''} onChange={e => setCapaCampo(c.id, 'nombre', e.target.value)} />
           <input style={{ ...ip, flex: '1 1 160px' }} placeholder="Producto" value={c.producto || ''} onChange={e => setCapaCampo(c.id, 'producto', e.target.value)} />
           <input style={{ ...ip, width: 100 }} placeholder="Mils" value={c.mils || ''} onChange={e => setCapaCampo(c.id, 'mils', e.target.value)} />
+          {c.origen && <span style={{ fontSize: 10.5, color: '#9AA3AD', whiteSpace: 'nowrap' }}>de {c.origen}</span>}
           <button onClick={() => delCapaEA(c.id)} style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '4px 8px', color: '#D9600A' }}>×</button>
         </div>
       ))}
