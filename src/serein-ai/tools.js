@@ -311,6 +311,122 @@ export function obtener_permisos_usuario(_args, ctx) {
   }
 }
 
+// ---------------------------------------------------------------
+// TOOL 11: listar_ot_activas (todas las areas visibles, o una planta)
+// ---------------------------------------------------------------
+const EN_CURSO_ESTADOS = ['Cotizada', 'En ejecución']
+export function listar_ot_activas({ area } = {}, ctx, datos) {
+  const H = 'listar_ot_activas'
+  if (!puedeVer(ctx, 'GESTION_OT')) return _sinPermiso(H, { modulo: 'GESTION_OT' })
+  let ots = (datos.ots || []).filter(o => EN_CURSO_ESTADOS.includes(o.estado) && puedeVerArea(ctx, o.area))
+  if (area) {
+    if (!puedeVerArea(ctx, area)) return _sinPermiso(H, { modulo: 'GESTION_OT', area })
+    ots = ots.filter(o => (o.area || '').toLowerCase() === String(area).toLowerCase())
+  }
+  if (ots.length === 0) return _faltante(H, area ? `No hay OT activas en ${area}.` : 'No tienes OT activas en tus areas.', { modulos_consultados: ['GESTION_OT'] })
+  const filas = ots.slice(0, 10).map(o => `${o.numero} - ${o.cliente} (${o.area}) - ${o.estado}${o.m2 ? ` - ${fm2(o.m2)} m2` : ''}`)
+  const extra = ots.length > 10 ? `\n(mostrando 10 de ${ots.length})` : ''
+  return {
+    ok: true,
+    texto: `Tienes ${ots.length} OT activa(s)${area ? ` en ${area}` : ''}:\n- ${filas.join('\n- ')}${extra}`,
+    fuentes: [{ modulo: 'Ordenes de Trabajo', enlace: 'GESTION_OT' }],
+    meta: {
+      herramienta: H, modulos_consultados: ['GESTION_OT'], registros_consultados: ots.map(o => o.numero),
+      permisos_aplicados: { areas: ctx.areasVisibles },
+      entidades: ots.map(o => ({ tipo: 'ot', numero: o.numero, cliente: o.cliente, area: o.area, m2: o.m2 })),
+    },
+  }
+}
+
+// ---------------------------------------------------------------
+// TOOL 12: comparar_entidades (usa la ultima lista mencionada, via memoria de conversacion)
+// ---------------------------------------------------------------
+export function comparar_entidades({ numeros } = {}, ctx, datos) {
+  const H = 'comparar_entidades'
+  if (!puedeVer(ctx, 'GESTION_OT')) return _sinPermiso(H, { modulo: 'GESTION_OT' })
+  const lista = (numeros || []).map(n => buscarOT(datos.ots, n)).filter(Boolean).filter(o => puedeVerArea(ctx, o.area))
+  if (lista.length < 2) return _faltante(H, 'No tengo suficientes OT para comparar todavia. Pideme primero una lista (ej: "que OT tengo activas").', {})
+  const orden = lista.slice().sort((a, b) => (b.m2 || 0) - (a.m2 || 0))
+  const top = orden[0]
+  const filas = orden.map(o => `${o.numero} (${o.cliente}): ${fm2(o.m2 || 0)} m2`)
+  return {
+    ok: true,
+    texto: `La que mas m2 tiene es ${top.numero} (${top.cliente}) con ${fm2(top.m2 || 0)} m2.\n- ${filas.join('\n- ')}`,
+    fuentes: [{ modulo: 'Orden de Trabajo', enlace: 'GESTION_OT', ref: top.numero }],
+    meta: { herramienta: H, modulos_consultados: ['GESTION_OT'], registros_consultados: orden.map(o => o.numero) },
+  }
+}
+
+// ---------------------------------------------------------------
+// TOOL 13: obtener_clientes_morosos (cruza facturas vencidas por cliente)
+// ---------------------------------------------------------------
+export function obtener_clientes_morosos(_args, ctx, datos) {
+  const H = 'obtener_clientes_morosos'
+  if (!puedeVer(ctx, 'FINANZAS') && !ctx.esGerencia) {
+    if (!ctx.areasVisibles.length) return _sinPermiso(H, { modulo: 'FINANZAS' })
+  }
+  const hoy = new Date().toISOString().slice(0, 10)
+  const facturas = datos.facturas || {}
+  const porCliente = {}
+  ctx.areasVisibles.forEach(area => {
+    (facturas[area] || []).forEach(f => {
+      if (f.estado !== 'Anulada' && !_pagada(f) && f.vencimiento && f.vencimiento < hoy) {
+        const k = f.cliente || 's/cliente'
+        porCliente[k] = porCliente[k] || { cliente: k, monto: 0, n: 0, masAntigua: f.vencimiento }
+        porCliente[k].monto += (f.monto || f.neto || 0)
+        porCliente[k].n++
+        if (f.vencimiento < porCliente[k].masAntigua) porCliente[k].masAntigua = f.vencimiento
+      }
+    })
+  })
+  const lista = Object.values(porCliente).sort((a, b) => b.monto - a.monto)
+  if (lista.length === 0) return _faltante(H, 'No encontre clientes con facturas vencidas en tus areas.', { modulos_consultados: ['FACTURAS'] })
+  const filas = lista.slice(0, 8).map(c => `${c.cliente}: ${clp(c.monto)} (${c.n} factura(s), la mas antigua vencio ${c.masAntigua})`)
+  return {
+    ok: true,
+    texto: `Hay ${lista.length} cliente(s) con facturas vencidas:\n- ${filas.join('\n- ')}`,
+    fuentes: ctx.areasVisibles.map(a => ({ modulo: `Facturas ${a}`, enlace: a === 'Proyectos' ? 'GESTION_PROYECTOS' : a })),
+    meta: { herramienta: H, modulos_consultados: ['FACTURAS'], registros_consultados: lista.map(c => c.cliente), permisos_aplicados: { areas: ctx.areasVisibles } },
+  }
+}
+
+// ---------------------------------------------------------------
+// TOOL 14: analizar_proyectos_riesgo (cruza avance, cobros vencidos y compras vs. venta cotizada)
+// ---------------------------------------------------------------
+export function analizar_proyectos_riesgo(_args, ctx, datos) {
+  const H = 'analizar_proyectos_riesgo'
+  if (!puedeVerArea(ctx, 'Proyectos')) return _sinPermiso(H, { modulo: 'GESTION_PROYECTOS', area: 'Proyectos' })
+  const hoy = new Date().toISOString().slice(0, 10)
+  const facturasProy = (datos.facturas || {})['Proyectos'] || []
+  const vencidasPorCliente = {}
+  facturasProy.forEach(f => {
+    if (f.estado !== 'Anulada' && !_pagada(f) && f.vencimiento && f.vencimiento < hoy) {
+      const k = (f.cliente || '').trim()
+      vencidasPorCliente[k] = (vencidasPorCliente[k] || 0) + (f.monto || f.neto || 0)
+    }
+  })
+  const analizados = (datos.proyectos || []).map(p => {
+    const avance = Number(p.avance) || 0
+    const venta = Number(p.venta_cotizada) || 0
+    const comprasTotal = (p.compras || []).reduce((a, c) => a + (Number(c.monto) || 0), 0)
+    const facturasVencidas = vencidasPorCliente[(p.cliente || '').trim()] || 0
+    let score = 0
+    const razones = []
+    if (facturasVencidas > 0) { score += 2; razones.push(`facturas vencidas del cliente por ${clp(facturasVencidas)}`) }
+    if (avance < 40) { score += 1; razones.push(`avance bajo (${avance}%)`) }
+    if (venta > 0 && comprasTotal / venta > 0.6) { score += 1; razones.push(`compras ya comprometen ${Math.round(comprasTotal / venta * 100)}% de la venta cotizada`) }
+    return { p, score, razones }
+  }).filter(x => x.score >= 2).sort((a, b) => b.score - a.score)
+  if (analizados.length === 0) return _faltante(H, 'No detecte proyectos con senales de riesgo (avance bajo, cobros vencidos o compras muy altas vs. venta) en este momento.', { modulos_consultados: ['GESTION_PROYECTOS', 'FACTURAS'] })
+  const filas = analizados.slice(0, 6).map(x => `${x.p.nombre} (${x.p.cliente}): ${x.razones.join('; ')}`)
+  return {
+    ok: true,
+    texto: `Detecte ${analizados.length} proyecto(s) con senales de riesgo:\n- ${filas.join('\n- ')}\n(Criterio: cobros vencidos del cliente, avance bajo, o compras que ya comprometen gran parte de la venta cotizada. Son senales, no reemplazan tu juicio.)`,
+    fuentes: [{ modulo: 'Proyectos', enlace: 'GESTION_PROYECTOS' }],
+    meta: { herramienta: H, modulos_consultados: ['GESTION_PROYECTOS', 'FACTURAS'], registros_consultados: analizados.map(x => x.p.nombre) },
+  }
+}
+
 export const TOOLS = {
   obtener_ot_por_numero,
   obtener_esquema_pintura_ot,
@@ -322,4 +438,8 @@ export const TOOLS = {
   obtener_saldo_factura,
   buscar_manual_procedimiento,
   obtener_permisos_usuario,
+  listar_ot_activas,
+  comparar_entidades,
+  obtener_clientes_morosos,
+  analizar_proyectos_riesgo,
 }
