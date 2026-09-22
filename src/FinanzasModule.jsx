@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react'
-import { Plus, Trash2, X, Copy, Landmark, ReceiptText, PieChart as PieIcon, CalendarClock, BarChart3, CheckCircle2 } from 'lucide-react'
+import { Plus, Trash2, X, Copy, Landmark, ReceiptText, PieChart as PieIcon, CalendarClock, BarChart3, CheckCircle2, Download } from 'lucide-react'
+import * as XLSX from 'xlsx'
 
 import { SEREIN } from './theme-serein.js'
 import { pullState, pushState } from './sync.js'
@@ -656,6 +657,84 @@ function ResumenMensual({ fin }) {
   )
 }
 
+// ================= EXPORTAR PROYECCIÓN DE CUENTAS POR PAGAR =================
+// Un solo Excel con 4 hojas: proyección mensual (fijos + variables + cuotas
+// de créditos/leasing, a 12 meses, reusando calcularResumenFin — el mismo
+// cálculo que ya usan Resumen mensual y Proyeccion a 12 meses, para no tener
+// dos fuentes de verdad), detalle de gastos fijos vigentes, detalle de
+// cuotas pendientes y un resumen por obligación (créditos/leasing).
+function exportarProyeccionPagos(fin) {
+  const wb = XLSX.utils.book_new()
+
+  const now = new Date()
+  const proyeccion = []
+  for (let k = 0; k < 12; k++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + k, 1)
+    const mesKey = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+    const r = calcularResumenFin(fin, mesKey)
+    proyeccion.push({
+      Mes: d.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' }),
+      'Gastos fijos': Math.round(r.fijos || 0),
+      'Gastos variables': Math.round(r.variables || 0),
+      'Cuotas créditos/leasing': Math.round(r.totalCuotasMes || 0),
+      'Total salida de caja': Math.round((r.fijos || 0) + (r.variables || 0) + (r.totalCuotasMes || 0)),
+    })
+  }
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(proyeccion), 'Proyección 12 meses')
+
+  const fijosDetalle = (fin.gastos || [])
+    .filter(g => g.tipo === 'fijo' && g.estado !== 'Anulado')
+    .sort((a, b) => (a.vencimiento || '').localeCompare(b.vencimiento || ''))
+    .map(g => ({
+      Gasto: g.nombre,
+      Categoría: g.categoria,
+      Proveedor: g.proveedor || '',
+      Neto: netoEf(g, fin.ufValor),
+      IVA: g.iva || 0,
+      Total: netoEf(g, fin.ufValor) + (g.iva || 0),
+      Vencimiento: g.vencimiento,
+      Frecuencia: g.frecuencia,
+      Estado: g.estado,
+      Áreas: (g.dist || []).map(d => `${d.area} ${d.pct}%`).join(', '),
+    }))
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(fijosDetalle.length ? fijosDetalle : [{ Gasto: 'Sin gastos fijos registrados' }]), 'Gastos fijos')
+
+  const cuotasDetalle = (fin.obligaciones || [])
+    .flatMap(o => (o.cuotas || []).filter(c => c.estado !== 'Pagada').map(c => ({
+      Institución: o.institucion,
+      Tipo: o.tipo,
+      'Producto/Activo': o.producto || o.bienDescripcion || o.activo || '',
+      'Nº cuota': c.n,
+      'De': o.nCuotas,
+      Vencimiento: c.vencimiento,
+      Capital: c.capital ?? '',
+      Interés: c.interes ?? '',
+      Total: c.total,
+      Estado: c.vencimiento < hoy() ? 'Vencida' : 'Pendiente',
+      'A cargo': c.aCargo === 'tercero_reembolsa' ? 'Reembolsable por tercero' : 'Propio',
+    })))
+    .sort((a, b) => (a.Vencimiento || '').localeCompare(b.Vencimiento || ''))
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(cuotasDetalle.length ? cuotasDetalle : [{ Institución: 'Sin cuotas pendientes' }]), 'Cuotas pendientes')
+
+  const resumenObligaciones = (fin.obligaciones || []).map(o => {
+    const pagadas = (o.cuotas || []).filter(c => c.estado === 'Pagada').length
+    const saldo = (o.cuotas || []).filter(c => c.estado !== 'Pagada').reduce((a, c) => a + (c.total || 0), 0)
+    return {
+      Institución: o.institucion,
+      Tipo: o.tipo,
+      'Producto/Activo': o.producto || o.bienDescripcion || o.activo || '',
+      'Monto original': o.montoOriginal || '',
+      'Cuotas pagadas': pagadas,
+      'Nº cuotas': o.nCuotas,
+      'Saldo pendiente': Math.round(saldo),
+      Área: (o.dist || []).map(d => `${d.area} ${d.pct}%`).join(', '),
+    }
+  })
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumenObligaciones.length ? resumenObligaciones : [{ Institución: 'Sin obligaciones registradas' }]), 'Resumen créditos-leasing')
+
+  XLSX.writeFile(wb, 'Serein_Proyeccion_Cuentas_por_Pagar_' + hoy() + '.xlsx')
+}
+
 // ================= MÓDULO PRINCIPAL =================
 export default function FinanzasModule({ otsDisponibles = [], fin: finExt, setFin: setFinExt }) {
   const [finInt, setFinInt] = useState(FIN_SEED)
@@ -673,13 +752,17 @@ export default function FinanzasModule({ otsDisponibles = [], fin: finExt, setFi
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             style={{ background: tab === t.id ? C.carbon : '#fff', color: tab === t.id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
             {t.icono}{t.label}
           </button>
         ))}
+        <button onClick={() => exportarProyeccionPagos(fin)} title="Descarga un Excel con la proyección a 12 meses de gastos fijos, variables y cuotas de créditos/leasing, más el detalle de cada uno"
+          style={{ marginLeft: 'auto', background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Download size={13} /> Descargar Excel · Cuentas por pagar
+        </button>
       </div>
       {tab === 'resumen' && <><ResumenMensual fin={fin} /><ProyeccionFin fin={fin} /></>}
       {tab === 'fijos' && <ListaGastos tipo="fijo" fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} />}
