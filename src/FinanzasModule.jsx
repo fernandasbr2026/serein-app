@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react'
-import { Plus, Trash2, X, Copy, Landmark, ReceiptText, PieChart as PieIcon, CalendarClock, BarChart3, CheckCircle2 } from 'lucide-react'
+import { Plus, Trash2, X, Copy, Landmark, ReceiptText, PieChart as PieIcon, CalendarClock, BarChart3, CheckCircle2, Download } from 'lucide-react'
+import * as XLSX from 'xlsx'
 
 import { SEREIN } from './theme-serein.js'
 import { pullState, pushState } from './sync.js'
@@ -448,7 +449,7 @@ function CreditosLeasing({ fin, setFin }) {
               <div>
                 <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15 }}>{o.tipo} · {o.institucion}</div>
                 <div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>
-                  {o.activo && `${o.activo} · `}{o.nCuotas} cuotas de {clp(o.valorCuota)} · día {o.diaVenc} · {o.dist.map(d => `${d.area} ${d.pct}%`).join(', ')}
+                  {o.activo && `${o.activo} · `}{o.nCuotas} cuotas de {clp(o.valorCuota || (o.cuotas[0] && o.cuotas[0].total) || 0)} · día {o.diaVenc || (o.cuotas[0] && (o.cuotas[0].vencimiento || '').slice(8, 10)) || '—'} · {o.dist.map(d => `${d.area} ${d.pct}%`).join(', ')}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
@@ -656,6 +657,90 @@ function ResumenMensual({ fin }) {
   )
 }
 
+// ================= INFORME EXCEL: PROYECCIÓN DE CUENTAS POR PAGAR =================
+// Junta en un solo archivo lo que hoy vive repartido en 2 pantallas
+// (Gastos fijos/variables pendientes + Créditos y Leasing): una lista
+// plana de todo lo que falta pagar ordenada por fecha, más la proyección
+// mensual (reutiliza calcularResumenFin, la misma fuente que ya usa
+// "Resumen mensual" y "Proyección" en pantalla — un solo cálculo, no dos
+// versiones que puedan desalinearse) y el detalle de cada crédito/leasing.
+// Las cuotas "a cargo de un tercero que reembolsa" se excluyen de
+// "Cuentas por pagar" (mismo criterio que flujoDe(): no son una salida de
+// caja real de Serein), igual que ya se excluyen del resto de los KPIs.
+function descargarInformeCuentasPorPagar(fin) {
+  const areasDe = dist => (dist || []).map(d => `${d.area} ${d.pct}%`).join(', ')
+
+  const pendientes = []
+  fin.gastos.filter(g => g.estado !== 'Anulado' && g.estado !== 'Pagado').forEach(g => {
+    pendientes.push({
+      Vencimiento: g.vencimiento || '',
+      Tipo: g.tipo === 'fijo' ? 'Gasto fijo' : 'Gasto variable',
+      Detalle: g.nombre || g.categoria || '',
+      Proveedor: g.proveedor || '',
+      Área: areasDe(g.dist),
+      'Monto neto': Math.round(netoEf(g, fin.ufValor)),
+      Estado: (g.vencimiento && g.vencimiento < hoy() && g.estado !== 'Pagado') ? 'Vencido' : (g.estado || 'Pendiente'),
+    })
+  })
+  fin.obligaciones.forEach(o => {
+    (o.cuotas || []).filter(c => c.estado !== 'Pagada' && c.aCargo !== 'tercero_reembolsa').forEach(c => {
+      pendientes.push({
+        Vencimiento: c.vencimiento || '',
+        Tipo: o.tipo || 'Crédito',
+        Detalle: (o.producto || o.institucion || '') + ' · cuota ' + c.n + '/' + o.nCuotas,
+        Proveedor: o.institucion || '',
+        Área: areasDe(o.dist),
+        'Monto neto': Math.round(c.total || 0),
+        Estado: (c.vencimiento && c.vencimiento < hoy()) ? 'Vencida' : 'Pendiente',
+      })
+    })
+  })
+  pendientes.sort((a, b) => String(a.Vencimiento).localeCompare(String(b.Vencimiento)))
+  const totalPendiente = pendientes.reduce((a, x) => a + (x['Monto neto'] || 0), 0)
+  pendientes.push({ Vencimiento: '', Tipo: '', Detalle: '', Proveedor: '', Área: '', 'Monto neto': '', Estado: '' })
+  pendientes.push({ Vencimiento: '', Tipo: '', Detalle: 'TOTAL CUENTAS POR PAGAR', Proveedor: '', Área: '', 'Monto neto': totalPendiente, Estado: '' })
+
+  const now = new Date()
+  const proyeccion = []
+  for (let k = 0; k < 12; k++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + k, 1)
+    const mesKey = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+    const r = calcularResumenFin(fin, mesKey)
+    proyeccion.push({
+      Mes: d.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' }),
+      'Gastos fijos': Math.round(r.fijos),
+      'Gastos variables': Math.round(r.variables),
+      'Cuotas créditos/leasing': Math.round(r.totalCuotasMes),
+      'Total salida de caja': Math.round(r.salidaCaja),
+    })
+  }
+
+  const creditos = fin.obligaciones.map(o => {
+    const cuotas = o.cuotas || []
+    const pagadas = cuotas.filter(c => c.estado === 'Pagada').length
+    const saldo = cuotas.filter(c => c.estado !== 'Pagada').reduce((a, c) => a + (c.total || 0), 0)
+    const proxima = cuotas.find(c => c.estado !== 'Pagada')
+    const vencidas = cuotas.filter(c => c.estado !== 'Pagada' && c.vencimiento < hoy()).length
+    return {
+      Institución: o.institucion || '',
+      Tipo: o.tipo || '',
+      Producto: o.producto || '',
+      'Cuotas pagadas': pagadas,
+      'Cuotas totales': o.nCuotas || cuotas.length,
+      'Próximo vencimiento': proxima ? proxima.vencimiento : '',
+      'Saldo pendiente': Math.round(saldo),
+      'Cuotas vencidas': vencidas,
+      Área: areasDe(o.dist),
+    }
+  })
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pendientes.length ? pendientes : [{ Vencimiento: 'Sin cuentas pendientes' }]), 'Cuentas por pagar')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(proyeccion), 'Proyección mensual')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(creditos.length ? creditos : [{ Institución: 'Sin créditos/leasing' }]), 'Créditos y Leasing')
+  XLSX.writeFile(wb, 'Cuentas_por_pagar_Serein_' + hoy() + '.xlsx')
+}
+
 // ================= MÓDULO PRINCIPAL =================
 export default function FinanzasModule({ otsDisponibles = [], fin: finExt, setFin: setFinExt }) {
   const [finInt, setFinInt] = useState(FIN_SEED)
@@ -673,13 +758,19 @@ export default function FinanzasModule({ otsDisponibles = [], fin: finExt, setFi
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
-        {tabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            style={{ background: tab === t.id ? C.carbon : '#fff', color: tab === t.id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
-            {t.icono}{t.label}
-          </button>
-        ))}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {tabs.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              style={{ background: tab === t.id ? C.carbon : '#fff', color: tab === t.id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
+              {t.icono}{t.label}
+            </button>
+          ))}
+        </div>
+        <button onClick={() => descargarInformeCuentasPorPagar(fin)} title="Descarga un Excel con cuentas por pagar, proyección mensual a 12 meses, y detalle de créditos/leasing"
+          style={{ background: C.naranja, color: '#fff', border: 'none', padding: '8px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Download size={13} /> Descargar Excel
+        </button>
       </div>
       {tab === 'resumen' && <><ResumenMensual fin={fin} /><ProyeccionFin fin={fin} /></>}
       {tab === 'fijos' && <ListaGastos tipo="fijo" fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} />}
