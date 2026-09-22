@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { ChevronDown, ChevronUp, Target, Receipt, Hammer, ShoppingCart, Pencil, Plus, Trash2, X, AlertTriangle, LayoutGrid, Table2, Flame, Upload, UserCheck } from 'lucide-react'
 import { PROYECTOS, CC_DEFS } from './proyectos-data.js'
-import { calcularPerdidaFactoring, perdidaFactoringFactura } from './ParametrosModule.jsx'
+import { calcularPerdidaFactoring, perdidaFactoringFactura, dec } from './ParametrosModule.jsx'
 import FacturasModule from './FacturasModule.jsx'
 import ProyParametros from './ProyParametros.jsx'
 import ProyCotizador from './ProyCotizador.jsx'
@@ -787,7 +787,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                   <thead><tr style={{ borderBottom: `1px solid ${C.carbon}` }}>{['N° factura', 'Fecha', 'EDP', 'Neto', 'Total c/IVA', 'PPM ' + ppmPct + '%', 'Estado pago', 'Fecha pago', 'Banco', ''].map(h => <th key={h} style={{ textAlign: (h === 'Neto' || h === 'Total c/IVA' || h.indexOf('PPM') === 0) ? 'right' : 'left', padding: '4px 6px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
                   <tbody>
-                    {facturasOT.map(fx => { const ov = (p.facEdp || {})[fx.numero] || {}; const est = ov.estado || fx.estado || 'Pendiente'; const esFact = /factor/i.test(est); const ppmF = Math.round((fx.neto || 0) * (ppmPct / 100)); const facs = (params && params.factoring) || []; const fcSel = facs.find(x => x.id === ov.factoringId) || facs.find(x => (fx.banco || '').toLowerCase().includes((x.nombre || '').toLowerCase().split(' ')[0])) || facs[0]; const baseF = fx.monto || Math.round((fx.neto || 0) * 1.19); const perdF = esFact && fcSel ? calcularPerdidaFactoring(baseF, ov.plazo != null ? ov.plazo : (fx.plazo || fx.dias || 30), ov.diasMora || fx.diasMora || 0, fcSel).total : 0; return (
+                    {facturasOT.map(fx => { const ov = (p.facEdp || {})[fx.numero] || {}; const est = ov.estado || fx.estado || 'Pendiente'; const esFact = /factor/i.test(est); const ppmF = Math.round((fx.neto || 0) * (ppmPct / 100)); const facs = (params && params.factoring) || []; const esManual = ov.factoringId === 'manual'; const fcSel = facs.find(x => x.id === ov.factoringId) || facs.find(x => (fx.banco || '').toLowerCase().includes((x.nombre || '').toLowerCase().split(' ')[0])) || facs[0]; const fcEfectivo = esManual ? { tasa: ov.manualTasa || 0, tasaMora: ov.manualTasaMora || 0, costoOp: ov.manualCostoOp || 0 } : fcSel; const baseF = fx.monto || Math.round((fx.neto || 0) * 1.19); const perdF = esFact && fcEfectivo ? calcularPerdidaFactoring(baseF, ov.plazo != null ? ov.plazo : (fx.plazo || fx.dias || 30), ov.diasMora || fx.diasMora || 0, fcEfectivo).total : 0; return (
                       <React.Fragment key={fx.id}>
                       <tr style={{ borderBottom: esFact ? 'none' : '1px solid #DFE4EA', background: fx.notaCredito ? '#FCEBEA' : 'transparent' }}>
                         <td style={{ padding: '4px 6px', fontWeight: 600 }}>
@@ -810,7 +810,12 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
                         <td colSpan={10} style={{ padding: '2px 8px 8px' }}>
                           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', fontSize: 11.5, color: '#D9600A' }}>
                             <span style={{ fontWeight: 700 }}>Factoring:</span>
-                            <select value={ov.factoringId || (fcSel ? fcSel.id : '')} onChange={ev => updFac(fx.numero, { factoringId: ev.target.value })} style={{ ...inp, padding: '3px 6px' }}>{facs.length === 0 && <option value="">(define en Parámetros)</option>}{facs.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}</select>
+                            <select value={ov.factoringId || (fcSel ? fcSel.id : '')} onChange={ev => updFac(fx.numero, { factoringId: ev.target.value })} style={{ ...inp, padding: '3px 6px' }}>{facs.length === 0 && <option value="">(define en Parámetros)</option>}{facs.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}<option value="manual">Otro (tasa manual)</option></select>
+                            {esManual && (<>
+                              <span>Tasa <input value={ov.manualTasa || ''} onChange={ev => updFac(fx.numero, { manualTasa: dec(ev.target.value) })} placeholder="0,83" style={{ ...inp, width: 50, padding: '3px 6px', textAlign: 'right' }} /> %/mes</span>
+                              <span>Tasa mora <input value={ov.manualTasaMora || ''} onChange={ev => updFac(fx.numero, { manualTasaMora: dec(ev.target.value) })} placeholder="3,5" style={{ ...inp, width: 50, padding: '3px 6px', textAlign: 'right' }} /> %/mes</span>
+                              <span>Costo op. <input value={ov.manualCostoOp || ''} onChange={ev => updFac(fx.numero, { manualCostoOp: num(ev.target.value) })} placeholder="0" style={{ ...inp, width: 70, padding: '3px 6px', textAlign: 'right' }} /></span>
+                            </>)}
                             <span>Plazo <input value={ov.plazo != null ? ov.plazo : (fx.plazo || 30)} onChange={ev => updFac(fx.numero, { plazo: num(ev.target.value) })} style={{ ...inp, width: 54, padding: '3px 6px', textAlign: 'right' }} /> días</span>
                             <span>Mora <input value={ov.diasMora || ''} onChange={ev => updFac(fx.numero, { diasMora: num(ev.target.value) })} placeholder="0" style={{ ...inp, width: 54, padding: '3px 6px', textAlign: 'right' }} /> días</span>
                             <span>Pérdida factoring: <b style={{ color: C.rojo }}>{clp(perdF)}</b></span>
