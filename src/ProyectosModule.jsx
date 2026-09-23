@@ -650,6 +650,13 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
   const [abierto, setAbierto] = useState(false)
   const [addEdp, setAddEdp] = useState(false)
   const [addCompra, setAddCompra] = useState(false)
+  // Filtros de la tabla de compras: solo cambian lo que se VE — cada fila
+  // conserva su índice original en p.compras (updCompra/eliminar trabajan
+  // por índice), así que filtrar nunca puede editar o borrar otra compra.
+  const [fCompCC, setFCompCC] = useState('')
+  const [fCompProv, setFCompProv] = useState('')
+  const [fCompEstado, setFCompEstado] = useState('')
+  const [fCompTexto, setFCompTexto] = useState('')
   const [editFicha, setEditFicha] = useState(false)
   const [addFactManual, setAddFactManual] = useState(false)
   const [fFactManual, setFFactManual] = useState({ numero: '', fecha: '', neto: '', tipo: 'Factura', refNumero: '' })
@@ -845,12 +852,52 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
           </div>
           {(p.compras || []).length === 0 ? (
             <div style={{ fontSize: 13, color: C.gris }}>Sin compras imputadas.</div>
-          ) : (
+          ) : (() => {
+            const normP = s => String(s || '').trim().toLowerCase()
+            const proveedores = [...new Set(p.compras.map(c => String(c.proveedor || '').trim()).filter(Boolean).map(s => s.toUpperCase()))].sort()
+            const comprasFilt = p.compras.map((c, i) => ({ c, i })).filter(({ c }) => {
+              if (fCompCC && (c.cc || CC_DEFS[0].id) !== fCompCC) return false
+              if (fCompProv && normP(c.proveedor) !== normP(fCompProv)) return false
+              if (fCompEstado && estadoPagoCompra(c) !== fCompEstado) return false
+              if (fCompTexto) { const q = normP(fCompTexto); if (![c.proveedor, c.detalle, c.folio].some(v => normP(v).includes(q))) return false }
+              return true
+            })
+            const hayFiltro = !!(fCompCC || fCompProv || fCompEstado || fCompTexto)
+            const totNeto = comprasFilt.reduce((a, { c }) => a + (+c.monto || 0), 0)
+            const totBruto = comprasFilt.reduce((a, { c }) => a + montoBrutoCompra(c), 0)
+            const totAbonado = comprasFilt.reduce((a, { c }) => a + (+c.abonado || 0), 0)
+            const porCC = {}
+            comprasFilt.forEach(({ c }) => { const id = c.cc || CC_DEFS[0].id; porCC[id] = (porCC[id] || 0) + (+c.monto || 0) })
+            const selF = { ...inp, padding: '5px 7px', fontSize: 12.5 }
+            return (
+            <>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
+              <select value={fCompCC} onChange={e => setFCompCC(e.target.value)} style={selF}><option value="">Todos los CC</option>{ccCodigos(p).map(id => <option key={id} value={id}>{id} · {nombreCC(p, id)}</option>)}</select>
+              <select value={fCompProv} onChange={e => setFCompProv(e.target.value)} style={selF}><option value="">Todos los proveedores</option>{proveedores.map(v => <option key={v} value={v}>{v}</option>)}</select>
+              <select value={fCompEstado} onChange={e => setFCompEstado(e.target.value)} style={selF}><option value="">Todos los estados de pago</option>{Object.keys(COLOR_PAGO_COMPRA).map(v => <option key={v} value={v}>{v}</option>)}</select>
+              <input value={fCompTexto} onChange={e => setFCompTexto(e.target.value)} placeholder="Buscar proveedor / detalle / N° doc…" style={{ ...selF, minWidth: 210 }} />
+              {hayFiltro && <button onClick={() => { setFCompCC(''); setFCompProv(''); setFCompEstado(''); setFCompTexto('') }} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12 }}>Limpiar filtros</button>}
+            </div>
+            <div style={{ padding: '8px 12px', background: hayFiltro ? '#FFF7E6' : '#F2F4F7', fontSize: 13, display: 'flex', gap: 18, flexWrap: 'wrap', marginBottom: 8 }}>
+              <span>{hayFiltro ? 'Filtrado: ' : 'Total: '}<b>{comprasFilt.length}</b> de {p.compras.length} compras</span>
+              <span>Neto: <b>{clp(totNeto)}</b></span>
+              <span>Con IVA: <b>{clp(totBruto)}</b></span>
+              <span>Abonado: <b style={{ color: C.verde }}>{clp(totAbonado)}</b></span>
+              <span>Por pagar: <b style={{ color: (totBruto - totAbonado) > 0 ? C.rojo : C.verde }}>{clp(Math.max(0, totBruto - totAbonado))}</b></span>
+            </div>
+            {Object.keys(porCC).length > 1 && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8, fontSize: 11.5 }}>
+                {Object.entries(porCC).sort((a, b) => b[1] - a[1]).map(([id, v]) => (
+                  <button key={id} onClick={() => setFCompCC(id)} title="Filtrar por este centro de costo" style={{ background: '#fff', border: '1px solid #DFE4EA', padding: '3px 8px', cursor: 'pointer', color: C.carbon }}><b>{id}</b> {nombreCC(p, id)}: {clp(v)}</button>
+                ))}
+              </div>
+            )}
+            {comprasFilt.length === 0 && <div style={{ fontSize: 13, color: C.gris, padding: '8px 0' }}>Ninguna compra coincide con los filtros.</div>}
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['CC', 'Proveedor', 'N° doc', 'Detalle', 'Fecha', 'Monto neto', 'Abonado', 'Estado pago', ''].map((h, i) => <th key={i} style={{ textAlign: ['Monto neto', 'Abonado'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
                 <tbody>
-                  {p.compras.map((c, i) => { const estadoPago = estadoPagoCompra(c); const bruto = montoBrutoCompra(c); return (
+                  {comprasFilt.map(({ c, i }) => { const estadoPago = estadoPagoCompra(c); const bruto = montoBrutoCompra(c); return (
                     <tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>
                       <td style={{ padding: '5px 8px' }}><select value={c.cc || CC_DEFS[0].id} onChange={ev => updCompra(i, { cc: ev.target.value })} style={{ ...inp, padding: '5px 7px' }}>{ccCodigos(p).map(id => <option key={id} value={id}>{id} · {nombreCC(p, id)}</option>)}</select></td>
                       <td style={{ padding: '5px 8px' }}><input value={c.proveedor} onChange={ev => updCompra(i, { proveedor: ev.target.value })} style={{ ...inp, width: 130, padding: '5px 7px' }} /></td>
@@ -869,7 +916,9 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
                 </tbody>
               </table>
             </div>
-          )}
+            </>
+            )
+          })()}
           {addCompra && <FormCompra p={p} onAdd={c => { if (onAddCompra(p.id, c)) setAddCompra(false) }} onCancel={() => setAddCompra(false)} />}
 
           {/* Resumen */}
