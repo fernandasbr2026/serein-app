@@ -80,28 +80,36 @@ function enPalabras(n) {
 function estilosDoc() { return '@page{size:A4;margin:18mm 14mm 14mm}body{font-family:Inter,Arial,Helvetica,sans-serif;color:#101828;font-size:12px;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.head{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #101315;padding-bottom:10px}.emp b{color:#101315;font-size:15px}.emp div{color:#5a6b85;line-height:1.45;font-size:10.5px}.doc{text-align:right}.doc .t{font-size:20px;font-weight:800;color:#101315}.doc .f{font-size:13px;font-weight:700;color:#F77716}table{width:100%;border-collapse:collapse;margin-top:10px}.cli td{padding:4px 8px;font-size:11px;vertical-align:top}.cli .lbl{color:#5a6b85;text-transform:uppercase;font-size:9px}.items th{background:#101315;color:#fff;padding:6px 8px;font-size:10px;text-align:left}.items td{border:1px solid #D8DCE5;padding:6px 8px;font-size:11px;vertical-align:top}.items .r{text-align:right}.tot{width:auto;margin-left:auto;margin-top:10px}.tot td{padding:4px 12px;font-size:12px}.tot .lbl{color:#5a6b85;text-align:right}.tot .big{font-weight:800;font-size:14px;color:#101315}.words{margin-top:8px;font-size:11px;color:#344054}.badge{display:inline-block;border:1px solid #D8DCE5;background:#F5F7FA;color:#5a6b85;padding:2px 8px;font-size:10px;margin-top:6px;border-radius:4px}.pb{page-break-before:always;padding-top:6px}.cond{font-size:11px;border-bottom:1px solid #D8DCE5;padding-bottom:8px;margin:8px 0}.cond ol{padding-left:18px;font-size:11px;line-height:1.5}.cond li{margin-bottom:5px;color:#101828}.cond .datos{margin-top:10px;border:1px solid #D8DCE5;padding:10px;font-size:11px;line-height:1.5;background:#F5F7FA}' }
 
 // Condiciones comerciales y operativas (se adjuntan a la cotización)
-function htmlCondiciones() {
-  return `<div class="pb cond">
-    <h2>Condiciones comerciales y operativas — SEREIN</h2>
-    <ol>
-      <li><b>Alcance y horario de ejecución:</b> los valores corresponden a trabajos realizados en horario normal y días hábiles.</li>
-      <li><b>Trabajos fuera de horario regular:</b> se aplicará recargo por horas extraordinarias y disponibilidad, informado previamente.</li>
-      <li><b>Condición del material recepcionado:</b> valores válidos para material nuevo y libre de contaminantes (aceites, grasas, lacas, etc.). Si no cumple, se debe informar para revalorizar.</li>
-      <li><b>Superficie mínima a cobrar:</b> piezas menores a 1 m² se valorizan como 1 m². Esquemas de pintura: cobro mínimo 18 m² (por compra mínima de pintura).</li>
-      <li><b>Piezas especiales y complejidad:</b> elementos no estándar se valorizan según complejidad (peso/masa, geometría, dimensiones, manipulación, puntos de izaje, protección o preparación adicional).</li>
-      <li><b>Cálculo de cubicación:</b> Parrillas estándar: A×B×2 + 30%. Parrillas especiales: desarrollo + 40%. Barandas: A×B + 40%. Enrejados/cerchas/reticulado: desarrollo + 30%. Cañerías hasta 3": +15%.</li>
-      <li><b>Exclusiones del servicio:</b> no se consideran trabajos adicionales como mecánicos, enmasillados, silicona, tapas, etiquetado, u otros no mencionados en la cotización.</li>
-      <li><b>Plazo de retiro y bodegaje:</b> el material puede permanecer en planta máx. 7 días terminado el proceso. Luego: bodegaje 2 UF/día.</li>
-      <li><b>Entrega y condiciones de carga:</b> SEREIN entrega el material puesto sobre camión. Capacidad grúa: 7 toneladas (sobre eso, corre por cuenta del cliente).</li>
-      <li><b>Responsabilidad del cliente para carguío:</b> el cliente debe contar con eslingas, maderas, cartón y elementos para carguío. Si se requiere embalaje, tiene costo adicional y debe solicitarse con 48 hrs de anticipación.</li>
-      <li><b>Orden de Compra (OC):</b> es obligatorio el envío de la OC para iniciar producción.</li>
-    </ol>
-    <div class="datos"><b>Datos de transferencia</b><br>
+// Condiciones comerciales por defecto (las mismas 10 de siempre). Una
+// cotización puede traer su propia lista en cot.condiciones ([{t, x}]); si
+// no la trae, se usan estas — así las cotizaciones antiguas se ven igual.
+export const CONDICIONES_DEF = [
+  { t: 'Alcance y horario de ejecución', x: 'los valores corresponden a trabajos realizados en horario normal y días hábiles.' },
+  { t: 'Trabajos fuera de horario regular', x: 'se aplicará recargo por horas extraordinarias y disponibilidad, informado previamente.' },
+  { t: 'Condición del material recepcionado', x: 'valores válidos para material nuevo y libre de contaminantes (aceites, grasas, lacas, etc.). Si no cumple, se debe informar para revalorizar.' },
+  { t: 'Superficie mínima a cobrar', x: 'piezas menores a 1 m² se valorizan como 1 m². Esquemas de pintura: cobro mínimo 18 m² (por compra mínima de pintura).' },
+  { t: 'Piezas especiales y complejidad', x: 'elementos no estándar se valorizan según complejidad (peso/masa, geometría, dimensiones, manipulación, puntos de izaje, protección o preparación adicional).' },
+  { t: 'Cálculo de cubicación', x: 'Parrillas estándar: A×B×2 + 30%. Parrillas especiales: desarrollo + 40%. Barandas: A×B + 40%. Enrejados/cerchas/reticulado: desarrollo + 30%. Cañerías hasta 3": +15%.' },
+  { t: 'Exclusiones del servicio', x: 'no se consideran trabajos adicionales como mecánicos, enmasillados, silicona, tapas, etiquetado, u otros no mencionados en la cotización.' },
+  { t: 'Plazo de retiro y bodegaje', x: 'el material puede permanecer en planta máx. 7 días terminado el proceso. Luego: bodegaje 2 UF/día.' },
+  { t: 'Entrega y condiciones de carga', x: 'SEREIN entrega el material puesto sobre camión. Capacidad grúa: 7 toneladas (sobre eso, corre por cuenta del cliente).' },
+  { t: 'Responsabilidad del cliente para carguío', x: 'el cliente debe contar con eslingas, maderas, cartón y elementos para carguío. Si se requiere embalaje, tiene costo adicional y debe solicitarse con 48 hrs de anticipación.' },
+  { t: 'Orden de Compra (OC)', x: 'es obligatorio el envío de la OC para iniciar producción.' },
+]
+const escH = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+const condicionesDe = cot => (Array.isArray(cot && cot.condiciones) && cot.condiciones.length) ? cot.condiciones : CONDICIONES_DEF
+const DATOS_TRANSFERENCIA_HTML = `<b>Datos de transferencia</b><br>
       SERVICIOS REVESTIMIENTOS INDUSTRIALES SpA · RUT 76.860.656-0<br>
       Banco de Chile · Cuenta Corriente N° 532147409<br>
       administracion@sereinspa.com<br>
-      Dirección: Santa Rosa 70, Lampa · sereingroup.cl
-    </div>
+      Dirección: Santa Rosa 70, Lampa · sereingroup.cl`
+function htmlCondiciones(cot) {
+  return `<div class="pb cond">
+    <h2>Condiciones comerciales y operativas — SEREIN</h2>
+    <ol>
+      ${condicionesDe(cot).map(c => `<li><b>${escH(c.t)}:</b> ${escH(c.x)}</li>`).join('\n      ')}
+    </ol>
+    <div class="datos">${DATOS_TRANSFERENCIA_HTML}</div>
   </div>`
 }
 function htmlDoc(cot, { conValores, esOT, conCondiciones }) {
@@ -139,7 +147,79 @@ function htmlDoc(cot, { conValores, esOT, conCondiciones }) {
     <table class="items"><thead><tr>${cols.map(c => '<th>' + c + '</th>').join('')}</tr></thead><tbody>${filas}</tbody></table>
     ${totalesHtml}
     ${cot.comentario ? '<div style="margin-top:10px;font-size:11px"><b>Comentario:</b> ' + cot.comentario + '</div>' : ''}
-    ${conCondiciones ? htmlCondiciones() : ''}
+    ${conCondiciones ? htmlCondiciones(cot) : ''}
+  </body></html>`
+}
+// ---- Formato "oferta" (reemplaza el PDF anterior de la cotización) ----
+// Mismo lenguaje visual que los protocolos y que las ofertas técnicas ya
+// enviadas. Todos los bloques nuevos son OPCIONALES: si la cotización no
+// trae asunto, sistema, carta, atención, lugar de ejecución o estados de
+// pago (todas las anteriores a este cambio), simplemente no se dibujan y
+// el documento queda como una cotización limpia — nada se pierde ni se
+// rompe en las cotizaciones ya emitidas.
+const fechaCorta = f => { const m = String(f || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[3] + '-' + m[2] + '-' + m[1] : (f || '') }
+const diasValidez = cot => { const a = new Date(cot.fecha + 'T12:00:00'), b = new Date(cot.vencimiento + 'T12:00:00'); const d = Math.round((b - a) / 86400000); return isFinite(d) && d > 0 ? d : 0 }
+// Reparte el neto en estados de pago según su %; el último se lleva el
+// resto para que la suma calce exacto con el total del documento.
+export function estadosDePago(cot) {
+  const t = totales(cot)
+  const pagos = (cot.pagos || []).filter(x => numDec(x.pct) > 0)
+  let accN = 0, accT = 0
+  return pagos.map((x, i) => {
+    const ultimo = i === pagos.length - 1
+    const neto = ultimo ? t.afecto - accN : Math.round(t.afecto * numDec(x.pct) / 100)
+    const total = ultimo ? t.total - accT : neto + Math.round(neto * 0.19)
+    accN += neto; accT += total
+    return { ...x, pct: numDec(x.pct), neto, total }
+  })
+}
+function estilosOferta() { return '@page{size:A4;margin:14mm 13mm 12mm}*{box-sizing:border-box}body{font-family:Inter,Arial,Helvetica,sans-serif;color:#101828;font-size:11.5px;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.oh{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}.oh img{height:50px;display:block;margin-bottom:6px}.oh .emp{font-size:10px;color:#5a6b85;line-height:1.5}.oh .emp b{color:#061A40;font-size:11px}.oh .doc{text-align:right}.oh .t{font-size:26px;font-weight:800;color:#061A40;letter-spacing:.5px}.pill{display:inline-block;background:#FF6B00;color:#fff;font-weight:700;font-size:11px;padding:3px 12px;border-radius:14px;margin-top:4px}.sub{font-size:10px;color:#5a6b85;margin-top:5px}.banner{background:#061A40;color:#fff;border-radius:8px;padding:10px 14px;margin-top:12px;font-size:10.5px;line-height:1.5}.banner b{color:#FF6B00;letter-spacing:.5px}.cli{display:grid;grid-template-columns:2fr 1fr 1fr 1.2fr 1.3fr;gap:10px;border:1px solid #D8DCE5;border-radius:8px;padding:10px 12px;margin-top:12px}.cli .l{font-size:8.5px;color:#8a97ab;text-transform:uppercase;letter-spacing:.6px}.cli .v{font-weight:700;font-size:11px;margin-top:2px}.carta{margin-top:12px;font-size:11px;line-height:1.55;color:#344054;white-space:pre-line}.box{border:2px solid #FF6B00;border-radius:12px;padding:12px 14px;margin-top:14px}.box h3{margin:0 0 8px;font-size:13px;color:#061A40;text-transform:uppercase;letter-spacing:.3px}table.it{width:100%;border-collapse:collapse}table.it th{background:#061A40;color:#fff;padding:6px 8px;font-size:9.5px;text-align:left;text-transform:uppercase}table.it td{border-bottom:1px solid #E2E7EC;padding:6px 8px;font-size:10.5px;vertical-align:top}table.it .r{text-align:right;white-space:nowrap}.tots{display:flex;justify-content:flex-end;margin-top:10px}.tots table{border-collapse:collapse}.tots td{padding:3px 12px;font-size:11px}.tots .lbl{color:#5a6b85;text-align:right}.tots .r{text-align:right}.tots .big td{font-size:20px;font-weight:800;color:#061A40;padding-top:6px}.words{margin-top:8px;font-size:10px;color:#5a6b85;font-style:italic}.sec{font-size:15px;font-weight:800;color:#061A40;margin:16px 0 8px}.bar{display:flex;height:5px;border-radius:3px;overflow:hidden;margin-bottom:10px}.bar i{flex:1}.eps{display:flex;gap:8px}.ep{flex:1;border:1px solid #D8DCE5;border-radius:8px;padding:9px 10px;break-inside:avoid}.ep .h{display:flex;justify-content:space-between;align-items:baseline;font-size:9px;color:#5a6b85;text-transform:uppercase;letter-spacing:.5px}.ep .h b{font-size:15px;color:#FF6B00}.ep .d{font-size:10px;line-height:1.45;margin:6px 0;min-height:34px}.ep .m{font-size:9.5px;color:#5a6b85;border-top:1px solid #EEE;padding-top:5px}.ep .m b{display:block;font-size:12px;color:#061A40}.nota{font-size:9.5px;color:#5a6b85;margin-top:8px;line-height:1.5}.pb{page-break-before:always;padding-top:4px}.cond h2{font-size:15px;color:#061A40;margin:0 0 8px}.cond ol{padding-left:18px;margin:0;font-size:10.5px;line-height:1.5}.cond li{margin-bottom:4px}.datos{margin-top:12px;border:1px solid #D8DCE5;background:#F5F7FA;padding:10px 12px;font-size:10.5px;line-height:1.6}.next{margin-top:12px;background:#FFF3EA;border:1px solid #FFD2B0;border-radius:8px;padding:10px 12px;font-size:10.5px;line-height:1.5}.firma{margin-top:14px;text-align:right;font-size:10.5px}.firma b{display:block}.foot{display:flex;margin-top:16px;border-radius:6px;overflow:hidden}.foot .n{background:#061A40;color:#fff;flex:1;padding:9px 12px;font-size:9.5px;font-weight:600;text-align:center}.foot .w{background:#FF6B00;color:#fff;padding:9px 14px;font-weight:700;font-size:10.5px}' }
+function htmlOferta(cot) {
+  const t = totales(cot)
+  const rev = parseInt(cot.rev, 10) || 0
+  const dv = diasValidez(cot)
+  const eps = estadosDePago(cot)
+  const logo = (function () { let l = ''; try { l = localStorage.getItem('serein_logo') || '' } catch (e) {} return l ? '<img src="' + l + '"/>' : '<div style="font-size:20px;font-weight:800;color:#061A40;margin-bottom:6px">SEREIN <span style="color:#FF6B00">GROUP</span></div>' })()
+  const subLinea = [cot.asunto ? escH(cot.asunto) : '', 'Emitida el ' + fechaCorta(cot.fecha), dv ? 'Válida por ' + dv + ' días' : ''].filter(Boolean).join(' · ')
+  const filas = (cot.items || []).map((it, i) => `<tr><td>${i + 1}</td><td>${escH(it.codigo)}</td><td><b>${escH(it.detalle)}</b>${it.descDetallada ? '<br><span style="color:#777">' + escH(it.descDetallada) + '</span>' : ''}${it.comentario ? '<br><span style="color:#777">' + escH(it.comentario) + '</span>' : ''}</td><td class="r">${fmtCant(it.cant)} ${escH(it.unidad || 'UN')}</td><td class="r">${clp(it.pUnitario)}</td><td class="r">${numDec(it.descuento) ? clp(it.descuento) : ''}</td><td class="r"><b>${clp(itemTotal(it))}</b></td></tr>`).join('')
+  const epsHtml = eps.length ? `<div class="sec">Estados de pago propuestos</div>
+    <div class="bar">${['#FF6B00', '#F79A5C', '#061A40', '#6B7A99'].map(c => '<i style="background:' + c + '"></i>').join('')}</div>
+    <div class="eps">${eps.map((x, i) => `<div class="ep"><div class="h"><span>EP ${i + 1}${x.t ? ' · ' + escH(x.t) : ''}</span><b>${x.pct}%</b></div><div class="d">${escH(x.d || '')}</div><div class="m">Neto ${clp(x.neto)}<b>${clp(x.total)} <span style="font-size:9px;font-weight:400;color:#5a6b85">c/IVA</span></b></div></div>`).join('')}</div>
+    <div class="nota">Montos calculados sobre el total de esta cotización. Cada estado de pago se factura al cumplirse su hito.</div>` : ''
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Cotización ${escH(cot.folio)}${rev ? ' Rev. ' + rev : ''}</title><style>${estilosOferta()}</style></head><body>
+    <div class="oh">
+      <div>${logo}<div class="emp"><b>${escH(EMPRESA.nombre)}</b> · RUT ${escH(EMPRESA.rut)}<br>${escH(EMPRESA.direccion)} · ${escH(EMPRESA.email)} · ${escH(EMPRESA.telefono)}</div></div>
+      <div class="doc"><div class="t">COTIZACIÓN</div><span class="pill">Folio N° ${escH(cot.folio)}${rev ? ' · Rev. ' + rev : ''}</span><div class="sub">${subLinea}</div></div>
+    </div>
+    ${cot.sistemaResumen ? `<div class="banner"><b>SISTEMA</b> &nbsp; ${escH(cot.sistemaResumen)}</div>` : ''}
+    <div class="cli">
+      <div><div class="l">Cliente</div><div class="v">${escH(cot.cliente)}</div></div>
+      <div><div class="l">RUT</div><div class="v">${escH(cot.rut)}</div></div>
+      <div><div class="l">Atención</div><div class="v">${escH(cot.atencion)}</div></div>
+      <div><div class="l">Lugar de ejecución</div><div class="v">${escH(cot.lugarEjecucion)}</div></div>
+      <div><div class="l">Condición de pago</div><div class="v">${escH(cot.condicionPago)}</div></div>
+    </div>
+    ${cot.carta ? `<div class="carta">${escH(cot.carta)}</div>` : ''}
+    <div class="box">
+      <h3>Detalle y valorización</h3>
+      <table class="it"><thead><tr><th>#</th><th>Código</th><th>Detalle</th><th style="text-align:right">Cant</th><th style="text-align:right">P. unitario</th><th style="text-align:right">Desc.</th><th style="text-align:right">Total</th></tr></thead><tbody>${filas}</tbody></table>
+      <div class="tots"><table>
+        <tr><td class="lbl">Neto</td><td class="r">${clp(t.afecto)}</td></tr>
+        <tr><td class="lbl">IVA 19 %</td><td class="r">${clp(t.iva)}</td></tr>
+        <tr class="big"><td class="lbl">Total</td><td class="r">${clp(t.total)}</td></tr>
+      </table></div>
+      <div class="words">Son: ${escH(enPalabras(t.total).toLowerCase())}.</div>
+    </div>
+    ${cot.comentario ? `<div class="nota" style="font-size:10.5px;color:#344054"><b>Comentario:</b> ${escH(cot.comentario)}</div>` : ''}
+    ${epsHtml}
+    <div class="pb cond">
+      <h2>Condiciones comerciales y operativas — SEREIN</h2>
+      <ol>${condicionesDe(cot).map(c => `<li><b>${escH(c.t)}:</b> ${escH(c.x)}</li>`).join('')}</ol>
+      <div class="datos">${DATOS_TRANSFERENCIA_HTML}</div>
+      <div class="next"><b>¿Siguiente paso?</b> Con su Orden de Compra activamos la programación de su trabajo. Coordinamos con gusto una visita a nuestras instalaciones para que su equipo conozca el proceso.</div>
+      <div class="firma"><b>SEREIN Group</b>${escH(cot.vendedor || 'Gerencia Comercial')}</div>
+      <div class="foot"><div class="n">Compromiso con la calidad · Seguridad en cada proceso · Excelencia en resultados</div><div class="w">www.sereingroup.cl</div></div>
+    </div>
   </body></html>`
 }
 function imprimir(html) {
@@ -149,7 +229,7 @@ function imprimir(html) {
   w.document.close()
   setTimeout(() => { w.focus(); w.print() }, 400)
 }
-export function descargarCotizacionPDF(cot) { imprimir(htmlDoc(cot, { conValores: true, esOT: false, conCondiciones: true })) }
+export function descargarCotizacionPDF(cot) { imprimir(htmlOferta(cot)) }
 export function descargarOTPDF(cot) { imprimir(htmlDoc(cot, { conValores: false, esOT: true })) }
 // ---- Informe de compra de pintura (envases completos) ----
 export function descargarInformePintura(cot) {
@@ -295,7 +375,7 @@ function MiniAddCliente({ nombreInicial, onAdd, onCancel }) {
   )
 }
 
-function FormCotizacion({ inicial, onGuardar, onCancelar, clientes = [], onAddCliente = () => {} }) {
+function FormCotizacion({ esEdicion = false, inicial, onGuardar, onCancelar, clientes = [], onAddCliente = () => {} }) {
   const [f, setF] = useState(inicial)
   const [addCli, setAddCli] = useState(false)
   const set = (k, v) => setF({ ...f, [k]: v })
@@ -308,6 +388,24 @@ function FormCotizacion({ inicial, onGuardar, onCancelar, clientes = [], onAddCl
   const setItem = (i, k, v) => setF({ ...f, items: f.items.map((it, j) => j === i ? { ...it, [k]: v } : it) })
   const addItem = () => setF({ ...f, items: [...f.items, { codigo: 'SPP', detalle: '', cant: '', unidad: 'UN', pUnitario: '', descuento: '', descDetallada: '', comentario: '' }] })
   const delItem = i => setF({ ...f, items: f.items.filter((_, j) => j !== i) })
+  // Estados de pago y condiciones: opcionales. Sin pagos no se dibuja ese
+  // bloque; sin condiciones propias se usan las de siempre (CONDICIONES_DEF).
+  const setPago = (i, k, v) => setF({ ...f, pagos: (f.pagos || []).map((x, j) => j === i ? { ...x, [k]: v } : x) })
+  const addPago = () => setF({ ...f, pagos: [...(f.pagos || []), { t: '', pct: '', d: '' }] })
+  const delPago = i => setF({ ...f, pagos: (f.pagos || []).filter((_, j) => j !== i) })
+  const sumaPct = (f.pagos || []).reduce((a, x) => a + numDec(x.pct), 0)
+  const personalizarCond = () => setF({ ...f, condiciones: CONDICIONES_DEF.map(c => ({ ...c })) })
+  const setCond = (i, k, v) => setF({ ...f, condiciones: f.condiciones.map((x, j) => j === i ? { ...x, [k]: v } : x) })
+  const addCond = () => setF({ ...f, condiciones: [...f.condiciones, { t: '', x: '' }] })
+  const delCond = i => setF({ ...f, condiciones: f.condiciones.filter((_, j) => j !== i) })
+  // Nueva revisión: guarda una foto de la versión actual dentro de la
+  // propia cotización (revisiones[]) y sube el N° de Rev. — el folio no
+  // cambia. Nada se borra: la versión anterior queda consultable.
+  const emitirRevision = () => {
+    if (!window.confirm('Se guardará una copia de la versión actual (Rev. ' + (parseInt(f.rev, 10) || 0) + ') y esta pasará a Rev. ' + ((parseInt(f.rev, 10) || 0) + 1) + '. ¿Continuar?')) return
+    const { revisiones, ...foto } = f
+    setF({ ...f, revisiones: [...(revisiones || []), { rev: parseInt(f.rev, 10) || 0, fecha: f.fecha, snapshot: foto }], rev: (parseInt(f.rev, 10) || 0) + 1, fecha: hoy() })
+  }
   const t = totales(f)
   const lab = { fontSize: 11, color: C.gris, display: 'flex', flexDirection: 'column', gap: 3 }
   return (
@@ -346,6 +444,49 @@ function FormCotizacion({ inicial, onGuardar, onCancelar, clientes = [], onAddCl
         <label style={lab}>Fecha vencimiento<input type="date" style={inp} value={f.vencimiento} onChange={e => set('vencimiento', e.target.value)} /></label>
         <label style={{ ...lab, gridColumn: '1 / -1' }}>Proveedor de pintura (para la OC)<input list="dl-cot-provpint" style={inp} value={f.proveedorPintura || ''} onChange={e => set('proveedorPintura', e.target.value)} placeholder="Escribe o elige un proveedor de pintura" /><datalist id="dl-cot-provpint">{PROVEEDORES_FICHA.map(p => <option key={p.id || p.nombre} value={p.nombre} />)}</datalist></label>
       </div>
+
+      <details style={{ marginTop: 12, border: '1px solid #DFE4EA', padding: '8px 12px', background: '#FAFBFC' }} open={!!(f.asunto || f.sistemaResumen || f.carta || f.atencion || f.lugarEjecucion || (f.pagos || []).length || f.condiciones || (parseInt(f.rev, 10) || 0) > 0)}>
+        <summary style={{ cursor: 'pointer', fontSize: 12, fontWeight: 700, color: C.carbon, textTransform: 'uppercase' }}>Formato oferta (opcional): atención, sistema, carta, estados de pago, condiciones, revisión</summary>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 8, marginTop: 10 }}>
+          <label style={lab}>Atención (nombre del contacto)<input style={inp} value={f.atencion || ''} onChange={e => set('atencion', e.target.value)} /></label>
+          <label style={lab}>Lugar de ejecución<input style={inp} value={f.lugarEjecucion || ''} onChange={e => set('lugarEjecucion', e.target.value)} placeholder="ej. Planta SEREIN, Lampa" /></label>
+          <label style={{ ...lab, gridColumn: '1 / -1' }}>Asunto (subtítulo bajo el folio)<input style={inp} value={f.asunto || ''} onChange={e => set('asunto', e.target.value)} placeholder="ej. Alternativa sistema Jotun" /></label>
+          <label style={{ ...lab, gridColumn: '1 / -1' }}>Sistema (franja azul: esquema, espesor total, colores)<textarea rows={2} style={{ ...inp, fontFamily: 'inherit', resize: 'vertical' }} value={f.sistemaResumen || ''} onChange={e => set('sistemaResumen', e.target.value)} /></label>
+          <label style={{ ...lab, gridColumn: '1 / -1' }}>Carta / texto introductorio<textarea rows={4} style={{ ...inp, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.4 }} value={f.carta || ''} onChange={e => set('carta', e.target.value)} placeholder="Saludo y explicación breve de la propuesta (opcional)" /></label>
+        </div>
+        <div style={{ fontSize: 11.5, fontWeight: 700, color: C.gris, textTransform: 'uppercase', margin: '12px 0 6px' }}>Estados de pago</div>
+        {(f.pagos || []).map((x, i) => (
+          <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <input style={{ ...inp, width: 120 }} placeholder="Nombre (Anticipo…)" value={x.t || ''} onChange={e => setPago(i, 't', e.target.value)} />
+            <input style={{ ...inp, width: 70, textAlign: 'right' }} placeholder="%" value={x.pct || ''} onChange={e => setPago(i, 'pct', e.target.value)} />
+            <input style={{ ...inp, flex: '1 1 240px' }} placeholder="Hito / condición (ej. Con la Orden de Compra)" value={x.d || ''} onChange={e => setPago(i, 'd', e.target.value)} />
+            <button type="button" onClick={() => delPago(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button>
+          </div>
+        ))}
+        <button type="button" onClick={addPago} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Estado de pago</button>
+        {(f.pagos || []).length > 0 && <span style={{ marginLeft: 10, fontSize: 12, fontWeight: 700, color: Math.abs(sumaPct - 100) < 0.01 ? C.verde : C.rojo }}>Suma: {sumaPct}% {Math.abs(sumaPct - 100) < 0.01 ? '✓' : '— debería sumar 100%'}</span>}
+        <div style={{ fontSize: 11.5, fontWeight: 700, color: C.gris, textTransform: 'uppercase', margin: '14px 0 6px' }}>Condiciones comerciales</div>
+        {!f.condiciones ? (
+          <div style={{ fontSize: 12, color: C.gris }}>Se usan las condiciones estándar de SEREIN. <button type="button" onClick={personalizarCond} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>Personalizar para esta cotización</button></div>
+        ) : (
+          <>
+            {f.condiciones.map((c, i) => (
+              <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: C.gris, width: 18, paddingTop: 7 }}>{i + 1}.</span>
+                <input style={{ ...inp, width: 200 }} placeholder="Título" value={c.t || ''} onChange={e => setCond(i, 't', e.target.value)} />
+                <textarea rows={2} style={{ ...inp, flex: '1 1 300px', fontFamily: 'inherit', resize: 'vertical' }} placeholder="Texto" value={c.x || ''} onChange={e => setCond(i, 'x', e.target.value)} />
+                <button type="button" onClick={() => delCond(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button>
+              </div>
+            ))}
+            <button type="button" onClick={addCond} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Condición</button>
+            <button type="button" onClick={() => window.confirm('¿Volver a las condiciones estándar?') && setF({ ...f, condiciones: null })} style={{ marginLeft: 8, background: 'none', border: '1px solid #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12 }}>Restaurar estándar</button>
+          </>
+        )}
+        <div style={{ fontSize: 11.5, fontWeight: 700, color: C.gris, textTransform: 'uppercase', margin: '14px 0 6px' }}>Revisión</div>
+        <div style={{ fontSize: 12.5 }}>Revisión actual: <b>Rev. {parseInt(f.rev, 10) || 0}</b> {(f.revisiones || []).length > 0 && <span style={{ color: C.gris }}>· {(f.revisiones || []).length} versión(es) anterior(es) guardada(s)</span>}
+          {esEdicion && (f.items || []).length > 0 && <button type="button" onClick={emitirRevision} style={{ marginLeft: 10, background: C.teal, color: '#fff', border: 'none', padding: '5px 12px', cursor: 'pointer', fontSize: 12 }}>Emitir nueva revisión</button>}
+        </div>
+      </details>
 
       <div style={{ fontSize: 12, fontWeight: 600, color: C.gris, textTransform: 'uppercase', margin: '14px 0 6px' }}>Ítems</div>
       <div style={{ overflowX: 'auto' }}>
@@ -588,7 +729,7 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
 
   if (creando || editId) {
     const inicial = editId ? cotizaciones.find(c => c.id === editId) : nuevaCot(maxFolio + 1)
-    return <FormCotizacion inicial={inicial} onGuardar={guardar} onCancelar={() => { setCreando(false); setEditId(null) }} clientes={clientes} onAddCliente={onAddCliente} />
+    return <FormCotizacion esEdicion={!!editId} inicial={inicial} onGuardar={guardar} onCancelar={() => { setCreando(false); setEditId(null) }} clientes={clientes} onAddCliente={onAddCliente} />
   }
 
   if (modo === 'params') return <CotizadorParametros onVolver={() => setModo('rapida')} />
