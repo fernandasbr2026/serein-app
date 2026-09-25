@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { COTIZADOR_SEED, valorM2Capa } from './cotizador-data.js'
 import { THEME } from './ui.jsx'
-import { Plus, Trash2, ChevronLeft } from 'lucide-react'
+import { Plus, Trash2, ChevronLeft, Upload } from 'lucide-react'
+import * as XLSX from 'xlsx'
 
 const LS_KEY = 'cotizador_params_v1'
 function cargar() { try { const s = localStorage.getItem(LS_KEY); if (s) { const o = JSON.parse(s); if (o && o.productos) return o } } catch (e) {} return JSON.parse(JSON.stringify(COTIZADOR_SEED)) }
@@ -35,6 +36,33 @@ export default function CotizadorParametros({ onVolver }) {
   // Al guardar, avisa al cotizador para que reciba los parametros nuevos al instante
   useEffect(() => { try { localStorage.setItem(LS_KEY, JSON.stringify(p)); window.dispatchEvent(new Event('cotizador-params')) } catch (e) {} }, [p])
   const upd = fn => setP(prev => { const n = JSON.parse(JSON.stringify(prev)); fn(n); return n })
+  // Importa rangos de espesor de ficha técnica desde una tabla (Producto, DFT mín µm, DFT máx µm).
+  // Solo completa dmin/dmax de productos que YA están en el catálogo (por nombre); no crea
+  // productos nuevos, porque un producto sin precio en el catálogo cotizaría en $0.
+  const importarRangos = async e => {
+    const fl = e.target.files && e.target.files[0]; e.target.value = ''
+    if (!fl) return
+    try {
+      const wb = XLSX.read(await fl.arrayBuffer(), { type: 'array' })
+      const filas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' })
+      const nn = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ')
+      const nd = s => { const v = parseFloat(String(s).replace(',', '.')); return isNaN(v) ? 0 : v }
+      const datos = filas.map(r => ({ nombre: nn(r[0]), min: nd(r[1]), max: nd(r[2]), orig: String(r[0] || '').trim() })).filter(r => r.nombre && (r.min > 0 || r.max > 0))
+      const sinCoincidencia = []
+      let actualizados = 0
+      upd(n => {
+        datos.forEach(r => {
+          const pr = n.productos.find(x => nn(x.n) === r.nombre)
+          if (!pr) { sinCoincidencia.push(r.orig); return }
+          if (r.min > 0) pr.dmin = r.min
+          if (r.max > 0) pr.dmax = r.max
+          actualizados++
+        })
+      })
+      window.alert('Rangos importados: ' + actualizados + ' producto(s) actualizados.' + (sinCoincidencia.length ? '\n\nNo están en el catálogo (agrégalos primero, con su precio, si quieres cotizarlos):\n- ' + sinCoincidencia.join('\n- ') : ''))
+    } catch (err) { window.alert('No se pudo leer el archivo: ' + ((err && err.message) || err)) }
+  }
+
   const norm = s => (s || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   const prodsFiltrados = () => (p.productos || []).map((pr, i) => ({ pr, i })).filter(({ pr }) => (!mcF || pr.mc === mcF) && (!q || norm(pr.n).includes(norm(q)) || norm(pr.mc).includes(norm(q))))
   const marcas = () => [...new Set((p.productos || []).map(x => x.mc).filter(Boolean))].sort()
@@ -62,7 +90,12 @@ export default function CotizadorParametros({ onVolver }) {
     {sec === 'productos' && (<div style={card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <div style={{ fontWeight: 600, color: T.text }}>Productos ({q || mcF ? prodsFiltrados().length + ' de ' + p.productos.length : p.productos.length})</div>
-        <button style={btnP} onClick={() => upd(n => n.productos.unshift({ n: 'NUEVO PRODUCTO', mc: '', s: 60, l: 0, g: 0, le: 3.785, pe: 0 }))}><Plus size={14} /> Agregar</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <label title="Excel o CSV con 3 columnas: Producto, DFT mín (µm), DFT máx (µm). Solo completa los productos que ya existen en el catálogo." style={{ ...btnP, background: '#fff', color: T.text, border: '1px solid ' + T.border, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}><Upload size={14} /> Importar rangos DFT
+            <input type="file" accept=".xlsx,.xlsm,.xls,.csv" style={{ display: 'none' }} onChange={importarRangos} />
+          </label>
+          <button style={btnP} onClick={() => upd(n => n.productos.unshift({ n: 'NUEVO PRODUCTO', mc: '', s: 60, l: 0, g: 0, le: 3.785, pe: 0 }))}><Plus size={14} /> Agregar</button>
+        </div>
       </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar producto o marca..." style={{ flex: '2 1 240px', padding: '8px 10px', border: '1px solid ' + T.border, borderRadius: 8, fontSize: 13 }} />

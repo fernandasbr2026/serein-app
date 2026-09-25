@@ -474,13 +474,31 @@ function FormCotizacion({ esEdicion = false, inicial, onGuardar, onCancelar, cli
     setF({ ...f, revisiones: [...(revisiones || []), { rev: parseInt(f.rev, 10) || 0, fecha: f.fecha, snapshot: foto }], rev: (parseInt(f.rev, 10) || 0) + 1, fecha: hoy() })
   }
   // Sistema de pintura y cubicación (opcionales)
-  const [cat] = useState(leerCatalogo)
+  const [cat, setCat] = useState(leerCatalogo)
   const setCapa = (i, k, v) => setF(prev => ({ ...prev, capas: (prev.capas || []).map((c, j) => {
     if (j !== i) return c
     const n = { ...c, [k]: v }
     if (k === 'producto') { const pr = buscarProducto(cat.productos, v); if (pr) { if (!numDec(n.s)) n.s = pr.s; if (!numDec(n.dmin) && pr.dmin) n.dmin = pr.dmin; if (!numDec(n.dmax) && pr.dmax) n.dmax = pr.dmax } }
     return n
   }) }))
+  // Guarda el rango de ficha técnica de UNA capa en el catálogo (solo si el producto ya existe
+  // en él — nunca crea productos, que quedarían con precio $0 en el Cotizador).
+  const guardarRangoCatalogo = i => {
+    const c = (f.capas || [])[i] || {}
+    const dmin = numDec(c.dmin), dmax = numDec(c.dmax)
+    if (!String(c.producto || '').trim() || (!dmin && !dmax)) { window.alert('Escribe el producto y al menos un límite de la ficha técnica (mín o máx).'); return }
+    let cat2 = null
+    try { cat2 = JSON.parse(localStorage.getItem('cotizador_params_v1') || 'null') } catch (e) {}
+    if (!cat2 || !cat2.productos) cat2 = JSON.parse(JSON.stringify(COTIZADOR_SEED))
+    const pr = buscarProducto(cat2.productos, c.producto)
+    if (!pr) { window.alert('"' + c.producto + '" no está en el catálogo. Agrégalo en Cotizador → Parámetros → Productos (con su precio) y luego guarda el rango.'); return }
+    if (dmin) pr.dmin = dmin
+    if (dmax) pr.dmax = dmax
+    try { localStorage.setItem('cotizador_params_v1', JSON.stringify(cat2)); window.dispatchEvent(new Event('cotizador-params')) } catch (e) { window.alert('No se pudo guardar en este equipo.'); return }
+    setCat(cat2)
+    pushState()
+    window.alert('Listo: ' + pr.n + ' queda con rango de ficha ' + (pr.dmin || '—') + '–' + (pr.dmax || '—') + ' µm en el catálogo.')
+  }
   const addCapa = () => setF({ ...f, capas: [...(f.capas || []), { producto: '', color: '', s: '', dft: '', dmin: '', dmax: '' }] })
   const delCapa = i => setF({ ...f, capas: (f.capas || []).filter((_, j) => j !== i) })
   const cargarEsquema = nombre => {
@@ -737,6 +755,7 @@ function FormCotizacion({ esEdicion = false, inicial, onGuardar, onCancelar, cli
             <span style={{ fontSize: 11.5, color: C.gris, minWidth: 190 }}>{r.rendL ? 'EPH ≈ ' + r.eph + ' µm · ' + fmtDec(r.rendL, 1) + ' m²/L · ' + fmtDec(r.rendGal, 1) + ' m²/gal' : 'completa sólidos y DFT'}</span>
             {r.rango === false && <span style={{ fontSize: 11.5, fontWeight: 700, color: C.rojo }}>⚠ fuera del rango de la ficha ({r.dmin || '—'}–{r.dmax || '—'} µm)</span>}
             {r.rango === true && <span style={{ fontSize: 11.5, color: C.verde }}>✓ dentro de ficha</span>}
+            {(numDec(c.dmin) > 0 || numDec(c.dmax) > 0) && String(c.producto || '').trim() && (() => { const pr = buscarProducto(cat.productos, c.producto); const igual = pr && numDec(pr.dmin) === numDec(c.dmin) && numDec(pr.dmax) === numDec(c.dmax); return igual ? null : <button type="button" onClick={() => guardarRangoCatalogo(i)} title="Guarda este rango en el catálogo para que se complete solo en próximas cotizaciones" style={{ background: 'none', border: '1px solid #DFE4EA', padding: '3px 8px', cursor: 'pointer', fontSize: 11 }}>Guardar rango en catálogo</button> })()}
             <button type="button" onClick={() => delCapa(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button>
           </div>) })}
         <button type="button" onClick={addCapa} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Capa</button>
