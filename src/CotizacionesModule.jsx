@@ -22,6 +22,10 @@ const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return 
 const numDec = s => { let x = String(s == null ? '' : s).trim().replace(/[^\d.,-]/g, ''); if (x.includes(',')) x = x.replace(/\./g, '').replace(',', '.'); else if (/^-?\d{1,3}(\.\d{3})+$/.test(x)) x = x.replace(/\./g, ''); const v = parseFloat(x); return isNaN(v) ? 0 : v }
 const fmtCant = s => numDec(s).toLocaleString('es-CL', { maximumFractionDigits: 2 })
 const inp = { padding: '9px 11px', border: '1px solid ' + SEREIN.line, borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }
+import { COTIZADOR_SEED } from './cotizador-data.js'
+import { calcCapa, dftTotal, calcCubicacion, milsAMicras, buscarProducto, fmtDec } from './ofertaCalc.js'
+// Catálogo de productos/esquemas (el mismo que edita Cotizador → Parámetros).
+function leerCatalogo() { try { const o = JSON.parse(localStorage.getItem('cotizador_params_v1') || 'null'); if (o && o.productos) return o } catch (e) {} return COTIZADOR_SEED }
 const AREAS = ['Santa Rosa', 'Istria', 'Proyectos']
 const ESTADOS_COT = ['Alta probabilidad de cierre', 'Baja probabilidad de cierre', 'Aprobada', 'Rechazada', 'Otro']
 const colorEstadoCot = e => ({ 'Aprobada': [SEREIN.greenSoft, C.verde], 'Rechazada': [SEREIN.redSoft, C.rojo], 'Alta probabilidad de cierre': [SEREIN.blueSoft, SEREIN.blue], 'Baja probabilidad de cierre': [SEREIN.orangeSoft, SEREIN.orangeDark], 'Otro': [SEREIN.fog2, C.gris] }[e] || [SEREIN.fog2, C.gris])
@@ -182,10 +186,26 @@ function htmlOferta(cot) {
   const logo = (function () { let l = ''; try { l = localStorage.getItem('serein_logo') || '' } catch (e) {} return l ? '<img src="' + l + '"/>' : '<div style="font-size:20px;font-weight:800;color:#061A40;margin-bottom:6px">SEREIN <span style="color:#FF6B00">GROUP</span></div>' })()
   const subLinea = [cot.asunto ? escH(cot.asunto) : '', 'Emitida el ' + fechaCorta(cot.fecha), dv ? 'Válida por ' + dv + ' días' : ''].filter(Boolean).join(' · ')
   const filas = (cot.items || []).map((it, i) => `<tr><td>${i + 1}</td><td>${escH(it.codigo)}</td><td><b>${escH(it.detalle)}</b>${it.descDetallada ? '<br><span style="color:#777">' + escH(it.descDetallada) + '</span>' : ''}${it.comentario ? '<br><span style="color:#777">' + escH(it.comentario) + '</span>' : ''}</td><td class="r">${fmtCant(it.cant)} ${escH(it.unidad || 'UN')}</td><td class="r">${clp(it.pUnitario)}</td><td class="r">${numDec(it.descuento) ? clp(it.descuento) : ''}</td><td class="r"><b>${clp(itemTotal(it))}</b></td></tr>`).join('')
-  const epsHtml = eps.length ? `<div class="sec">Estados de pago propuestos</div>
+  // Cubicación y sistema de pintura (opcionales). Los números salen de
+  // ofertaCalc.js — nunca se tipean a mano en el documento.
+  const precioCub = cot.cubPrecio || ((cot.items || [])[0] || {}).pUnitario
+  const cub = calcCubicacion(cot.cubicacion, precioCub)
+  const it0 = (cot.items || [])[0] || {}
+  const m2Total = cub.m2 || (/m\s*2|m²/i.test(it0.unidad || '') ? numDec(it0.cant) : 0)
+  const capasOk = (cot.capas || []).filter(c => numDec(c.dft) > 0)
+  const capasHtml = capasOk.length ? `<div class="box"><h3 style="text-transform:none">Sistema de pintura · ${dftTotal(capasOk)} µm DFT total</h3>
+      <table class="it"><thead><tr><th>Capa</th><th>Producto</th><th>Color</th><th style="text-align:right">DFT</th><th style="text-align:right">EPH control*</th><th style="text-align:right">Rend. teórico**</th>${m2Total > 0 ? '<th style="text-align:right">Consumo teórico · ' + fmtDec(m2Total, 2) + ' m²</th>' : ''}</tr></thead><tbody>
+      ${capasOk.map((c, i) => { const r = calcCapa(c, m2Total); return `<tr><td>${i + 1}ª</td><td><b>${escH(c.producto)}</b></td><td>${escH(c.color)}</td><td class="r">${r.dft} µm</td><td class="r">${r.eph ? '≈ ' + r.eph + ' µm' : ''}</td><td class="r">${r.rendL ? fmtDec(r.rendL, 1) + ' m²/L · <b>' + fmtDec(r.rendGal, 1) + ' m²/gal</b>' : ''}</td>${m2Total > 0 ? '<td class="r">' + (r.litros ? fmtDec(r.litros, 1) + ' L · ' + fmtDec(r.galones, 1) + ' gal' : '') + '</td>' : ''}</tr>` }).join('')}
+      <tr><td colspan="3"><b>Sistema completo</b></td><td class="r"><b>${dftTotal(capasOk)} µm</b></td><td></td><td></td>${m2Total > 0 ? '<td></td>' : ''}</tr></tbody></table>
+      <div class="nota">* EPH: espesor húmedo de control, según sólidos en volumen. ** Al DFT indicado, según sólidos en volumen de las fichas técnicas del fabricante. Valores teóricos, sin pérdidas de aplicación.${cot.notaTecnica ? ' ' + escH(cot.notaTecnica) : ''}</div></div>` : (cot.notaTecnica ? `<div class="carta">${escH(cot.notaTecnica)}</div>` : '')
+  const cubHtml = cub.rows.some(r => r.m2 > 0) ? `<div class="sec" style="margin-top:14px">Cubicación detallada</div>
+      <table class="it"><thead><tr><th>Elemento</th><th>Dato informado</th><th>Criterio</th><th style="text-align:right">M² a pintar</th><th>Color</th><th style="text-align:right">Subtotal neto</th></tr></thead><tbody>
+      ${cub.rows.map(r => `<tr><td>${escH(r.elemento)}</td><td>${escH(r.dato)}</td><td>${escH(r.criterio)}</td><td class="r">${fmtDec(r.m2, 2)}</td><td>${escH(r.color)}</td><td class="r">${clp(r.subtotal)}</td></tr>`).join('')}
+      <tr><td colspan="3"><b>Total cubicado · precio unitario ${clp(precioCub)}/m²</b></td><td class="r"><b>${fmtDec(cub.m2, 2)}</b></td><td></td><td class="r"><b>${clp(cub.neto)}</b></td></tr></tbody></table>` : ''
+  const epsHtml = eps.length ? `<div style="break-inside:avoid;page-break-inside:avoid"><div class="sec">Estados de pago propuestos</div>
     <div class="bar">${['#FF6B00', '#F79A5C', '#061A40', '#6B7A99'].map(c => '<i style="background:' + c + '"></i>').join('')}</div>
     <div class="eps">${eps.map((x, i) => `<div class="ep"><div class="h"><span>EP ${i + 1}${x.t ? ' · ' + escH(x.t) : ''}</span><b>${x.pct}%</b></div><div class="d">${escH(x.d || '')}</div><div class="m">Neto ${clp(x.neto)}<b>${clp(x.total)} <span style="font-size:9px;font-weight:400;color:#5a6b85">c/IVA</span></b></div></div>`).join('')}</div>
-    <div class="nota">Montos calculados sobre el total de esta cotización. Cada estado de pago se factura al cumplirse su hito.</div>` : ''
+    <div class="nota">Montos calculados sobre el total de esta cotización. Cada estado de pago se factura al cumplirse su hito.</div></div>` : ''
   return `<!doctype html><html><head><meta charset="utf-8"><title>Cotización ${escH(cot.folio)}${rev ? ' Rev. ' + rev : ''}</title><style>${estilosOferta()}</style></head><body>
     <div class="oh">
       <div>${logo}<div class="emp"><b>${escH(EMPRESA.nombre)}</b> · RUT ${escH(EMPRESA.rut)}<br>${escH(EMPRESA.direccion)} · ${escH(EMPRESA.email)} · ${escH(EMPRESA.telefono)}</div></div>
@@ -200,6 +220,7 @@ function htmlOferta(cot) {
       <div><div class="l">Condición de pago</div><div class="v">${escH(cot.condicionPago)}</div></div>
     </div>
     ${cot.carta ? `<div class="carta">${escH(cot.carta)}</div>` : ''}
+    ${capasHtml}${cubHtml}
     <div class="box">
       <h3>Detalle y valorización</h3>
       <table class="it"><thead><tr><th>#</th><th>Código</th><th>Detalle</th><th style="text-align:right">Cant</th><th style="text-align:right">P. unitario</th><th style="text-align:right">Desc.</th><th style="text-align:right">Total</th></tr></thead><tbody>${filas}</tbody></table>
@@ -212,7 +233,7 @@ function htmlOferta(cot) {
     </div>
     ${cot.comentario ? `<div class="nota" style="font-size:10.5px;color:#344054"><b>Comentario:</b> ${escH(cot.comentario)}</div>` : ''}
     ${epsHtml}
-    <div class="pb cond">
+    <div class="${(capasOk.length || cub.rows.some(r => r.m2 > 0)) ? 'cond' : 'pb cond'}" style="margin-top:18px">
       <h2>Condiciones comerciales y operativas — SEREIN</h2>
       <ol>${condicionesDe(cot).map(c => `<li><b>${escH(c.t)}:</b> ${escH(c.x)}</li>`).join('')}</ol>
       <div class="datos">${DATOS_TRANSFERENCIA_HTML}</div>
@@ -406,6 +427,25 @@ function FormCotizacion({ esEdicion = false, inicial, onGuardar, onCancelar, cli
     const { revisiones, ...foto } = f
     setF({ ...f, revisiones: [...(revisiones || []), { rev: parseInt(f.rev, 10) || 0, fecha: f.fecha, snapshot: foto }], rev: (parseInt(f.rev, 10) || 0) + 1, fecha: hoy() })
   }
+  // Sistema de pintura y cubicación (opcionales)
+  const [cat] = useState(leerCatalogo)
+  const setCapa = (i, k, v) => setF(prev => ({ ...prev, capas: (prev.capas || []).map((c, j) => {
+    if (j !== i) return c
+    const n = { ...c, [k]: v }
+    if (k === 'producto') { const pr = buscarProducto(cat.productos, v); if (pr) { if (!numDec(n.s)) n.s = pr.s; if (!numDec(n.dmin) && pr.dmin) n.dmin = pr.dmin; if (!numDec(n.dmax) && pr.dmax) n.dmax = pr.dmax } }
+    return n
+  }) }))
+  const addCapa = () => setF({ ...f, capas: [...(f.capas || []), { producto: '', color: '', s: '', dft: '', dmin: '', dmax: '' }] })
+  const delCapa = i => setF({ ...f, capas: (f.capas || []).filter((_, j) => j !== i) })
+  const cargarEsquema = nombre => {
+    const es = (cat.esquemas || []).find(x => x.n === nombre); if (!es) return
+    setF({ ...f, capas: (es.capas || []).map(c => { const pr = buscarProducto(cat.productos, c.p); return { producto: c.p, color: '', s: pr ? pr.s : '', dft: milsAMicras(c.m), dmin: pr && pr.dmin ? pr.dmin : '', dmax: pr && pr.dmax ? pr.dmax : '' } }) })
+  }
+  const setCub = (i, k, v) => setF({ ...f, cubicacion: (f.cubicacion || []).map((r, j) => j === i ? { ...r, [k]: v } : r) })
+  const addCub = () => setF({ ...f, cubicacion: [...(f.cubicacion || []), { elemento: '', dato: '', criterio: '', m2: '', color: '' }] })
+  const delCub = i => setF({ ...f, cubicacion: (f.cubicacion || []).filter((_, j) => j !== i) })
+  const cubCalc = calcCubicacion(f.cubicacion, f.cubPrecio || (f.items && f.items[0] ? f.items[0].pUnitario : 0))
+  const m2Item0 = numDec(f.items && f.items[0] ? f.items[0].cant : 0)
   const t = totales(f)
   const lab = { fontSize: 11, color: C.gris, display: 'flex', flexDirection: 'column', gap: 3 }
   return (
@@ -486,6 +526,56 @@ function FormCotizacion({ esEdicion = false, inicial, onGuardar, onCancelar, cli
         <div style={{ fontSize: 12.5 }}>Revisión actual: <b>Rev. {parseInt(f.rev, 10) || 0}</b> {(f.revisiones || []).length > 0 && <span style={{ color: C.gris }}>· {(f.revisiones || []).length} versión(es) anterior(es) guardada(s)</span>}
           {esEdicion && (f.items || []).length > 0 && <button type="button" onClick={emitirRevision} style={{ marginLeft: 10, background: C.teal, color: '#fff', border: 'none', padding: '5px 12px', cursor: 'pointer', fontSize: 12 }}>Emitir nueva revisión</button>}
         </div>
+      </details>
+
+      <details style={{ marginTop: 10, border: '1px solid #DFE4EA', padding: '8px 12px', background: '#FAFBFC' }} open={!!((f.capas || []).length || (f.cubicacion || []).length || f.notaTecnica)}>
+        <summary style={{ cursor: 'pointer', fontSize: 12, fontWeight: 700, color: C.carbon, textTransform: 'uppercase' }}>Sistema de pintura y cubicación (opcional): capas con espesores, rendimiento y m² por ítem</summary>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '10px 0 6px' }}>
+          <select style={{ ...inp, maxWidth: 360 }} value="" onChange={e => { if (e.target.value) cargarEsquema(e.target.value) }}>
+            <option value="">Cargar esquema del catálogo…</option>
+            {(cat.esquemas || []).map(es => <option key={es.n} value={es.n}>{es.n}</option>)}
+          </select>
+          <span style={{ fontSize: 11.5, color: C.gris }}>Trae producto, sólidos y espesor (mils → µm); el color y los rangos de ficha los completas tú.</span>
+        </div>
+        <datalist id="dl-cot-prods">{(cat.productos || []).map(pr => <option key={pr.n} value={pr.n} />)}</datalist>
+        {(f.capas || []).map((c, i) => { const r = calcCapa(c, 0); return (
+          <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, color: C.gris, width: 22 }}>{i + 1}ª</span>
+            <input list="dl-cot-prods" style={{ ...inp, width: 200 }} placeholder="Producto" value={c.producto || ''} onChange={e => setCapa(i, 'producto', e.target.value)} />
+            <input style={{ ...inp, width: 100 }} placeholder="Color" value={c.color || ''} onChange={e => setCapa(i, 'color', e.target.value)} />
+            <input style={{ ...inp, width: 64, textAlign: 'right' }} placeholder="Sól. %" title="Sólidos en volumen %" value={c.s || ''} onChange={e => setCapa(i, 's', e.target.value)} />
+            <input style={{ ...inp, width: 70, textAlign: 'right' }} placeholder="DFT µm" value={c.dft || ''} onChange={e => setCapa(i, 'dft', e.target.value)} />
+            <input style={{ ...inp, width: 64, textAlign: 'right' }} placeholder="Fic. mín" title="DFT mínimo de la ficha técnica (µm)" value={c.dmin || ''} onChange={e => setCapa(i, 'dmin', e.target.value)} />
+            <input style={{ ...inp, width: 64, textAlign: 'right' }} placeholder="Fic. máx" title="DFT máximo de la ficha técnica (µm)" value={c.dmax || ''} onChange={e => setCapa(i, 'dmax', e.target.value)} />
+            <span style={{ fontSize: 11.5, color: C.gris, minWidth: 190 }}>{r.rendL ? 'EPH ≈ ' + r.eph + ' µm · ' + fmtDec(r.rendL, 1) + ' m²/L · ' + fmtDec(r.rendGal, 1) + ' m²/gal' : 'completa sólidos y DFT'}</span>
+            {r.rango === false && <span style={{ fontSize: 11.5, fontWeight: 700, color: C.rojo }}>⚠ fuera del rango de la ficha ({r.dmin || '—'}–{r.dmax || '—'} µm)</span>}
+            {r.rango === true && <span style={{ fontSize: 11.5, color: C.verde }}>✓ dentro de ficha</span>}
+            <button type="button" onClick={() => delCapa(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button>
+          </div>) })}
+        <button type="button" onClick={addCapa} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Capa</button>
+        {(f.capas || []).length > 0 && <span style={{ marginLeft: 10, fontSize: 12.5, fontWeight: 700 }}>DFT total: {dftTotal(f.capas)} µm</span>}
+        <label style={{ ...lab, marginTop: 10 }}>Nota técnica (se imprime bajo la tabla de capas)<textarea rows={3} style={{ ...inp, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.4 }} value={f.notaTecnica || ''} onChange={e => set('notaTecnica', e.target.value)} /></label>
+
+        <div style={{ fontSize: 11.5, fontWeight: 700, color: C.gris, textTransform: 'uppercase', margin: '14px 0 6px' }}>Cubicación detallada</div>
+        {(f.cubicacion || []).map((r, i) => (
+          <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input style={{ ...inp, flex: '1 1 220px' }} placeholder="Elemento (ej. Puertas de emergencia, 3 un)" value={r.elemento || ''} onChange={e => setCub(i, 'elemento', e.target.value)} />
+            <input style={{ ...inp, width: 110 }} placeholder="Dato informado" value={r.dato || ''} onChange={e => setCub(i, 'dato', e.target.value)} />
+            <input style={{ ...inp, width: 100 }} placeholder="Criterio" value={r.criterio || ''} onChange={e => setCub(i, 'criterio', e.target.value)} />
+            <input style={{ ...inp, width: 80, textAlign: 'right' }} placeholder="M²" value={r.m2 || ''} onChange={e => setCub(i, 'm2', e.target.value)} />
+            <input style={{ ...inp, width: 90 }} placeholder="Color" value={r.color || ''} onChange={e => setCub(i, 'color', e.target.value)} />
+            <span style={{ fontSize: 12, minWidth: 90, textAlign: 'right' }}>{clp(cubCalc.rows[i] ? cubCalc.rows[i].subtotal : 0)}</span>
+            <button type="button" onClick={() => delCub(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button>
+          </div>
+        ))}
+        <button type="button" onClick={addCub} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Fila de cubicación</button>
+        {(f.cubicacion || []).length > 0 && (
+          <div style={{ marginTop: 8, fontSize: 12.5, display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span>Total: <b>{fmtDec(cubCalc.m2, 2)} m²</b> · neto <b>{clp(cubCalc.neto)}</b> (a {clp(f.cubPrecio || (f.items && f.items[0] ? f.items[0].pUnitario : 0))}/m²)</span>
+            <label style={{ fontSize: 11.5, color: C.gris }}>Precio unitario de la tabla <input style={{ ...inp, width: 90, textAlign: 'right', marginLeft: 4 }} value={f.cubPrecio || ''} onChange={e => set('cubPrecio', e.target.value)} placeholder="ítem 1" /></label>
+            {Math.abs(cubCalc.m2 - m2Item0) > 0.005 && <span style={{ color: C.rojo, fontWeight: 700 }}>⚠ el ítem 1 tiene {fmtDec(m2Item0, 2)} m² y la cubicación suma {fmtDec(cubCalc.m2, 2)} m² <button type="button" onClick={() => setF({ ...f, items: f.items.map((it, j) => j === 0 ? { ...it, cant: String(cubCalc.m2).replace('.', ',') } : it) })} style={{ marginLeft: 6, background: C.teal, color: '#fff', border: 'none', padding: '3px 8px', cursor: 'pointer', fontSize: 11.5 }}>Usar {fmtDec(cubCalc.m2, 2)} m² en el ítem 1</button></span>}
+          </div>
+        )}
       </details>
 
       <div style={{ fontSize: 12, fontWeight: 600, color: C.gris, textTransform: 'uppercase', margin: '14px 0 6px' }}>Ítems</div>
