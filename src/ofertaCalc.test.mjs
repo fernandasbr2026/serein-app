@@ -1,0 +1,24 @@
+// Ejecutar: node src/ofertaCalc.test.mjs
+import assert from 'node:assert/strict'
+import { calcCapa, dftTotal, calcCubicacion, milsAMicras } from './ofertaCalc.js'
+
+// Cotización N° 918 Rev.1 (Jotun): valores del PDF emitido
+const M2 = 502.3
+const c1 = calcCapa({ producto: 'Jotamastic 80', s: 80, dft: 135, dmin: 75, dmax: 200 }, M2)
+const c2 = calcCapa({ producto: 'Jotamastic 80 Aluminio', s: 80, dft: 150, dmin: 75, dmax: 200 }, M2)
+const c3 = calcCapa({ producto: 'Hardtop Flexi', s: 64, dft: 75, dmin: 50, dmax: 150 }, M2)
+
+assert.equal(c1.eph, 170); assert.equal(c2.eph, 190); assert.equal(c3.eph, 120)
+assert.equal(c1.rendL.toFixed(1), '5.9'); assert.equal(c2.rendL.toFixed(1), '5.3'); assert.equal(c3.rendL.toFixed(1), '8.5')
+assert.equal(c1.rendGal.toFixed(1), '22.4'); assert.equal(c2.rendGal.toFixed(1), '20.2'); assert.equal(c3.rendGal.toFixed(1), '32.3')
+assert.equal(c1.litros.toFixed(1), '84.8'); assert.equal(c2.litros.toFixed(1), '94.2'); assert.equal(c3.litros.toFixed(1), '58.9')
+assert.equal(c1.galones.toFixed(1), '22.4'); assert.equal(c2.galones.toFixed(1), '24.9'); assert.equal(c3.galones.toFixed(1), '15.6')
+assert.equal(dftTotal([{ dft: 135 }, { dft: 150 }, { dft: 75 }]), 360)
+assert.equal(c1.rango, true)
+assert.equal(calcCapa({ s: 80, dft: 250, dmin: 75, dmax: 200 }, 0).rango, false)
+assert.equal(calcCapa({ s: 80, dft: 100 }, 0).rango, null)
+assert.equal(milsAMicras(5.3), 135)
+
+const cub = calcCubicacion([{ m2: '22,5' }, { m2: '136' }, { m2: '35,28' }, { m2: '8,52' }, { m2: '300' }], 34467)
+assert.equal(cub.m2.toFixed(2), '502.30')
+console.log('ofertaCalc OK — coincide con la N° 918 (EPH, rendimiento, consumo, DFT total, m²)')

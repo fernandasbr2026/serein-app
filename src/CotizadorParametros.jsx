@@ -74,7 +74,7 @@ export default function CotizadorParametros({ onVolver }) {
           </div>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }}>
-          <thead><tr><th style={th}>Producto</th><th style={th}>Marca</th><th style={th}>Solidos %</th><th style={th}>$/litro</th><th style={th}>$/galon</th><th style={th} title="Litros que trae el envase que se compra: galon 3,785 L / tineta 19 L">L / envase</th><th style={th} title="Precio del envase completo">$ / envase</th><th style={th}></th></tr></thead>
+          <thead><tr><th style={th}>Producto</th><th style={th}>Marca</th><th style={th}>Solidos %</th><th style={th}>$/litro</th><th style={th}>$/galon</th><th style={th} title="Litros que trae el envase que se compra: galon 3,785 L / tineta 19 L">L / envase</th><th style={th} title="Precio del envase completo">$ / envase</th><th style={th} title="Espesor seco mínimo que permite la ficha técnica (µm). Se usa para avisar si una capa cotizada queda fuera de rango.">DFT mín µm</th><th style={th} title="Espesor seco máximo que permite la ficha técnica (µm).">DFT máx µm</th><th style={th}></th></tr></thead>
           <tbody>
             {prodsFiltrados().map(({ pr, i }) => (<tr key={i}>
               <td style={tdc}>{ti(pr.n, v => upd(n => { n.productos[i].n = v }), { minWidth: 150 })}</td>
@@ -84,9 +84,11 @@ export default function CotizadorParametros({ onVolver }) {
               <td style={tdc}>{ni(pr.g, v => upd(n => { n.productos[i].g = v }), { width: 100 })}</td>
               <td style={tdc}>{ni(pr.le, v => upd(n => { n.productos[i].le = v }), { width: 90 })}</td>
               <td style={tdc}>{ni(pr.pe, v => upd(n => { n.productos[i].pe = v }), { width: 110 })}</td>
+              <td style={tdc}>{ni(pr.dmin, v => upd(n => { n.productos[i].dmin = v }), { width: 80 })}</td>
+              <td style={tdc}>{ni(pr.dmax, v => upd(n => { n.productos[i].dmax = v }), { width: 80 })}</td>
               <td style={tdc}><button style={btnDel} onClick={() => upd(n => n.productos.splice(i, 1))}><Trash2 size={15} /></button></td>
             </tr>))}
-            {prodsFiltrados().length === 0 && <tr><td colSpan={8} style={{ padding: 16, textAlign: 'center', color: T.textMute, fontSize: 13 }}>Sin productos que coincidan con la busqueda.</td></tr>}
+            {prodsFiltrados().length === 0 && <tr><td colSpan={10} style={{ padding: 16, textAlign: 'center', color: T.textMute, fontSize: 13 }}>Sin productos que coincidan con la busqueda.</td></tr>}
           </tbody>
         </table>
         <div style={{ fontSize: 11.5, color: T.textMute, marginTop: 8 }}>La pintura se compra por envase cerrado. <b>L / envase</b> es lo que trae el envase (galon 3,785 L, tineta 19 L) y <b>$ / envase</b> lo que cuesta completo. Si quedan vacios, se asume un galon al precio de la columna $/galon.</div>
