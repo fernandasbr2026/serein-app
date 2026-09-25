@@ -22,3 +22,19 @@ assert.equal(milsAMicras(5.3), 135)
 const cub = calcCubicacion([{ m2: '22,5' }, { m2: '136' }, { m2: '35,28' }, { m2: '8,52' }, { m2: '300' }], 34467)
 assert.equal(cub.m2.toFixed(2), '502.30')
 console.log('ofertaCalc OK — coincide con la N° 918 (EPH, rendimiento, consumo, DFT total, m²)')
+
+// ---- Lectura con IA: criterios y verificación de cifras ----
+import { m2DeFila, criterioPorDefecto, cifrasNoRespaldadas } from './ofertaCalc.js'
+assert.equal(m2DeFila({ cantidad: 11.25, unidad: 'm2' }, '2caras'), 22.5)
+assert.equal(m2DeFila({ cantidad: 750, unidad: 'ml' }, 'perfil'), 300)
+assert.equal(m2DeFila({ cantidad: 45, unidad: 'ml' }, 'tubo'), 8.55)
+assert.equal(m2DeFila({ m2Informado: 12.5 }, 'informado'), 12.5)
+assert.equal(m2DeFila({ cantidad: 10 }, 'manual', '1,5'), 15)
+assert.equal(criterioPorDefecto({ unidad: 'ml' }), 'perfil')
+assert.equal(criterioPorDefecto({ m2Informado: 3 }), 'informado')
+assert.equal(criterioPorDefecto({ unidad: 'm2', cantidad: 11.25, m2Informado: 11.25 }), '1cara')
+assert.equal(criterioPorDefecto({ unidad: 'm2', cantidad: 11.25, m2Informado: 22.5 }), 'informado')
+const datos = { m2Total: 502.3, dftTotalUm: 360, capas: [{ dft: 135 }] }
+assert.deepEqual(cifrasNoRespaldadas('Cubicamos 502,30 m² con 360 µm en 3 manos.', datos), [])
+assert.deepEqual(cifrasNoRespaldadas('Garantía de 24 meses y 1.500 m² adicionales, 360 µm.', datos), ['1.500'])
+console.log('lectura IA: criterios y verificación de cifras OK')

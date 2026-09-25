@@ -48,3 +48,45 @@ export function calcCubicacion(filas, precioUnitario) {
 }
 
 export const fmtDec = (n, d = 1) => (Number(n) || 0).toLocaleString('es-CL', { minimumFractionDigits: d, maximumFractionDigits: d })
+
+// ---- Apoyo a la lectura con IA (la IA transcribe; el cálculo lo hace esto) ----
+// Criterios de superficie que elige la PERSONA por fila. La IA nunca
+// calcula m² a pintar.
+export const CRITERIOS_M2 = [
+  { id: '1cara', label: '1 cara (×1)', f: 1, texto: '1 cara' },
+  { id: '2caras', label: '2 caras (×2)', f: 2, texto: '2 caras' },
+  { id: 'perfil', label: 'Perfil 0,40 m²/ml', f: 0.4, texto: '0,40 m²/ml' },
+  { id: 'tubo', label: 'Tubular Ø2" 0,19 m²/ml', f: 0.19, texto: '0,19 m²/ml' },
+  { id: 'informado', label: 'Usar m² informado', f: null, texto: 'm² informado' },
+  { id: 'manual', label: 'Factor manual', f: null, texto: 'factor manual' },
+]
+export function criterioPorDefecto(fila) {
+  // Una superficie informada en m² casi siempre es UNA cara: se propone
+  // "1 cara" para que la persona decida si son 2. 'informado' solo cuando
+  // el documento trae un m² distinto de la cantidad (columna propia).
+  if (fila && fila.unidad === 'm2') return (fila.m2Informado != null && fila.cantidad != null && Math.abs(fila.m2Informado - fila.cantidad) > 0.005) ? 'informado' : '1cara'
+  if (fila && fila.m2Informado != null) return 'informado'
+  if (fila && fila.unidad === 'ml') return 'perfil'
+  return 'manual'
+}
+// m² sugeridos de una fila leída: cantidad × factor (o el m² informado).
+export function m2DeFila(fila, criterioId, factorManual) {
+  if (criterioId === 'informado') return nd(fila && fila.m2Informado)
+  const cr = CRITERIOS_M2.find(c => c.id === criterioId)
+  const f = cr && cr.f != null ? cr.f : nd(factorManual)
+  return Math.round(nd(fila && fila.cantidad) * f * 100) / 100
+}
+// Cifras del texto redactado que NO están en los datos de la cotización
+// (para avisar antes de aplicar). Se ignoran enteros de 1-2 dígitos.
+export function cifrasNoRespaldadas(texto, datos) {
+  const val = t => { const l = t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : (/^\d{1,3}(\.\d{3})+$/.test(t) ? t.replace(/\./g, '') : t); return parseFloat(l) }
+  const tokens = s => (String(s || '').match(/\d[\d.,]*\d|\d/g) || [])
+  const permitidos = tokens(JSON.stringify(datos)).map(val).filter(n => !isNaN(n))
+  const malas = []
+  tokens(texto).forEach(t => {
+    const n = val(t)
+    if (isNaN(n) || (Number.isInteger(n) && n < 100)) return
+    if (!permitidos.some(p => Math.abs(p - n) < 0.006)) malas.push(t)
+  })
+  return [...new Set(malas)]
+}
