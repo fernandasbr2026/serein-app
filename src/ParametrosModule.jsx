@@ -11,6 +11,7 @@ import { supabase } from './supabase.js'
 // ============================================================
 
 import { SEREIN } from './theme-serein.js'
+import { CONDICIONES_DEF } from './cotizacionDefaults.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
 const C = { naranja: SEREIN.orange, carbon: SEREIN.text, verde: SEREIN.green, rojo: SEREIN.red, gris: SEREIN.textFaint, azul: SEREIN.ink }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
@@ -391,6 +392,37 @@ function SeccionInstrumentos({ params, setParams }) {
 </div>
 </div>) }
 
+// Condiciones comerciales estándar de las cotizaciones (se usan cuando la
+// cotización no trae las suyas). Lista local + guardado 700 ms después de la
+// última tecla, para no traer/subir la nube en cada letra.
+function CondicionesCotizacion({ params, setTop }) {
+  const [lista, setLista] = useState(() => Array.isArray(params.condicionesCotizacion) && params.condicionesCotizacion.length ? params.condicionesCotizacion : null)
+  const timer = useRef(null)
+  const guardar = nueva => { setLista(nueva); clearTimeout(timer.current); timer.current = setTimeout(() => setTop('condicionesCotizacion', nueva || []), 700) }
+  const ip = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
+  return (
+    <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #DFE4EA' }}>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase', marginBottom: 4 }}>Condiciones comerciales de las cotizaciones</div>
+      <div style={{ fontSize: 12, color: '#5A636E', marginBottom: 8 }}>Se imprimen en toda cotización que no tenga condiciones propias. Cada cotización puede personalizarlas desde su formulario.</div>
+      {!lista ? (
+        <button onClick={() => guardar(CONDICIONES_DEF.map(c => ({ ...c })))} style={{ background: '#101315', color: '#fff', border: 'none', fontSize: 12, fontWeight: 600, padding: '8px 14px', borderRadius: 6, cursor: 'pointer' }}>Editar las condiciones estándar</button>
+      ) : (
+        <>
+          {lista.map((c, i) => (
+            <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, color: '#9AA3AD', width: 20, paddingTop: 8 }}>{i + 1}.</span>
+              <input style={{ ...ip, width: 220 }} placeholder="Título" value={c.t || ''} onChange={e => guardar(lista.map((x, j) => j === i ? { ...x, t: e.target.value } : x))} />
+              <textarea rows={2} style={{ ...ip, flex: '1 1 320px', fontFamily: 'inherit', resize: 'vertical' }} placeholder="Texto" value={c.x || ''} onChange={e => guardar(lista.map((x, j) => j === i ? { ...x, x: e.target.value } : x))} />
+              <button onClick={() => guardar(lista.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#C5453D', fontSize: 16 }}>×</button>
+            </div>
+          ))}
+          <button onClick={() => guardar([...lista, { t: '', x: '' }])} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '6px 12px', cursor: 'pointer', fontSize: 12, color: '#5A636E' }}>+ Condición</button>
+          <button onClick={() => window.confirm('¿Volver a las condiciones de fábrica?') && guardar(null)} style={{ marginLeft: 8, background: 'none', border: '1px solid #DFE4EA', padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}>Restaurar condiciones de fábrica</button>
+        </>
+      )}
+    </div>
+  )
+}
 function SeccionEmpresa({ params, setParams }) {
   const emp = params.empresa || {}
   const pendEmp = useRef({})
@@ -417,7 +449,7 @@ function SeccionEmpresa({ params, setParams }) {
   }
   const ip = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box', width: '100%', marginTop: 4 }
   const lb = { fontSize: 12, color: '#9AA3AD' }
-  const campos = [['razonSocial', 'Razón social'], ['rut', 'RUT'], ['giro', 'Giro'], ['direccion', 'Dirección'], ['comuna', 'Comuna / Ciudad'], ['telefono', 'Teléfono'], ['correo', 'Correo'], ['web', 'Sitio web']]
+  const campos = [['razonSocial', 'Razón social'], ['rut', 'RUT'], ['giro', 'Giro'], ['direccion', 'Dirección'], ['comuna', 'Comuna / Ciudad'], ['telefono', 'Teléfono'], ['correo', 'Correo'], ['web', 'Sitio web'], ['banco', 'Banco (datos de transferencia)'], ['cuentaCorriente', 'N° cuenta corriente']]
   return (
     <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
       <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Datos de la empresa</div>
@@ -425,6 +457,7 @@ function SeccionEmpresa({ params, setParams }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px,1fr))', gap: 12 }}>
         {campos.map(c => (<label key={c[0]} style={lb}>{c[1]}<input style={ip} value={emp[c[0]] || ''} onChange={e => set(c[0], e.target.value)} /></label>))}
       </div>
+      <CondicionesCotizacion params={params} setTop={setTop} />
       <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #DFE4EA' }}>
         <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase', marginBottom: 4 }}>Logo de la empresa</div>
         <div style={{ fontSize: 12, color: '#5A636E', marginBottom: 8 }}>Se usa en los PDF (cotizaciones, OC, protocolos). Tambien se puede administrar en la pestana Instrumentos.</div>

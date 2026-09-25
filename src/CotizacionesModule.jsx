@@ -37,10 +37,10 @@ const colorEstadoCot = e => ({ 'Aprobada': [SEREIN.greenSoft, C.verde], 'Rechaza
 // nunca el celular personal de nadie del equipo. Se puede sobrescribir
 // desde Parametros -> Datos empresa; esto es solo el respaldo si no se ha
 // configurado.
-const _EMP_DEF = { nombre: 'SERVICIOS REVESTIMIENTOS INDUSTRIALES SPA', rut: '76.860.656-0', giro: 'Revestimientos Industriales y habitacionales', direccion: 'Santa Rosa 70, RENCA', telefono: '56945917843', email: 'administracion@sereinspa.com' }
+const _EMP_DEF = { banco: BANCO_DEF.banco, cuenta: BANCO_DEF.cuentaCorriente, nombre: 'SERVICIOS REVESTIMIENTOS INDUSTRIALES SPA', rut: '76.860.656-0', giro: 'Revestimientos Industriales y habitacionales', direccion: 'Santa Rosa 70, Lampa', telefono: '56945917843', email: 'administracion@sereinspa.com' }
 function _empVal(k, map) { try { const p = JSON.parse(localStorage.getItem('serein_params') || '{}'); const e = (p && p.empresa) || {}; const v = e[map]; return (v && String(v).trim()) || _EMP_DEF[k] || '' } catch (x) { return _EMP_DEF[k] || '' } }
 export const EMPRESA = {}
-;[['nombre', 'razonSocial'], ['rut', 'rut'], ['giro', 'giro'], ['direccion', 'direccion'], ['telefono', 'telefono'], ['email', 'correo']].forEach(m => Object.defineProperty(EMPRESA, m[0], { get() { return _empVal(m[0], m[1]) }, enumerable: true }))
+;[['nombre', 'razonSocial'], ['rut', 'rut'], ['giro', 'giro'], ['direccion', 'direccion'], ['telefono', 'telefono'], ['email', 'correo'], ['banco', 'banco'], ['cuenta', 'cuentaCorriente']].forEach(m => Object.defineProperty(EMPRESA, m[0], { get() { return _empVal(m[0], m[1]) }, enumerable: true }))
 
 const itemTotal = it => Math.max(0, Math.round((numDec(it.cant) * num(it.pUnitario)) - num(it.descuento)))
 export function totales(cot) {
@@ -89,33 +89,24 @@ function estilosDoc() { return '@page{size:A4;margin:18mm 14mm 14mm}body{font-fa
 // Condiciones comerciales por defecto (las mismas 10 de siempre). Una
 // cotización puede traer su propia lista en cot.condiciones ([{t, x}]); si
 // no la trae, se usan estas — así las cotizaciones antiguas se ven igual.
-export const CONDICIONES_DEF = [
-  { t: 'Alcance y horario de ejecución', x: 'los valores corresponden a trabajos realizados en horario normal y días hábiles.' },
-  { t: 'Trabajos fuera de horario regular', x: 'se aplicará recargo por horas extraordinarias y disponibilidad, informado previamente.' },
-  { t: 'Condición del material recepcionado', x: 'valores válidos para material nuevo y libre de contaminantes (aceites, grasas, lacas, etc.). Si no cumple, se debe informar para revalorizar.' },
-  { t: 'Superficie mínima a cobrar', x: 'piezas menores a 1 m² se valorizan como 1 m². Esquemas de pintura: cobro mínimo 18 m² (por compra mínima de pintura).' },
-  { t: 'Piezas especiales y complejidad', x: 'elementos no estándar se valorizan según complejidad (peso/masa, geometría, dimensiones, manipulación, puntos de izaje, protección o preparación adicional).' },
-  { t: 'Cálculo de cubicación', x: 'Parrillas estándar: A×B×2 + 30%. Parrillas especiales: desarrollo + 40%. Barandas: A×B + 40%. Enrejados/cerchas/reticulado: desarrollo + 30%. Cañerías hasta 3": +15%.' },
-  { t: 'Exclusiones del servicio', x: 'no se consideran trabajos adicionales como mecánicos, enmasillados, silicona, tapas, etiquetado, u otros no mencionados en la cotización.' },
-  { t: 'Plazo de retiro y bodegaje', x: 'el material puede permanecer en planta máx. 7 días terminado el proceso. Luego: bodegaje 2 UF/día.' },
-  { t: 'Entrega y condiciones de carga', x: 'SEREIN entrega el material puesto sobre camión. Capacidad grúa: 7 toneladas (sobre eso, corre por cuenta del cliente).' },
-  { t: 'Responsabilidad del cliente para carguío', x: 'el cliente debe contar con eslingas, maderas, cartón y elementos para carguío. Si se requiere embalaje, tiene costo adicional y debe solicitarse con 48 hrs de anticipación.' },
-  { t: 'Orden de Compra (OC)', x: 'es obligatorio el envío de la OC para iniciar producción.' },
-]
+import { CONDICIONES_DEF, BANCO_DEF } from './cotizacionDefaults.js'
 const escH = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-const condicionesDe = cot => (Array.isArray(cot && cot.condiciones) && cot.condiciones.length) ? cot.condiciones : CONDICIONES_DEF
-const DATOS_TRANSFERENCIA_HTML = `<b>Datos de transferencia</b><br>
-      SERVICIOS REVESTIMIENTOS INDUSTRIALES SpA · RUT 76.860.656-0<br>
-      Banco de Chile · Cuenta Corriente N° 532147409<br>
-      administracion@sereinspa.com<br>
-      Dirección: Santa Rosa 70, Lampa · sereingroup.cl`
+// Orden de prioridad: condiciones propias de la cotización → las estándar
+// configuradas en Parámetros → las de fábrica (CONDICIONES_DEF).
+const condicionesEstandar = () => { try { const p = JSON.parse(localStorage.getItem('serein_params') || '{}'); if (Array.isArray(p.condicionesCotizacion) && p.condicionesCotizacion.length) return p.condicionesCotizacion } catch (e) {} return CONDICIONES_DEF }
+const condicionesDe = cot => (Array.isArray(cot && cot.condiciones) && cot.condiciones.length) ? cot.condiciones : condicionesEstandar()
+const datosTransferenciaHtml = () => `<b>Datos de transferencia</b><br>
+      SERVICIOS REVESTIMIENTOS INDUSTRIALES SpA · RUT ${escH(EMPRESA.rut)}<br>
+      ${escH(EMPRESA.banco)} · Cuenta Corriente N° ${escH(EMPRESA.cuenta)}<br>
+      ${escH(EMPRESA.email)}<br>
+      Dirección: ${escH(EMPRESA.direccion)} · sereingroup.cl`
 function htmlCondiciones(cot) {
   return `<div class="pb cond">
     <h2>Condiciones comerciales y operativas — SEREIN</h2>
     <ol>
       ${condicionesDe(cot).map(c => `<li><b>${escH(c.t)}:</b> ${escH(c.x)}</li>`).join('\n      ')}
     </ol>
-    <div class="datos">${DATOS_TRANSFERENCIA_HTML}</div>
+    <div class="datos">${datosTransferenciaHtml()}</div>
   </div>`
 }
 function htmlDoc(cot, { conValores, esOT, conCondiciones }) {
@@ -238,7 +229,8 @@ function htmlOferta(cot) {
     <div class="${(capasOk.length || cub.rows.some(r => r.m2 > 0)) ? 'cond' : 'pb cond'}" style="margin-top:18px">
       <h2>Condiciones comerciales y operativas — SEREIN</h2>
       <ol>${condicionesDe(cot).map(c => `<li><b>${escH(c.t)}:</b> ${escH(c.x)}</li>`).join('')}</ol>
-      <div class="datos">${DATOS_TRANSFERENCIA_HTML}</div>
+      <div class="datos">${datosTransferenciaHtml()}</div>
+      ${cot.anexosMuestra ? '<div class="nota">Anexos: A · Protocolo de preparación de superficie (muestra) · B · Protocolo de pintura RC-PG-6 (muestra)</div>' : ''}
       <div class="next"><b>¿Siguiente paso?</b> Con su Orden de Compra activamos la programación de su trabajo. Coordinamos con gusto una visita a nuestras instalaciones para que su equipo conozca el proceso.</div>
       <div class="firma"><b>SEREIN Group</b>${escH(cot.vendedor || 'Gerencia Comercial')}</div>
       <div class="foot"><div class="n">Compromiso con la calidad · Seguridad en cada proceso · Excelencia en resultados</div><div class="w">www.sereingroup.cl</div></div>
@@ -252,7 +244,59 @@ function imprimir(html) {
   w.document.close()
   setTimeout(() => { w.focus(); w.print() }, 400)
 }
-export function descargarCotizacionPDF(cot) { imprimir(htmlOferta(cot)) }
+// ---- Anexos de protocolos de muestra (A: PIG, B: PGP) ----
+// Se generan con los mismos generadores de protocolos de las OT (OTModule),
+// en blanco y con el esquema de esta cotización, y se unen al final del PDF.
+// OTModule ya importa este archivo, así que se carga en el momento de usar
+// (import dinámico) para no crear un ciclo de módulos.
+const milsTxt = um => fmtDec(numDec(um) / 25.4, 1).replace(',', '.') + ' Mils'
+function protocolosMuestra(cot, OT) {
+  let instr = null
+  try { instr = (JSON.parse(localStorage.getItem('serein_params') || '{}') || {}).instrumentos || null } catch (e) {}
+  const capas = (cot.capas || []).filter(x => numDec(x.dft) > 0)
+  const esquema = cot.sistemaResumen || capas.map(x => (x.producto || '') + (x.color ? ' ' + x.color : '') + ' ' + numDec(x.dft) + ' µm').join(' + ') + (capas.length ? ' · ' + dftTotal(capas) + ' µm DFT' : '')
+  const ot = { numero: '', area: '', oc: '', nv: '', cliente: '', esquema: '' }
+  const base = (tipo) => { const p = OT.nuevoProtocolo(tipo, ot, 'XXX', instr); p.fecha = ''; p.pgpCodigo = 'PGP XXX-2026'; p.esquemaProyecto = esquema; if (p.amb) p.amb.fecha = ''; return p }
+  const pig = base('PIG')
+  const pgp = base('PGP')
+  if (capas.length) pgp.capas = capas.map((x, i) => ({ id: 'mu' + i, nombre: (['Primera', 'Segunda', 'Tercera', 'Cuarta', 'Quinta', 'Sexta'][i] || (i + 1) + 'ª') + ' capa', producto: (x.producto || '') + (x.color && !(x.producto || '').toLowerCase().includes(String(x.color).toLowerCase()) ? ' ' + x.color : ''), solicitado: milsTxt(x.dft), amb: { fecha: '', humedad: '', tAmbiente: '', tPieza: '', ptoRocio: '', horaInicio: '' }, filas: [0, 1, 2, 3, 4].map(() => ['', '', '', '', '', '', '']), fotos: [] }))
+  return [
+    { html: OT.htmlDeProtocolo(pig, instr), titulo: 'ANEXO A · Protocolo de preparación de superficie (muestra)' },
+    { html: OT.htmlDeProtocolo(pgp, instr), titulo: 'ANEXO B · Protocolo de pintura RC-PG-6 (muestra)' },
+  ]
+}
+// Une el documento principal con los anexos: los estilos de cada protocolo
+// se conservan (sin su @page, para no cambiar los márgenes del principal) y
+// cada anexo arranca en página nueva con un rótulo de identificación.
+function unirConAnexos(htmlPrincipal, anexos, folio) {
+  const estilos = [], cuerpos = []
+  anexos.forEach(a => {
+    const st = (a.html.match(/<style>([\s\S]*?)<\/style>/) || [])[1] || ''
+    estilos.push(st.replace(/@page\{[^}]*\}/g, ''))
+    let body = (a.html.match(/<body>([\s\S]*)<\/body>/) || [])[1] || ''
+    const rotulo = '<div style="font:700 10px Arial;color:#5a6b85;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Cotización N° ' + escH(folio) + ' · ' + escH(a.titulo) + '</div>'
+    body = body.replace('<div class="page">', '<div class="page">' + rotulo)
+    cuerpos.push('<div style="page-break-before:always">' + body + '</div>')
+  })
+  return htmlPrincipal.replace('</style>', '</style><style>' + estilos.join('\n') + '</style>').replace('</body>', cuerpos.join('') + '</body>')
+}
+// Documento completo de la cotización (con anexos si corresponde).
+export async function htmlCotizacionCompleta(cot) {
+  const principal = htmlOferta(cot)
+  if (!cot.anexosMuestra) return principal
+  const OT = await import('./OTModule.jsx')
+  return unirConAnexos(principal, protocolosMuestra(cot, OT), cot.folio)
+}
+export function descargarCotizacionPDF(cot) {
+  if (!cot.anexosMuestra) { imprimir(htmlOferta(cot)); return }
+  const w = window.open('', '_blank')
+  if (!w) { window.alert('Habilita las ventanas emergentes para descargar el documento.'); return }
+  w.document.write('<p style="font-family:Arial;padding:24px">Preparando cotización con anexos…</p>')
+  htmlCotizacionCompleta(cot).catch(e => { console.error('anexos de muestra:', e); return htmlOferta(cot) }).then(html => {
+    w.document.open(); w.document.write(html); w.document.close()
+    setTimeout(() => { w.focus(); w.print() }, 500)
+  })
+}
 export function descargarOTPDF(cot) { imprimir(htmlDoc(cot, { conValores: false, esOT: true })) }
 // ---- Informe de compra de pintura (envases completos) ----
 export function descargarInformePintura(cot) {
@@ -417,7 +461,7 @@ function FormCotizacion({ esEdicion = false, inicial, onGuardar, onCancelar, cli
   const addPago = () => setF({ ...f, pagos: [...(f.pagos || []), { t: '', pct: '', d: '' }] })
   const delPago = i => setF({ ...f, pagos: (f.pagos || []).filter((_, j) => j !== i) })
   const sumaPct = (f.pagos || []).reduce((a, x) => a + numDec(x.pct), 0)
-  const personalizarCond = () => setF({ ...f, condiciones: CONDICIONES_DEF.map(c => ({ ...c })) })
+  const personalizarCond = () => setF({ ...f, condiciones: condicionesEstandar().map(c => ({ ...c })) })
   const setCond = (i, k, v) => setF({ ...f, condiciones: f.condiciones.map((x, j) => j === i ? { ...x, [k]: v } : x) })
   const addCond = () => setF({ ...f, condiciones: [...f.condiciones, { t: '', x: '' }] })
   const delCond = i => setF({ ...f, condiciones: f.condiciones.filter((_, j) => j !== i) })
@@ -664,6 +708,7 @@ function FormCotizacion({ esEdicion = false, inicial, onGuardar, onCancelar, cli
             <button type="button" onClick={() => window.confirm('¿Volver a las condiciones estándar?') && setF({ ...f, condiciones: null })} style={{ marginLeft: 8, background: 'none', border: '1px solid #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12 }}>Restaurar estándar</button>
           </>
         )}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, margin: '14px 0 0' }}><input type="checkbox" checked={!!f.anexosMuestra} onChange={e => set('anexosMuestra', e.target.checked)} /> Incluir al final los protocolos de muestra (Anexo A: PIG · Anexo B: PGP con el esquema de esta cotización)</label>
         <div style={{ fontSize: 11.5, fontWeight: 700, color: C.gris, textTransform: 'uppercase', margin: '14px 0 6px' }}>Revisión</div>
         <div style={{ fontSize: 12.5 }}>Revisión actual: <b>Rev. {parseInt(f.rev, 10) || 0}</b> {(f.revisiones || []).length > 0 && <span style={{ color: C.gris }}>· {(f.revisiones || []).length} versión(es) anterior(es) guardada(s)</span>}
           {esEdicion && (f.items || []).length > 0 && <button type="button" onClick={emitirRevision} style={{ marginLeft: 10, background: C.teal, color: '#fff', border: 'none', padding: '5px 12px', cursor: 'pointer', fontSize: 12 }}>Emitir nueva revisión</button>}
