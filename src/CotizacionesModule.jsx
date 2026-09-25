@@ -23,7 +23,9 @@ const numDec = s => { let x = String(s == null ? '' : s).trim().replace(/[^\d.,-
 const fmtCant = s => numDec(s).toLocaleString('es-CL', { maximumFractionDigits: 2 })
 const inp = { padding: '9px 11px', border: '1px solid ' + SEREIN.line, borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }
 import { COTIZADOR_SEED } from './cotizador-data.js'
-import { calcCapa, dftTotal, calcCubicacion, milsAMicras, buscarProducto, fmtDec } from './ofertaCalc.js'
+import { calcCapa, dftTotal, calcCubicacion, milsAMicras, buscarProducto, fmtDec, CRITERIOS_M2, criterioPorDefecto, m2DeFila, cifrasNoRespaldadas } from './ofertaCalc.js'
+import { supabase } from './supabase.js'
+import { fileToBase64 } from './protocolo-pdf.js'
 // Catálogo de productos/esquemas (el mismo que edita Cotizador → Parámetros).
 function leerCatalogo() { try { const o = JSON.parse(localStorage.getItem('cotizador_params_v1') || 'null'); if (o && o.productos) return o } catch (e) {} return COTIZADOR_SEED }
 const AREAS = ['Santa Rosa', 'Istria', 'Proyectos']
@@ -446,6 +448,81 @@ function FormCotizacion({ esEdicion = false, inicial, onGuardar, onCancelar, cli
   const delCub = i => setF({ ...f, cubicacion: (f.cubicacion || []).filter((_, j) => j !== i) })
   const cubCalc = calcCubicacion(f.cubicacion, f.cubPrecio || (f.items && f.items[0] ? f.items[0].pUnitario : 0))
   const m2Item0 = numDec(f.items && f.items[0] ? f.items[0].cant : 0)
+  // ---- Asistente IA ----
+  // La IA solo LEE (extraer-cubicacion) y REDACTA (redactar-oferta); nunca
+  // guarda nada por su cuenta. Los m² los calcula el navegador con el
+  // criterio que elige la persona por fila, y todo pasa por un panel de
+  // revisión antes de aplicarse.
+  const [lectura, setLectura] = useState(null)
+  const [redaccion, setRedaccion] = useState(null)
+  const [instrucciones, setInstrucciones] = useState('')
+  const esExcel = fl => /\.(xlsx|xlsm|xls|csv)$/i.test(fl.name || '')
+  const leerCubicacion = async e => {
+    const fls = [...(e.target.files || [])]
+    e.target.value = ''
+    if (!fls.length) return
+    setLectura({ cargando: true })
+    try {
+      const archivos = [], textos = []
+      for (const fl of fls) {
+        if (esExcel(fl)) {
+          const wb = XLSX.read(await fl.arrayBuffer(), { type: 'array' })
+          wb.SheetNames.forEach(n => { const csv = XLSX.utils.sheet_to_csv(wb.Sheets[n], { FS: ';', blankrows: false }); if (csv.trim()) textos.push('### Hoja: ' + n + '\n' + csv) })
+        } else archivos.push({ base64: await fileToBase64(fl), mimeType: fl.type || 'application/pdf', filename: fl.name })
+      }
+      const { data, error } = await supabase.functions.invoke('extraer-cubicacion', { body: { archivos, texto: textos.join('\n\n'), filename: fls[0].name } })
+      if (error) throw error
+      if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo leer el documento.')
+      const d = data.datos || {}
+      setLectura({ datos: d, filas: (d.filas || []).map(fi => { const cr = criterioPorDefecto(fi); return { ...fi, aplicar: true, criterio: cr, factor: '', m2: String(m2DeFila(fi, cr, '')).replace('.', ',') } }) })
+    } catch (err) { setLectura({ error: (err && err.message) || String(err) }) }
+  }
+  const setFilaLectura = (i, cambios) => setLectura(l => ({ ...l, filas: l.filas.map((fi, j) => {
+    if (j !== i) return fi
+    const n = { ...fi, ...cambios }
+    if ('criterio' in cambios || 'factor' in cambios) n.m2 = String(m2DeFila(n, n.criterio, n.factor)).replace('.', ',')
+    return n
+  }) }))
+  const aplicarLectura = () => {
+    const d = lectura.datos || {}
+    const nuevas = lectura.filas.filter(x => x.aplicar).map(x => ({ elemento: x.elemento, dato: x.dato, criterio: (CRITERIOS_M2.find(c => c.id === x.criterio) || {}).texto || '', m2: x.m2, color: '' }))
+    setF(prev => ({
+      ...prev,
+      cubicacion: [...(prev.cubicacion || []), ...nuevas],
+      atencion: prev.atencion || d.contacto || '',
+      lugarEjecucion: prev.lugarEjecucion || d.lugarEjecucion || '',
+      requerimiento: [d.esquemaSolicitado ? 'Esquema solicitado por el cliente: ' + d.esquemaSolicitado : '', d.observaciones ? 'Observaciones: ' + d.observaciones : ''].filter(Boolean).join('\n') || prev.requerimiento || '',
+    }))
+    setLectura(null)
+  }
+  const datosParaRedactar = () => {
+    const capasOk = (f.capas || []).filter(c => numDec(c.dft) > 0)
+    const cubR = calcCubicacion(f.cubicacion, f.cubPrecio || (f.items && f.items[0] ? f.items[0].pUnitario : 0))
+    const it0 = (f.items || [])[0] || {}
+    const m2Total = cubR.m2 || (/m\s*2|m²/i.test(it0.unidad || '') ? numDec(it0.cant) : 0)
+    return {
+      cliente: f.cliente || null, atencion: f.atencion || null, lugarEjecucion: f.lugarEjecucion || null, condicionPago: f.condicionPago || null,
+      servicio: it0.detalle || null, m2Total: m2Total || null, dftTotalUm: capasOk.length ? dftTotal(capasOk) : null,
+      capas: capasOk.map(c => { const r = calcCapa(c, 0); return { producto: c.producto || null, color: c.color || null, dftUm: r.dft, solidosVolPct: numDec(c.s) || null, rangoFichaTecnica: r.rango === null ? 'sin dato' : (r.rango ? 'dentro' : 'fuera') } }),
+      cubicacion: cubR.rows.filter(r => r.m2 > 0).map(r => ({ elemento: r.elemento, m2: r.m2, criterio: r.criterio || null, color: r.color || null })),
+    }
+  }
+  const redactar = async () => {
+    setRedaccion({ cargando: true })
+    try {
+      const datos = datosParaRedactar()
+      const { data, error } = await supabase.functions.invoke('redactar-oferta', { body: { datos, requerimiento: f.requerimiento || '', instrucciones } })
+      if (error) throw error
+      if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo redactar.')
+      const pr = data.propuesta || {}
+      setRedaccion({ datos, valores: { asunto: pr.asunto || '', sistemaResumen: pr.sistemaResumen || '', carta: pr.carta || '', notaTecnica: pr.notaTecnica || '' }, aplicar: { asunto: !!pr.asunto, sistemaResumen: !!pr.sistemaResumen, carta: !!pr.carta, notaTecnica: !!pr.notaTecnica } })
+    } catch (err) { setRedaccion({ error: (err && err.message) || String(err) }) }
+  }
+  const aplicarRedaccion = () => {
+    const v = redaccion.valores, ap = redaccion.aplicar
+    setF(prev => { const n = { ...prev }; ['asunto', 'sistemaResumen', 'carta', 'notaTecnica'].forEach(k => { if (ap[k]) n[k] = v[k] }); return n })
+    setRedaccion(null)
+  }
   const t = totales(f)
   const lab = { fontSize: 11, color: C.gris, display: 'flex', flexDirection: 'column', gap: 3 }
   return (
@@ -483,6 +560,71 @@ function FormCotizacion({ esEdicion = false, inicial, onGuardar, onCancelar, cli
         <label style={lab}>Fecha documento<input type="date" style={inp} value={f.fecha} onChange={e => set('fecha', e.target.value)} /></label>
         <label style={lab}>Fecha vencimiento<input type="date" style={inp} value={f.vencimiento} onChange={e => set('vencimiento', e.target.value)} /></label>
         <label style={{ ...lab, gridColumn: '1 / -1' }}>Proveedor de pintura (para la OC)<input list="dl-cot-provpint" style={inp} value={f.proveedorPintura || ''} onChange={e => set('proveedorPintura', e.target.value)} placeholder="Escribe o elige un proveedor de pintura" /><datalist id="dl-cot-provpint">{PROVEEDORES_FICHA.map(p => <option key={p.id || p.nombre} value={p.nombre} />)}</datalist></label>
+      </div>
+
+      <div style={{ marginTop: 12, border: '1px solid #CFE3E8', background: '#F3FAFB', padding: '10px 12px' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.teal, textTransform: 'uppercase', marginBottom: 6 }}>Asistente IA (opcional) — propone, tú revisas y aplicas</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <label style={{ background: C.teal, color: '#fff', padding: '7px 12px', fontSize: 12.5, cursor: lectura && lectura.cargando ? 'wait' : 'pointer', opacity: lectura && lectura.cargando ? 0.7 : 1 }}>
+            {lectura && lectura.cargando ? 'Leyendo…' : 'Leer cubicación del cliente (PDF / Excel / foto)'}
+            <input type="file" accept="application/pdf,image/*,.xlsx,.xlsm,.xls,.csv" multiple style={{ display: 'none' }} disabled={!!(lectura && lectura.cargando)} onChange={leerCubicacion} />
+          </label>
+          <button type="button" onClick={redactar} disabled={!!(redaccion && redaccion.cargando)} style={{ background: C.carbon, color: '#fff', border: 'none', padding: '7px 12px', fontSize: 12.5, cursor: 'pointer', opacity: redaccion && redaccion.cargando ? 0.7 : 1 }}>{redaccion && redaccion.cargando ? 'Redactando…' : 'Redactar carta y nota técnica'}</button>
+          <input style={{ ...inp, flex: '1 1 240px' }} placeholder="Indicaciones para la redacción (opcional, ej. destacar que se pinta en planta)" value={instrucciones} onChange={e => setInstrucciones(e.target.value)} />
+        </div>
+        <div style={{ fontSize: 11, color: C.gris, marginTop: 6 }}>La IA solo transcribe y redacta: los m², precios y espesores los calcula el sistema. Para redactar, primero carga cliente, capas y cubicación.</div>
+
+        {lectura && lectura.error && <div style={{ marginTop: 8, fontSize: 12.5, color: C.rojo }}>No se pudo leer: {lectura.error} <button type="button" onClick={() => setLectura(null)} style={{ marginLeft: 6, background: 'none', border: '1px solid #DFE4EA', padding: '2px 8px', cursor: 'pointer', fontSize: 11.5 }}>Cerrar</button></div>}
+        {lectura && lectura.filas && (
+          <div style={{ marginTop: 10, background: '#fff', border: '1px solid #DFE4EA', padding: 10 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>Revisión de la cubicación leída ({lectura.filas.length} filas)</div>
+            {lectura.datos && (lectura.datos.esquemaSolicitado || lectura.datos.observaciones) && <div style={{ fontSize: 11.5, color: C.gris, marginBottom: 6 }}>{lectura.datos.esquemaSolicitado && <div><b>Esquema pedido:</b> {lectura.datos.esquemaSolicitado}</div>}{lectura.datos.observaciones && <div><b>Observaciones:</b> {lectura.datos.observaciones}</div>}</div>}
+            <div style={{ fontSize: 11.5, color: C.rojo, marginBottom: 6 }}>Elige cuántas caras / qué factor aplica en cada fila: el m² se recalcula solo. Revisa que lo leído coincida con el documento.</div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead><tr style={{ borderBottom: '2px solid ' + C.carbon }}>{['', 'Elemento', 'Dato leído', 'Criterio', 'Factor', 'M² a pintar'].map((h, i) => <th key={i} style={{ textAlign: 'left', padding: '4px 6px', fontSize: 10, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {lectura.filas.map((fi, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #E2E7EC' }}>
+                      <td style={{ padding: '3px 6px' }}><input type="checkbox" checked={fi.aplicar} onChange={e => setFilaLectura(i, { aplicar: e.target.checked })} /></td>
+                      <td style={{ padding: '3px 4px' }}><input style={{ ...inp, width: 260, padding: '4px 6px' }} value={fi.elemento} onChange={e => setFilaLectura(i, { elemento: e.target.value })} /></td>
+                      <td style={{ padding: '3px 4px' }}><input style={{ ...inp, width: 100, padding: '4px 6px' }} value={fi.dato} onChange={e => setFilaLectura(i, { dato: e.target.value })} /></td>
+                      <td style={{ padding: '3px 4px' }}><select style={{ ...inp, padding: '4px 6px' }} value={fi.criterio} onChange={e => setFilaLectura(i, { criterio: e.target.value })}>{CRITERIOS_M2.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select></td>
+                      <td style={{ padding: '3px 4px' }}>{fi.criterio === 'manual' ? <input style={{ ...inp, width: 60, padding: '4px 6px', textAlign: 'right' }} value={fi.factor} onChange={e => setFilaLectura(i, { factor: e.target.value })} placeholder="×" /> : <span style={{ color: C.gris }}>—</span>}</td>
+                      <td style={{ padding: '3px 4px' }}><input style={{ ...inp, width: 80, padding: '4px 6px', textAlign: 'right' }} value={fi.m2} onChange={e => setFilaLectura(i, { m2: e.target.value })} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <button type="button" onClick={aplicarLectura} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5 }}>Agregar {lectura.filas.filter(x => x.aplicar).length} fila(s) a la cubicación</button>
+              <button type="button" onClick={() => setLectura(null)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>Descartar</button>
+            </div>
+          </div>
+        )}
+
+        {redaccion && redaccion.error && <div style={{ marginTop: 8, fontSize: 12.5, color: C.rojo }}>No se pudo redactar: {redaccion.error} <button type="button" onClick={() => setRedaccion(null)} style={{ marginLeft: 6, background: 'none', border: '1px solid #DFE4EA', padding: '2px 8px', cursor: 'pointer', fontSize: 11.5 }}>Cerrar</button></div>}
+        {redaccion && redaccion.valores && (
+          <div style={{ marginTop: 10, background: '#fff', border: '1px solid #DFE4EA', padding: 10 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>Propuesta de redacción — edita lo que quieras antes de aplicar</div>
+            {[['asunto', 'Asunto', 1], ['sistemaResumen', 'Sistema (franja azul)', 2], ['carta', 'Carta introductoria', 6], ['notaTecnica', 'Nota técnica', 3]].map(([k, lbl, rows]) => {
+              const raros = redaccion.aplicar[k] ? cifrasNoRespaldadas(redaccion.valores[k], redaccion.datos) : []
+              return (
+                <div key={k} style={{ marginBottom: 8 }}>
+                  <label style={{ fontSize: 11.5, color: C.gris, display: 'flex', gap: 6, alignItems: 'center', marginBottom: 3 }}><input type="checkbox" checked={!!redaccion.aplicar[k]} onChange={e => setRedaccion(r => ({ ...r, aplicar: { ...r.aplicar, [k]: e.target.checked } }))} /> {lbl}{(f[k] || '').trim() && <span style={{ color: C.ambar }}> · reemplazará el texto actual</span>}</label>
+                  <textarea rows={rows} style={{ ...inp, width: '100%', fontFamily: 'inherit', lineHeight: 1.4, resize: 'vertical' }} value={redaccion.valores[k]} onChange={e => setRedaccion(r => ({ ...r, valores: { ...r.valores, [k]: e.target.value } }))} />
+                  {raros.length > 0 && <div style={{ fontSize: 11.5, color: C.rojo, fontWeight: 700 }}>⚠ Cifras que no están en los datos de la cotización: {raros.join(', ')} — revísalas o bórralas.</div>}
+                </div>
+              )
+            })}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="button" onClick={aplicarRedaccion} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5 }}>Aplicar a la cotización</button>
+              <button type="button" onClick={redactar} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>Redactar de nuevo</button>
+              <button type="button" onClick={() => setRedaccion(null)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>Descartar</button>
+            </div>
+          </div>
+        )}
       </div>
 
       <details style={{ marginTop: 12, border: '1px solid #DFE4EA', padding: '8px 12px', background: '#FAFBFC' }} open={!!(f.asunto || f.sistemaResumen || f.carta || f.atencion || f.lugarEjecucion || (f.pagos || []).length || f.condiciones || (parseInt(f.rev, 10) || 0) > 0)}>
