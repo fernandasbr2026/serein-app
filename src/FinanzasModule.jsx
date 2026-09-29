@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react'
-import { Plus, Trash2, X, Copy, Landmark, ReceiptText, PieChart as PieIcon, CalendarClock, BarChart3, CheckCircle2, Download } from 'lucide-react'
+import { Plus, Trash2, X, Copy, Landmark, ReceiptText, PieChart as PieIcon, CalendarClock, BarChart3, CheckCircle2, Download, TrendingUp } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 import { SEREIN } from './theme-serein.js'
@@ -753,6 +753,7 @@ function itemsPorPagar(fin, proyectos = []) {
       detalle: g.nombre || g.categoria || '',
       proveedor: g.proveedor || '',
       area: areasDe(g.dist),
+      categoria: g.categoria || '',
       monto: Math.round(netoEf(g, fin.ufValor)),
       tabDestino: g.tipo === 'fijo' ? 'fijos' : 'variables',
       formaPago: g.formaPago || 'Transferencia',
@@ -807,13 +808,35 @@ function itemsPorPagar(fin, proyectos = []) {
 // de antemano si algo era "fijo" o "variable" para encontrarlo). Los
 // botones de abajo llevan a la pestaña correspondiente para cargar un
 // gasto o crédito nuevo — no duplican los formularios que ya existen.
-const COLOR_TIPO_PAGO = { 'Gasto fijo': '#2563EB', 'Gasto variable': '#D97706', 'Compra proyecto': '#0E9F6E', default: C.gris }
-function PorPagar({ fin, proyectos, irA }) {
+const COLOR_TIPO_PAGO = { 'Gasto fijo': '#2563EB', 'Gasto variable': '#D97706', 'Compra proyecto': '#0E9F6E', 'Nómina': '#7C3AED', default: C.gris }
+// Nómina = sueldos + imposiciones — se agrupan SIEMPRE juntos, aparte del
+// resto, para no tener que revisarlos "parte por parte" mezclados con
+// arriendo/luz/etc. (pedido explícito). Categorías de CATEGORIAS_FIJO.
+const esNomina = categoria => /sueldo/i.test(categoria || '') || categoria === 'Imposiciones'
+// Tarjeta de KPI al estilo tablero de colores sólidos (fondo lleno, no solo
+// un borde) — más llamativo que las tarjetas blancas del resto de la app,
+// a pedido explícito ("visualización de estos colores").
+function kpiSolida(label, valor, color, icono, sub) {
+  return (
+    <div style={{ background: color, color: '#fff', borderRadius: 10, padding: '14px 16px', flex: '1 1 190px', boxShadow: '0 2px 6px rgba(0,0,0,.12)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 22 }}>{valor}</div>
+        {icono}
+      </div>
+      <div style={{ fontSize: 12, marginTop: 4, opacity: 0.92 }}>{label}</div>
+      {sub && <div style={{ fontSize: 10.5, marginTop: 3, opacity: 0.8 }}>{sub}</div>}
+    </div>
+  )
+}
+function PorPagar({ fin, proyectos, params, setParams, irA }) {
   const items = itemsPorPagar(fin, proyectos)
   const h = hoy()
   const en7 = new Date(); en7.setDate(en7.getDate() + 7)
   const en7s = en7.toISOString().slice(0, 10)
   const mesActual = h.slice(0, 7)
+  const nominas = items.filter(x => esNomina(x.categoria)).sort((a, b) => (a.vencimiento || '9999').localeCompare(b.vencimiento || '9999'))
+  const proveedores = items.filter(x => x.tipo === 'Compra proyecto')
+  const restoSinAgrupar = items.filter(x => !esNomina(x.categoria) && x.tipo !== 'Compra proyecto')
   const grupos = [
     { id: 'vencido', label: 'Vencido', color: C.rojo, filtro: x => !!x.vencimiento && x.vencimiento < h },
     { id: 'semana', label: 'Esta semana', color: C.naranja, filtro: x => x.vencimiento >= h && x.vencimiento <= en7s },
@@ -823,20 +846,51 @@ function PorPagar({ fin, proyectos, irA }) {
   const totalGeneral = items.reduce((a, x) => a + x.monto, 0)
   const totalVencido = items.filter(grupos[0].filtro).reduce((a, x) => a + x.monto, 0)
   const totalSemana = items.filter(grupos[1].filtro).reduce((a, x) => a + x.monto, 0)
-  const kpiCard = (label, valor, color) => (
-    <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: `3px solid ${color}`, padding: '12px 16px', flex: '1 1 180px' }}>
-      <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase', letterSpacing: 0.3 }}>{label}</div>
-      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 22, color, marginTop: 2 }}>{clp(valor)}</div>
+  const totalMes = items.filter(x => mesDe(x.vencimiento) === mesActual).reduce((a, x) => a + x.monto, 0)
+  const totalNominas = nominas.reduce((a, x) => a + x.monto, 0)
+  const totalProveedores = proveedores.reduce((a, x) => a + x.monto, 0)
+  const uf = (params && params.uf) || { valor: fin.ufValor || 0, fecha: '' }
+  const ufHoyOk = uf.fecha === h
+  const btnAgregar = { background: 'none', border: `1px dashed #C9C4B8`, color: C.carbon, padding: '8px 14px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }
+  const seccion = (titulo, color, filas, icono) => filas.length > 0 && (
+    <div style={{ marginBottom: 22 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: `4px solid ${color}`, paddingLeft: 10, marginBottom: 8 }}>
+        <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 13, textTransform: 'uppercase', color, display: 'flex', alignItems: 'center', gap: 6 }}>{icono} {titulo} ({filas.length})</span>
+        <span style={{ fontWeight: 700, fontFamily: SEREIN.fontDisplay }}>{clp(filas.reduce((a, x) => a + x.monto, 0))}</span>
+      </div>
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead><tr style={{ borderBottom: '1px solid #DFE4EA' }}>
+            {['Vencimiento', 'Tipo', 'Detalle', 'Forma de pago', 'Monto'].map(hh => (
+              <th key={hh} style={{ textAlign: hh === 'Monto' ? 'right' : 'left', padding: '6px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{hh}</th>
+            ))}
+          </tr></thead>
+          <tbody>
+            {filas.map(x => { const colorTipo = COLOR_TIPO_PAGO[x.tipo] || COLOR_TIPO_PAGO.default; return (
+              <tr key={x.id} style={{ borderBottom: '1px solid #F2F4F7' }}>
+                <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>{x.vencimiento || <span style={{ color: C.gris }}>—</span>}</td>
+                <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}><span style={{ background: colorTipo + '22', color: colorTipo, fontWeight: 700, fontSize: 11, padding: '3px 8px', borderRadius: 20 }}>{x.tipo}</span></td>
+                <td style={{ padding: '6px 10px' }}>{x.detalle}{x.proveedor ? <span style={{ color: C.gris }}> · {x.proveedor}</span> : ''}</td>
+                <td style={{ padding: '6px 10px', fontSize: 12 }}>{x.formaPago === 'Cheque' ? <span title={x.chequeInfo}>🧾 Cheque{x.chequeInfo ? ' · ' + x.chequeInfo : ''}</span> : <span style={{ color: C.gris }}>Transferencia</span>}</td>
+                <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600 }}>{clp(x.monto)}</td>
+              </tr>
+            )})}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
-  const btnAgregar = { background: 'none', border: `1px dashed #C9C4B8`, color: C.carbon, padding: '8px 14px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }
   return (
     <div>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-        {kpiCard('Total por pagar', totalGeneral, C.carbon)}
-        {kpiCard('Vencido', totalVencido, C.rojo)}
-        {kpiCard('Por vencer esta semana', totalSemana, C.naranja)}
+        {kpiSolida('Por pagar esta semana', clp(totalSemana), C.naranja, <CalendarClock size={20} />)}
+        {kpiSolida('Por pagar este mes', clp(totalMes), '#0E7A8F', <BarChart3 size={20} />, mesActual)}
+        {kpiSolida('Nóminas pendientes', clp(totalNominas), COLOR_TIPO_PAGO['Nómina'], <span style={{ fontSize: 18 }}>👥</span>)}
+        {kpiSolida('Proveedores (proyectos)', clp(totalProveedores), COLOR_TIPO_PAGO['Compra proyecto'], <span style={{ fontSize: 18 }}>🎨</span>)}
+        {kpiSolida('Vencido', clp(totalVencido), C.rojo, <span style={{ fontSize: 18 }}>⚠</span>)}
+        {kpiSolida('UF hoy', clp(uf.valor), ufHoyOk ? C.verde : '#94A3B8', <TrendingUp size={20} />, uf.fecha ? ('al ' + uf.fecha + (ufHoyOk ? ' · al día' : ' · desactualizada')) : 'sin datos')}
       </div>
+      <div style={{ fontSize: 11.5, color: C.gris, marginBottom: 16 }}>Total general pendiente: <b style={{ color: C.carbon }}>{clp(totalGeneral)}</b></div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
         <button onClick={() => irA('fijos')} style={btnAgregar}><Plus size={13} /> Gasto fijo</button>
         <button onClick={() => irA('variables')} style={btnAgregar}><Plus size={13} /> Gasto variable</button>
@@ -844,38 +898,11 @@ function PorPagar({ fin, proyectos, irA }) {
         <div title="Las compras de proyecto (pintura, materiales) se cargan en la ficha de cada proyecto — acá solo se muestran para tener todo junto." style={{ ...btnAgregar, cursor: 'default', color: COLOR_TIPO_PAGO['Compra proyecto'], borderColor: COLOR_TIPO_PAGO['Compra proyecto'] }}>ℹ Compras de proyecto: se cargan en Proyectos</div>
       </div>
       {items.length === 0 && <div style={{ fontSize: 13, color: C.gris, background: '#fff', border: '1px solid #DFE4EA', padding: 16 }}>No hay cuentas por pagar pendientes.</div>}
+      {seccion('Nóminas (sueldos e imposiciones)', COLOR_TIPO_PAGO['Nómina'], nominas, '👥')}
+      {seccion('Proveedores de proyecto', COLOR_TIPO_PAGO['Compra proyecto'], proveedores, '🎨')}
       {grupos.map(g => {
-        const filas = items.filter(g.filtro)
-        if (!filas.length) return null
-        const subtotal = filas.reduce((a, x) => a + x.monto, 0)
-        return (
-          <div key={g.id} style={{ marginBottom: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: `4px solid ${g.color}`, paddingLeft: 10, marginBottom: 8 }}>
-              <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 13, textTransform: 'uppercase', color: g.color }}>{g.label} ({filas.length})</span>
-              <span style={{ fontWeight: 700, fontFamily: SEREIN.fontDisplay }}>{clp(subtotal)}</span>
-            </div>
-            <div style={{ background: '#fff', border: '1px solid #DFE4EA', overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead><tr style={{ borderBottom: '1px solid #DFE4EA' }}>
-                  {['Vencimiento', 'Tipo', 'Detalle', 'Forma de pago', 'Monto'].map(hh => (
-                    <th key={hh} style={{ textAlign: hh === 'Monto' ? 'right' : 'left', padding: '6px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{hh}</th>
-                  ))}
-                </tr></thead>
-                <tbody>
-                  {filas.map(x => { const colorTipo = COLOR_TIPO_PAGO[x.tipo] || COLOR_TIPO_PAGO.default; return (
-                    <tr key={x.id} style={{ borderBottom: '1px solid #F2F4F7' }}>
-                      <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>{x.vencimiento || <span style={{ color: C.gris }}>—</span>}</td>
-                      <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}><span style={{ background: colorTipo + '22', color: colorTipo, fontWeight: 700, fontSize: 11, padding: '3px 8px', borderRadius: 20 }}>{x.tipo}</span></td>
-                      <td style={{ padding: '6px 10px' }}>{x.detalle}{x.proveedor ? <span style={{ color: C.gris }}> · {x.proveedor}</span> : ''}</td>
-                      <td style={{ padding: '6px 10px', fontSize: 12 }}>{x.formaPago === 'Cheque' ? <span title={x.chequeInfo}>🧾 Cheque{x.chequeInfo ? ' · ' + x.chequeInfo : ''}</span> : <span style={{ color: C.gris }}>Transferencia</span>}</td>
-                      <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600 }}>{clp(x.monto)}</td>
-                    </tr>
-                  )})}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )
+        const filas = restoSinAgrupar.filter(g.filtro)
+        return filas.length > 0 ? <div key={g.id}>{seccion(g.label, g.color, filas)}</div> : null
       })}
     </div>
   )
@@ -945,7 +972,7 @@ function descargarInformeCuentasPorPagar(fin) {
 }
 
 // ================= MÓDULO PRINCIPAL =================
-export default function FinanzasModule({ otsDisponibles = [], fin: finExt, setFin: setFinExt, proyectos = [] }) {
+export default function FinanzasModule({ otsDisponibles = [], fin: finExt, setFin: setFinExt, proyectos = [], params, setParams }) {
   const [finInt, setFinInt] = useState(FIN_SEED)
   const fin = finExt ?? finInt
   const setFin = setFinExt ?? setFinInt
@@ -976,7 +1003,7 @@ export default function FinanzasModule({ otsDisponibles = [], fin: finExt, setFi
           <Download size={13} /> Descargar Excel
         </button>
       </div>
-      {tab === 'porpagar' && <PorPagar fin={fin} proyectos={proyectos} irA={setTab} />}
+      {tab === 'porpagar' && <PorPagar fin={fin} proyectos={proyectos} params={params} setParams={setParams} irA={setTab} />}
       {tab === 'resumen' && <><ResumenMensual fin={fin} /><ProyeccionFin fin={fin} /></>}
       {tab === 'fijos' && <ListaGastos tipo="fijo" fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} />}
       {tab === 'variables' && <ListaGastos tipo="variable" fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} />}
