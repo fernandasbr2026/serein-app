@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react'
-import { Plus, Trash2, X, Copy, Landmark, ReceiptText, PieChart as PieIcon, CalendarClock, BarChart3, CheckCircle2, Download, TrendingUp } from 'lucide-react'
+import { Plus, Trash2, X, Copy, Landmark, ReceiptText, PieChart as PieIcon, CalendarClock, BarChart3, CheckCircle2, Download, TrendingUp, Pencil } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 import { SEREIN } from './theme-serein.js'
@@ -77,36 +77,93 @@ function EditorDistribucion({ dist, setDist, plantillas, areas }) {
 }
 
 // ================= FORMULARIO DE GASTO =================
-function FormGasto({ tipo, fin, setFin, otsDisponibles, onCerrar }) {
+// ---- Escritura de gastos (pull-fresh + merge + push) — funciones de
+// modulo, no atadas a ningun componente, para que tanto ListaGastos como
+// FormGasto como el modal de detalle de Pagos escriban siempre con el
+// mismo criterio seguro y sin duplicar el codigo tres veces. ----
+async function agregarGastoFresco(fin, setFin, gasto) {
+  try { await pullState() } catch (e) {}
+  let fresco = null
+  try { fresco = JSON.parse(localStorage.getItem('serein_fin') || 'null') } catch (e) {}
+  const baseFin = fresco && typeof fresco === 'object' ? fresco : fin
+  const nuevoFin = { ...baseFin, gastos: [gasto, ...(baseFin.gastos || [])] }
+  try { localStorage.setItem('serein_fin', JSON.stringify(nuevoFin)) } catch (e) {}
+  setFin(nuevoFin)
+  pushState()
+}
+async function editarGastoFresco(fin, setFin, gasto) {
+  try { await pullState() } catch (e) {}
+  let fresco = null
+  try { fresco = JSON.parse(localStorage.getItem('serein_fin') || 'null') } catch (e) {}
+  const baseFin = fresco && typeof fresco === 'object' ? fresco : fin
+  const nuevoFin = { ...baseFin, gastos: (baseFin.gastos || []).map(g => g.id === gasto.id ? gasto : g) }
+  try { localStorage.setItem('serein_fin', JSON.stringify(nuevoFin)) } catch (e) {}
+  setFin(nuevoFin)
+  pushState()
+}
+async function eliminarGastoFresco(fin, setFin, id) {
+  try { await pullState() } catch (e) {}
+  let fresco = null
+  try { fresco = JSON.parse(localStorage.getItem('serein_fin') || 'null') } catch (e) {}
+  const baseFin = fresco && typeof fresco === 'object' ? fresco : fin
+  const nuevoFin = { ...baseFin, gastos: (baseFin.gastos || []).filter(x => x.id !== id) }
+  try { localStorage.setItem('serein_fin', JSON.stringify(nuevoFin)) } catch (e) {}
+  setFin(nuevoFin)
+  pushState()
+}
+async function cambiarEstadoGasto(fin, setFin, id, estado) {
+  try { await pullState() } catch (e) {}
+  let fresco = null
+  try { fresco = JSON.parse(localStorage.getItem('serein_fin') || 'null') } catch (e) {}
+  const baseFin = fresco && typeof fresco === 'object' ? fresco : fin
+  const nuevoFin = { ...baseFin, gastos: (baseFin.gastos || []).map(g => g.id === id ? { ...g, estado } : g) }
+  try { localStorage.setItem('serein_fin', JSON.stringify(nuevoFin)) } catch (e) {}
+  setFin(nuevoFin)
+  pushState()
+}
+// Marca pagada una cuota puntual de un credito/leasing — las cuotas no se
+// editan libremente (son parte de la tabla de amortizacion), solo se
+// marcan como pagadas desde aca.
+async function marcarCuotaPagada(fin, setFin, obligacionId, n) {
+  try { await pullState() } catch (e) {}
+  let fresco = null
+  try { fresco = JSON.parse(localStorage.getItem('serein_fin') || 'null') } catch (e) {}
+  const baseFin = fresco && typeof fresco === 'object' ? fresco : fin
+  const nuevoFin = { ...baseFin, obligaciones: (baseFin.obligaciones || []).map(o => o.id !== obligacionId ? o : { ...o, cuotas: (o.cuotas || []).map(c => c.n === n ? { ...c, estado: 'Pagada' } : c) }) }
+  try { localStorage.setItem('serein_fin', JSON.stringify(nuevoFin)) } catch (e) {}
+  setFin(nuevoFin)
+  pushState()
+}
+
+// gastoInicial: si se pasa, el formulario edita esa fila en vez de crear
+// una nueva (mismos campos, precargados) — usado tanto por el boton
+// "Editar" de ListaGastos como por el modal de detalle de Pagos.
+function FormGasto({ tipo, fin, setFin, otsDisponibles = [], onCerrar, gastoInicial }) {
+  const editando = !!gastoInicial
   const cats = tipo === 'fijo' ? CATEGORIAS_FIJO : CATEGORIAS_VAR
-  const [f, setF] = useState({ nombre: '', categoria: cats[0], proveedor: '', documento: '', neto: '', conIva: tipo !== 'fijo', vencimiento: hoy(), frecuencia: tipo === 'fijo' ? 'Mensual' : 'Única', estado: 'Pendiente', ot: '', obs: '', esUF: false, uf: '', formaPago: 'Transferencia', numeroCheque: '', fechaCheque: '' })
-  const [dist, setDist] = useState([{ area: 'General empresa', pct: 100 }])
+  const [f, setF] = useState(() => gastoInicial ? {
+    nombre: gastoInicial.nombre, categoria: gastoInicial.categoria, proveedor: gastoInicial.proveedor || '', documento: gastoInicial.documento || '',
+    neto: gastoInicial.esUF ? '' : String(gastoInicial.neto || ''), conIva: !!gastoInicial.iva, vencimiento: gastoInicial.vencimiento || hoy(),
+    frecuencia: gastoInicial.frecuencia || 'Única', estado: gastoInicial.estado || 'Pendiente', ot: gastoInicial.ot || '', obs: gastoInicial.obs || '',
+    esUF: !!gastoInicial.esUF, uf: gastoInicial.esUF ? String(gastoInicial.uf || '') : '', formaPago: gastoInicial.formaPago || 'Transferencia',
+    numeroCheque: gastoInicial.numeroCheque || '', fechaCheque: gastoInicial.fechaCheque || '',
+  } : { nombre: '', categoria: cats[0], proveedor: '', documento: '', neto: '', conIva: tipo !== 'fijo', vencimiento: hoy(), frecuencia: tipo === 'fijo' ? 'Mensual' : 'Única', estado: 'Pendiente', ot: '', obs: '', esUF: false, uf: '', formaPago: 'Transferencia', numeroCheque: '', fechaCheque: '' })
+  const [dist, setDist] = useState(() => gastoInicial ? gastoInicial.dist.map(d => ({ ...d })) : [{ area: 'General empresa', pct: 100 }])
   const suma = dist.reduce((a, d) => a + (parseFloat(d.pct) || 0), 0)
   const ok = Math.abs(suma - 100) < 0.01
 
   function guardar() {
     if (!f.nombre || (f.esUF ? num(f.uf) : num(f.neto)) <= 0 || !ok) return
     const neto = f.esUF ? Math.round(num(f.uf) * (fin.ufValor || 0)) : num(f.neto)
-    const g = { id: 'g' + Date.now(), tipo, nombre: f.nombre, categoria: f.categoria, proveedor: f.proveedor, documento: f.documento, neto, iva: f.conIva ? Math.round(neto * 0.19) : 0, vencimiento: f.vencimiento, frecuencia: f.frecuencia, estado: f.estado, ot: f.ot, dist: dist.map(d => ({ area: d.area, pct: parseFloat(d.pct) })), obs: f.obs, esUF: f.esUF, uf: num(f.uf), formaPago: f.formaPago, numeroCheque: f.formaPago === 'Cheque' ? f.numeroCheque : '', fechaCheque: f.formaPago === 'Cheque' ? f.fechaCheque : '' }
-    agregarGastoFresco(g)
+    const g = { id: editando ? gastoInicial.id : 'g' + Date.now(), tipo: editando ? gastoInicial.tipo : tipo, nombre: f.nombre, categoria: f.categoria, proveedor: f.proveedor, documento: f.documento, neto, iva: f.conIva ? Math.round(neto * 0.19) : 0, vencimiento: f.vencimiento, frecuencia: f.frecuencia, estado: f.estado, ot: f.ot, dist: dist.map(d => ({ area: d.area, pct: parseFloat(d.pct) })), obs: f.obs, esUF: f.esUF, uf: num(f.uf), formaPago: f.formaPago, numeroCheque: f.formaPago === 'Cheque' ? f.numeroCheque : '', fechaCheque: f.formaPago === 'Cheque' ? f.fechaCheque : '' }
+    if (editando) editarGastoFresco(fin, setFin, g); else agregarGastoFresco(fin, setFin, g)
     onCerrar()
-  }
-
-  async function agregarGastoFresco(gasto) {
-    try { await pullState() } catch (e) {}
-    let fresco = null
-    try { fresco = JSON.parse(localStorage.getItem('serein_fin') || 'null') } catch (e) {}
-    const baseFin = fresco && typeof fresco === 'object' ? fresco : fin
-    const nuevoFin = { ...baseFin, gastos: [gasto, ...(baseFin.gastos || [])] }
-    try { localStorage.setItem('serein_fin', JSON.stringify(nuevoFin)) } catch (e) {}
-    setFin(nuevoFin)
-    pushState()
   }
 
   return (
     <div style={{ background: '#fff', border: `2px solid ${C.naranja}`, padding: 16, marginBottom: 14 }}>
       <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>
-        Nuevo gasto {tipo === 'fijo' ? 'fijo' : 'variable / compra'}
+        {editando ? 'Editar gasto' : `Nuevo gasto ${tipo === 'fijo' ? 'fijo' : 'variable / compra'}`}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
         <input style={inp} placeholder="Nombre del gasto *" value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} />
@@ -139,7 +196,7 @@ function FormGasto({ tipo, fin, setFin, otsDisponibles, onCerrar }) {
       <input style={{ ...inp, width: '100%', marginTop: 8 }} placeholder="Observaciones" value={f.obs} onChange={e => setF({ ...f, obs: e.target.value })} />
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
         <button onClick={guardar} disabled={!ok}
-          style={{ background: ok ? C.verde : '#DFE4EA', color: '#fff', border: 'none', padding: '9px 18px', cursor: ok ? 'pointer' : 'not-allowed', fontSize: 13 }}>Guardar gasto</button>
+          style={{ background: ok ? C.verde : '#DFE4EA', color: '#fff', border: 'none', padding: '9px 18px', cursor: ok ? 'pointer' : 'not-allowed', fontSize: 13 }}>{editando ? 'Guardar cambios' : 'Guardar gasto'}</button>
         <button onClick={onCerrar} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
       </div>
     </div>
@@ -149,6 +206,7 @@ function FormGasto({ tipo, fin, setFin, otsDisponibles, onCerrar }) {
 // ================= LISTA DE GASTOS =================
 function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
   const [creando, setCreando] = useState(false)
+  const [editando, setEditando] = useState(null)
   const [fArea, setFArea] = useState('')
   // Filtro por mes: antes esta lista mostraba TODOS los gastos del tipo
   // sin ninguna forma de acotar a un mes — con varios meses cargados se
@@ -189,32 +247,6 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
       ...baseFin,
       gastos: [nuevo, ...(baseFin.gastos || []).map(x => x.id === g.id && x.frecuencia === 'Mensual' ? { ...x, frecuencia: 'Única' } : x)],
     }
-    try { localStorage.setItem('serein_fin', JSON.stringify(nuevoFin)) } catch (e) {}
-    setFin(nuevoFin)
-    pushState()
-  }
-
-  // Al igual que el resto de los handlers de este archivo, trae lo más
-  // fresco antes de escribir: sin este pullState(), cambiar el estado de un
-  // gasto desde un dispositivo podía pisar (con la copia local, potencialmente
-  // atrasada) un gasto agregado/editado desde otro dispositivo segundos antes.
-  async function cambiarEstadoGasto(id, estado) {
-    try { await pullState() } catch (e) {}
-    let fresco = null
-    try { fresco = JSON.parse(localStorage.getItem('serein_fin') || 'null') } catch (e) {}
-    const baseFin = fresco && typeof fresco === 'object' ? fresco : fin
-    const nuevoFin = { ...baseFin, gastos: (baseFin.gastos || []).map(g => g.id === id ? { ...g, estado } : g) }
-    try { localStorage.setItem('serein_fin', JSON.stringify(nuevoFin)) } catch (e) {}
-    setFin(nuevoFin)
-    pushState()
-  }
-
-  async function eliminarGastoFresco(id) {
-    try { await pullState() } catch (e) {}
-    let fresco = null
-    try { fresco = JSON.parse(localStorage.getItem('serein_fin') || 'null') } catch (e) {}
-    const baseFin = fresco && typeof fresco === 'object' ? fresco : fin
-    const nuevoFin = { ...baseFin, gastos: (baseFin.gastos || []).filter(x => x.id !== id) }
     try { localStorage.setItem('serein_fin', JSON.stringify(nuevoFin)) } catch (e) {}
     setFin(nuevoFin)
     pushState()
@@ -270,13 +302,14 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
 
   return (
     <div>
-      {!creando && (
+      {!creando && !editando && (
         <button onClick={() => setCreando(true)}
           style={{ background: C.naranja, color: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
           <Plus size={15} /> Nuevo gasto {tipo === 'fijo' ? 'fijo' : 'variable'}
         </button>
       )}
       {creando && <FormGasto tipo={tipo} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} onCerrar={() => setCreando(false)} />}
+      {editando && <FormGasto tipo={editando.tipo} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} gastoInicial={editando} onCerrar={() => setEditando(null)} />}
 
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', margin: '14px 0 10px' }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: C.gris, textTransform: 'uppercase' }}>Mes</span>
@@ -332,15 +365,16 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
                 <td style={{ padding: '8px', color: C.gris, whiteSpace: 'nowrap' }}>{g.vencimiento}</td>
                 <td style={{ padding: '8px', color: C.gris, fontSize: 12 }}>{g.frecuencia}</td>
                 <td style={{ padding: '8px' }}>
-                  <select value={g.estado} onChange={e => cambiarEstadoGasto(g.id, e.target.value)}
+                  <select value={g.estado} onChange={e => cambiarEstadoGasto(fin, setFin, g.id, e.target.value)}
                     style={{ border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '3px 6px', background: g.estado === 'Pagado' ? '#E6F7EE' : g.estado === 'Vencido' ? '#FCEBEA' : g.estado === 'Anulado' ? '#EEE' : '#FDECDD', color: g.estado === 'Pagado' ? C.verde : g.estado === 'Vencido' ? C.rojo : g.estado === 'Anulado' ? C.gris : '#D9600A' }}>
                     {ESTADOS_GASTO.map(x => <option key={x}>{x}</option>)}
                   </select>
                 </td>
                 <td style={{ padding: '8px', fontSize: 12 }}>{g.dist.map(d => <div key={d.area}>{d.area}: {d.pct}% ({clp(netoEf(g, fin.ufValor) * d.pct / 100)})</div>)}</td>
                 <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>
+                  <button title="Editar" onClick={() => setEditando(g)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Pencil size={14} /></button>
                   <button title="Duplicar al mes siguiente" onClick={() => duplicarMesSiguiente(g)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Copy size={14} /></button>
-                  <button title="Eliminar" onClick={() => window.confirm(`¿Eliminar "${g.nombre}"?`) && eliminarGastoFresco(g.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
+                  <button title="Eliminar" onClick={() => window.confirm(`¿Eliminar "${g.nombre}"?`) && eliminarGastoFresco(fin, setFin, g.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
                 </td>
               </tr>
             ))}
@@ -758,6 +792,8 @@ function itemsPorPagar(fin, proyectos = []) {
       tabDestino: g.tipo === 'fijo' ? 'fijos' : 'variables',
       formaPago: g.formaPago || 'Transferencia',
       chequeInfo: g.formaPago === 'Cheque' ? [g.numeroCheque, g.fechaCheque].filter(Boolean).join(' · ') : '',
+      origen: 'gasto',
+      gasto: g,
     })
   })
   fin.obligaciones.forEach(o => {
@@ -771,6 +807,9 @@ function itemsPorPagar(fin, proyectos = []) {
         area: areasDe(o.dist),
         monto: Math.round(c.total || 0),
         tabDestino: 'creditos',
+        origen: 'cuota',
+        obligacionId: o.id,
+        cuotaN: c.n,
       })
     })
   })
@@ -793,6 +832,7 @@ function itemsPorPagar(fin, proyectos = []) {
         tabDestino: null,
         formaPago: 'Transferencia',
         chequeInfo: '',
+        origen: 'compra_proyecto',
       })
     })
   })
@@ -832,14 +872,16 @@ function kpiSolida(label, valor, color, icono, sub, onClick) {
   )
 }
 // Tabla de filas de itemsPorPagar() — reutilizada tanto por cada seccion()
-// de la pantalla como por el modal de detalle que abren las tarjetas KPI,
-// para no mantener dos veces el mismo marcado.
-function tablaItemsPago(filas) {
+// de la pantalla (solo lectura, sin acciones) como por el modal de detalle
+// que abren las tarjetas KPI (con acciones), para no mantener dos veces el
+// mismo marcado. acciones() opcional: recibe la fila y devuelve el JSX de
+// la columna de la derecha (editar/eliminar/marcar pagada segun el origen).
+function tablaItemsPago(filas, acciones) {
   return (
     <div style={{ background: '#fff', border: '1px solid #DFE4EA', overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead><tr style={{ borderBottom: '1px solid #DFE4EA' }}>
-          {['Vencimiento', 'Tipo', 'Detalle', 'Forma de pago', 'Monto'].map(hh => (
+          {['Vencimiento', 'Tipo', 'Detalle', 'Forma de pago', 'Monto', ...(acciones ? [''] : [])].map(hh => (
             <th key={hh} style={{ textAlign: hh === 'Monto' ? 'right' : 'left', padding: '6px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{hh}</th>
           ))}
         </tr></thead>
@@ -851,6 +893,7 @@ function tablaItemsPago(filas) {
               <td style={{ padding: '6px 10px' }}>{x.detalle}{x.proveedor ? <span style={{ color: C.gris }}> · {x.proveedor}</span> : ''}</td>
               <td style={{ padding: '6px 10px', fontSize: 12 }}>{x.formaPago === 'Cheque' ? <span title={x.chequeInfo}>🧾 Cheque{x.chequeInfo ? ' · ' + x.chequeInfo : ''}</span> : <span style={{ color: C.gris }}>Transferencia</span>}</td>
               <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600 }}>{clp(x.monto)}</td>
+              {acciones && <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>{acciones(x)}</td>}
             </tr>
           )})}
         </tbody>
@@ -859,13 +902,35 @@ function tablaItemsPago(filas) {
   )
 }
 // Modal de detalle que abre cada tarjeta KPI de colores — mismo patron de
-// overlay ya usado en la ficha de OT (fondo oscuro + panel centrado,
-// clic afuera o boton Cerrar para salir).
-function ModalDetallePago({ titulo, color, filas, sub, onClose }) {
+// overlay ya usado en la ficha de OT (fondo oscuro + panel centrado, clic
+// afuera o boton Cerrar para salir). A pedido explicito ("necesito agregar,
+// eliminar, editar") las filas que son gastos (fijo/variable) se pueden
+// editar/eliminar directo desde aca, las cuotas de credito se pueden marcar
+// pagadas, y hay un boton para cargar un gasto nuevo sin salir del modal —
+// todo escribe con los mismos helpers pull-fresh+merge+push que usa
+// ListaGastos, nunca una copia paralela. Las compras de proyecto siguen
+// siendo de solo lectura aca (se editan en la ficha del proyecto, que es
+// donde vive el resto de sus datos — folio, abono, etc.).
+function ModalDetallePago({ titulo, color, filas, sub, onClose, fin, setFin, otsDisponibles }) {
+  const [editando, setEditando] = useState(null)
+  const [creando, setCreando] = useState(null) // 'fijo' | 'variable' | null
   const total = (filas || []).reduce((a, x) => a + x.monto, 0)
+  const puedeEditar = !!(fin && setFin)
+
+  const acciones = puedeEditar ? (x => {
+    if (x.origen === 'gasto') return (<>
+      <button title="Editar" onClick={() => setEditando(x.gasto)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Pencil size={14} /></button>
+      <button title="Eliminar" onClick={() => window.confirm(`¿Eliminar "${x.gasto.nombre}"?`) && eliminarGastoFresco(fin, setFin, x.gasto.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
+    </>)
+    if (x.origen === 'cuota') return (
+      <button onClick={() => marcarCuotaPagada(fin, setFin, x.obligacionId, x.cuotaN)} style={{ background: 'none', border: `1px solid ${C.verde}`, color: C.verde, borderRadius: 4, padding: '3px 8px', fontSize: 11, cursor: 'pointer' }}>Marcar pagada</button>
+    )
+    return <span title="Se edita en la ficha del proyecto correspondiente" style={{ color: C.gris, fontSize: 11 }}>—</span>
+  }) : null
+
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,26,46,.55)', zIndex: 70, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '28px 16px', overflowY: 'auto' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#F7F6F3', width: '100%', maxWidth: 820, boxShadow: '0 20px 60px -12px rgba(0,0,0,.4)', borderRadius: 6, overflow: 'hidden' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#F7F6F3', width: '100%', maxWidth: 860, boxShadow: '0 20px 60px -12px rgba(0,0,0,.4)', borderRadius: 6, overflow: 'hidden' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', borderBottom: `3px solid ${color}`, background: '#fff' }}>
           <div>
             <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 15, textTransform: 'uppercase', color }}>{titulo}</div>
@@ -874,12 +939,22 @@ function ModalDetallePago({ titulo, color, filas, sub, onClose }) {
           <button onClick={onClose} style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><X size={15} /> Cerrar</button>
         </div>
         <div style={{ padding: 16 }}>
+          {puedeEditar && !editando && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+              {creando ? null : (<>
+                <button onClick={() => setCreando('fijo')} style={{ background: C.naranja, color: '#fff', border: 'none', padding: '8px 14px', cursor: 'pointer', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={13} /> Gasto fijo</button>
+                <button onClick={() => setCreando('variable')} style={{ background: 'none', border: `1px dashed ${C.naranja}`, color: C.carbon, padding: '8px 14px', cursor: 'pointer', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={13} /> Gasto variable</button>
+              </>)}
+            </div>
+          )}
+          {editando && <FormGasto tipo={editando.tipo} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} gastoInicial={editando} onCerrar={() => setEditando(null)} />}
+          {creando && <FormGasto tipo={creando} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} onCerrar={() => setCreando(null)} />}
           {filas ? (
             filas.length === 0 ? (
               <div style={{ fontSize: 13, color: C.gris }}>No hay cuentas en este grupo.</div>
             ) : (<>
               <div style={{ fontSize: 12.5, color: C.gris, marginBottom: 8 }}>{filas.length} cuenta(s) · total <b style={{ color: C.carbon }}>{clp(total)}</b></div>
-              {tablaItemsPago(filas)}
+              {tablaItemsPago(filas, acciones)}
             </>)
           ) : null}
         </div>
@@ -887,7 +962,7 @@ function ModalDetallePago({ titulo, color, filas, sub, onClose }) {
     </div>
   )
 }
-export function PorPagar({ fin, proyectos, params, setParams, irA }) {
+export function PorPagar({ fin, setFin, proyectos, params, setParams, otsDisponibles, irA }) {
   const [detalle, setDetalle] = useState(null)
   const items = itemsPorPagar(fin, proyectos)
   const h = hoy()
@@ -924,34 +999,40 @@ export function PorPagar({ fin, proyectos, params, setParams, irA }) {
   return (
     <div>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-        {kpiSolida('Por pagar esta semana', clp(totalSemana), C.naranja, <CalendarClock size={20} />, null,
-          () => setDetalle({ titulo: 'Por pagar esta semana', color: C.naranja, sub: h + ' al ' + en7s, filas: items.filter(grupos[1].filtro) }))}
-        {kpiSolida('Por pagar este mes', clp(totalMes), '#0E7A8F', <BarChart3 size={20} />, mesActual,
-          () => setDetalle({ titulo: 'Por pagar este mes', color: '#0E7A8F', sub: mesActual, filas: items.filter(x => mesDe(x.vencimiento) === mesActual) }))}
-        {kpiSolida('Nóminas pendientes', clp(totalNominas), COLOR_TIPO_PAGO['Nómina'], <span style={{ fontSize: 18 }}>👥</span>, null,
-          () => setDetalle({ titulo: 'Nóminas pendientes', color: COLOR_TIPO_PAGO['Nómina'], sub: 'Sueldos e imposiciones', filas: nominas }))}
-        {kpiSolida('Proveedores (proyectos)', clp(totalProveedores), COLOR_TIPO_PAGO['Compra proyecto'], <span style={{ fontSize: 18 }}>🎨</span>, null,
-          () => setDetalle({ titulo: 'Proveedores (proyectos)', color: COLOR_TIPO_PAGO['Compra proyecto'], sub: 'Compras de proyecto con saldo pendiente', filas: proveedores }))}
-        {kpiSolida('Vencido', clp(totalVencido), C.rojo, <span style={{ fontSize: 18 }}>⚠</span>, null,
-          () => setDetalle({ titulo: 'Vencido', color: C.rojo, sub: 'Antes de ' + h, filas: items.filter(grupos[0].filtro) }))}
-        {kpiSolida('UF hoy', clp(uf.valor), ufHoyOk ? C.verde : '#94A3B8', <TrendingUp size={20} />, uf.fecha ? ('al ' + uf.fecha + (ufHoyOk ? ' · al día' : ' · desactualizada')) : 'sin datos',
-          () => setDetalle({ titulo: 'UF hoy', color: ufHoyOk ? C.verde : '#94A3B8', sub: null, filas: null, uf }))}
+        {kpiSolida('Por pagar esta semana', clp(totalSemana), C.naranja, <CalendarClock size={20} />, null, () => setDetalle('semana'))}
+        {kpiSolida('Por pagar este mes', clp(totalMes), '#0E7A8F', <BarChart3 size={20} />, mesActual, () => setDetalle('mes'))}
+        {kpiSolida('Nóminas pendientes', clp(totalNominas), COLOR_TIPO_PAGO['Nómina'], <span style={{ fontSize: 18 }}>👥</span>, null, () => setDetalle('nominas'))}
+        {kpiSolida('Proveedores (proyectos)', clp(totalProveedores), COLOR_TIPO_PAGO['Compra proyecto'], <span style={{ fontSize: 18 }}>🎨</span>, null, () => setDetalle('proveedores'))}
+        {kpiSolida('Vencido', clp(totalVencido), C.rojo, <span style={{ fontSize: 18 }}>⚠</span>, null, () => setDetalle('vencido'))}
+        {kpiSolida('UF hoy', clp(uf.valor), ufHoyOk ? C.verde : '#94A3B8', <TrendingUp size={20} />, uf.fecha ? ('al ' + uf.fecha + (ufHoyOk ? ' · al día' : ' · desactualizada')) : 'sin datos', () => setDetalle('uf'))}
       </div>
-      {detalle && (detalle.uf ? (
+      {detalle === 'uf' && (
         <div onClick={() => setDetalle(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,26,46,.55)', zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 8, maxWidth: 420, width: '100%', padding: 20, boxShadow: '0 20px 60px -12px rgba(0,0,0,.4)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-              <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 15, textTransform: 'uppercase', color: detalle.color }}>Valor UF</div>
+              <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 15, textTransform: 'uppercase', color: ufHoyOk ? C.verde : '#94A3B8' }}>Valor UF</div>
               <button onClick={() => setDetalle(null)} style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><X size={15} /> Cerrar</button>
             </div>
-            <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 26, marginBottom: 4 }}>{clp(detalle.uf.valor)}</div>
-            <div style={{ fontSize: 12.5, color: C.gris, marginBottom: 12 }}>{detalle.uf.fecha ? ('Actualizada al ' + detalle.uf.fecha + (ufHoyOk ? ' · al día' : ' · desactualizada, se sincroniza sola en cuanto se abra la app')) : 'Sin datos aún'}</div>
+            <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 26, marginBottom: 4 }}>{clp(uf.valor)}</div>
+            <div style={{ fontSize: 12.5, color: C.gris, marginBottom: 12 }}>{uf.fecha ? ('Actualizada al ' + uf.fecha + (ufHoyOk ? ' · al día' : ' · desactualizada, se sincroniza sola en cuanto se abra la app')) : 'Sin datos aún'}</div>
             <div style={{ fontSize: 12.5, color: C.carbon, lineHeight: 1.5 }}>El valor se trae automáticamente cada día desde mindicador.cl y se usa para calcular en pesos los gastos indexados a UF (como el arriendo) dentro de "Por pagar esta semana" y "Por pagar este mes".</div>
           </div>
         </div>
-      ) : (
-        <ModalDetallePago titulo={detalle.titulo} color={detalle.color} sub={detalle.sub} filas={detalle.filas} onClose={() => setDetalle(null)} />
-      ))}
+      )}
+      {detalle && detalle !== 'uf' && (() => {
+        // filas se recalcula en cada render desde items/nominas/proveedores
+        // (ya recalculados arriba a partir de fin/proyectos vigentes) — asi
+        // el modal queda al dia apenas se edita o elimina algo adentro, sin
+        // quedarse con una foto vieja tomada al momento del clic.
+        const cfg = {
+          semana: { titulo: 'Por pagar esta semana', color: C.naranja, sub: h + ' al ' + en7s, filas: items.filter(grupos[1].filtro) },
+          mes: { titulo: 'Por pagar este mes', color: '#0E7A8F', sub: mesActual, filas: items.filter(x => mesDe(x.vencimiento) === mesActual) },
+          nominas: { titulo: 'Nóminas pendientes', color: COLOR_TIPO_PAGO['Nómina'], sub: 'Sueldos e imposiciones', filas: nominas },
+          proveedores: { titulo: 'Proveedores (proyectos)', color: COLOR_TIPO_PAGO['Compra proyecto'], sub: 'Compras de proyecto con saldo pendiente', filas: proveedores },
+          vencido: { titulo: 'Vencido', color: C.rojo, sub: 'Antes de ' + h, filas: items.filter(grupos[0].filtro) },
+        }[detalle]
+        return <ModalDetallePago titulo={cfg.titulo} color={cfg.color} sub={cfg.sub} filas={cfg.filas} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} onClose={() => setDetalle(null)} />
+      })()}
       <div style={{ fontSize: 11.5, color: C.gris, marginBottom: 16 }}>Total general pendiente: <b style={{ color: C.carbon }}>{clp(totalGeneral)}</b></div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
         <button onClick={() => irA('fijos')} style={btnAgregar}><Plus size={13} /> Gasto fijo</button>
