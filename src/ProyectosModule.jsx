@@ -74,8 +74,8 @@ const colorUT = p => p >= 30 ? C.verde : p >= 15 ? C.ambar : C.rojo
 // factura, nunca es un campo aparte que alguien pueda dejar
 // desactualizado — mismo criterio que el resto de la app (ej. estado de
 // una pieza en OTModule.jsx).
-const montoBrutoCompra = c => c.exento ? (c.monto || 0) : Math.round((c.monto || 0) * 1.19)
-const estadoPagoCompra = c => { const bruto = montoBrutoCompra(c); const ab = c.abonado || 0; if (ab <= 0) return 'Pendiente'; if (ab >= bruto) return 'Pagado'; return 'Parcial' }
+export const montoBrutoCompra = c => c.exento ? (c.monto || 0) : Math.round((c.monto || 0) * 1.19)
+export const estadoPagoCompra = c => { const bruto = montoBrutoCompra(c); const ab = c.abonado || 0; if (ab <= 0) return 'Pendiente'; if (ab >= bruto) return 'Pagado'; return 'Parcial' }
 const COLOR_PAGO_COMPRA = { Pendiente: C.rojo, Parcial: C.ambar, Pagado: C.verde }
 
 function Barra({ pct, color, alto = 8 }) {

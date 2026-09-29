@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx'
 
 import { SEREIN } from './theme-serein.js'
 import { pullState, pushState } from './sync.js'
+import { montoBrutoCompra } from './ProyectosModule.jsx'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
 const C = { naranja: SEREIN.orange, carbon: SEREIN.text, verde: SEREIN.green, rojo: SEREIN.red, gris: SEREIN.textFaint }
 const clp = n => '$' + Math.round(n).toLocaleString('es-CL')
@@ -17,6 +18,7 @@ const CATEGORIAS_FIJO = ['Arriendo', 'Luz', 'Agua', 'Internet', 'Teléfono', 'Co
 const CATEGORIAS_VAR = ['Combustible', 'EPP', 'Herramientas', 'Mantenciones', 'Transporte', 'Materiales menores', 'Repuestos', 'Insumos de planta', 'Otros']
 const FRECUENCIAS = ['Mensual', 'Semanal', 'Anual', 'Única']
 const ESTADOS_GASTO = ['Pendiente', 'Pagado', 'Vencido', 'Anulado']
+const FORMAS_PAGO = ['Transferencia', 'Cheque']
 const TIPOS_OBLIGACION = ['Crédito', 'Leasing', 'Préstamo', 'Fogape', 'Vehículo', 'Maquinaria', 'Otro']
 
 // ================= DATOS DE PRUEBA (gastos reales de tu Excel, julio 2026) =================
@@ -77,7 +79,7 @@ function EditorDistribucion({ dist, setDist, plantillas, areas }) {
 // ================= FORMULARIO DE GASTO =================
 function FormGasto({ tipo, fin, setFin, otsDisponibles, onCerrar }) {
   const cats = tipo === 'fijo' ? CATEGORIAS_FIJO : CATEGORIAS_VAR
-  const [f, setF] = useState({ nombre: '', categoria: cats[0], proveedor: '', documento: '', neto: '', conIva: tipo !== 'fijo', vencimiento: hoy(), frecuencia: tipo === 'fijo' ? 'Mensual' : 'Única', estado: 'Pendiente', ot: '', obs: '', esUF: false, uf: '' })
+  const [f, setF] = useState({ nombre: '', categoria: cats[0], proveedor: '', documento: '', neto: '', conIva: tipo !== 'fijo', vencimiento: hoy(), frecuencia: tipo === 'fijo' ? 'Mensual' : 'Única', estado: 'Pendiente', ot: '', obs: '', esUF: false, uf: '', formaPago: 'Transferencia', numeroCheque: '', fechaCheque: '' })
   const [dist, setDist] = useState([{ area: 'General empresa', pct: 100 }])
   const suma = dist.reduce((a, d) => a + (parseFloat(d.pct) || 0), 0)
   const ok = Math.abs(suma - 100) < 0.01
@@ -85,7 +87,7 @@ function FormGasto({ tipo, fin, setFin, otsDisponibles, onCerrar }) {
   function guardar() {
     if (!f.nombre || (f.esUF ? num(f.uf) : num(f.neto)) <= 0 || !ok) return
     const neto = f.esUF ? Math.round(num(f.uf) * (fin.ufValor || 0)) : num(f.neto)
-    const g = { id: 'g' + Date.now(), tipo, nombre: f.nombre, categoria: f.categoria, proveedor: f.proveedor, documento: f.documento, neto, iva: f.conIva ? Math.round(neto * 0.19) : 0, vencimiento: f.vencimiento, frecuencia: f.frecuencia, estado: f.estado, ot: f.ot, dist: dist.map(d => ({ area: d.area, pct: parseFloat(d.pct) })), obs: f.obs, esUF: f.esUF, uf: num(f.uf) }
+    const g = { id: 'g' + Date.now(), tipo, nombre: f.nombre, categoria: f.categoria, proveedor: f.proveedor, documento: f.documento, neto, iva: f.conIva ? Math.round(neto * 0.19) : 0, vencimiento: f.vencimiento, frecuencia: f.frecuencia, estado: f.estado, ot: f.ot, dist: dist.map(d => ({ area: d.area, pct: parseFloat(d.pct) })), obs: f.obs, esUF: f.esUF, uf: num(f.uf), formaPago: f.formaPago, numeroCheque: f.formaPago === 'Cheque' ? f.numeroCheque : '', fechaCheque: f.formaPago === 'Cheque' ? f.fechaCheque : '' }
     agregarGastoFresco(g)
     onCerrar()
   }
@@ -127,6 +129,9 @@ function FormGasto({ tipo, fin, setFin, otsDisponibles, onCerrar }) {
           <option value="">Sin OT/OC (gasto general)</option>
           {otsDisponibles.map(o => <option key={o}>{o}</option>)}
         </select>
+        <select style={inp} value={f.formaPago} onChange={e => setF({ ...f, formaPago: e.target.value })}>{FORMAS_PAGO.map(x => <option key={x}>{x}</option>)}</select>
+        {f.formaPago === 'Cheque' && <input style={inp} placeholder="Nº de cheque" value={f.numeroCheque} onChange={e => setF({ ...f, numeroCheque: e.target.value })} />}
+        {f.formaPago === 'Cheque' && <label style={{ fontSize: 12, color: C.gris }}>Fecha del cheque<input type="date" style={{ ...inp, width: '100%' }} value={f.fechaCheque} onChange={e => setF({ ...f, fechaCheque: e.target.value })} /></label>}
       </div>
       {num(f.neto) > 0 && f.conIva && <div style={{ fontSize: 12, color: C.gris, marginTop: 6 }}>IVA: {clp(num(f.neto) * 0.19)} · Total: {clp(num(f.neto) * 1.19)}</div>}
       {f.ot && <div style={{ fontSize: 12, color: '#D9600A', background: '#FDECDD', padding: '6px 10px', marginTop: 6 }}>Este gasto se cargará como costo de la {f.ot} además del área.</div>}
@@ -737,7 +742,7 @@ function ResumenMensual({ fin }) {
 // que nunca se desalineen entre sí. Excluye lo Anulado/Pagado y las
 // cuotas a cargo de un tercero que reembolsa (mismo criterio que
 // flujoDe(): no son una salida de caja real de Serein).
-function itemsPorPagar(fin) {
+function itemsPorPagar(fin, proyectos = []) {
   const areasDe = dist => (dist || []).map(d => `${d.area} ${d.pct}%`).join(', ')
   const items = []
   fin.gastos.filter(g => g.estado !== 'Anulado' && g.estado !== 'Pagado').forEach(g => {
@@ -750,6 +755,8 @@ function itemsPorPagar(fin) {
       area: areasDe(g.dist),
       monto: Math.round(netoEf(g, fin.ufValor)),
       tabDestino: g.tipo === 'fijo' ? 'fijos' : 'variables',
+      formaPago: g.formaPago || 'Transferencia',
+      chequeInfo: g.formaPago === 'Cheque' ? [g.numeroCheque, g.fechaCheque].filter(Boolean).join(' · ') : '',
     })
   })
   fin.obligaciones.forEach(o => {
@@ -766,7 +773,29 @@ function itemsPorPagar(fin) {
       })
     })
   })
-  items.sort((a, b) => a.vencimiento.localeCompare(b.vencimiento))
+  // Compras de cada proyecto (pintura, materiales, subcontratos) con saldo
+  // pendiente — se leen desde ProyectosModule, nunca se duplican: siguen
+  // viviendo y se editan solo en la ficha del proyecto correspondiente.
+  ;(proyectos || []).forEach(p => {
+    ;(p.compras || []).forEach(c => {
+      const bruto = montoBrutoCompra(c)
+      const pendiente = bruto - (+c.abonado || 0)
+      if (pendiente <= 0) return
+      items.push({
+        id: 'c-' + p.id + '-' + (c.folio || '') + '-' + (c.fecha || '') + '-' + bruto,
+        vencimiento: (c.fecha && c.fecha !== '—') ? c.fecha : '',
+        tipo: 'Compra proyecto',
+        detalle: (c.detalle || c.proveedor || 'Compra') + ' · OT ' + (p.ot || p.nombre || '—'),
+        proveedor: c.proveedor || '',
+        area: '',
+        monto: Math.round(pendiente),
+        tabDestino: null,
+        formaPago: 'Transferencia',
+        chequeInfo: '',
+      })
+    })
+  })
+  items.sort((a, b) => (a.vencimiento || '9999').localeCompare(b.vencimiento || '9999'))
   return items
 }
 
@@ -778,8 +807,9 @@ function itemsPorPagar(fin) {
 // de antemano si algo era "fijo" o "variable" para encontrarlo). Los
 // botones de abajo llevan a la pestaña correspondiente para cargar un
 // gasto o crédito nuevo — no duplican los formularios que ya existen.
-function PorPagar({ fin, irA }) {
-  const items = itemsPorPagar(fin)
+const COLOR_TIPO_PAGO = { 'Gasto fijo': '#2563EB', 'Gasto variable': '#D97706', 'Compra proyecto': '#0E9F6E', default: C.gris }
+function PorPagar({ fin, proyectos, irA }) {
+  const items = itemsPorPagar(fin, proyectos)
   const h = hoy()
   const en7 = new Date(); en7.setDate(en7.getDate() + 7)
   const en7s = en7.toISOString().slice(0, 10)
@@ -811,6 +841,7 @@ function PorPagar({ fin, irA }) {
         <button onClick={() => irA('fijos')} style={btnAgregar}><Plus size={13} /> Gasto fijo</button>
         <button onClick={() => irA('variables')} style={btnAgregar}><Plus size={13} /> Gasto variable</button>
         <button onClick={() => irA('creditos')} style={btnAgregar}><Plus size={13} /> Crédito / Leasing</button>
+        <div title="Las compras de proyecto (pintura, materiales) se cargan en la ficha de cada proyecto — acá solo se muestran para tener todo junto." style={{ ...btnAgregar, cursor: 'default', color: COLOR_TIPO_PAGO['Compra proyecto'], borderColor: COLOR_TIPO_PAGO['Compra proyecto'] }}>ℹ Compras de proyecto: se cargan en Proyectos</div>
       </div>
       {items.length === 0 && <div style={{ fontSize: 13, color: C.gris, background: '#fff', border: '1px solid #DFE4EA', padding: 16 }}>No hay cuentas por pagar pendientes.</div>}
       {grupos.map(g => {
@@ -826,20 +857,20 @@ function PorPagar({ fin, irA }) {
             <div style={{ background: '#fff', border: '1px solid #DFE4EA', overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead><tr style={{ borderBottom: '1px solid #DFE4EA' }}>
-                  {['Vencimiento', 'Tipo', 'Detalle', 'Área', 'Monto'].map(hh => (
+                  {['Vencimiento', 'Tipo', 'Detalle', 'Forma de pago', 'Monto'].map(hh => (
                     <th key={hh} style={{ textAlign: hh === 'Monto' ? 'right' : 'left', padding: '6px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{hh}</th>
                   ))}
                 </tr></thead>
                 <tbody>
-                  {filas.map(x => (
+                  {filas.map(x => { const colorTipo = COLOR_TIPO_PAGO[x.tipo] || COLOR_TIPO_PAGO.default; return (
                     <tr key={x.id} style={{ borderBottom: '1px solid #F2F4F7' }}>
-                      <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>{x.vencimiento}</td>
-                      <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>{x.tipo}</td>
-                      <td style={{ padding: '6px 10px' }}>{x.detalle}</td>
-                      <td style={{ padding: '6px 10px', color: C.gris, fontSize: 12 }}>{x.area}</td>
+                      <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>{x.vencimiento || <span style={{ color: C.gris }}>—</span>}</td>
+                      <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}><span style={{ background: colorTipo + '22', color: colorTipo, fontWeight: 700, fontSize: 11, padding: '3px 8px', borderRadius: 20 }}>{x.tipo}</span></td>
+                      <td style={{ padding: '6px 10px' }}>{x.detalle}{x.proveedor ? <span style={{ color: C.gris }}> · {x.proveedor}</span> : ''}</td>
+                      <td style={{ padding: '6px 10px', fontSize: 12 }}>{x.formaPago === 'Cheque' ? <span title={x.chequeInfo}>🧾 Cheque{x.chequeInfo ? ' · ' + x.chequeInfo : ''}</span> : <span style={{ color: C.gris }}>Transferencia</span>}</td>
                       <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600 }}>{clp(x.monto)}</td>
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             </div>
@@ -914,13 +945,13 @@ function descargarInformeCuentasPorPagar(fin) {
 }
 
 // ================= MÓDULO PRINCIPAL =================
-export default function FinanzasModule({ otsDisponibles = [], fin: finExt, setFin: setFinExt }) {
+export default function FinanzasModule({ otsDisponibles = [], fin: finExt, setFin: setFinExt, proyectos = [] }) {
   const [finInt, setFinInt] = useState(FIN_SEED)
   const fin = finExt ?? finInt
   const setFin = setFinExt ?? setFinInt
 
   const tabs = [
-    { id: 'porpagar', label: 'Por pagar', icono: <CalendarClock size={13} /> },
+    { id: 'porpagar', label: 'Pagos', icono: <CalendarClock size={13} /> },
     { id: 'resumen', label: 'Resumen mensual', icono: <BarChart3 size={13} /> },
     { id: 'fijos', label: 'Gastos fijos', icono: <ReceiptText size={13} /> },
     { id: 'variables', label: 'Gastos variables', icono: <ReceiptText size={13} /> },
@@ -945,7 +976,7 @@ export default function FinanzasModule({ otsDisponibles = [], fin: finExt, setFi
           <Download size={13} /> Descargar Excel
         </button>
       </div>
-      {tab === 'porpagar' && <PorPagar fin={fin} irA={setTab} />}
+      {tab === 'porpagar' && <PorPagar fin={fin} proyectos={proyectos} irA={setTab} />}
       {tab === 'resumen' && <><ResumenMensual fin={fin} /><ProyeccionFin fin={fin} /></>}
       {tab === 'fijos' && <ListaGastos tipo="fijo" fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} />}
       {tab === 'variables' && <ListaGastos tipo="variable" fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} />}
