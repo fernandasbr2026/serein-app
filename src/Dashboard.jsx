@@ -834,7 +834,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
             setClientes(prev => [nuevoCli, ...(prev || [])])
           }} />
         ) : esModuloFin && puedeVer('FINANZAS') ? (
-          <FinanzasModule otsDisponibles={ots.map(o => o.numero)} fin={fin} setFin={setFin} />
+          <FinanzasModule otsDisponibles={ots.map(o => o.numero)} fin={fin} setFin={setFin} proyectos={proyectos} />
         ) : esModuloPagos && puedeVer('PAGOS') ? (
           <ProveedoresPagosModule pp={pp} setPp={setPp} gastos={fin.gastos || []} />
         ) : esModuloOC && puedeVer('ORDENES_COMPRA') ? (
