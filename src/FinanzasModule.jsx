@@ -816,19 +816,79 @@ const esNomina = categoria => /sueldo/i.test(categoria || '') || categoria === '
 // Tarjeta de KPI al estilo tablero de colores sólidos (fondo lleno, no solo
 // un borde) — más llamativo que las tarjetas blancas del resto de la app,
 // a pedido explícito ("visualización de estos colores").
-function kpiSolida(label, valor, color, icono, sub) {
+function kpiSolida(label, valor, color, icono, sub, onClick) {
   return (
-    <div style={{ background: color, color: '#fff', borderRadius: 10, padding: '14px 16px', flex: '1 1 190px', boxShadow: '0 2px 6px rgba(0,0,0,.12)' }}>
+    <div onClick={onClick} style={{ background: color, color: '#fff', borderRadius: 10, padding: '14px 16px', flex: '1 1 190px', boxShadow: '0 2px 6px rgba(0,0,0,.12)', cursor: onClick ? 'pointer' : 'default', transition: 'transform .1s ease, box-shadow .1s ease' }}
+      onMouseEnter={e => { if (onClick) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 14px rgba(0,0,0,.2)' } }}
+      onMouseLeave={e => { if (onClick) { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 2px 6px rgba(0,0,0,.12)' } }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 22 }}>{valor}</div>
         {icono}
       </div>
       <div style={{ fontSize: 12, marginTop: 4, opacity: 0.92 }}>{label}</div>
       {sub && <div style={{ fontSize: 10.5, marginTop: 3, opacity: 0.8 }}>{sub}</div>}
+      {onClick && <div style={{ fontSize: 10, marginTop: 6, opacity: 0.75, textDecoration: 'underline' }}>Ver detalle</div>}
     </div>
   )
 }
-function PorPagar({ fin, proyectos, params, setParams, irA }) {
+// Tabla de filas de itemsPorPagar() — reutilizada tanto por cada seccion()
+// de la pantalla como por el modal de detalle que abren las tarjetas KPI,
+// para no mantener dos veces el mismo marcado.
+function tablaItemsPago(filas) {
+  return (
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <thead><tr style={{ borderBottom: '1px solid #DFE4EA' }}>
+          {['Vencimiento', 'Tipo', 'Detalle', 'Forma de pago', 'Monto'].map(hh => (
+            <th key={hh} style={{ textAlign: hh === 'Monto' ? 'right' : 'left', padding: '6px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{hh}</th>
+          ))}
+        </tr></thead>
+        <tbody>
+          {filas.map(x => { const colorTipo = COLOR_TIPO_PAGO[x.tipo] || COLOR_TIPO_PAGO.default; return (
+            <tr key={x.id} style={{ borderBottom: '1px solid #F2F4F7' }}>
+              <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>{x.vencimiento || <span style={{ color: C.gris }}>—</span>}</td>
+              <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}><span style={{ background: colorTipo + '22', color: colorTipo, fontWeight: 700, fontSize: 11, padding: '3px 8px', borderRadius: 20 }}>{x.tipo}</span></td>
+              <td style={{ padding: '6px 10px' }}>{x.detalle}{x.proveedor ? <span style={{ color: C.gris }}> · {x.proveedor}</span> : ''}</td>
+              <td style={{ padding: '6px 10px', fontSize: 12 }}>{x.formaPago === 'Cheque' ? <span title={x.chequeInfo}>🧾 Cheque{x.chequeInfo ? ' · ' + x.chequeInfo : ''}</span> : <span style={{ color: C.gris }}>Transferencia</span>}</td>
+              <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600 }}>{clp(x.monto)}</td>
+            </tr>
+          )})}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+// Modal de detalle que abre cada tarjeta KPI de colores — mismo patron de
+// overlay ya usado en la ficha de OT (fondo oscuro + panel centrado,
+// clic afuera o boton Cerrar para salir).
+function ModalDetallePago({ titulo, color, filas, sub, onClose }) {
+  const total = (filas || []).reduce((a, x) => a + x.monto, 0)
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,26,46,.55)', zIndex: 70, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '28px 16px', overflowY: 'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#F7F6F3', width: '100%', maxWidth: 820, boxShadow: '0 20px 60px -12px rgba(0,0,0,.4)', borderRadius: 6, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', borderBottom: `3px solid ${color}`, background: '#fff' }}>
+          <div>
+            <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 15, textTransform: 'uppercase', color }}>{titulo}</div>
+            {sub && <div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>{sub}</div>}
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><X size={15} /> Cerrar</button>
+        </div>
+        <div style={{ padding: 16 }}>
+          {filas ? (
+            filas.length === 0 ? (
+              <div style={{ fontSize: 13, color: C.gris }}>No hay cuentas en este grupo.</div>
+            ) : (<>
+              <div style={{ fontSize: 12.5, color: C.gris, marginBottom: 8 }}>{filas.length} cuenta(s) · total <b style={{ color: C.carbon }}>{clp(total)}</b></div>
+              {tablaItemsPago(filas)}
+            </>)
+          ) : null}
+        </div>
+      </div>
+    </div>
+  )
+}
+export function PorPagar({ fin, proyectos, params, setParams, irA }) {
+  const [detalle, setDetalle] = useState(null)
   const items = itemsPorPagar(fin, proyectos)
   const h = hoy()
   const en7 = new Date(); en7.setDate(en7.getDate() + 7)
@@ -858,38 +918,40 @@ function PorPagar({ fin, proyectos, params, setParams, irA }) {
         <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 13, textTransform: 'uppercase', color, display: 'flex', alignItems: 'center', gap: 6 }}>{icono} {titulo} ({filas.length})</span>
         <span style={{ fontWeight: 700, fontFamily: SEREIN.fontDisplay }}>{clp(filas.reduce((a, x) => a + x.monto, 0))}</span>
       </div>
-      <div style={{ background: '#fff', border: '1px solid #DFE4EA', overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead><tr style={{ borderBottom: '1px solid #DFE4EA' }}>
-            {['Vencimiento', 'Tipo', 'Detalle', 'Forma de pago', 'Monto'].map(hh => (
-              <th key={hh} style={{ textAlign: hh === 'Monto' ? 'right' : 'left', padding: '6px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{hh}</th>
-            ))}
-          </tr></thead>
-          <tbody>
-            {filas.map(x => { const colorTipo = COLOR_TIPO_PAGO[x.tipo] || COLOR_TIPO_PAGO.default; return (
-              <tr key={x.id} style={{ borderBottom: '1px solid #F2F4F7' }}>
-                <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>{x.vencimiento || <span style={{ color: C.gris }}>—</span>}</td>
-                <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}><span style={{ background: colorTipo + '22', color: colorTipo, fontWeight: 700, fontSize: 11, padding: '3px 8px', borderRadius: 20 }}>{x.tipo}</span></td>
-                <td style={{ padding: '6px 10px' }}>{x.detalle}{x.proveedor ? <span style={{ color: C.gris }}> · {x.proveedor}</span> : ''}</td>
-                <td style={{ padding: '6px 10px', fontSize: 12 }}>{x.formaPago === 'Cheque' ? <span title={x.chequeInfo}>🧾 Cheque{x.chequeInfo ? ' · ' + x.chequeInfo : ''}</span> : <span style={{ color: C.gris }}>Transferencia</span>}</td>
-                <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600 }}>{clp(x.monto)}</td>
-              </tr>
-            )})}
-          </tbody>
-        </table>
-      </div>
+      {tablaItemsPago(filas)}
     </div>
   )
   return (
     <div>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-        {kpiSolida('Por pagar esta semana', clp(totalSemana), C.naranja, <CalendarClock size={20} />)}
-        {kpiSolida('Por pagar este mes', clp(totalMes), '#0E7A8F', <BarChart3 size={20} />, mesActual)}
-        {kpiSolida('Nóminas pendientes', clp(totalNominas), COLOR_TIPO_PAGO['Nómina'], <span style={{ fontSize: 18 }}>👥</span>)}
-        {kpiSolida('Proveedores (proyectos)', clp(totalProveedores), COLOR_TIPO_PAGO['Compra proyecto'], <span style={{ fontSize: 18 }}>🎨</span>)}
-        {kpiSolida('Vencido', clp(totalVencido), C.rojo, <span style={{ fontSize: 18 }}>⚠</span>)}
-        {kpiSolida('UF hoy', clp(uf.valor), ufHoyOk ? C.verde : '#94A3B8', <TrendingUp size={20} />, uf.fecha ? ('al ' + uf.fecha + (ufHoyOk ? ' · al día' : ' · desactualizada')) : 'sin datos')}
+        {kpiSolida('Por pagar esta semana', clp(totalSemana), C.naranja, <CalendarClock size={20} />, null,
+          () => setDetalle({ titulo: 'Por pagar esta semana', color: C.naranja, sub: h + ' al ' + en7s, filas: items.filter(grupos[1].filtro) }))}
+        {kpiSolida('Por pagar este mes', clp(totalMes), '#0E7A8F', <BarChart3 size={20} />, mesActual,
+          () => setDetalle({ titulo: 'Por pagar este mes', color: '#0E7A8F', sub: mesActual, filas: items.filter(x => mesDe(x.vencimiento) === mesActual) }))}
+        {kpiSolida('Nóminas pendientes', clp(totalNominas), COLOR_TIPO_PAGO['Nómina'], <span style={{ fontSize: 18 }}>👥</span>, null,
+          () => setDetalle({ titulo: 'Nóminas pendientes', color: COLOR_TIPO_PAGO['Nómina'], sub: 'Sueldos e imposiciones', filas: nominas }))}
+        {kpiSolida('Proveedores (proyectos)', clp(totalProveedores), COLOR_TIPO_PAGO['Compra proyecto'], <span style={{ fontSize: 18 }}>🎨</span>, null,
+          () => setDetalle({ titulo: 'Proveedores (proyectos)', color: COLOR_TIPO_PAGO['Compra proyecto'], sub: 'Compras de proyecto con saldo pendiente', filas: proveedores }))}
+        {kpiSolida('Vencido', clp(totalVencido), C.rojo, <span style={{ fontSize: 18 }}>⚠</span>, null,
+          () => setDetalle({ titulo: 'Vencido', color: C.rojo, sub: 'Antes de ' + h, filas: items.filter(grupos[0].filtro) }))}
+        {kpiSolida('UF hoy', clp(uf.valor), ufHoyOk ? C.verde : '#94A3B8', <TrendingUp size={20} />, uf.fecha ? ('al ' + uf.fecha + (ufHoyOk ? ' · al día' : ' · desactualizada')) : 'sin datos',
+          () => setDetalle({ titulo: 'UF hoy', color: ufHoyOk ? C.verde : '#94A3B8', sub: null, filas: null, uf }))}
       </div>
+      {detalle && (detalle.uf ? (
+        <div onClick={() => setDetalle(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,26,46,.55)', zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 8, maxWidth: 420, width: '100%', padding: 20, boxShadow: '0 20px 60px -12px rgba(0,0,0,.4)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+              <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 15, textTransform: 'uppercase', color: detalle.color }}>Valor UF</div>
+              <button onClick={() => setDetalle(null)} style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><X size={15} /> Cerrar</button>
+            </div>
+            <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 26, marginBottom: 4 }}>{clp(detalle.uf.valor)}</div>
+            <div style={{ fontSize: 12.5, color: C.gris, marginBottom: 12 }}>{detalle.uf.fecha ? ('Actualizada al ' + detalle.uf.fecha + (ufHoyOk ? ' · al día' : ' · desactualizada, se sincroniza sola en cuanto se abra la app')) : 'Sin datos aún'}</div>
+            <div style={{ fontSize: 12.5, color: C.carbon, lineHeight: 1.5 }}>El valor se trae automáticamente cada día desde mindicador.cl y se usa para calcular en pesos los gastos indexados a UF (como el arriendo) dentro de "Por pagar esta semana" y "Por pagar este mes".</div>
+          </div>
+        </div>
+      ) : (
+        <ModalDetallePago titulo={detalle.titulo} color={detalle.color} sub={detalle.sub} filas={detalle.filas} onClose={() => setDetalle(null)} />
+      ))}
       <div style={{ fontSize: 11.5, color: C.gris, marginBottom: 16 }}>Total general pendiente: <b style={{ color: C.carbon }}>{clp(totalGeneral)}</b></div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
         <button onClick={() => irA('fijos')} style={btnAgregar}><Plus size={13} /> Gasto fijo</button>
@@ -972,20 +1034,19 @@ function descargarInformeCuentasPorPagar(fin) {
 }
 
 // ================= MÓDULO PRINCIPAL =================
-export default function FinanzasModule({ otsDisponibles = [], fin: finExt, setFin: setFinExt, proyectos = [], params, setParams }) {
+export default function FinanzasModule({ otsDisponibles = [], fin: finExt, setFin: setFinExt, proyectos = [], params, setParams, tabInicial }) {
   const [finInt, setFinInt] = useState(FIN_SEED)
   const fin = finExt ?? finInt
   const setFin = setFinExt ?? setFinInt
 
   const tabs = [
-    { id: 'porpagar', label: 'Pagos', icono: <CalendarClock size={13} /> },
     { id: 'resumen', label: 'Resumen mensual', icono: <BarChart3 size={13} /> },
     { id: 'fijos', label: 'Gastos fijos', icono: <ReceiptText size={13} /> },
     { id: 'variables', label: 'Gastos variables', icono: <ReceiptText size={13} /> },
     { id: 'creditos', label: 'Créditos y Leasing', icono: <Landmark size={13} /> },
     { id: 'plantillas', label: 'Reglas de distribución', icono: <PieIcon size={13} /> },
   ]
-  const [tab, setTab] = useState('porpagar')
+  const [tab, setTab] = useState(tabInicial || 'resumen')
 
   return (
     <div>
@@ -1003,7 +1064,6 @@ export default function FinanzasModule({ otsDisponibles = [], fin: finExt, setFi
           <Download size={13} /> Descargar Excel
         </button>
       </div>
-      {tab === 'porpagar' && <PorPagar fin={fin} proyectos={proyectos} params={params} setParams={setParams} irA={setTab} />}
       {tab === 'resumen' && <><ResumenMensual fin={fin} /><ProyeccionFin fin={fin} /></>}
       {tab === 'fijos' && <ListaGastos tipo="fijo" fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} />}
       {tab === 'variables' && <ListaGastos tipo="variable" fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} />}

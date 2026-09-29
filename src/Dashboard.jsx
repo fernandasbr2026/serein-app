@@ -11,7 +11,7 @@ import OTModule, { OTS_INICIALES, resumenOTArea } from './OTModule.jsx'
 import PipelineOT from './PipelineOT.jsx'
 import PipelineProyectos from './PipelineProyectos.jsx'
 import ManoObraModule from './ManoObraModule.jsx'
-import FinanzasModule, { FIN_SEED, calcularResumenFin, resumenGastosPeriodoArea, netoEf } from './FinanzasModule.jsx'
+import FinanzasModule, { FIN_SEED, calcularResumenFin, resumenGastosPeriodoArea, netoEf, PorPagar } from './FinanzasModule.jsx'
 import CotizadorModule from './CotizadorModule.jsx'
 import CotizacionesModule from './CotizacionesModule.jsx'
 import ProduccionModule, { AVANCES_SEED } from './ProduccionModule.jsx'
@@ -201,6 +201,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     ...(esGerencia ? ['ASESOR'] : []),
     ...areasUsuario.filter(a => a !== 'Proyectos'),
     ...(tieneProyectos ? ['GESTION_PROYECTOS'] : []),
+    ...(esGerencia ? ['CALENDARIO_PAGOS'] : []),
     ...(esGerencia ? ['PAGOS'] : []),
     ...(esGerencia ? ['ORDENES_COMPRA'] : []),
       ...(esGerencia ? ['LIBRO_COMPRAS'] : []),
@@ -218,7 +219,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     'INVENTARIO',
     ...(esGerencia ? ['PARAMETROS'] : []),
   ]
-  const ORDEN_MODULOS = ['TODAS', 'ORGANIGRAMA', 'CRM', 'ASESOR', 'Santa Rosa', 'Istria', 'GESTION_PROYECTOS', 'FINANZAS', 'ORDENES_COMPRA', 'PAGOS', 'LIBRO_COMPRAS', 'LIBRO_VENTAS', 'CARTOLAS_BANCARIAS', 'TRAZABILIDAD', 'COTIZADOR', 'CLIENTES', 'CONTACTOS', 'COMPRAS_OP', 'PRODUCCION', 'GESTION_OT', 'ASISTENCIA', 'INVENTARIO', 'PARAMETROS']
+  const ORDEN_MODULOS = ['TODAS', 'ORGANIGRAMA', 'CRM', 'ASESOR', 'Santa Rosa', 'Istria', 'GESTION_PROYECTOS', 'CALENDARIO_PAGOS', 'FINANZAS', 'ORDENES_COMPRA', 'PAGOS', 'LIBRO_COMPRAS', 'LIBRO_VENTAS', 'CARTOLAS_BANCARIAS', 'TRAZABILIDAD', 'COTIZADOR', 'CLIENTES', 'CONTACTOS', 'COMPRAS_OP', 'PRODUCCION', 'GESTION_OT', 'ASISTENCIA', 'INVENTARIO', 'PARAMETROS']
   // INVENTARIO se agrega siempre para los perfiles con lista blanca de
   // modulos (varios supervisores lo necesitan aunque no este en su lista) —
   // perfil.ocultar_inventario es la excepcion explicita para un perfil que
@@ -234,6 +235,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   })
   useEffect(() => { try { sessionStorage.setItem('serein_areaSel', areaSel) } catch (e) {} }, [areaSel])
   const [sidebarColapsado, setSidebarColapsado] = useState(false)
+  const [tabFinanzasInicial, setTabFinanzasInicial] = useState(null)
 
   const esModuloProyectos = areaSel === 'GESTION_PROYECTOS'
   const esModuloOrganigrama = areaSel === 'ORGANIGRAMA'
@@ -242,6 +244,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const esModuloMO = areaSel === 'ASISTENCIA'
   const esModuloFin = areaSel === 'FINANZAS'
   const esModuloPagos = areaSel === 'PAGOS'
+  const esModuloCalendarioPagos = areaSel === 'CALENDARIO_PAGOS'
   const esModuloOC = areaSel === 'ORDENES_COMPRA'
   const esModuloTraza = areaSel === 'TRAZABILIDAD'
   const esModuloParams = areaSel === 'PARAMETROS'
@@ -786,7 +789,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     )
   }
 
-  const nombreTab = t => t === 'ASESOR' ? 'Asesor IA' : t === 'TODAS' ? 'Consolidado' : t === 'ORGANIGRAMA' ? '🗂️ Organigrama' : t === 'CRM' ? '📞 CRM' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'ORDENES_COMPRA' ? '🧾 Órdenes de Compra' : t === 'TRAZABILIDAD' ? '🔗 Trazabilidad y Alertas' : t === 'INVENTARIO' ? '📦 Inventario' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Resumen ventas por cliente' : t === 'CONTACTOS' ? '📇 Clientes y Proveedores' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t === 'LIBRO_COMPRAS' ? 'Libro de Compras' : t === 'LIBRO_VENTAS' ? 'Libro de Ventas' : t === 'CARTOLAS_BANCARIAS' ? 'Cartolas Bancarias' : t
+  const nombreTab = t => t === 'ASESOR' ? 'Asesor IA' : t === 'TODAS' ? 'Consolidado' : t === 'ORGANIGRAMA' ? '🗂️ Organigrama' : t === 'CRM' ? '📞 CRM' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'CALENDARIO_PAGOS' ? '🗓️ Pagos' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'ORDENES_COMPRA' ? '🧾 Órdenes de Compra' : t === 'TRAZABILIDAD' ? '🔗 Trazabilidad y Alertas' : t === 'INVENTARIO' ? '📦 Inventario' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Resumen ventas por cliente' : t === 'CONTACTOS' ? '📇 Clientes y Proveedores' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t === 'LIBRO_COMPRAS' ? 'Libro de Compras' : t === 'LIBRO_VENTAS' ? 'Libro de Ventas' : t === 'CARTOLAS_BANCARIAS' ? 'Cartolas Bancarias' : t
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: THEME.bg, fontFamily: THEME.font }}>
@@ -854,7 +857,9 @@ export default function Dashboard({ perfil, email, onLogout }) {
             setClientes(prev => [nuevoCli, ...(prev || [])])
           }} />
         ) : esModuloFin && puedeVer('FINANZAS') ? (
-          <FinanzasModule otsDisponibles={ots.map(o => o.numero)} fin={fin} setFin={setFin} proyectos={proyectos} params={params} setParams={setParams} />
+          <FinanzasModule otsDisponibles={ots.map(o => o.numero)} fin={fin} setFin={setFin} proyectos={proyectos} params={params} setParams={setParams} tabInicial={tabFinanzasInicial} />
+        ) : esModuloCalendarioPagos && puedeVer('CALENDARIO_PAGOS') ? (
+          <PorPagar fin={fin} proyectos={proyectos} params={params} setParams={setParams} irA={tabId => { setTabFinanzasInicial(tabId); setAreaSel('FINANZAS') }} />
         ) : esModuloPagos && puedeVer('PAGOS') ? (
           <ProveedoresPagosModule pp={pp} setPp={setPp} gastos={fin.gastos || []} />
         ) : esModuloOC && puedeVer('ORDENES_COMPRA') ? (
