@@ -828,7 +828,7 @@ function kpiSolida(label, valor, color, icono, sub) {
     </div>
   )
 }
-function PorPagar({ fin, proyectos, params, setParams, irA }) {
+export function PorPagar({ fin, proyectos, params, setParams, irA }) {
   const items = itemsPorPagar(fin, proyectos)
   const h = hoy()
   const en7 = new Date(); en7.setDate(en7.getDate() + 7)
@@ -972,20 +972,19 @@ function descargarInformeCuentasPorPagar(fin) {
 }
 
 // ================= MÓDULO PRINCIPAL =================
-export default function FinanzasModule({ otsDisponibles = [], fin: finExt, setFin: setFinExt, proyectos = [], params, setParams }) {
+export default function FinanzasModule({ otsDisponibles = [], fin: finExt, setFin: setFinExt, proyectos = [], params, setParams, tabInicial }) {
   const [finInt, setFinInt] = useState(FIN_SEED)
   const fin = finExt ?? finInt
   const setFin = setFinExt ?? setFinInt
 
   const tabs = [
-    { id: 'porpagar', label: 'Pagos', icono: <CalendarClock size={13} /> },
     { id: 'resumen', label: 'Resumen mensual', icono: <BarChart3 size={13} /> },
     { id: 'fijos', label: 'Gastos fijos', icono: <ReceiptText size={13} /> },
     { id: 'variables', label: 'Gastos variables', icono: <ReceiptText size={13} /> },
     { id: 'creditos', label: 'Créditos y Leasing', icono: <Landmark size={13} /> },
     { id: 'plantillas', label: 'Reglas de distribución', icono: <PieIcon size={13} /> },
   ]
-  const [tab, setTab] = useState('porpagar')
+  const [tab, setTab] = useState(tabInicial || 'resumen')
 
   return (
     <div>
@@ -1003,7 +1002,6 @@ export default function FinanzasModule({ otsDisponibles = [], fin: finExt, setFi
           <Download size={13} /> Descargar Excel
         </button>
       </div>
-      {tab === 'porpagar' && <PorPagar fin={fin} proyectos={proyectos} params={params} setParams={setParams} irA={setTab} />}
       {tab === 'resumen' && <><ResumenMensual fin={fin} /><ProyeccionFin fin={fin} /></>}
       {tab === 'fijos' && <ListaGastos tipo="fijo" fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} />}
       {tab === 'variables' && <ListaGastos tipo="variable" fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} />}
