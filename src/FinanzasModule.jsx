@@ -272,17 +272,26 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
   const [creando, setCreando] = useState(false)
   const [editando, setEditando] = useState(null)
   const [fArea, setFArea] = useState('')
-  // Filtro por mes: antes esta lista mostraba TODOS los gastos del tipo
-  // sin ninguna forma de acotar a un mes — con varios meses cargados se
-  // volvía una sola lista larga sin orden claro de "esto ya lo revisé
-  // este mes". Por defecto se muestra el mes en curso (lo más probable
-  // que la persona quiera revisar), con opción de ver otro mes o todos.
-  const mesesDisponibles = [...new Set(fin.gastos.filter(g => g.tipo === tipo).map(g => mesDe(g.vencimiento)).filter(Boolean))].sort()
-  const [fMes, setFMes] = useState(() => { const actual = hoy().slice(0, 7); return mesesDisponibles.includes(actual) ? actual : (mesesDisponibles[mesesDisponibles.length - 1] || '') })
+  // Pestañas de mes (Ene-Dic de un año elegible con ‹ ›): reemplaza el
+  // selector "Todos los meses"/un mes suelto de antes — se navega el año
+  // completo. Por defecto abre en el mes en curso.
+  const anioActual = Number(hoy().slice(0, 4))
+  const [anioSel, setAnioSel] = useState(anioActual)
+  const [mesSel, setMesSel] = useState(Number(hoy().slice(5, 7)))
+  const mesKey = anioSel + '-' + String(mesSel).padStart(2, '0')
   const [seleccion, setSeleccion] = useState(() => new Set())
   const todosDelTipo = fin.gastos.filter(g => g.tipo === tipo)
   const porArea = fArea ? todosDelTipo.filter(g => (g.dist || []).some(d => d.area === fArea && (+d.pct || 0) > 0)) : todosDelTipo
-  const gastos = fMes ? porArea.filter(g => mesDe(g.vencimiento) === fMes) : porArea
+  // Filas reales de este mes (su propia fila vive aca, se pueden editar) +
+  // ocurrencias proyectadas de gastos Mensual/Anual cuya fila real vive en
+  // otro mes — de solo lectura, solo para ver cuanto va a costar ese mes
+  // sin tener que cargarlo de nuevo cada vez (pedido explícito: "mis fijos
+  // los debo cargar solo 1 vez y luego deberían aparecer todos los meses").
+  const gastosReales = porArea.filter(g => mesDe(g.vencimiento) === mesKey)
+  const gastosProyectados = porArea
+    .filter(g => g.estado !== 'Anulado' && (g.frecuencia === 'Mensual' || g.frecuencia === 'Anual') && mesDe(g.vencimiento) !== mesKey && gastoOcurreEnMes(g, mesKey))
+    .map(g => ({ ...g, vencimiento: fechaOcurrenciaEnMes(g, mesKey), _proyectado: true }))
+  const gastos = [...gastosReales, ...gastosProyectados].sort((a, b) => (a.vencimiento || '').localeCompare(b.vencimiento || ''))
   // Con filtro de area, se cuenta solo la parte del gasto asignada a esa area
   const pctArea = g => fArea ? (g.dist || []).filter(d => d.area === fArea).reduce((a, d) => a + (+d.pct || 0), 0) / 100 : 1
   const resumen = gastos.filter(g => g.estado !== 'Anulado').reduce((a, g) => {
@@ -362,7 +371,8 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
     setSeleccion(new Set())
   }
   const alternarSeleccion = id => setSeleccion(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
-  const seleccionarTodos = () => setSeleccion(s => s.size === gastos.length ? new Set() : new Set(gastos.map(g => g.id)))
+  const seleccionarTodos = () => setSeleccion(s => s.size === gastosReales.length ? new Set() : new Set(gastosReales.map(g => g.id)))
+  const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
   return (
     <div>
@@ -375,12 +385,21 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
       {creando && <FormGasto tipo={tipo} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} onCerrar={() => setCreando(false)} />}
       {editando && <FormGasto tipo={editando.tipo} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} gastoInicial={editando} onCerrar={() => setEditando(null)} />}
 
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', margin: '14px 0 10px' }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: C.gris, textTransform: 'uppercase' }}>Mes</span>
-        <select value={fMes} onChange={e => { setFMes(e.target.value); setSeleccion(new Set()) }} style={{ padding: '7px 10px', border: '1px solid #DFE4EA', fontSize: 13, background: '#fff' }}>
-          <option value="">Todos los meses</option>
-          {mesesDisponibles.map(m => <option key={m} value={m}>{new Date(m + '-01T12:00:00').toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })}</option>)}
-        </select>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '14px 0 6px' }}>
+        <button onClick={() => setAnioSel(a => a - 1)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '4px 9px', cursor: 'pointer', fontSize: 13 }}>‹</button>
+        <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 14, minWidth: 44, textAlign: 'center' }}>{anioSel}</span>
+        <button onClick={() => setAnioSel(a => a + 1)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '4px 9px', cursor: 'pointer', fontSize: 13 }}>›</button>
+        <span style={{ fontSize: 11.5, color: C.gris, marginLeft: 6 }}>Los meses en gris muestran lo proyectado de tus gastos mensuales/anuales — se cargan una sola vez, no hace falta repetirlos.</span>
+      </div>
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 10 }}>
+        {MESES.map((m, i) => (
+          <button key={m} onClick={() => { setMesSel(i + 1); setSeleccion(new Set()) }}
+            style={{ background: mesSel === i + 1 ? C.naranja : '#fff', color: mesSel === i + 1 ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '6px 11px', fontSize: 12.5, fontWeight: mesSel === i + 1 ? 700 : 500, cursor: 'pointer' }}>
+            {m}
+          </button>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: C.gris, textTransform: 'uppercase' }}>Area</span>
         <select value={fArea} onChange={e => setFArea(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #DFE4EA', fontSize: 13, background: '#fff' }}>
           <option value="">Todas las areas</option>
@@ -411,7 +430,7 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-                <th style={{ padding: '5px 8px' }}><input type="checkbox" checked={gastos.length > 0 && seleccion.size === gastos.length} onChange={seleccionarTodos} style={{ cursor: 'pointer' }} /></th>
+                <th style={{ padding: '5px 8px' }}><input type="checkbox" checked={gastosReales.length > 0 && seleccion.size === gastosReales.length} onChange={seleccionarTodos} style={{ cursor: 'pointer' }} /></th>
               {['Gasto', 'Categoría', 'Proveedor', 'Neto', 'Total', 'Vence', 'Frec.', 'Estado', 'Distribución', ''].map(h => (
                 <th key={h} style={{ textAlign: ['Neto', 'Total'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
               ))}
@@ -419,8 +438,8 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
           </thead>
           <tbody>
             {gastos.map(g => (
-              <tr key={g.id} style={{ borderBottom: '1px solid #DFE4EA', verticalAlign: 'top', opacity: g.estado === 'Anulado' ? 0.45 : 1 }}>
-                <td style={{ padding: '8px' }}><input type="checkbox" checked={seleccion.has(g.id)} onChange={() => alternarSeleccion(g.id)} style={{ cursor: 'pointer' }} /></td>
+              <tr key={g._proyectado ? 'proy-' + g.id : g.id} style={{ borderBottom: '1px solid #DFE4EA', verticalAlign: 'top', background: g._proyectado ? '#FAFAF8' : 'transparent', opacity: g._proyectado ? 0.72 : (g.estado === 'Anulado' ? 0.45 : 1) }}>
+                <td style={{ padding: '8px' }}>{!g._proyectado && <input type="checkbox" checked={seleccion.has(g.id)} onChange={() => alternarSeleccion(g.id)} style={{ cursor: 'pointer' }} />}</td>
                 <td style={{ padding: '8px', fontWeight: 500 }}>{g.nombre}{g.ot && <div style={{ fontSize: 11, color: C.naranja, fontFamily: "'JetBrains Mono',monospace" }}>{g.ot}</div>}</td>
                 <td style={{ padding: '8px', color: C.gris }}>{g.categoria}</td>
                 <td style={{ padding: '8px', color: C.gris }}>{g.proveedor || '—'}</td>
@@ -429,20 +448,26 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
                 <td style={{ padding: '8px', color: C.gris, whiteSpace: 'nowrap' }}>{g.vencimiento}</td>
                 <td style={{ padding: '8px', color: C.gris, fontSize: 12 }}>{g.frecuencia}</td>
                 <td style={{ padding: '8px' }}>
-                  <select value={g.estado} onChange={e => cambiarEstadoGasto(fin, setFin, g.id, e.target.value)}
-                    style={{ border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '3px 6px', background: g.estado === 'Pagado' ? '#E6F7EE' : g.estado === 'Vencido' ? '#FCEBEA' : g.estado === 'Anulado' ? '#EEE' : '#FDECDD', color: g.estado === 'Pagado' ? C.verde : g.estado === 'Vencido' ? C.rojo : g.estado === 'Anulado' ? C.gris : '#D9600A' }}>
-                    {ESTADOS_GASTO.map(x => <option key={x}>{x}</option>)}
-                  </select>
+                  {g._proyectado ? (
+                    <span title="Se va a cargar solo cuando llegue este mes — el pago se marca ahí, no acá." style={{ background: '#EEE', color: C.gris, fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 10 }}>Proyectado</span>
+                  ) : (
+                    <select value={g.estado} onChange={e => cambiarEstadoGasto(fin, setFin, g.id, e.target.value)}
+                      style={{ border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '3px 6px', background: g.estado === 'Pagado' ? '#E6F7EE' : g.estado === 'Vencido' ? '#FCEBEA' : g.estado === 'Anulado' ? '#EEE' : '#FDECDD', color: g.estado === 'Pagado' ? C.verde : g.estado === 'Vencido' ? C.rojo : g.estado === 'Anulado' ? C.gris : '#D9600A' }}>
+                      {ESTADOS_GASTO.map(x => <option key={x}>{x}</option>)}
+                    </select>
+                  )}
                 </td>
                 <td style={{ padding: '8px', fontSize: 12 }}>{g.dist.map(d => <div key={d.area}>{d.area}: {d.pct}% ({clp(netoEf(g, fin.ufValor) * d.pct / 100)})</div>)}</td>
                 <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>
-                  <button title="Editar" onClick={() => setEditando(g)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Pencil size={14} /></button>
-                  <button title="Duplicar al mes siguiente" onClick={() => duplicarMesSiguiente(g)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Copy size={14} /></button>
-                  <button title="Eliminar" onClick={() => window.confirm(`¿Eliminar "${g.nombre}"?`) && eliminarGastoFresco(fin, setFin, g.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
+                  {g._proyectado ? <span style={{ fontSize: 11, color: C.gris }}>—</span> : (<>
+                    <button title="Editar" onClick={() => setEditando(g)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Pencil size={14} /></button>
+                    <button title="Duplicar al mes siguiente" onClick={() => duplicarMesSiguiente(g)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Copy size={14} /></button>
+                    <button title="Eliminar" onClick={() => window.confirm(`¿Eliminar "${g.nombre}"?`) && eliminarGastoFresco(fin, setFin, g.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
+                  </>)}
                 </td>
               </tr>
             ))}
-            {gastos.length === 0 && <tr><td colSpan={11} style={{ padding: 16, textAlign: 'center', color: '#9AA3AD' }}>Sin gastos registrados.</td></tr>}
+            {gastos.length === 0 && <tr><td colSpan={11} style={{ padding: 16, textAlign: 'center', color: '#9AA3AD' }}>Sin gastos para {MESES[mesSel - 1]} {anioSel}.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -695,11 +720,33 @@ function CreditosLeasing({ fin, setFin }) {
 export const netoEf = (g, uf) => g.esUF ? Math.round((g.uf || 0) * (uf || 0)) : (g.neto || 0)
 const flujoDe = c => (c.estado === 'Pagada' || c.aCargo === 'tercero_reembolsa') ? 0 : (c.total || 0)
 
+// Un gasto "Mensual" tiene una ocurrencia cada mes desde su vencimiento en
+// adelante (arriendo, ERP, etc. — se carga UNA vez y se repite solo); uno
+// "Anual" la tiene cada año en el mismo mes/día (ej. patente); "Semanal" y
+// "Única" solo cuentan en su propio mes. Una sola fuente para esta regla —
+// calcularResumenFin/resumenGastosPeriodoArea la usan para sumar, y
+// ListaGastos la usa para decidir qué mostrar en las pestañas de mes.
+// g.vencimiento es 'YYYY-MM-DD': el mes va en slice(5,7), no slice(5)
+// (que compara '07' contra '07-05' y nunca calza -> los gastos Anual
+// desaparecían de todos los resúmenes/proyecciones).
+function gastoOcurreEnMes(g, mes) {
+  if (g.frecuencia === 'Mensual') return mes >= mesDe(g.vencimiento)
+  if (g.frecuencia === 'Anual') return mes.slice(5, 7) === (g.vencimiento || '').slice(5, 7) && mes >= mesDe(g.vencimiento)
+  return mesDe(g.vencimiento) === mes
+}
+// Fecha efectiva de la ocurrencia de un gasto recurrente en un mes dado —
+// mismo día del mes original, ajustado si ese mes tiene menos días (ej. el
+// 31 de un mes cae el último día del mes en uno de 30 o menos).
+function fechaOcurrenciaEnMes(g, mes) {
+  if (g.frecuencia !== 'Mensual' && g.frecuencia !== 'Anual') return g.vencimiento
+  const dia = Number((g.vencimiento || '').slice(8, 10)) || 1
+  const [anio, mesNum] = mes.split('-').map(Number)
+  const ultimoDia = new Date(anio, mesNum, 0).getDate()
+  return mes + '-' + String(Math.min(dia, ultimoDia)).padStart(2, '0')
+}
+
 export function calcularResumenFin(fin, mes) {
-  // g.vencimiento es 'YYYY-MM-DD': el mes va en slice(5,7), no slice(5)
-  // (que compara '07' contra '07-05' y nunca calza -> los gastos Anual
-  // desaparecían de todos los resúmenes/proyecciones).
-  const gastosMes = fin.gastos.filter(g => g.estado !== 'Anulado' && (g.frecuencia === 'Mensual' ? mes >= mesDe(g.vencimiento) : (g.frecuencia === 'Anual' ? (mes.slice(5, 7) === (g.vencimiento || '').slice(5, 7) && mes >= mesDe(g.vencimiento)) : mesDe(g.vencimiento) === mes)))
+  const gastosMes = fin.gastos.filter(g => g.estado !== 'Anulado' && gastoOcurreEnMes(g, mes))
   const fijos = gastosMes.filter(g => g.tipo === 'fijo').reduce((a, g) => a + netoEf(g, fin.ufValor), 0)
   const variables = gastosMes.filter(g => g.tipo === 'variable').reduce((a, g) => a + netoEf(g, fin.ufValor), 0)
   const porArea = {}
@@ -722,7 +769,7 @@ export function calcularResumenFin(fin, mes) {
 export function resumenGastosPeriodoArea(fin, meses, area) {
   let fijos = 0, variables = 0, sinClasificar = 0
   ;(meses || []).forEach(mes => {
-    const gastosMes = fin.gastos.filter(g => g.estado !== 'Anulado' && (g.frecuencia === 'Mensual' ? mes >= mesDe(g.vencimiento) : (g.frecuencia === 'Anual' ? (mes.slice(5, 7) === (g.vencimiento || '').slice(5, 7) && mes >= mesDe(g.vencimiento)) : mesDe(g.vencimiento) === mes)))
+    const gastosMes = fin.gastos.filter(g => g.estado !== 'Anulado' && gastoOcurreEnMes(g, mes))
     gastosMes.forEach(g => {
       const pct = ((g.dist || []).find(d => d.area === area) || {}).pct || 0
       if (!pct) return
