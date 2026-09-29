@@ -1091,9 +1091,39 @@ export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setPara
   const en7 = new Date(); en7.setDate(en7.getDate() + 7)
   const en7s = en7.toISOString().slice(0, 10)
   const mesActual = h.slice(0, 7)
+  // Pestañas Ene-Dic (con año navegable) — al elegir un mes se ve TODO lo
+  // que corresponde pagar ese mes en un solo lugar (fijos, variables,
+  // créditos, nóminas, proveedores), no solo lo vencido/de esta semana.
+  // Abre por defecto en el mes en curso. Mismo criterio de proyección que
+  // ya usa ListaGastos (Finanzas): un gasto Mensual/Anual cuya fila real
+  // vive en otro mes aparece igual, de solo lectura ("Proyectado") — el
+  // pago en sí se marca cuando ese mes llega de verdad.
+  const MESES_PAGOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+  const [anioPagos, setAnioPagos] = useState(Number(h.slice(0, 4)))
+  const [mesPagos, setMesPagos] = useState(Number(h.slice(5, 7)))
+  const mesPagosKey = anioPagos + '-' + String(mesPagos).padStart(2, '0')
+  const itemsRealesMes = items.filter(x => mesDe(x.vencimiento) === mesPagosKey)
+  const gastosProyectadosMes = fin.gastos
+    .filter(g => g.estado !== 'Anulado' && (g.frecuencia === 'Mensual' || g.frecuencia === 'Anual') && mesDe(g.vencimiento) !== mesPagosKey && gastoOcurreEnMes(g, mesPagosKey))
+    .map(g => ({
+      id: 'proy-' + g.id + '-' + mesPagosKey,
+      vencimiento: fechaOcurrenciaEnMes(g, mesPagosKey),
+      tipo: g.tipo === 'fijo' ? 'Gasto fijo' : 'Gasto variable',
+      detalle: g.nombre || g.categoria || '',
+      proveedor: g.proveedor || '',
+      categoria: g.categoria || '',
+      monto: Math.round(netoEf(g, fin.ufValor)),
+      formaPago: g.formaPago || 'Transferencia',
+      chequeInfo: '',
+      origen: 'proyectado',
+    }))
+  const itemsMes = [...itemsRealesMes, ...gastosProyectadosMes].sort((a, b) => (a.vencimiento || '9999').localeCompare(b.vencimiento || '9999'))
+  const nominasMes = itemsMes.filter(x => esNomina(x.categoria))
+  const proveedoresMes = itemsMes.filter(x => x.tipo === 'Compra proyecto')
+  const restoMes = itemsMes.filter(x => !esNomina(x.categoria) && x.tipo !== 'Compra proyecto')
+  const totalMesPagos = itemsMes.reduce((a, x) => a + x.monto, 0)
   const nominas = items.filter(x => esNomina(x.categoria)).sort((a, b) => (a.vencimiento || '9999').localeCompare(b.vencimiento || '9999'))
   const proveedores = items.filter(x => x.tipo === 'Compra proyecto')
-  const restoSinAgrupar = items.filter(x => !esNomina(x.categoria) && x.tipo !== 'Compra proyecto')
   const grupos = [
     { id: 'vencido', label: 'Vencido', color: C.rojo, filtro: x => !!x.vencimiento && x.vencimiento < h },
     { id: 'semana', label: 'Esta semana', color: C.naranja, filtro: x => x.vencimiento >= h && x.vencimiento <= en7s },
@@ -1124,6 +1154,7 @@ export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setPara
       <button title="Editar" onClick={() => setEditandoCompra(x)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Pencil size={14} /></button>
       <button title="Eliminar" onClick={() => window.confirm(`¿Eliminar la compra de "${x.proveedor || x.detalle}"?`) && eliminarCompraProyecto(proyectos, setProyectos, x.proyectoId, x.compraIndex)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
     </>) : <span title="Se edita en la ficha del proyecto correspondiente" style={{ color: C.gris, fontSize: 11 }}>—</span>
+    if (x.origen === 'proyectado') return <span title="Se va a cargar solo cuando llegue este mes — el pago se marca ahí, no acá." style={{ background: '#EEE', color: C.gris, fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 10 }}>Proyectado</span>
     return null
   }
   const seccion = (titulo, color, filas, icono) => filas.length > 0 && (
@@ -1182,13 +1213,27 @@ export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setPara
         <button onClick={() => irA('creditos')} style={btnAgregar}><Plus size={13} /> Crédito / Leasing</button>
         <div title="Una compra de proyecto nueva se carga desde la ficha del proyecto (necesita elegir Centro de Costo) — pero una vez cargada, se puede editar o eliminar directo desde acá." style={{ ...btnAgregar, cursor: 'default', color: COLOR_TIPO_PAGO['Compra proyecto'], borderColor: COLOR_TIPO_PAGO['Compra proyecto'] }}>ℹ Compras de proyecto nuevas: se agregan en Proyectos</div>
       </div>
-      {items.length === 0 && <div style={{ fontSize: 13, color: C.gris, background: '#fff', border: '1px solid #DFE4EA', padding: 16 }}>No hay cuentas por pagar pendientes.</div>}
-      {seccion('Nóminas (sueldos e imposiciones)', COLOR_TIPO_PAGO['Nómina'], nominas, '👥')}
-      {seccion('Proveedores de proyecto', COLOR_TIPO_PAGO['Compra proyecto'], proveedores, '🎨')}
-      {grupos.map(g => {
-        const filas = restoSinAgrupar.filter(g.filtro)
-        return filas.length > 0 ? <div key={g.id}>{seccion(g.label, g.color, filas)}</div> : null
-      })}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <button onClick={() => setAnioPagos(a => a - 1)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '4px 9px', cursor: 'pointer', fontSize: 13 }}>‹</button>
+        <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 14, minWidth: 44, textAlign: 'center' }}>{anioPagos}</span>
+        <button onClick={() => setAnioPagos(a => a + 1)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '4px 9px', cursor: 'pointer', fontSize: 13 }}>›</button>
+        <span style={{ fontSize: 11.5, color: C.gris, marginLeft: 6 }}>Elige un mes para ver todos tus pagos de ese mes — fijos, variables, créditos, nóminas y proveedores juntos.</span>
+      </div>
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 14 }}>
+        {MESES_PAGOS.map((m, i) => (
+          <button key={m} onClick={() => setMesPagos(i + 1)}
+            style={{ background: mesPagos === i + 1 ? C.naranja : '#fff', color: mesPagos === i + 1 ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '6px 11px', fontSize: 12.5, fontWeight: mesPagos === i + 1 ? 700 : 500, cursor: 'pointer' }}>
+            {m}
+          </button>
+        ))}
+      </div>
+      <div style={{ fontSize: 13, color: C.carbon, marginBottom: 14 }}>Total de {MESES_PAGOS[mesPagos - 1]} {anioPagos}: <b style={{ fontFamily: SEREIN.fontDisplay }}>{clp(totalMesPagos)}</b></div>
+
+      {itemsMes.length === 0 && <div style={{ fontSize: 13, color: C.gris, background: '#fff', border: '1px solid #DFE4EA', padding: 16 }}>No hay pagos para {MESES_PAGOS[mesPagos - 1]} {anioPagos}.</div>}
+      {seccion('Nóminas (sueldos e imposiciones)', COLOR_TIPO_PAGO['Nómina'], nominasMes, '👥')}
+      {seccion('Proveedores de proyecto', COLOR_TIPO_PAGO['Compra proyecto'], proveedoresMes, '🎨')}
+      {seccion('Otros pagos del mes', C.naranja, restoMes, '💵')}
     </div>
   )
 }
