@@ -121,6 +121,27 @@ async function cambiarEstadoGasto(fin, setFin, id, estado) {
   setFin(nuevoFin)
   pushState()
 }
+// Convierte la ocurrencia PROYECTADA de un gasto recurrente (Mensual/Anual)
+// en una fila real, con el estado que se elija (Pagado/Pendiente/etc) —
+// misma idea que duplicarMesSiguiente() de ListaGastos, pero para
+// cualquier mes que se este mirando (no solo "el mes siguiente") y
+// pudiendo fijar el estado de una vez, en vez de crear siempre en
+// Pendiente. La fila ancla (la que tenia frecuencia "Mensual") se cierra a
+// "Única" para que de aca en adelante la nueva fila sea la vigente — así
+// nunca quedan dos filas "Mensual" sumando el mismo gasto para siempre.
+async function materializarGastoProyectado(fin, setFin, gastoAnclaId, fechaOcurrencia, estadoNuevo) {
+  try { await pullState() } catch (e) {}
+  let fresco = null
+  try { fresco = JSON.parse(localStorage.getItem('serein_fin') || 'null') } catch (e) {}
+  const baseFin = fresco && typeof fresco === 'object' ? fresco : fin
+  const ancla = (baseFin.gastos || []).find(g => g.id === gastoAnclaId)
+  if (!ancla) return
+  const nueva = { ...ancla, id: 'g' + Date.now() + Math.random().toString(36).slice(2, 7), vencimiento: fechaOcurrencia, estado: estadoNuevo }
+  const nuevoFin = { ...baseFin, gastos: [nueva, ...(baseFin.gastos || []).map(x => x.id === gastoAnclaId && x.frecuencia === 'Mensual' ? { ...x, frecuencia: 'Única' } : x)] }
+  try { localStorage.setItem('serein_fin', JSON.stringify(nuevoFin)) } catch (e) {}
+  setFin(nuevoFin)
+  pushState()
+}
 // Marca pagada una cuota puntual de un credito/leasing — las cuotas no se
 // editan libremente (son parte de la tabla de amortizacion), solo se
 // marcan como pagadas desde aca.
@@ -449,7 +470,11 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
                 <td style={{ padding: '8px', color: C.gris, fontSize: 12 }}>{g.frecuencia}</td>
                 <td style={{ padding: '8px' }}>
                   {g._proyectado ? (
-                    <span title="Se va a cargar solo cuando llegue este mes — el pago se marca ahí, no acá." style={{ background: '#EEE', color: C.gris, fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 10 }}>Proyectado</span>
+                    <select defaultValue="" onChange={e => e.target.value && materializarGastoProyectado(fin, setFin, g.id, g.vencimiento, e.target.value)} title="Elegir un estado carga este mes como una cuenta real"
+                      style={{ border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '3px 6px', background: '#EEE', color: C.gris }}>
+                      <option value="" disabled>Proyectado</option>
+                      {ESTADOS_GASTO.map(x => <option key={x} value={x}>{x}</option>)}
+                    </select>
                   ) : (
                     <select value={g.estado} onChange={e => cambiarEstadoGasto(fin, setFin, g.id, e.target.value)}
                       style={{ border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '3px 6px', background: g.estado === 'Pagado' ? '#E6F7EE' : g.estado === 'Vencido' ? '#FCEBEA' : g.estado === 'Anulado' ? '#EEE' : '#FDECDD', color: g.estado === 'Pagado' ? C.verde : g.estado === 'Vencido' ? C.rojo : g.estado === 'Anulado' ? C.gris : '#D9600A' }}>
@@ -1116,6 +1141,7 @@ export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setPara
       formaPago: g.formaPago || 'Transferencia',
       chequeInfo: '',
       origen: 'proyectado',
+      gasto: g,
     }))
   const itemsMes = [...itemsRealesMes, ...gastosProyectadosMes].sort((a, b) => (a.vencimiento || '9999').localeCompare(b.vencimiento || '9999'))
   const nominasMes = itemsMes.filter(x => esNomina(x.categoria))
@@ -1142,8 +1168,12 @@ export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setPara
   // Acciones por fila (editar/eliminar un gasto, marcar pagada una cuota,
   // editar/eliminar una compra de proyecto) — una sola vez para toda la
   // pantalla, la usan tanto las secciones de abajo como el modal de detalle.
+  const estiloEstado = estado => ({ border: 'none', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', padding: '3px 6px', borderRadius: 4, marginRight: 4, background: estado === 'Pagado' ? '#E6F7EE' : estado === 'Vencido' ? '#FCEBEA' : estado === 'Anulado' ? '#EEE' : '#FDECDD', color: estado === 'Pagado' ? C.verde : estado === 'Vencido' ? C.rojo : estado === 'Anulado' ? C.gris : '#D9600A' })
   const acciones = x => {
     if (x.origen === 'gasto') return (<>
+      <select value={x.gasto.estado} onChange={e => cambiarEstadoGasto(fin, setFin, x.gasto.id, e.target.value)} style={estiloEstado(x.gasto.estado)}>
+        {ESTADOS_GASTO.map(v => <option key={v}>{v}</option>)}
+      </select>
       <button title="Editar" onClick={() => setEditandoGasto(x.gasto)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Pencil size={14} /></button>
       <button title="Eliminar" onClick={() => window.confirm(`¿Eliminar "${x.gasto.nombre}"?`) && eliminarGastoFresco(fin, setFin, x.gasto.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
     </>)
@@ -1154,7 +1184,16 @@ export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setPara
       <button title="Editar" onClick={() => setEditandoCompra(x)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Pencil size={14} /></button>
       <button title="Eliminar" onClick={() => window.confirm(`¿Eliminar la compra de "${x.proveedor || x.detalle}"?`) && eliminarCompraProyecto(proyectos, setProyectos, x.proyectoId, x.compraIndex)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
     </>) : <span title="Se edita en la ficha del proyecto correspondiente" style={{ color: C.gris, fontSize: 11 }}>—</span>
-    if (x.origen === 'proyectado') return <span title="Se va a cargar solo cuando llegue este mes — el pago se marca ahí, no acá." style={{ background: '#EEE', color: C.gris, fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 10 }}>Proyectado</span>
+    // Proyectado: al elegir un estado se crea recien ahi la fila real de
+    // ese mes (materializarGastoProyectado) — antes de eso no existe nada
+    // que editar/eliminar, por eso este select reemplaza directo al
+    // badge "Proyectado" en vez de sumarse a él.
+    if (x.origen === 'proyectado') return (
+      <select defaultValue="" onChange={e => e.target.value && materializarGastoProyectado(fin, setFin, x.gasto.id, x.vencimiento, e.target.value)} title="Elegir un estado carga este mes como una cuenta real" style={{ ...estiloEstado(''), background: '#EEE', color: C.gris }}>
+        <option value="" disabled>Proyectado</option>
+        {ESTADOS_GASTO.map(v => <option key={v} value={v}>{v}</option>)}
+      </select>
+    )
     return null
   }
   const seccion = (titulo, color, filas, icono) => filas.length > 0 && (
