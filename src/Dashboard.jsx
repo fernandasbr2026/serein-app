@@ -859,7 +859,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
         ) : esModuloFin && puedeVer('FINANZAS') ? (
           <FinanzasModule otsDisponibles={ots.map(o => o.numero)} fin={fin} setFin={setFin} proyectos={proyectos} params={params} setParams={setParams} tabInicial={tabFinanzasInicial} />
         ) : esModuloCalendarioPagos && puedeVer('CALENDARIO_PAGOS') ? (
-          <PorPagar fin={fin} proyectos={proyectos} params={params} setParams={setParams} irA={tabId => { setTabFinanzasInicial(tabId); setAreaSel('FINANZAS') }} />
+          <PorPagar fin={fin} setFin={setFin} proyectos={proyectos} params={params} setParams={setParams} otsDisponibles={ots.map(o => o.numero)} irA={tabId => { setTabFinanzasInicial(tabId); setAreaSel('FINANZAS') }} />
         ) : esModuloPagos && puedeVer('PAGOS') ? (
           <ProveedoresPagosModule pp={pp} setPp={setPp} gastos={fin.gastos || []} />
         ) : esModuloOC && puedeVer('ORDENES_COMPRA') ? (
