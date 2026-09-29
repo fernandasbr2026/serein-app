@@ -239,7 +239,7 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
         </div>
         {it.capas.length > 0 && <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
-            <thead><tr><th style={th}>Capa</th><th style={th}>Producto</th><th style={th}>Mils min</th><th style={th}>Mils max</th><th style={th}>Perdida</th><th style={th}>Solidos %</th><th style={th}>Rend m2/gal</th><th style={th}>Valor galon</th><th style={th}>Valor $/m2</th><th style={th}></th></tr></thead>
+            <thead><tr><th style={th}>Capa</th><th style={th}>Producto</th><th style={th}>Mils min</th><th style={th}>Mils max</th><th style={th}>Perdida</th><th style={th} title="Ayuda opcional: escribe un % y aplica para calcular la Perdida — no se recalcula sola despues">% extra (opc.)</th><th style={th}>Solidos %</th><th style={th}>Rend m2/gal</th><th style={th}>Valor galon</th><th style={th}>Valor $/m2</th><th style={th}></th></tr></thead>
             <tbody>
               {it.capas.map((c, j) => { const prod = idx[c.p]; const mp = milsProm(c); const rend = prod ? rendimientoM2Gal(prod.s, mp, c.perdida, cte.constante) : 0; const vg = prod ? valorGalon(prod, cte.litrosPorGalon) : 0; const vm = prod ? valorM2Capa(prod, mp, c.perdida, cte) : 0; return (<tr key={j}>
                 <td style={tdc}>{j + 1}a</td>
@@ -247,6 +247,17 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
                 <td style={tdc}><input type="number" value={c.mMin} onChange={e => updItem(i, x => x.capas[j].mMin = e.target.value)} style={{ ...inp, width: 68, padding: '5px 6px' }} /></td>
                 <td style={tdc}><input type="number" value={c.mMax} onChange={e => updItem(i, x => x.capas[j].mMax = e.target.value)} style={{ ...inp, width: 68, padding: '5px 6px' }} /></td>
                 <td style={tdc}><input type="number" value={c.perdida} onChange={e => updItem(i, x => x.capas[j].perdida = e.target.value)} style={{ ...inp, width: 62, padding: '5px 6px' }} /></td>
+                <td style={tdc}>
+                  <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                    <input type="number" value={c.pctPerdidaExtra || ''} onChange={e => updItem(i, x => x.capas[j].pctPerdidaExtra = e.target.value)} placeholder="ej. 30" style={{ ...inp, width: 50, padding: '5px 6px' }} />
+                    <button
+                      type="button"
+                      title="Calcula la Perdida como (perdida tipica de Parametros) x (1 + %/100) y la escribe en la columna Perdida — es un ayudante puntual, no queda vinculado: si cambias el % despues, hay que volver a apretar Aplicar."
+                      onClick={() => updItem(i, x => { const base = +(cte.perdidaTipica) || 2; const pct = parseFloat(String(x.capas[j].pctPerdidaExtra).replace(',', '.')) || 0; x.capas[j].perdida = Math.round(base * (1 + pct / 100) * 100) / 100 })}
+                      style={{ background: 'transparent', border: '1px solid ' + T.border, borderRadius: 4, padding: '4px 7px', cursor: 'pointer', fontSize: 11, color: T.textSoft }}
+                    >Aplicar</button>
+                  </div>
+                </td>
                 <td style={tdc}>{prod ? prod.s + '%' : '-'}</td>
                 <td style={tdc}>{rend ? rend.toFixed(2) : '-'}</td>
                 <td style={tdc}>{vg ? clp(vg) : '-'}</td>
