@@ -134,6 +134,70 @@ async function marcarCuotaPagada(fin, setFin, obligacionId, n) {
   setFin(nuevoFin)
   pushState()
 }
+// Edita/elimina una compra de proyecto DIRECTO en p.compras[compraIndex] —
+// misma fila y mismo criterio pull-fresh+merge+push que usa updCompra() en
+// la ficha del proyecto (ProyectosModule.jsx), para que editar desde Pagos
+// sea exactamente lo mismo que editarla ahi, nunca una copia paralela. El
+// indice es el del arreglo COMPLETO de compras de ese proyecto (no de una
+// vista filtrada) — asi nunca se pisa la fila equivocada.
+async function actualizarCompraProyecto(proyectos, setProyectos, proyectoId, compraIndex, cambios) {
+  try { await pullState() } catch (e) {}
+  let fresco = null
+  try { fresco = JSON.parse(localStorage.getItem('serein_proyectos') || 'null') } catch (e) {}
+  const base = Array.isArray(fresco) ? fresco : proyectos
+  const nuevo = base.map(p => p.id !== proyectoId ? p : { ...p, compras: p.compras.map((c, j) => j === compraIndex ? { ...c, ...cambios } : c) })
+  try { localStorage.setItem('serein_proyectos', JSON.stringify(nuevo)) } catch (e) {}
+  setProyectos(nuevo)
+  pushState()
+}
+async function eliminarCompraProyecto(proyectos, setProyectos, proyectoId, compraIndex) {
+  try { await pullState() } catch (e) {}
+  let fresco = null
+  try { fresco = JSON.parse(localStorage.getItem('serein_proyectos') || 'null') } catch (e) {}
+  const base = Array.isArray(fresco) ? fresco : proyectos
+  const nuevo = base.map(p => p.id !== proyectoId ? p : { ...p, compras: p.compras.filter((_, j) => j !== compraIndex) })
+  try { localStorage.setItem('serein_proyectos', JSON.stringify(nuevo)) } catch (e) {}
+  setProyectos(nuevo)
+  pushState()
+}
+// Edicion rapida de una compra de proyecto desde Pagos — mismos campos
+// clave que FormCompra (ProyectosModule.jsx), salvo el Centro de Costo:
+// ese se deja tal cual (reclasificarlo requiere el catalogo de CC del
+// proyecto, que es informacion propia de la ficha del proyecto) — para
+// cambiar el CC se sigue entrando a Proyectos, todo lo demas se edita aca.
+function FormEditarCompra({ item, proyectos, setProyectos, onCerrar }) {
+  const c = item.compra
+  const [f, setF] = useState({
+    proveedor: c.proveedor || '', folio: c.folio || '', detalle: c.detalle || '',
+    fecha: (c.fecha && c.fecha !== '—') ? c.fecha : '', monto: String(c.monto || ''), exento: !!c.exento, abonado: String(c.abonado || ''),
+  })
+  function guardar() {
+    if (!f.proveedor || num(f.monto) <= 0) return
+    actualizarCompraProyecto(proyectos, setProyectos, item.proyectoId, item.compraIndex, {
+      proveedor: f.proveedor, folio: f.folio, detalle: f.detalle, fecha: f.fecha || '—',
+      monto: num(f.monto), exento: f.exento, abonado: num(f.abonado),
+    })
+    onCerrar()
+  }
+  return (
+    <div style={{ background: '#fff', border: `2px solid ${COLOR_TIPO_PAGO['Compra proyecto']}`, padding: 16, marginBottom: 14 }}>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Editar compra de proyecto</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
+        <input style={inp} placeholder="Proveedor *" value={f.proveedor} onChange={e => setF({ ...f, proveedor: e.target.value })} />
+        <input style={inp} placeholder="N° doc / folio" value={f.folio} onChange={e => setF({ ...f, folio: e.target.value })} />
+        <input style={inp} placeholder="Detalle" value={f.detalle} onChange={e => setF({ ...f, detalle: e.target.value })} />
+        <label style={{ fontSize: 12, color: C.gris }}>Fecha<input type="date" style={{ ...inp, width: '100%' }} value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} /></label>
+        <input style={inp} placeholder="Monto neto CLP *" value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} />
+        <label style={{ ...inp, display: 'flex', alignItems: 'center', gap: 6, border: 'none' }}><input type="checkbox" checked={f.exento} onChange={e => setF({ ...f, exento: e.target.checked })} /> Exenta (sin IVA)</label>
+        <input style={inp} placeholder="Abonado CLP" value={f.abonado} onChange={e => setF({ ...f, abonado: e.target.value })} />
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <button onClick={guardar} style={{ background: C.verde, color: '#fff', border: 'none', padding: '9px 18px', cursor: 'pointer', fontSize: 13 }}>Guardar cambios</button>
+        <button onClick={onCerrar} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+      </div>
+    </div>
+  )
+}
 
 // gastoInicial: si se pasa, el formulario edita esa fila en vez de crear
 // una nueva (mismos campos, precargados) — usado tanto por el boton
@@ -814,10 +878,13 @@ function itemsPorPagar(fin, proyectos = []) {
     })
   })
   // Compras de cada proyecto (pintura, materiales, subcontratos) con saldo
-  // pendiente — se leen desde ProyectosModule, nunca se duplican: siguen
-  // viviendo y se editan solo en la ficha del proyecto correspondiente.
+  // pendiente — se leen desde ProyectosModule, nunca se duplican: es la
+  // MISMA fila que ProyectosModule guarda en p.compras[j], por eso se
+  // guarda aca su indice real (compraIndex, sobre el arreglo completo sin
+  // filtrar) — permite editarla/eliminarla desde Pagos escribiendo
+  // directo sobre esa fila, sin mantener una copia aparte.
   ;(proyectos || []).forEach(p => {
-    ;(p.compras || []).forEach(c => {
+    ;(p.compras || []).forEach((c, i) => {
       const bruto = montoBrutoCompra(c)
       const pendiente = bruto - (+c.abonado || 0)
       if (pendiente <= 0) return
@@ -833,6 +900,9 @@ function itemsPorPagar(fin, proyectos = []) {
         formaPago: 'Transferencia',
         chequeInfo: '',
         origen: 'compra_proyecto',
+        proyectoId: p.id,
+        compraIndex: i,
+        compra: c,
       })
     })
   })
@@ -911,23 +981,13 @@ function tablaItemsPago(filas, acciones) {
 // ListaGastos, nunca una copia paralela. Las compras de proyecto siguen
 // siendo de solo lectura aca (se editan en la ficha del proyecto, que es
 // donde vive el resto de sus datos — folio, abono, etc.).
-function ModalDetallePago({ titulo, color, filas, sub, onClose, fin, setFin, otsDisponibles }) {
-  const [editando, setEditando] = useState(null)
-  const [creando, setCreando] = useState(null) // 'fijo' | 'variable' | null
+// Puramente presentacional — quien la abre (PorPagar) le pasa que hacer al
+// tocar cada boton (acciones) y los botones de "cargar gasto nuevo"
+// (onCrearGasto), para que editar/crear se comporte identico venga el clic
+// de esta ventana o de las secciones de la pantalla principal de Pagos: un
+// solo estado de edicion, un solo formulario, nunca dos copias.
+function ModalDetallePago({ titulo, color, filas, sub, onClose, acciones, onCrearGasto }) {
   const total = (filas || []).reduce((a, x) => a + x.monto, 0)
-  const puedeEditar = !!(fin && setFin)
-
-  const acciones = puedeEditar ? (x => {
-    if (x.origen === 'gasto') return (<>
-      <button title="Editar" onClick={() => setEditando(x.gasto)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Pencil size={14} /></button>
-      <button title="Eliminar" onClick={() => window.confirm(`¿Eliminar "${x.gasto.nombre}"?`) && eliminarGastoFresco(fin, setFin, x.gasto.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
-    </>)
-    if (x.origen === 'cuota') return (
-      <button onClick={() => marcarCuotaPagada(fin, setFin, x.obligacionId, x.cuotaN)} style={{ background: 'none', border: `1px solid ${C.verde}`, color: C.verde, borderRadius: 4, padding: '3px 8px', fontSize: 11, cursor: 'pointer' }}>Marcar pagada</button>
-    )
-    return <span title="Se edita en la ficha del proyecto correspondiente" style={{ color: C.gris, fontSize: 11 }}>—</span>
-  }) : null
-
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,26,46,.55)', zIndex: 70, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '28px 16px', overflowY: 'auto' }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#F7F6F3', width: '100%', maxWidth: 860, boxShadow: '0 20px 60px -12px rgba(0,0,0,.4)', borderRadius: 6, overflow: 'hidden' }}>
@@ -939,16 +999,12 @@ function ModalDetallePago({ titulo, color, filas, sub, onClose, fin, setFin, ots
           <button onClick={onClose} style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><X size={15} /> Cerrar</button>
         </div>
         <div style={{ padding: 16 }}>
-          {puedeEditar && !editando && (
+          {onCrearGasto && (
             <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-              {creando ? null : (<>
-                <button onClick={() => setCreando('fijo')} style={{ background: C.naranja, color: '#fff', border: 'none', padding: '8px 14px', cursor: 'pointer', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={13} /> Gasto fijo</button>
-                <button onClick={() => setCreando('variable')} style={{ background: 'none', border: `1px dashed ${C.naranja}`, color: C.carbon, padding: '8px 14px', cursor: 'pointer', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={13} /> Gasto variable</button>
-              </>)}
+              <button onClick={() => onCrearGasto('fijo')} style={{ background: C.naranja, color: '#fff', border: 'none', padding: '8px 14px', cursor: 'pointer', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={13} /> Gasto fijo</button>
+              <button onClick={() => onCrearGasto('variable')} style={{ background: 'none', border: `1px dashed ${C.naranja}`, color: C.carbon, padding: '8px 14px', cursor: 'pointer', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={13} /> Gasto variable</button>
             </div>
           )}
-          {editando && <FormGasto tipo={editando.tipo} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} gastoInicial={editando} onCerrar={() => setEditando(null)} />}
-          {creando && <FormGasto tipo={creando} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} onCerrar={() => setCreando(null)} />}
           {filas ? (
             filas.length === 0 ? (
               <div style={{ fontSize: 13, color: C.gris }}>No hay cuentas en este grupo.</div>
@@ -962,8 +1018,27 @@ function ModalDetallePago({ titulo, color, filas, sub, onClose, fin, setFin, ots
     </div>
   )
 }
-export function PorPagar({ fin, setFin, proyectos, params, setParams, otsDisponibles, irA }) {
+// Overlay generico para el formulario de edicion/creacion que dispara
+// cualquier boton de accion — flota por encima del modal de detalle
+// cuando corresponde (zIndex mas alto), mismo patron de fondo oscuro +
+// clic afuera para cerrar que el resto de la app.
+function OverlayFormulario({ onClose, children }) {
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,26,46,.65)', zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, overflowY: 'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 640 }}>{children}</div>
+    </div>
+  )
+}
+export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setParams, otsDisponibles, irA }) {
   const [detalle, setDetalle] = useState(null)
+  // Un solo estado de edicion/creacion para TODA la pantalla — lo usan por
+  // igual las secciones de abajo (Nominas, Proveedores, Vencido, etc.) y el
+  // modal de detalle que abre cada tarjeta, asi editar una fila se ve y se
+  // comporta identico sin importar desde donde se clickeo.
+  const [editandoGasto, setEditandoGasto] = useState(null)
+  const [creandoGasto, setCreandoGasto] = useState(null) // 'fijo' | 'variable' | null
+  const [editandoCompra, setEditandoCompra] = useState(null)
+  const puedeEditarProyectos = !!setProyectos
   const items = itemsPorPagar(fin, proyectos)
   const h = hoy()
   const en7 = new Date(); en7.setDate(en7.getDate() + 7)
@@ -987,13 +1062,30 @@ export function PorPagar({ fin, setFin, proyectos, params, setParams, otsDisponi
   const uf = (params && params.uf) || { valor: fin.ufValor || 0, fecha: '' }
   const ufHoyOk = uf.fecha === h
   const btnAgregar = { background: 'none', border: `1px dashed #C9C4B8`, color: C.carbon, padding: '8px 14px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }
+  // Acciones por fila (editar/eliminar un gasto, marcar pagada una cuota,
+  // editar/eliminar una compra de proyecto) — una sola vez para toda la
+  // pantalla, la usan tanto las secciones de abajo como el modal de detalle.
+  const acciones = x => {
+    if (x.origen === 'gasto') return (<>
+      <button title="Editar" onClick={() => setEditandoGasto(x.gasto)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Pencil size={14} /></button>
+      <button title="Eliminar" onClick={() => window.confirm(`¿Eliminar "${x.gasto.nombre}"?`) && eliminarGastoFresco(fin, setFin, x.gasto.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
+    </>)
+    if (x.origen === 'cuota') return (
+      <button onClick={() => marcarCuotaPagada(fin, setFin, x.obligacionId, x.cuotaN)} style={{ background: 'none', border: `1px solid ${C.verde}`, color: C.verde, borderRadius: 4, padding: '3px 8px', fontSize: 11, cursor: 'pointer' }}>Marcar pagada</button>
+    )
+    if (x.origen === 'compra_proyecto') return puedeEditarProyectos ? (<>
+      <button title="Editar" onClick={() => setEditandoCompra(x)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Pencil size={14} /></button>
+      <button title="Eliminar" onClick={() => window.confirm(`¿Eliminar la compra de "${x.proveedor || x.detalle}"?`) && eliminarCompraProyecto(proyectos, setProyectos, x.proyectoId, x.compraIndex)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
+    </>) : <span title="Se edita en la ficha del proyecto correspondiente" style={{ color: C.gris, fontSize: 11 }}>—</span>
+    return null
+  }
   const seccion = (titulo, color, filas, icono) => filas.length > 0 && (
     <div style={{ marginBottom: 22 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: `4px solid ${color}`, paddingLeft: 10, marginBottom: 8 }}>
         <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 13, textTransform: 'uppercase', color, display: 'flex', alignItems: 'center', gap: 6 }}>{icono} {titulo} ({filas.length})</span>
         <span style={{ fontWeight: 700, fontFamily: SEREIN.fontDisplay }}>{clp(filas.reduce((a, x) => a + x.monto, 0))}</span>
       </div>
-      {tablaItemsPago(filas)}
+      {tablaItemsPago(filas, acciones)}
     </div>
   )
   return (
@@ -1031,14 +1123,17 @@ export function PorPagar({ fin, setFin, proyectos, params, setParams, otsDisponi
           proveedores: { titulo: 'Proveedores (proyectos)', color: COLOR_TIPO_PAGO['Compra proyecto'], sub: 'Compras de proyecto con saldo pendiente', filas: proveedores },
           vencido: { titulo: 'Vencido', color: C.rojo, sub: 'Antes de ' + h, filas: items.filter(grupos[0].filtro) },
         }[detalle]
-        return <ModalDetallePago titulo={cfg.titulo} color={cfg.color} sub={cfg.sub} filas={cfg.filas} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} onClose={() => setDetalle(null)} />
+        return <ModalDetallePago titulo={cfg.titulo} color={cfg.color} sub={cfg.sub} filas={cfg.filas} acciones={acciones} onCrearGasto={setCreandoGasto} onClose={() => setDetalle(null)} />
       })()}
+      {editandoGasto && <OverlayFormulario onClose={() => setEditandoGasto(null)}><FormGasto tipo={editandoGasto.tipo} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} gastoInicial={editandoGasto} onCerrar={() => setEditandoGasto(null)} /></OverlayFormulario>}
+      {creandoGasto && <OverlayFormulario onClose={() => setCreandoGasto(null)}><FormGasto tipo={creandoGasto} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} onCerrar={() => setCreandoGasto(null)} /></OverlayFormulario>}
+      {editandoCompra && <OverlayFormulario onClose={() => setEditandoCompra(null)}><FormEditarCompra item={editandoCompra} proyectos={proyectos} setProyectos={setProyectos} onCerrar={() => setEditandoCompra(null)} /></OverlayFormulario>}
       <div style={{ fontSize: 11.5, color: C.gris, marginBottom: 16 }}>Total general pendiente: <b style={{ color: C.carbon }}>{clp(totalGeneral)}</b></div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
         <button onClick={() => irA('fijos')} style={btnAgregar}><Plus size={13} /> Gasto fijo</button>
         <button onClick={() => irA('variables')} style={btnAgregar}><Plus size={13} /> Gasto variable</button>
         <button onClick={() => irA('creditos')} style={btnAgregar}><Plus size={13} /> Crédito / Leasing</button>
-        <div title="Las compras de proyecto (pintura, materiales) se cargan en la ficha de cada proyecto — acá solo se muestran para tener todo junto." style={{ ...btnAgregar, cursor: 'default', color: COLOR_TIPO_PAGO['Compra proyecto'], borderColor: COLOR_TIPO_PAGO['Compra proyecto'] }}>ℹ Compras de proyecto: se cargan en Proyectos</div>
+        <div title="Una compra de proyecto nueva se carga desde la ficha del proyecto (necesita elegir Centro de Costo) — pero una vez cargada, se puede editar o eliminar directo desde acá." style={{ ...btnAgregar, cursor: 'default', color: COLOR_TIPO_PAGO['Compra proyecto'], borderColor: COLOR_TIPO_PAGO['Compra proyecto'] }}>ℹ Compras de proyecto nuevas: se agregan en Proyectos</div>
       </div>
       {items.length === 0 && <div style={{ fontSize: 13, color: C.gris, background: '#fff', border: '1px solid #DFE4EA', padding: 16 }}>No hay cuentas por pagar pendientes.</div>}
       {seccion('Nóminas (sueldos e imposiciones)', COLOR_TIPO_PAGO['Nómina'], nominas, '👥')}
