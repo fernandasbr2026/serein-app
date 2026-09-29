@@ -262,6 +262,26 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const [pp, setPp] = useState(() => { const s = LS('pp', null); if (!s) return PP_SEED; return (s.ocsVer === PP_SEED.ocsVer) ? s : { ...s, ocs: PP_SEED.ocs, ocsVer: PP_SEED.ocsVer } })
   const [params, setParams] = useState(() => LS('params', PARAMS_SEED))
   useEffect(() => { const uv = (params.uf && params.uf.valor) || 0; if ((fin.ufValor || 0) !== uv) setFin(f => ({ ...f, ufValor: uv })) }, [params.uf && params.uf.valor])
+  // Antes la UF solo se traía de mindicador.cl si NUNCA se había cargado
+  // un valor (ver SeccionUF en ParametrosModule.jsx) — una vez cargada la
+  // primera vez, quedaba fija hasta que alguien entrara a Parámetros y
+  // apretara "Actualizar" a mano. Para que las proyecciones de Finanzas
+  // (Pagos, gastos en UF) siempre usen la UF del día sin depender de que
+  // alguien visite esa pantalla, se revisa una vez por sesión si la fecha
+  // guardada quedó atrás y, si es así, se trae la actual sola.
+  useEffect(() => {
+    const hoyStr = new Date().toISOString().slice(0, 10)
+    if ((params.uf && params.uf.fecha) === hoyStr) return
+    ;(async () => {
+      try {
+        const r = await fetch('https://mindicador.cl/api/uf')
+        const d = await r.json()
+        const s = d.serie && d.serie[0]
+        if (s) setParams(p => ({ ...p, uf: { valor: Math.round(s.valor), fecha: (s.fecha || '').slice(0, 10) } }))
+      } catch (e) { /* sin internet o API caída — se reintenta la próxima vez que se abra la app */ }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [clientes, setClientes] = useState(() => sanearClientesArr(LS('clientes', CLIENTES_SEED)))
   const [contactos, setContactos] = useState(() => { const s = LS('contactos', null); const base = (s && s.ver === CONTACTOS_SEED.ver) ? s : CONTACTOS_SEED; return { ...base, clientes: sanearClientesArr(base.clientes) } })
   const [facturas, setFacturas] = useState(() => LS('facturas', FACTURAS_SEED))
@@ -834,7 +854,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
             setClientes(prev => [nuevoCli, ...(prev || [])])
           }} />
         ) : esModuloFin && puedeVer('FINANZAS') ? (
-          <FinanzasModule otsDisponibles={ots.map(o => o.numero)} fin={fin} setFin={setFin} proyectos={proyectos} />
+          <FinanzasModule otsDisponibles={ots.map(o => o.numero)} fin={fin} setFin={setFin} proyectos={proyectos} params={params} setParams={setParams} />
         ) : esModuloPagos && puedeVer('PAGOS') ? (
           <ProveedoresPagosModule pp={pp} setPp={setPp} gastos={fin.gastos || []} />
         ) : esModuloOC && puedeVer('ORDENES_COMPRA') ? (
