@@ -547,7 +547,7 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
   const timersPropio = useRef({})
   const [buscar, setBuscar] = useState('')
   const [mostrarForm, setMostrarForm] = useState(false)
-  const [nuevo, setNuevo] = useState({ tag: '', idPieza: '', m2: '', referencia: '' })
+  const [nuevo, setNuevo] = useState({ tag: '', idPieza: '', m2: '', referencia: '', cantidad: '1' })
   const marcasFiltradas = buscar.trim() ? marcas.filter(m => [m.marca, m.idPieza, m.referencia].some(v => String(v || '').toLowerCase().includes(buscar.trim().toLowerCase()))) : marcas
   const total = marcas.length
   const recibidas = marcas.filter(m => m.recibida).length
@@ -667,19 +667,37 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
   // resto de la app (checklist de recepcion, despacho, protocolos, Excel) —
   // asi una marca agregada a mano funciona identico a una que vino del
   // Excel, sin tocar esa logica existente.
+  //
+  // Cantidad > 1: mismo TAG, mismos m², una fila POR PIEZA (nunca una sola
+  // fila con un numero adentro) — el resto de la app (recepcion, despacho,
+  // protocolos, trazabilidad) asume una fila = una pieza fisica, asi que
+  // repetir la fila en vez de agregarle un contador evita tener que tocar
+  // esa logica. El ID de cada copia se numera solo con sufijos de letra
+  // (A, B, C… luego AA, AB…), el mismo patron -A/-B/-C que ya usa un TAG
+  // con varias piezas cargado a mano o por Excel.
   const agregarManual = () => {
     const tag = nuevo.tag.trim()
     if (!tag) return
-    const idPieza = nuevo.idPieza.trim()
-    const marcaTxt = idPieza ? (tag + '-' + idPieza) : tag
-    const dup = marcas.some(m => String(m.marca || '').trim().toLowerCase() === marcaTxt.toLowerCase())
-    if (dup) { window.alert('Ya existe una marca "' + marcaTxt + '" en el checklist.'); return }
-    onGuardar([...marcas, {
-      id: 'me' + Date.now() + Math.random().toString(36).slice(2, 7),
-      marca: marcaTxt, tag, idPieza: idPieza || null, referencia: nuevo.referencia.trim() || null,
-      m2: parseFloat(nuevo.m2) || 0, m2Propio: null, recibida: false, fechaRecibida: null
-    }])
-    setNuevo({ tag: '', idPieza: '', m2: '', referencia: '' }); setMostrarForm(false)
+    const cantidad = Math.min(500, Math.max(1, parseInt(nuevo.cantidad, 10) || 1))
+    const idBase = nuevo.idPieza.trim()
+    const sufijoLetra = i => { let s = '', n = i; do { s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26) - 1 } while (n >= 0); return s }
+    const nuevas = []
+    for (let i = 0; i < cantidad; i++) {
+      const idPieza = cantidad > 1 ? (idBase ? idBase + sufijoLetra(i) : sufijoLetra(i)) : idBase
+      const marcaTxt = idPieza ? (tag + '-' + idPieza) : tag
+      const yaExiste = marcas.some(m => String(m.marca || '').trim().toLowerCase() === marcaTxt.toLowerCase())
+      const repetidaEnEstaTanda = nuevas.some(m => m.marca.toLowerCase() === marcaTxt.toLowerCase())
+      if (yaExiste || repetidaEnEstaTanda) continue
+      nuevas.push({
+        id: 'me' + Date.now() + Math.random().toString(36).slice(2, 7) + i,
+        marca: marcaTxt, tag, idPieza: idPieza || null, referencia: nuevo.referencia.trim() || null,
+        m2: parseFloat(nuevo.m2) || 0, m2Propio: null, recibida: false, fechaRecibida: null
+      })
+    }
+    if (!nuevas.length) { window.alert(cantidad > 1 ? 'Todas esas marcas ya existían en el checklist.' : 'Ya existe una marca "' + tag + (idBase ? '-' + idBase : '') + '" en el checklist.'); return }
+    onGuardar([...marcas, ...nuevas])
+    if (nuevas.length < cantidad) window.alert(`Se agregaron ${nuevas.length} de ${cantidad} — el resto ya existía en el checklist y no se repitió.`)
+    setNuevo({ tag: '', idPieza: '', m2: '', referencia: '', cantidad: '1' }); setMostrarForm(false)
   }
 
   return (
@@ -775,16 +793,26 @@ function MarcasEsperadasOT({ ot, onGuardar }) {
             <input value={nuevo.idPieza} onChange={e => setNuevo({ ...nuevo, idPieza: e.target.value })} placeholder="ej. A" style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '6px 8px', fontSize: 12.5, width: 90 }} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <label style={{ fontSize: 10, color: '#9AA3AD' }}>m² cliente</label>
+            <label style={{ fontSize: 10, color: '#9AA3AD' }}>Cantidad</label>
+            <input type="number" step="1" min="1" max="500" value={nuevo.cantidad} onChange={e => setNuevo({ ...nuevo, cantidad: e.target.value })} style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '6px 8px', fontSize: 12.5, width: 70 }} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <label style={{ fontSize: 10, color: '#9AA3AD' }}>m² cliente {Number(nuevo.cantidad) > 1 ? '(c/u)' : ''}</label>
             <input type="number" step="0.01" min="0" value={nuevo.m2} onChange={e => setNuevo({ ...nuevo, m2: e.target.value })} style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '6px 8px', fontSize: 12.5, width: 90 }} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <label style={{ fontSize: 10, color: '#9AA3AD' }}>Referencia (opcional)</label>
             <input value={nuevo.referencia} onChange={e => setNuevo({ ...nuevo, referencia: e.target.value })} placeholder="ej. N° de plano" style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '6px 8px', fontSize: 12.5, width: 130 }} />
           </div>
-          <button onClick={agregarManual} disabled={!nuevo.tag.trim()} style={{ background: nuevo.tag.trim() ? C.verde : '#DFE4EA', color: '#fff', border: 'none', borderRadius: 4, padding: '7px 14px', fontSize: 13, cursor: nuevo.tag.trim() ? 'pointer' : 'not-allowed' }}>Agregar</button>
-          <button onClick={() => { setMostrarForm(false); setNuevo({ tag: '', idPieza: '', m2: '', referencia: '' }) }} style={{ background: 'none', border: '1px solid #DFE4EA', borderRadius: 4, padding: '7px 12px', fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
-          {nuevo.tag.trim() && <div style={{ flexBasis: '100%', fontSize: 11, color: '#9AA3AD' }}>Se guardará como: <b>{nuevo.idPieza.trim() ? nuevo.tag.trim() + '-' + nuevo.idPieza.trim() : nuevo.tag.trim()}</b></div>}
+          <button onClick={agregarManual} disabled={!nuevo.tag.trim()} style={{ background: nuevo.tag.trim() ? C.verde : '#DFE4EA', color: '#fff', border: 'none', borderRadius: 4, padding: '7px 14px', fontSize: 13, cursor: nuevo.tag.trim() ? 'pointer' : 'not-allowed' }}>Agregar{Number(nuevo.cantidad) > 1 ? ' ' + Number(nuevo.cantidad) + ' piezas' : ''}</button>
+          <button onClick={() => { setMostrarForm(false); setNuevo({ tag: '', idPieza: '', m2: '', referencia: '', cantidad: '1' }) }} style={{ background: 'none', border: '1px solid #DFE4EA', borderRadius: 4, padding: '7px 12px', fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+          {nuevo.tag.trim() && (
+            <div style={{ flexBasis: '100%', fontSize: 11, color: '#9AA3AD' }}>
+              {Number(nuevo.cantidad) > 1
+                ? <>Se guardarán {Number(nuevo.cantidad)} piezas: <b>{nuevo.tag.trim()}-{nuevo.idPieza.trim() || 'A'}</b>, <b>{nuevo.tag.trim()}-{nuevo.idPieza.trim() || 'B'}</b>… hasta {nuevo.tag.trim()}-{nuevo.idPieza.trim()}{(() => { let s = '', n = Number(nuevo.cantidad) - 1; do { s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26) - 1 } while (n >= 0); return s })()}</>
+                : <>Se guardará como: <b>{nuevo.idPieza.trim() ? nuevo.tag.trim() + '-' + nuevo.idPieza.trim() : nuevo.tag.trim()}</b></>}
+            </div>
+          )}
         </div>
       )}
       {total === 0 ? (
