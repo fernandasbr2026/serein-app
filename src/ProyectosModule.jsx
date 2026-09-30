@@ -202,7 +202,8 @@ function FormCompra({ p, onAdd, onCancel, params }) {
 // se agrega la compra (mismo onAdd que ya usa FormCompra, con su
 // anti-duplicado por folio+RUT) y ademas se sube el PDF a Drive,
 // organizado OT / Centro de Costo.
-function ImportadorFacturaCompra({ p, onAdd }) {
+function ImportadorFacturaCompra({ p, onAdd, params }) {
+  const factoringList = (params && params.factoring) || []
   const [abierto, setAbierto] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
   const [error, setError] = useState('')
@@ -226,6 +227,7 @@ function ImportadorFacturaCompra({ p, onAdd }) {
         proveedor: d.proveedor || '', rut: d.rut || '', folio: d.folio || '',
         fecha: d.fecha || '', monto: d.neto != null ? String(d.neto) : '', exento: !!d.exento,
         detalle: d.detalle || '', cc: ccCodigos(p)[0] || CC_DEFS[0].id, abonado: '', pagadaCompleta: false,
+        formaPago: 'Contado', vencimiento: '', factorizada: false, factoringNombre: '',
       })
     } catch (err) { setError('No se pudo leer la factura: ' + ((err && err.message) || String(err))) }
     setSubiendo(false)
@@ -235,7 +237,7 @@ function ImportadorFacturaCompra({ p, onAdd }) {
   const confirmar = async () => {
     if (!revision) return
     if (!revision.proveedor.trim() || !(num(revision.monto) > 0)) { window.alert('Falta el proveedor o el monto no es válido — revisa antes de confirmar.'); return }
-    const agregada = onAdd({ proveedor: revision.proveedor, detalle: revision.detalle, fecha: revision.fecha || '—', monto: num(revision.monto), cc: revision.cc, folio: revision.folio, rut: revision.rut, exento: !!revision.exento, abonado: revision.pagadaCompleta ? brutoRevision : num(revision.abonado) })
+    const agregada = onAdd({ proveedor: revision.proveedor, detalle: revision.detalle, fecha: revision.fecha || '—', monto: num(revision.monto), cc: revision.cc, folio: revision.folio, rut: revision.rut, exento: !!revision.exento, abonado: revision.pagadaCompleta ? brutoRevision : num(revision.abonado), formaPago: revision.formaPago, vencimiento: revision.formaPago === 'Programado' ? revision.vencimiento : '', factorizada: !!revision.factorizada, factoringNombre: revision.factorizada ? revision.factoringNombre.trim() : '' })
     if (!agregada) return // anti-duplicado ya avisó (folio+RUT repetido) — la persona decide, no se sube a Drive de vuelta
     setGuardando(true)
     try {
@@ -275,6 +277,20 @@ function ImportadorFacturaCompra({ p, onAdd }) {
                 <input style={{ ...inp, width: 120 }} type="date" value={revision.fecha} onChange={e => setRevision(r => ({ ...r, fecha: e.target.value }))} />
                 <input style={{ ...inp, width: 120 }} placeholder="Monto neto CLP" value={revision.monto} onChange={e => setRevision(r => ({ ...r, monto: e.target.value }))} />
                 <label style={{ fontSize: 12, color: C.gris, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" checked={!!revision.exento} onChange={e => setRevision(r => ({ ...r, exento: e.target.checked }))} /> Exenta (sin IVA)</label>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: '1px dashed #DFE4EA' }}>
+                <select style={inp} value={revision.formaPago} onChange={e => setRevision(r => ({ ...r, formaPago: e.target.value }))}>
+                  <option value="Contado">Pago al contado</option>
+                  <option value="Programado">Pago programado</option>
+                </select>
+                {revision.formaPago === 'Programado' && (
+                  <label style={{ fontSize: 11, color: C.gris }}>Vencimiento del pago<input style={{ ...inp, width: 140, display: 'block' }} type="date" value={revision.vencimiento} onChange={e => setRevision(r => ({ ...r, vencimiento: e.target.value }))} /></label>
+                )}
+                <label style={{ fontSize: 12, color: C.gris, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" checked={revision.factorizada} onChange={e => setRevision(r => ({ ...r, factorizada: e.target.checked }))} /> Factorizada</label>
+                {revision.factorizada && (
+                  <input list="factoring-sugeridos-importador" style={{ ...inp, width: 160 }} placeholder="Empresa de factoring" value={revision.factoringNombre} onChange={e => setRevision(r => ({ ...r, factoringNombre: e.target.value }))} />
+                )}
+                <datalist id="factoring-sugeridos-importador">{factoringList.map(fc => <option key={fc.id} value={fc.nombre} />)}</datalist>
               </div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
                 <input style={{ ...inp, width: 120 }} placeholder="Abonado CLP" value={revision.pagadaCompleta ? brutoRevision : revision.abonado} disabled={revision.pagadaCompleta} onChange={e => setRevision(r => ({ ...r, abonado: e.target.value }))} />
@@ -865,7 +881,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0 8px' }}>
             <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.gris, display: 'flex', alignItems: 'center', gap: 5 }}><ShoppingCart size={13} /> Compras imputadas (por CC)</span>
             <div style={{ display: 'flex', gap: 6 }}>
-              <ImportadorFacturaCompra p={p} onAdd={c => onAddCompra(p.id, c)} />
+              <ImportadorFacturaCompra p={p} params={params} onAdd={c => onAddCompra(p.id, c)} />
               <button onClick={() => setAddCompra(true)} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Agregar compra</button>
             </div>
           </div>
