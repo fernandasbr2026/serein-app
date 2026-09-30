@@ -3,7 +3,7 @@
 // tabla de trazabilidad por pieza) como por TrazabilidadModule.jsx (tablero
 // de lotes y alarmas). Separado a su propio archivo para no duplicar la
 // misma logica en dos modulos.
-const hoy = () => new Date().toISOString().slice(0, 10)
+const hoy = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 
 // Tope defensivo de iteraciones (~27 años de dias habiles) — una fecha mal
 // escrita a mano (texto libre, formato distinto) o un plazo en dias con un

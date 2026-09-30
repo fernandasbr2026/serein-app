@@ -8,7 +8,7 @@ import { SEREIN } from './theme-serein.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
 const C = { navy: SEREIN.ink, line: SEREIN.line, gray: SEREIN.textFaint, red: SEREIN.red, orange: SEREIN.orange, green: SEREIN.green }
 const clp = n => '$' + Math.round(+n || 0).toLocaleString('es-CL')
-const hoy = () => new Date().toISOString().slice(0, 10)
+const hoy = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 const mesDe = d => (d || '').slice(0, 7)
 function sumarDias(f, n) { const d = new Date(f + 'T00:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
 const SEVR = { rojo: 3, amarillo: 2, verde: 1 }

@@ -375,7 +375,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
   const marcarPagadasSel = () => {
     if (!sel.size) return
     if (!window.confirm('Se marcaran ' + sel.size + ' factura(s) como Pagada en ' + area + '. Continuar?')) return
-    const hoyISO = new Date().toISOString().slice(0, 10)
+    const hoyISO = (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') })()
     eliminarFresco(baseLista => baseLista.map(x => sel.has(x.id) ? { ...x, estado: 'Pagado', fecha_pago: x.fecha_pago || hoyISO } : x))
     setSel(new Set())
   }

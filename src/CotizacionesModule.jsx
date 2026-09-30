@@ -415,7 +415,7 @@ function htmlOTDoc(ot) {
 export function descargarOTDesdeOT(ot) { imprimir(htmlOTDoc(ot)) }
 
 // Cotización vacía nueva
-const hoy = () => new Date().toISOString().slice(0, 10)
+const hoy = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 function nuevaCot(folio) {
   return { id: 'cot' + Date.now(), folio: String(folio || ''), fecha: hoy(), vencimiento: hoy(), area: 'Santa Rosa', cliente: '', rut: '', giro: '', ciudad: '', comuna: '', direccion: '', condicionPago: 'CONTADO', vendedor: 'Venta general', comentario: '', estado: 'Alta probabilidad de cierre', estadoOtro: '', proveedorPintura: '', items: [{ codigo: 'SPP', detalle: 'SERVICIO GRANALLADO Y PINTURA EN PLANTA', cant: '', unidad: 'UN', pUnitario: '', descuento: '', descDetallada: '', comentario: '' }] }
 }

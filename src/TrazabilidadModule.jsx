@@ -20,7 +20,7 @@ import { SEREIN } from './theme-serein.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
 const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
-const hoy = () => new Date().toISOString().slice(0, 10)
+const hoy = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 
 const ocsDeOT = (ocs, numOT) => (ocs || []).filter(o => (o.asignaciones || []).some(a => a.ot === numOT))
 const produccionDe = o => ({ 'Cotizada': 'No iniciada', 'En ejecución': 'En proceso', 'Terminada': 'Terminada', 'Facturada': 'Terminada', 'Cerrada': 'Terminada' }[o.estado] || '—')

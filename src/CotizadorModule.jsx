@@ -4,7 +4,7 @@ import { Plus, Trash2, X, FileText, TrendingUp, ArrowRightCircle, ChevronDown, C
 const C = { naranja: '#FF6B00', carbon: '#0F1A2E', verde: '#12805C', rojo: '#D64545', gris: '#8A929E' }
 const clp = n => '$' + Math.round(n).toLocaleString('es-CL')
 const num = s => { const v = parseFloat(String(s).replace(/[^\d.]/g, '')); return isNaN(v) ? 0 : v }
-const hoy = () => new Date().toISOString().slice(0, 10)
+const hoy = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 const inp = { padding: '7px 9px', border: '1px solid #CBD2D6', fontSize: 13, boxSizing: 'border-box' }
 
 const ESTADOS_COT = ['Borrador', 'Enviada', 'Aprobada', 'Rechazada', 'Vencida']
