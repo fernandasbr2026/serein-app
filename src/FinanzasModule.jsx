@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react'
-import { Plus, Trash2, X, Copy, Landmark, ReceiptText, PieChart as PieIcon, CalendarClock, BarChart3, CheckCircle2, Download, TrendingUp, Pencil } from 'lucide-react'
+import { Plus, Trash2, X, Copy, Landmark, ReceiptText, PieChart as PieIcon, CalendarClock, BarChart3, CheckCircle2, Download, TrendingUp, Pencil, SplitSquareHorizontal } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 import { SEREIN } from './theme-serein.js'
@@ -121,6 +121,75 @@ async function cambiarEstadoGasto(fin, setFin, id, estado) {
   setFin(nuevoFin)
   pushState()
 }
+// Divide un sueldo (una fila de nómina) en dos pagos: quincena (dia
+// elegido, por defecto la mitad del monto) y fin de mes (el resto, se
+// queda en la fila original solo que con el monto reducido). Cada mitad
+// queda como su propio gasto "Mensual" independiente — no hace falta
+// ningun concepto nuevo de "gasto pareado": al ser cada uno un gasto
+// recurrente normal con su propio dia del mes, el motor de proyeccion ya
+// existente (gastoOcurreEnMes/materializarGastoProyectado) los repite
+// solos todos los meses sin cambios.
+// Suma el costo de TODAS las horas extras de un mes ya cerrado y lo deja
+// como un gasto variable fechado el 5 del mes siguiente (que es cuando se
+// pagan) — pedido explícito: extras de septiembre → gasto el 5 de
+// octubre, sin cargarlo a mano. Idempotente por mes: si ya existe un
+// gasto generado para ese mesCerrado (marcado con extrasOrigenMes), se
+// actualiza el monto en vez de duplicarlo — las horas extras se pueden
+// seguir editando en Asistencia hasta el día del pago, y cada
+// sincronización debe reflejar el total más reciente, no sumar de nuevo.
+export async function sincronizarExtrasGastoVariable(fin, setFin, mo, mesCerrado) {
+  const total = Math.round((mo.horasExtras || []).filter(h => (h.fecha || '').startsWith(mesCerrado)).reduce((a, h) => a + ((h.costo && h.costo.total) || 0), 0))
+  if (total <= 0) return { total: 0 }
+  const [anio, mesNum] = mesCerrado.split('-').map(Number)
+  // new Date(anio, mesNum, 5): mesNum es el mes CERRADO en base 1 (ej. 9
+  // para septiembre), que coincide con el índice en base 0 del mes
+  // SIGUIENTE (9 = octubre) — así se arma directo la fecha de pago.
+  const fechaPago = new Date(anio, mesNum, 5)
+  const vencimiento = fechaPago.getFullYear() + '-' + String(fechaPago.getMonth() + 1).padStart(2, '0') + '-05'
+  const nombreMes = new Date(anio, mesNum - 1, 1).toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })
+  try { await pullState() } catch (e) {}
+  let fresco = null
+  try { fresco = JSON.parse(localStorage.getItem('serein_fin') || 'null') } catch (e) {}
+  const baseFin = fresco && typeof fresco === 'object' ? fresco : fin
+  const gastos = baseFin.gastos || []
+  const existente = gastos.find(g => g.extrasOrigenMes === mesCerrado)
+  const nuevosGastos = existente
+    ? gastos.map(g => g.id === existente.id ? { ...g, neto: total } : g)
+    : [{
+        id: 'g' + Date.now() + Math.random().toString(36).slice(2, 7), tipo: 'variable', nombre: 'Horas extras ' + nombreMes, categoria: 'Otros',
+        proveedor: 'Interno', documento: '', neto: total, iva: 0, vencimiento, frecuencia: 'Única', estado: 'Pendiente', ot: '',
+        dist: [{ area: 'General empresa', pct: 100 }], obs: 'Generado automáticamente desde Asistencia · Horas extras', esUF: false, uf: 0,
+        formaPago: 'Transferencia', numeroCheque: '', fechaCheque: '', extrasOrigenMes: mesCerrado,
+      }, ...gastos]
+  const nuevoFin = { ...baseFin, gastos: nuevosGastos }
+  try { localStorage.setItem('serein_fin', JSON.stringify(nuevoFin)) } catch (e) {}
+  setFin(nuevoFin)
+  pushState()
+  return { total, vencimiento }
+}
+async function dividirNominaEnQuincena(fin, setFin, gastoId, diaQuincena, montoQuincena) {
+  try { await pullState() } catch (e) {}
+  let fresco = null
+  try { fresco = JSON.parse(localStorage.getItem('serein_fin') || 'null') } catch (e) {}
+  const baseFin = fresco && typeof fresco === 'object' ? fresco : fin
+  const gastos = baseFin.gastos || []
+  const original = gastos.find(g => g.id === gastoId)
+  if (!original) return
+  const netoTotal = original.neto || 0
+  const montoQ = Math.min(Math.max(0, montoQuincena), netoTotal)
+  const [anio, mes] = (original.vencimiento || hoy()).split('-')
+  const fechaQuincena = `${anio}-${mes}-${String(diaQuincena).padStart(2, '0')}`
+  const quincena = {
+    ...original, id: 'g' + Date.now() + Math.random().toString(36).slice(2, 7), serieId: undefined,
+    nombre: original.nombre + ' (quincena)', vencimiento: fechaQuincena,
+    neto: montoQ, iva: original.iva ? Math.round(montoQ * 0.19) : 0, dividioQuincena: undefined,
+  }
+  const finDeMes = { ...original, nombre: original.nombre.replace(/ \(fin de mes\)$/, '') + ' (fin de mes)', neto: netoTotal - montoQ, iva: original.iva ? Math.round((netoTotal - montoQ) * 0.19) : 0, dividioQuincena: true }
+  const nuevoFin = { ...baseFin, gastos: [quincena, ...gastos.map(g => g.id === gastoId ? finDeMes : g)] }
+  try { localStorage.setItem('serein_fin', JSON.stringify(nuevoFin)) } catch (e) {}
+  setFin(nuevoFin)
+  pushState()
+}
 // Serie de un gasto recurrente: todas las filas materializadas de un mismo
 // gasto Mensual/Anual comparten un serieId (el id de la fila original que
 // las originó). Una fila sin serieId es su propia serie de una sola fila
@@ -198,6 +267,34 @@ async function eliminarCompraProyecto(proyectos, setProyectos, proyectoId, compr
 // ese se deja tal cual (reclasificarlo requiere el catalogo de CC del
 // proyecto, que es informacion propia de la ficha del proyecto) — para
 // cambiar el CC se sigue entrando a Proyectos, todo lo demas se edita aca.
+// Formulario chico para dividirNominaEnQuincena — se abre desde el
+// boton "Dividir en quincena" de una fila de nómina. Propone la mitad del
+// monto en la quincena por defecto (pedido explícito: "50/50 editable"),
+// dejando ajustar dia y monto para el caso de un anticipo distinto.
+function FormDividirQuincena({ gasto, onCerrar, fin, setFin }) {
+  const [dia, setDia] = useState('15')
+  const [monto, setMonto] = useState(String(Math.round((gasto.neto || 0) / 2)))
+  const restante = Math.max(0, (gasto.neto || 0) - (num(monto) || 0))
+  function guardar() {
+    dividirNominaEnQuincena(fin, setFin, gasto.id, parseInt(dia, 10) || 15, num(monto))
+    onCerrar()
+  }
+  return (
+    <div style={{ background: '#fff', border: `2px solid ${COLOR_TIPO_PAGO['Nómina']}`, padding: 16, marginBottom: 14 }}>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Dividir "{gasto.nombre}" en quincena + fin de mes</div>
+      <div style={{ fontSize: 12, color: C.gris, marginBottom: 10 }}>Monto total: {clp(gasto.neto || 0)}. Se crean dos pagos independientes, cada uno se repite solo todos los meses.</div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <label style={{ fontSize: 12, color: C.gris }}>Día de la quincena<input type="number" min="1" max="28" style={{ ...inp, width: 70, display: 'block' }} value={dia} onChange={e => setDia(e.target.value)} /></label>
+        <label style={{ fontSize: 12, color: C.gris }}>Monto quincena<input style={{ ...inp, width: 140, display: 'block' }} value={monto} onChange={e => setMonto(e.target.value)} /></label>
+        <div style={{ fontSize: 12.5, color: C.carbon }}>Fin de mes (resto): <b>{clp(restante)}</b></div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <button onClick={guardar} style={{ background: C.verde, color: '#fff', border: 'none', padding: '9px 18px', cursor: 'pointer', fontSize: 13 }}>Dividir</button>
+        <button onClick={onCerrar} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+      </div>
+    </div>
+  )
+}
 function FormEditarCompra({ item, proyectos, setProyectos, onCerrar }) {
   const c = item.compra
   const [f, setF] = useState({
@@ -325,6 +422,7 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
   const [creando, setCreando] = useState(false)
   const [editando, setEditando] = useState(null)
   const [editandoProyectado, setEditandoProyectado] = useState(null)
+  const [dividiendoQuincena, setDividiendoQuincena] = useState(null)
   const [fArea, setFArea] = useState('')
   // Pestañas de mes (Ene-Dic de un año elegible con ‹ ›): reemplaza el
   // selector "Todos los meses"/un mes suelto de antes — se navega el año
@@ -353,6 +451,16 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
     const nt = netoEf(g, fin.ufValor)
     return { n: a.n + 1, neto: a.neto + nt * p, total: a.total + (nt + (g.iva || 0)) * p }
   }, { n: 0, neto: 0, total: 0 })
+  // Cuánto toca pagar en la quincena (día ≤15) vs a fin de mes (día >15) —
+  // solo de las nóminas de este mes, sea que ya se hayan dividido con
+  // "Dividir en quincena" o que sigan siendo un solo pago (ahí cuentan
+  // enteras en el bucket de su propio día).
+  const nominasDelMes = gastos.filter(g => g.estado !== 'Anulado' && esNomina(g.categoria))
+  const resumenQuincena = nominasDelMes.reduce((a, g) => {
+    const dia = Number((g.vencimiento || '').slice(8, 10)) || 31
+    const nt = netoEf(g, fin.ufValor)
+    return dia <= 15 ? { ...a, quincena: a.quincena + nt } : { ...a, finMes: a.finMes + nt }
+  }, { quincena: 0, finMes: 0 })
 
   async function duplicarMesSiguiente(g) {
     const d = new Date(g.vencimiento + 'T12:00:00')
@@ -481,6 +589,18 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
         ))}
       </div>
 
+      {nominasDelMes.length > 0 && (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14, fontSize: 12.5 }}>
+          <div style={{ background: COLOR_TIPO_PAGO['Nómina'] + '18', border: `1px solid ${COLOR_TIPO_PAGO['Nómina']}55`, borderRadius: 4, padding: '8px 12px' }}>
+            Nóminas quincena (día ≤15): <b>{clp(resumenQuincena.quincena)}</b>
+          </div>
+          <div style={{ background: COLOR_TIPO_PAGO['Nómina'] + '18', border: `1px solid ${COLOR_TIPO_PAGO['Nómina']}55`, borderRadius: 4, padding: '8px 12px' }}>
+            Nóminas fin de mes (día &gt;15): <b>{clp(resumenQuincena.finMes)}</b>
+          </div>
+        </div>
+      )}
+      {dividiendoQuincena && <FormDividirQuincena gasto={dividiendoQuincena} fin={fin} setFin={setFin} onCerrar={() => setDividiendoQuincena(null)} />}
+
       <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18, overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
@@ -523,6 +643,9 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
                     <button title="Eliminar este mes (no afecta los demás)" onClick={() => window.confirm(`¿Marcar "${g.nombre}" de ${g.vencimiento} como que no corresponde pagarlo? No afecta otros meses.`) && materializarGastoProyectado(fin, setFin, g.id, g.vencimiento, { estado: 'Anulado' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
                   </>) : (<>
                     <button title="Editar" onClick={() => setEditando(g)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Pencil size={14} /></button>
+                    {esNomina(g.categoria) && !/\((quincena|fin de mes)\)$/.test(g.nombre) && (
+                      <button title="Dividir en quincena + fin de mes" onClick={() => setDividiendoQuincena(g)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLOR_TIPO_PAGO['Nómina'] }}><SplitSquareHorizontal size={14} /></button>
+                    )}
                     <button title="Duplicar al mes siguiente" onClick={() => duplicarMesSiguiente(g)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Copy size={14} /></button>
                     <button title="Eliminar" onClick={() => window.confirm(`¿Eliminar "${g.nombre}"?`) && eliminarGastoFresco(fin, setFin, g.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
                   </>)}
@@ -1148,6 +1271,7 @@ export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setPara
   const [creandoGasto, setCreandoGasto] = useState(null) // 'fijo' | 'variable' | null
   const [editandoCompra, setEditandoCompra] = useState(null)
   const [editandoProyectado, setEditandoProyectado] = useState(null)
+  const [dividiendoQuincena, setDividiendoQuincena] = useState(null)
   const puedeEditarProyectos = !!setProyectos
   const items = itemsPorPagar(fin, proyectos)
   const h = hoy()
@@ -1183,6 +1307,15 @@ export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setPara
     }))
   const itemsMes = [...itemsRealesMes, ...gastosProyectadosMes].sort((a, b) => (a.vencimiento || '9999').localeCompare(b.vencimiento || '9999'))
   const nominasMes = itemsMes.filter(x => esNomina(x.categoria))
+  // Cuánto toca pagar en la quincena (día ≤15) vs a fin de mes (día >15) —
+  // pedido explícito: "cómo puedo saber cuánto debo pagar en quincena y
+  // finales de mes". Cuenta cada nómina en su propio día (funciona tanto
+  // para las ya divididas con "Dividir en quincena" como para las que
+  // siguen siendo un solo pago).
+  const resumenQuincenaPagos = nominasMes.reduce((a, x) => {
+    const dia = Number((x.vencimiento || '').slice(8, 10)) || 31
+    return dia <= 15 ? { ...a, quincena: a.quincena + x.monto } : { ...a, finMes: a.finMes + x.monto }
+  }, { quincena: 0, finMes: 0 })
   const proveedoresMes = itemsMes.filter(x => x.tipo === 'Compra proyecto')
   const restoMes = itemsMes.filter(x => !esNomina(x.categoria) && x.tipo !== 'Compra proyecto')
   const totalMesPagos = itemsMes.reduce((a, x) => a + x.monto, 0)
@@ -1213,6 +1346,9 @@ export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setPara
         {ESTADOS_GASTO.map(v => <option key={v}>{v}</option>)}
       </select>
       <button title="Editar" onClick={() => setEditandoGasto(x.gasto)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Pencil size={14} /></button>
+      {esNomina(x.gasto.categoria) && !/\((quincena|fin de mes)\)$/.test(x.gasto.nombre) && (
+        <button title="Dividir en quincena + fin de mes" onClick={() => setDividiendoQuincena(x.gasto)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLOR_TIPO_PAGO['Nómina'] }}><SplitSquareHorizontal size={14} /></button>
+      )}
       <button title="Eliminar" onClick={() => window.confirm(`¿Eliminar "${x.gasto.nombre}"?`) && eliminarGastoFresco(fin, setFin, x.gasto.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
     </>)
     if (x.origen === 'cuota') return (
@@ -1287,6 +1423,7 @@ export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setPara
       {creandoGasto && <OverlayFormulario onClose={() => setCreandoGasto(null)}><FormGasto tipo={creandoGasto} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} onCerrar={() => setCreandoGasto(null)} /></OverlayFormulario>}
       {editandoCompra && <OverlayFormulario onClose={() => setEditandoCompra(null)}><FormEditarCompra item={editandoCompra} proyectos={proyectos} setProyectos={setProyectos} onCerrar={() => setEditandoCompra(null)} /></OverlayFormulario>}
       {editandoProyectado && <OverlayFormulario onClose={() => setEditandoProyectado(null)}><FormGasto tipo={editandoProyectado.gasto.tipo} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} proyectadoInicial={editandoProyectado} onCerrar={() => setEditandoProyectado(null)} /></OverlayFormulario>}
+      {dividiendoQuincena && <OverlayFormulario onClose={() => setDividiendoQuincena(null)}><FormDividirQuincena gasto={dividiendoQuincena} fin={fin} setFin={setFin} onCerrar={() => setDividiendoQuincena(null)} /></OverlayFormulario>}
       <div style={{ fontSize: 11.5, color: C.gris, marginBottom: 16 }}>Total general pendiente: <b style={{ color: C.carbon }}>{clp(totalGeneral)}</b></div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
         <button onClick={() => irA('fijos')} style={btnAgregar}><Plus size={13} /> Gasto fijo</button>
@@ -1312,6 +1449,16 @@ export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setPara
       <div style={{ fontSize: 13, color: C.carbon, marginBottom: 14 }}>Total de {MESES_PAGOS[mesPagos - 1]} {anioPagos}: <b style={{ fontFamily: SEREIN.fontDisplay }}>{clp(totalMesPagos)}</b></div>
 
       {itemsMes.length === 0 && <div style={{ fontSize: 13, color: C.gris, background: '#fff', border: '1px solid #DFE4EA', padding: 16 }}>No hay pagos para {MESES_PAGOS[mesPagos - 1]} {anioPagos}.</div>}
+      {nominasMes.length > 0 && (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10, fontSize: 12.5 }}>
+          <div style={{ background: COLOR_TIPO_PAGO['Nómina'] + '18', border: `1px solid ${COLOR_TIPO_PAGO['Nómina']}55`, borderRadius: 4, padding: '8px 12px' }}>
+            Quincena (día ≤15): <b>{clp(resumenQuincenaPagos.quincena)}</b>
+          </div>
+          <div style={{ background: COLOR_TIPO_PAGO['Nómina'] + '18', border: `1px solid ${COLOR_TIPO_PAGO['Nómina']}55`, borderRadius: 4, padding: '8px 12px' }}>
+            Fin de mes (día &gt;15): <b>{clp(resumenQuincenaPagos.finMes)}</b>
+          </div>
+        </div>
+      )}
       {seccion('Nóminas (sueldos e imposiciones)', COLOR_TIPO_PAGO['Nómina'], nominasMes, '👥')}
       {seccion('Proveedores de proyecto', COLOR_TIPO_PAGO['Compra proyecto'], proveedoresMes, '🎨')}
       {seccion('Otros pagos del mes', C.naranja, restoMes, '💵')}

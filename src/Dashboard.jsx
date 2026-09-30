@@ -11,7 +11,7 @@ import OTModule, { OTS_INICIALES, resumenOTArea } from './OTModule.jsx'
 import PipelineOT from './PipelineOT.jsx'
 import PipelineProyectos from './PipelineProyectos.jsx'
 import ManoObraModule from './ManoObraModule.jsx'
-import FinanzasModule, { FIN_SEED, calcularResumenFin, resumenGastosPeriodoArea, netoEf, PorPagar } from './FinanzasModule.jsx'
+import FinanzasModule, { FIN_SEED, calcularResumenFin, resumenGastosPeriodoArea, netoEf, PorPagar, sincronizarExtrasGastoVariable } from './FinanzasModule.jsx'
 import CotizadorModule from './CotizadorModule.jsx'
 import CotizacionesModule from './CotizacionesModule.jsx'
 import ProduccionModule, { AVANCES_SEED } from './ProduccionModule.jsx'
@@ -273,7 +273,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   // alguien visite esa pantalla, se revisa una vez por sesión si la fecha
   // guardada quedó atrás y, si es así, se trae la actual sola.
   useEffect(() => {
-    const hoyStr = new Date().toISOString().slice(0, 10)
+    const hoyStr = (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') })()
     if ((params.uf && params.uf.fecha) === hoyStr) return
     ;(async () => {
       try {
@@ -285,7 +285,33 @@ export default function Dashboard({ perfil, email, onLogout }) {
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  const [clientes, setClientes] = useState(() => sanearClientesArr(LS('clientes', CLIENTES_SEED)))
+  // Extras de trabajadores (Asistencia → Horas extras) → gasto variable
+  // automático para el 5 del mes siguiente (pedido explícito: "los extras
+  // de septiembre se pagan el 5 de octubre"). Se sincroniza solo el
+  // último día del mes que se cierra (ahí el total de extras ya está
+  // completo) y se avisa con un banner en la app — sin correo automático,
+  // que requeriría un cron nuevo en el servidor (no existe hoy). El
+  // banner se puede cerrar; una vez cerrado para un mes no vuelve a
+  // aparecer ese mes (guardado en localStorage), aunque la sincronización
+  // en sí se sigue actualizando cada vez que se abre la app ese día por
+  // si las horas extras cambiaron.
+  const [avisoExtras, setAvisoExtras] = useState(null)
+  useEffect(() => {
+    if (!esGerencia) return
+    const d = new Date()
+    const esUltimoDiaDelMes = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate() === d.getDate()
+    if (!esUltimoDiaDelMes) return
+    const mesCerrado = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+    ;(async () => {
+      const r = await sincronizarExtrasGastoVariable(fin, setFin, mo, mesCerrado)
+      if (r.total <= 0) return
+      let cerrado = null
+      try { cerrado = localStorage.getItem('serein_aviso_extras_cerrado') } catch (e) {}
+      if (cerrado === mesCerrado) return
+      setAvisoExtras({ mesCerrado, total: r.total, vencimiento: r.vencimiento })
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [esGerencia])
   const [contactos, setContactos] = useState(() => { const s = LS('contactos', null); const base = (s && s.ver === CONTACTOS_SEED.ver) ? s : CONTACTOS_SEED; return { ...base, clientes: sanearClientesArr(base.clientes) } })
   const [facturas, setFacturas] = useState(() => LS('facturas', FACTURAS_SEED))
   const [cotizaciones, setCotizaciones] = useState(() => LS('cotizaciones', []))
@@ -799,6 +825,12 @@ export default function Dashboard({ perfil, email, onLogout }) {
       <main style={{ flex: 1, minWidth: 0, height: '100vh', overflowY: 'auto' }}>
       <div style={{ padding: 20, maxWidth: 1200, margin: '0 auto' }}>
               <PageHeader titulo={nombreTab(areaSel)} perfil={perfil} email={email} />
+        {avisoExtras && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', background: '#EDE9FE', border: '1px solid #C4B5FD', borderRadius: 6, padding: '10px 14px', marginBottom: 14, fontSize: 13 }}>
+            <span><b>Extras de trabajadores cargados:</b> {clp(avisoExtras.total)} en horas extras del mes que termina hoy quedaron como gasto variable para pagar el {avisoExtras.vencimiento} — revísalo en Pagos o en Finanzas → Gastos variables.</span>
+            <button onClick={() => { try { localStorage.setItem('serein_aviso_extras_cerrado', avisoExtras.mesCerrado) } catch (e) {}; setAvisoExtras(null) }} style={{ background: 'none', border: '1px solid #C4B5FD', borderRadius: 4, padding: '5px 10px', cursor: 'pointer', fontSize: 12.5, flexShrink: 0 }}>Entendido</button>
+          </div>
+        )}
         {esModuloOrganigrama ? (<OrganigramaModule esGerencia={esGerencia} />) : esModuloCRM ? (<CRMModule />) : esModuloAsesor && puedeVer('ASESOR') ? (<AsesorModule fin={fin} pp={pp} proyectos={proyectos} ots={ots} params={params} onIr={setAreaSel} />) : esModuloLibroCompras && puedeVer('LIBRO_COMPRAS') ? (<LibroComprasModule esGerencia={esGerencia} ots={ots} factoringList={params.factoring || []} proyectos={proyectos} setProyectos={setProyectos} />) : esModuloLibroVentas && puedeVer('LIBRO_VENTAS') ? (<LibroVentasModule ots={ots} proyectos={proyectos} facturas={facturas} setFacturas={setFacturas} params={params} />) : esModuloProyectos && puedeVer('GESTION_PROYECTOS') ? (() => {
           // proyectosIdsPermitidos filtra por p.ot (el N de OT/cotizacion del
           // proyecto). setProyectosSeguro fusiona el resultado del modulo
