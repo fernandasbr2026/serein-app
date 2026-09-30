@@ -997,11 +997,18 @@ function itemsPorPagar(fin, proyectos = []) {
       const bruto = montoBrutoCompra(c)
       const pendiente = bruto - (+c.abonado || 0)
       if (pendiente <= 0) return
+      // El vencimiento que importa para Pagos es la fecha de PAGO, no la de
+      // emisión — una compra "Programado" trae su propia fecha de
+      // vencimiento (pedido explícito: "con su respectiva fecha de
+      // vencimiento"); si es al contado o no se cargó vencimiento, se usa
+      // la fecha de emisión como antes, para no perder las compras viejas.
+      const vencimientoPago = (c.formaPago === 'Programado' && c.vencimiento) ? c.vencimiento : ((c.fecha && c.fecha !== '—') ? c.fecha : '')
+      const notaFactoring = c.factorizada ? (' · Factorizada' + (c.factoringNombre ? (' a ' + c.factoringNombre) : '')) : ''
       items.push({
         id: 'c-' + p.id + '-' + (c.folio || '') + '-' + (c.fecha || '') + '-' + bruto,
-        vencimiento: (c.fecha && c.fecha !== '—') ? c.fecha : '',
+        vencimiento: vencimientoPago,
         tipo: 'Compra proyecto',
-        detalle: (c.detalle || c.proveedor || 'Compra') + ' · OT ' + (p.ot || p.nombre || '—'),
+        detalle: (c.detalle || c.proveedor || 'Compra') + ' · OT ' + (p.ot || p.nombre || '—') + (c.formaPago === 'Programado' ? ' · Pago programado' : '') + notaFactoring,
         proveedor: c.proveedor || '',
         area: '',
         monto: Math.round(pendiente),
