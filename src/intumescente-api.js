@@ -117,7 +117,7 @@ function calcularFechaVencimiento(fechaEmision, validezDias) {
 // Crea la cotización + su primera revisión (estado inicial: Borrador).
 export async function crearCotizacionBorrador({ cliente, area, proyectoId, obra, moneda, valorUf, validezDias, snapshot, resultados, userId }) {
   const numero = await generarFolio()
-  const hoy = new Date().toISOString().slice(0, 10)
+  const hoy = (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') })()
   const { data: cot, error: eCot } = await supabase.from('cotizaciones').insert({
     numero, tipo: 'intumescente', cliente, area, proyecto_id: proyectoId || null,
     observaciones: obra || null, moneda: moneda || 'CLP', valor_uf: valorUf || null,
@@ -206,7 +206,7 @@ export async function cambiarEstado(cotizacionId, nuevoEstado, motivoNoAdjudicac
 // vencimiento ya pasó y no están aprobadas/cerradas. Pensada para
 // llamarse al cargar el listado (no hay cron en este proyecto).
 export async function marcarVencidas() {
-  const hoy = new Date().toISOString().slice(0, 10)
+  const hoy = (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') })()
   const { error } = await supabase.from('cotizaciones')
     .update({ estado: 'Vencida' })
     .eq('tipo', 'intumescente')

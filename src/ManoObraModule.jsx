@@ -8,7 +8,7 @@ import { pullState, pushState } from './sync.js'
 const C = { naranja: SEREIN.orange, carbon: SEREIN.text, verde: SEREIN.green, rojo: SEREIN.red, gris: SEREIN.textFaint, azul: '#0E7A8F', morado: '#5B4E8C' }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
-const hoy = () => new Date().toISOString().slice(0, 10)
+const hoy = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 const inp = { padding: '8px 10px', border: '1px solid #DFE4EA', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }
 
 // ============================================================

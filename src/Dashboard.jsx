@@ -553,8 +553,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
   })()
 
   // ----- Flujo de caja proyectado (consolidado): lo que se debe pagar vs lo que va a entrar -----
-  const _hoy = new Date().toISOString().slice(0, 10)
-  const _en7 = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+  const _hoy = (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') })()
+  const _en7 = (() => { const d = new Date(); d.setDate(d.getDate() + 7); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') })()
   const gastosPend = (fin.gastos || []).filter(g => g.estado !== 'Pagado' && g.estado !== 'Anulado')
   const cuotasPend = (fin.obligaciones || []).flatMap(o => o.cuotas || []).filter(c => c.estado !== 'Pagada')
   const docsPend = (pp.docs || []).filter(d => !d.anulado).map(d => ({ venc: d.fecha_vencimiento, monto: Math.max(0, (d.total || 0) - (d.pagos || []).reduce((a, p) => a + (p.monto || 0), 0)) })).filter(d => d.monto > 0)

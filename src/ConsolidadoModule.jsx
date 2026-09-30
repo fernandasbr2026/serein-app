@@ -14,7 +14,7 @@ const C = { navy: SEREIN.ink, carbon: SEREIN.text, orange: SEREIN.orange, azul: 
 const SEV = { ok: C.verde, warn: C.ambar, crit: C.rojo }
 const clp = n => '$' + Math.round(+n || 0).toLocaleString('es-CL')
 const pad2 = x => (x < 10 ? '0' + x : '' + x)
-const hoyStr = () => new Date().toISOString().slice(0, 10)
+const hoyStr = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 function addDias(f, n) { if (!f) return null; const d = new Date(('' + f).slice(0, 10) + 'T00:00:00'); if (isNaN(d)) return null; d.setDate(d.getDate() + (+n || 0)); return d.toISOString().slice(0, 10) }
 function fechaCL(f) { if (!f) return '-'; const s = ('' + f).slice(0, 10); const p = s.split('-'); return p.length === 3 ? p[2] + '-' + p[1] + '-' + p[0] : s }
 const num = n => (+n || 0)

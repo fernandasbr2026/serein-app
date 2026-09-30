@@ -10,7 +10,7 @@ const C = { navy: SEREIN.ink, carbon: SEREIN.text, naranja: SEREIN.orange, verde
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const num = s => { const v = parseFloat(String(s).replace(',', '.').replace(/[^\d.\-]/g, '')); return isNaN(v) ? 0 : v }
 const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
-const hoy = () => new Date().toISOString().slice(0, 10)
+const hoy = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 const uid = () => 'm' + Date.now() + Math.floor(Math.random() * 9999)
 const SEDES = ['Santa Rosa', 'Istria']
 const parseDesc = desc => { const d = String(desc || '').trim(); const m = d.match(/\(([^)]*)\)/); return { proveedor: m ? m[1].trim() : '', color: d.replace(/\s*\([^)]*\)\s*/, '').trim() } }

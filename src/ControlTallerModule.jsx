@@ -19,7 +19,7 @@ import { SEREIN } from './theme-serein.js'
 const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const kg = n => Math.round(n || 0).toLocaleString('es-CL') + ' kg'
-const hoy = () => new Date().toISOString().slice(0, 10)
+const hoy = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 
 // taller_partes usa snake_case (peso_unitario) — se mapea una sola vez acá
 // al shape camelCase que ya usan controlTaller.js y toda la UI existente,

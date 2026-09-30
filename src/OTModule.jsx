@@ -33,7 +33,7 @@ const btnMini = { background: 'none', border: 'none', cursor: 'pointer', color: 
 const CATEGORIAS_COSTO = ['Materiales', 'Mano de obra', 'Gastos asociados', 'Arriendo equipos', 'Factoring', 'Transporte', 'Otros']
 const ESTADOS_OT = ['Cotizada', 'En ejecución', 'Terminada', 'Facturada', 'Cerrada']
 const PREPARACIONES = ['SSPC-SP1 Limpieza solvente', 'SSPC-SP2/SP3 Manual/Mecánica', 'SSPC-SP6 Comercial', 'SSPC-SP10 Casi blanco', 'SSPC-SP5 Metal blanco', 'Hidrolavado', 'Otra']
-const hoy = () => new Date().toISOString().slice(0, 10)
+const hoy = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 // Le pone un limite de tiempo a cualquier promesa: si no resuelve antes,
 // rechaza con un mensaje claro en vez de dejar la operacion colgada para
 // siempre (ej. generar el PDF de un protocolo con una imagen dañada podia

@@ -237,7 +237,7 @@ export function obtener_facturas_vencidas(_args, ctx, datos) {
     // Areas comerciales pueden ver su cartera; produccion no.
     if (!ctx.areasVisibles.length) return _sinPermiso(H, { modulo: 'FINANZAS' })
   }
-  const hoy = new Date().toISOString().slice(0, 10)
+  const hoy = (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') })()
   const facturas = datos.facturas || {}
   const vencidas = []
   ctx.areasVisibles.forEach(area => {
