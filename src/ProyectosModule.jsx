@@ -517,10 +517,15 @@ function FichaEditor({ p, onUpdate, onClose }) {
 // y ademas con montoBruto/perdidaFactoring/factoringId para trazabilidad.
 function AbonosOT({ p, facturasOT, onUpdate, params }) {
   const [add, setAdd] = useState(false)
-  const [f, setF] = useState({ monto: '', fecha: '', banco: '', metodo: 'Transferencia', factoringId: '', dias: '30', diasMora: '' })
+  const [f, setF] = useState({ monto: '', fecha: '', banco: '', metodo: 'Transferencia', factoringId: '', dias: '30', diasMora: '', manualNombre: '', manualTasa: '', manualTasaMora: '', manualCostoOp: '' })
   const abonos = p.abonos || []
   const factoringList = (params && params.factoring) || []
-  const factoringSel = factoringList.find(x => x.id === f.factoringId) || null
+  // "Otro (tasa manual)": para un factoring que no está en Parámetros —
+  // mismo patrón ya usado en la tabla de Facturas de esta misma ficha
+  // (ov.factoringId === 'manual').
+  const factoringSel = f.factoringId === 'manual'
+    ? { nombre: f.manualNombre.trim() || 'Otro', tasa: dec(f.manualTasa || '0'), tasaMora: dec(f.manualTasaMora || '0'), costoOp: num(f.manualCostoOp) || 0 }
+    : factoringList.find(x => x.id === f.factoringId) || null
   const perdidaPreview = (f.metodo === 'Factoring' && factoringSel) ? calcularPerdidaFactoring(num(f.monto), num(f.dias), num(f.diasMora), factoringSel) : null
   // Total real de cada factura: usa el monto con IVA que ya viene calculado (exento => monto = neto)
   const totalDe = fac => Math.round(fac.monto || (fac.neto || 0) * 1.19)
@@ -550,9 +555,9 @@ function AbonosOT({ p, facturasOT, onUpdate, params }) {
     const neto = esFactoring ? Math.max(0, bruto - perdida) : bruto
     onUpdate(p.id, { abonos: [...abonos, {
       id: 'ab' + Date.now(), monto: neto, fecha: f.fecha || '—', banco: f.banco || '',
-      metodo: f.metodo, ...(esFactoring ? { montoBruto: bruto, factoringId: factoringSel.id, factoringNombre: factoringSel.nombre, perdidaFactoring: perdida } : {})
+      metodo: f.metodo, ...(esFactoring ? { montoBruto: bruto, factoringId: f.factoringId, factoringNombre: factoringSel.nombre, perdidaFactoring: perdida } : {})
     }] })
-    setF({ monto: '', fecha: '', banco: '', metodo: 'Transferencia', factoringId: '', dias: '30', diasMora: '' }); setAdd(false)
+    setF({ monto: '', fecha: '', banco: '', metodo: 'Transferencia', factoringId: '', dias: '30', diasMora: '', manualNombre: '', manualTasa: '', manualTasaMora: '', manualCostoOp: '' }); setAdd(false)
   }
   const eliminar = id => onUpdate(p.id, { abonos: abonos.filter(a => a.id !== id) })
   return (
@@ -605,8 +610,15 @@ function AbonosOT({ p, facturasOT, onUpdate, params }) {
                 <select value={f.factoringId} onChange={e => setF({ ...f, factoringId: e.target.value })} style={{ ...inpA, width: 160 }}>
                   <option value="">Selecciona...</option>
                   {factoringList.map(fc => <option key={fc.id} value={fc.id}>{fc.nombre}</option>)}
+                  <option value="manual">Otro (tasa manual)</option>
                 </select>
               </div>
+              {f.factoringId === 'manual' && (<>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Nombre</label><input value={f.manualNombre} onChange={e => setF({ ...f, manualNombre: e.target.value })} placeholder="Empresa de factoring" style={{ ...inpA, width: 150 }} /></div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Tasa %/mes</label><input value={f.manualTasa} onChange={e => setF({ ...f, manualTasa: e.target.value })} placeholder="0,83" style={{ ...inpA, width: 70, textAlign: 'right' }} /></div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Tasa mora %/mes</label><input value={f.manualTasaMora} onChange={e => setF({ ...f, manualTasaMora: e.target.value })} placeholder="3,5" style={{ ...inpA, width: 70, textAlign: 'right' }} /></div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Costo op.</label><input value={f.manualCostoOp} onChange={e => setF({ ...f, manualCostoOp: e.target.value })} placeholder="0" style={{ ...inpA, width: 90, textAlign: 'right' }} /></div>
+              </>)}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Días crédito</label><input type="number" value={f.dias} onChange={e => setF({ ...f, dias: e.target.value })} style={{ ...inpA, width: 90, textAlign: 'right' }} /></div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><label style={{ fontSize: 10, color: C.gris }}>Días mora</label><input type="number" value={f.diasMora} onChange={e => setF({ ...f, diasMora: e.target.value })} placeholder="0" style={{ ...inpA, width: 90, textAlign: 'right' }} /></div>
               {perdidaPreview && (
