@@ -146,9 +146,10 @@ function FormEdp({ params, onAdd, onCancel }) {
 }
 
 // ---------- Form compra (con CC, folio, rut) ----------
-function FormCompra({ p, onAdd, onCancel }) {
-  const [f, setF] = useState({ proveedor: '', detalle: '', fecha: '', monto: '', cc: CC_DEFS[0].id, folio: '', rut: '', exento: false, abonado: '', pagadaCompleta: false })
+function FormCompra({ p, onAdd, onCancel, params }) {
+  const [f, setF] = useState({ proveedor: '', detalle: '', fecha: '', monto: '', cc: CC_DEFS[0].id, folio: '', rut: '', exento: false, abonado: '', pagadaCompleta: false, formaPago: 'Contado', vencimiento: '', factorizada: false, factoringId: '' })
   const bruto = montoBrutoCompra({ monto: num(f.monto), exento: f.exento })
+  const factoringList = (params && params.factoring) || []
   return (
     <div style={{ background: '#F2F4F7', padding: 12, marginTop: 8 }}>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -159,15 +160,31 @@ function FormCompra({ p, onAdd, onCancel }) {
           {ccCodigos(p).map(id => <option key={id} value={id}>{id} · {nombreCC(p, id)}</option>)}
         </select>
         <input style={{ ...inp, width: 130 }} placeholder="Detalle (opcional)" value={f.detalle} onChange={e => setF({ ...f, detalle: e.target.value })} />
-        <input style={{ ...inp, width: 120 }} type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} />
+        <label style={{ fontSize: 11, color: C.gris }}>Fecha emisión<input style={{ ...inp, width: 120, display: 'block' }} type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} /></label>
         <input style={{ ...inp, width: 120 }} placeholder="Monto neto CLP" value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} /><label style={{ fontSize: 12, color: C.gris, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" checked={!!f.exento} onChange={e => setF({ ...f, exento: e.target.checked })} /> Exenta (sin IVA)</label>
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: '1px dashed #DFE4EA' }}>
+        <select style={inp} value={f.formaPago} onChange={e => setF({ ...f, formaPago: e.target.value })}>
+          <option value="Contado">Pago al contado</option>
+          <option value="Programado">Pago programado</option>
+        </select>
+        {f.formaPago === 'Programado' && (
+          <label style={{ fontSize: 11, color: C.gris }}>Vencimiento del pago<input style={{ ...inp, width: 140, display: 'block' }} type="date" value={f.vencimiento} onChange={e => setF({ ...f, vencimiento: e.target.value })} /></label>
+        )}
+        <label style={{ fontSize: 12, color: C.gris, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" checked={f.factorizada} onChange={e => setF({ ...f, factorizada: e.target.checked })} /> Factorizada</label>
+        {f.factorizada && (
+          <select style={inp} value={f.factoringId} onChange={e => setF({ ...f, factoringId: e.target.value })}>
+            <option value="">— elegir factoring —</option>
+            {factoringList.map(fc => <option key={fc.id} value={fc.id}>{fc.nombre}</option>)}
+          </select>
+        )}
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
         <input style={{ ...inp, width: 120 }} placeholder="Abonado CLP" value={f.pagadaCompleta ? bruto : f.abonado} disabled={f.pagadaCompleta} onChange={e => setF({ ...f, abonado: e.target.value })} />
         <label style={{ fontSize: 12, color: C.gris, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" checked={f.pagadaCompleta} onChange={e => setF({ ...f, pagadaCompleta: e.target.checked })} /> Pagada por completo</label>
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-        <button onClick={() => f.proveedor && num(f.monto) > 0 && onAdd({ proveedor: f.proveedor, detalle: f.detalle, fecha: f.fecha || '—', monto: num(f.monto), cc: f.cc, folio: f.folio, rut: f.rut, exento: !!f.exento, abonado: f.pagadaCompleta ? bruto : num(f.abonado) })}
+        <button onClick={() => f.proveedor && num(f.monto) > 0 && onAdd({ proveedor: f.proveedor, detalle: f.detalle, fecha: f.fecha || '—', monto: num(f.monto), cc: f.cc, folio: f.folio, rut: f.rut, exento: !!f.exento, abonado: f.pagadaCompleta ? bruto : num(f.abonado), formaPago: f.formaPago, vencimiento: f.formaPago === 'Programado' ? f.vencimiento : '', factorizada: !!f.factorizada, factoringId: f.factorizada ? f.factoringId : '', factoringNombre: f.factorizada ? ((factoringList.find(fc => fc.id === f.factoringId) || {}).nombre || '') : '' })}
           style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Agregar compra</button>
         <button onClick={onCancel} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
       </div>
@@ -895,15 +912,33 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
             {comprasFilt.length === 0 && <div style={{ fontSize: 13, color: C.gris, padding: '8px 0' }}>Ninguna compra coincide con los filtros.</div>}
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['CC', 'Proveedor', 'N° doc', 'Detalle', 'Fecha', 'Monto neto', 'Abonado', 'Estado pago', ''].map((h, i) => <th key={i} style={{ textAlign: ['Monto neto', 'Abonado'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+                <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['CC', 'Proveedor', 'N° doc', 'Detalle', 'Fecha', 'Pago', 'Monto neto', 'Abonado', 'Estado pago', ''].map((h, i) => <th key={i} style={{ textAlign: ['Monto neto', 'Abonado'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
                 <tbody>
-                  {comprasFilt.map(({ c, i }) => { const estadoPago = estadoPagoCompra(c); const bruto = montoBrutoCompra(c); return (
+                  {comprasFilt.map(({ c, i }) => { const estadoPago = estadoPagoCompra(c); const bruto = montoBrutoCompra(c); const factoringList = (params && params.factoring) || []; return (
                     <tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>
                       <td style={{ padding: '5px 8px' }}><select value={c.cc || CC_DEFS[0].id} onChange={ev => updCompra(i, { cc: ev.target.value })} style={{ ...inp, padding: '5px 7px' }}>{ccCodigos(p).map(id => <option key={id} value={id}>{id} · {nombreCC(p, id)}</option>)}</select></td>
                       <td style={{ padding: '5px 8px' }}><input value={c.proveedor} onChange={ev => updCompra(i, { proveedor: ev.target.value })} style={{ ...inp, width: 130, padding: '5px 7px' }} /></td>
                       <td style={{ padding: '5px 8px' }}><input value={c.folio || ''} onChange={ev => updCompra(i, { folio: ev.target.value })} placeholder="N° doc" style={{ ...inp, width: 90, padding: '5px 7px' }} /></td>
                       <td style={{ padding: '5px 8px' }}><input value={c.detalle || ''} onChange={ev => updCompra(i, { detalle: ev.target.value })} placeholder="Detalle" style={{ ...inp, width: 130, padding: '5px 7px' }} /></td>
                       <td style={{ padding: '5px 8px' }}><input type="date" value={c.fecha && c.fecha !== '—' ? c.fecha : ''} onChange={ev => updCompra(i, { fecha: ev.target.value || '—' })} style={{ ...inp, width: 140, padding: '5px 7px' }} /></td>
+                      <td style={{ padding: '5px 8px', minWidth: 150 }}>
+                        <select value={c.formaPago || 'Contado'} onChange={ev => updCompra(i, { formaPago: ev.target.value })} style={{ ...inp, width: '100%', padding: '5px 7px' }}>
+                          <option value="Contado">Al contado</option>
+                          <option value="Programado">Programado</option>
+                        </select>
+                        {c.formaPago === 'Programado' && (
+                          <input type="date" value={c.vencimiento && c.vencimiento !== '—' ? c.vencimiento : ''} onChange={ev => updCompra(i, { vencimiento: ev.target.value || '' })} title="Vencimiento del pago" style={{ ...inp, width: '100%', padding: '5px 7px', marginTop: 3 }} />
+                        )}
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3, fontSize: 10.5, color: C.gris }}>
+                          <input type="checkbox" checked={!!c.factorizada} onChange={ev => updCompra(i, { factorizada: ev.target.checked, factoringId: ev.target.checked ? c.factoringId : '' })} /> Factorizada
+                        </label>
+                        {c.factorizada && (
+                          <select value={c.factoringId || ''} onChange={ev => updCompra(i, { factoringId: ev.target.value, factoringNombre: (factoringList.find(fc => fc.id === ev.target.value) || {}).nombre || '' })} style={{ ...inp, width: '100%', padding: '5px 7px', marginTop: 3 }}>
+                            <option value="">— elegir —</option>
+                            {factoringList.map(fc => <option key={fc.id} value={fc.id}>{fc.nombre}</option>)}
+                          </select>
+                        )}
+                      </td>
                       <td style={{ padding: '5px 8px', textAlign: 'right' }}><input value={c.monto} onChange={ev => updCompra(i, { monto: num(ev.target.value) })} style={{ ...inp, width: 110, padding: '5px 7px', textAlign: 'right' }} /><label style={{ display: 'block', marginTop: 3, fontSize: 10.5, color: C.gris }}><input type="checkbox" checked={!!c.exento} onChange={ev => updCompra(i, { exento: ev.target.checked })} /> Exenta</label></td>
                       <td style={{ padding: '5px 8px', textAlign: 'right' }}>
                         <input value={c.abonado || ''} onChange={ev => updCompra(i, { abonado: num(ev.target.value) })} placeholder="0" style={{ ...inp, width: 100, padding: '5px 7px', textAlign: 'right' }} />
@@ -919,7 +954,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
             </>
             )
           })()}
-          {addCompra && <FormCompra p={p} onAdd={c => { if (onAddCompra(p.id, c)) setAddCompra(false) }} onCancel={() => setAddCompra(false)} />}
+          {addCompra && <FormCompra p={p} params={params} onAdd={c => { if (onAddCompra(p.id, c)) setAddCompra(false) }} onCancel={() => setAddCompra(false)} />}
 
           {/* Resumen */}
           <div style={{ marginTop: 16, padding: '10px 14px', background: '#F2F4F7', fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
