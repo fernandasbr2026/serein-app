@@ -1225,7 +1225,13 @@ export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setPara
     if (x.origen === 'cuota') return (
       <button onClick={() => marcarCuotaPagada(fin, setFin, x.obligacionId, x.cuotaN)} style={{ background: 'none', border: `1px solid ${C.verde}`, color: C.verde, borderRadius: 4, padding: '3px 8px', fontSize: 11, cursor: 'pointer' }}>Marcar pagada</button>
     )
+    // "Marcar pagada" escribe directo en la MISMA fila p.compras[j] que
+    // usa la ficha del proyecto (actualizarCompraProyecto, ya pull-fresh +
+    // merge + push) — así pagarla desde acá o desde Proyectos es
+    // literalmente la misma escritura, nunca dos copias que puedan
+    // desincronizarse entre sí.
     if (x.origen === 'compra_proyecto') return puedeEditarProyectos ? (<>
+      <button onClick={() => actualizarCompraProyecto(proyectos, setProyectos, x.proyectoId, x.compraIndex, { abonado: montoBrutoCompra(x.compra) })} style={{ background: 'none', border: `1px solid ${C.verde}`, color: C.verde, borderRadius: 4, padding: '3px 8px', fontSize: 11, cursor: 'pointer', marginRight: 4 }}>Marcar pagada</button>
       <button title="Editar" onClick={() => setEditandoCompra(x)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Pencil size={14} /></button>
       <button title="Eliminar" onClick={() => window.confirm(`¿Eliminar la compra de "${x.proveedor || x.detalle}"?`) && eliminarCompraProyecto(proyectos, setProyectos, x.proyectoId, x.compraIndex)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
     </>) : <span title="Se edita en la ficha del proyecto correspondiente" style={{ color: C.gris, fontSize: 11 }}>—</span>
