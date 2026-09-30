@@ -121,23 +121,35 @@ async function cambiarEstadoGasto(fin, setFin, id, estado) {
   setFin(nuevoFin)
   pushState()
 }
+// Serie de un gasto recurrente: todas las filas materializadas de un mismo
+// gasto Mensual/Anual comparten un serieId (el id de la fila original que
+// las originó). Una fila sin serieId es su propia serie de una sola fila
+// (gastos ya existentes de antes de este campo, o gastos Única/Semanal).
+const serieDe = g => g.serieId || g.id
+// ¿Ya existe, en esta serie, una fila real con vencimiento en este mes? —
+// evita proyectar de nuevo un mes que ya fue confirmado (pagado, dejado
+// pendiente con datos editados, o eliminado/anulado para ese mes puntual).
+function serieTieneFilaPropiaEnMes(gastos, serieId, mes) {
+  return gastos.some(g => serieDe(g) === serieId && mesDe(g.vencimiento) === mes)
+}
 // Convierte la ocurrencia PROYECTADA de un gasto recurrente (Mensual/Anual)
-// en una fila real, con el estado que se elija (Pagado/Pendiente/etc) —
-// misma idea que duplicarMesSiguiente() de ListaGastos, pero para
-// cualquier mes que se este mirando (no solo "el mes siguiente") y
-// pudiendo fijar el estado de una vez, en vez de crear siempre en
-// Pendiente. La fila ancla (la que tenia frecuencia "Mensual") se cierra a
-// "Única" para que de aca en adelante la nueva fila sea la vigente — así
-// nunca quedan dos filas "Mensual" sumando el mismo gasto para siempre.
-async function materializarGastoProyectado(fin, setFin, gastoAnclaId, fechaOcurrencia, estadoNuevo) {
+// en una fila real para ese mes puntual — con el estado y los campos que
+// se le pasen en `cambios` (permite editar monto/proveedor/etc antes de
+// confirmar, no solo copiar tal cual el gasto original). La fila ancla
+// NUNCA se toca ni se cierra: sigue siendo la fuente de la proyección de
+// cualquier otro mes que todavía no tenga su propia fila real (ver
+// serieTieneFilaPropiaEnMes) — así materializar un mes no rompe la
+// proyección de los demás, vengan antes o después.
+async function materializarGastoProyectado(fin, setFin, gastoAnclaId, fechaOcurrencia, cambios) {
   try { await pullState() } catch (e) {}
   let fresco = null
   try { fresco = JSON.parse(localStorage.getItem('serein_fin') || 'null') } catch (e) {}
   const baseFin = fresco && typeof fresco === 'object' ? fresco : fin
-  const ancla = (baseFin.gastos || []).find(g => g.id === gastoAnclaId)
+  const gastos = baseFin.gastos || []
+  const ancla = gastos.find(g => g.id === gastoAnclaId)
   if (!ancla) return
-  const nueva = { ...ancla, id: 'g' + Date.now() + Math.random().toString(36).slice(2, 7), vencimiento: fechaOcurrencia, estado: estadoNuevo }
-  const nuevoFin = { ...baseFin, gastos: [nueva, ...(baseFin.gastos || []).map(x => x.id === gastoAnclaId && x.frecuencia === 'Mensual' ? { ...x, frecuencia: 'Única' } : x)] }
+  const nueva = { ...ancla, ...cambios, id: 'g' + Date.now() + Math.random().toString(36).slice(2, 7), serieId: serieDe(ancla), vencimiento: fechaOcurrencia, frecuencia: 'Única' }
+  const nuevoFin = { ...baseFin, gastos: [nueva, ...gastos] }
   try { localStorage.setItem('serein_fin', JSON.stringify(nuevoFin)) } catch (e) {}
   setFin(nuevoFin)
   pushState()
@@ -223,24 +235,43 @@ function FormEditarCompra({ item, proyectos, setProyectos, onCerrar }) {
 // gastoInicial: si se pasa, el formulario edita esa fila en vez de crear
 // una nueva (mismos campos, precargados) — usado tanto por el boton
 // "Editar" de ListaGastos como por el modal de detalle de Pagos.
-function FormGasto({ tipo, fin, setFin, otsDisponibles = [], onCerrar, gastoInicial }) {
+// proyectadoInicial: si se pasa (en vez de gastoInicial), el formulario
+// precarga los datos de una ocurrencia PROYECTADA (item con .gasto = fila
+// ancla, .vencimiento = fecha de ese mes) para poder editarla — al guardar
+// no toca la fila ancla, crea una fila real nueva para ese mes puntual con
+// los valores que queden en el formulario (mismo camino que
+// materializarGastoProyectado, pero permitiendo cambiar cualquier campo
+// antes de confirmar, no solo el estado).
+function FormGasto({ tipo, fin, setFin, otsDisponibles = [], onCerrar, gastoInicial, proyectadoInicial }) {
   const editando = !!gastoInicial
+  const materializando = !!proyectadoInicial
+  const base = gastoInicial || (proyectadoInicial && proyectadoInicial.gasto)
   const cats = tipo === 'fijo' ? CATEGORIAS_FIJO : CATEGORIAS_VAR
-  const [f, setF] = useState(() => gastoInicial ? {
-    nombre: gastoInicial.nombre, categoria: gastoInicial.categoria, proveedor: gastoInicial.proveedor || '', documento: gastoInicial.documento || '',
-    neto: gastoInicial.esUF ? '' : String(gastoInicial.neto || ''), conIva: !!gastoInicial.iva, vencimiento: gastoInicial.vencimiento || hoy(),
-    frecuencia: gastoInicial.frecuencia || 'Única', estado: gastoInicial.estado || 'Pendiente', ot: gastoInicial.ot || '', obs: gastoInicial.obs || '',
-    esUF: !!gastoInicial.esUF, uf: gastoInicial.esUF ? String(gastoInicial.uf || '') : '', formaPago: gastoInicial.formaPago || 'Transferencia',
-    numeroCheque: gastoInicial.numeroCheque || '', fechaCheque: gastoInicial.fechaCheque || '',
+  const [f, setF] = useState(() => base ? {
+    nombre: base.nombre, categoria: base.categoria, proveedor: base.proveedor || '', documento: base.documento || '',
+    neto: base.esUF ? '' : String(base.neto || ''), conIva: !!base.iva, vencimiento: materializando ? proyectadoInicial.vencimiento : (base.vencimiento || hoy()),
+    frecuencia: base.frecuencia || 'Única', estado: materializando ? 'Pendiente' : (base.estado || 'Pendiente'), ot: base.ot || '', obs: base.obs || '',
+    esUF: !!base.esUF, uf: base.esUF ? String(base.uf || '') : '', formaPago: base.formaPago || 'Transferencia',
+    numeroCheque: base.numeroCheque || '', fechaCheque: base.fechaCheque || '',
   } : { nombre: '', categoria: cats[0], proveedor: '', documento: '', neto: '', conIva: tipo !== 'fijo', vencimiento: hoy(), frecuencia: tipo === 'fijo' ? 'Mensual' : 'Única', estado: 'Pendiente', ot: '', obs: '', esUF: false, uf: '', formaPago: 'Transferencia', numeroCheque: '', fechaCheque: '' })
-  const [dist, setDist] = useState(() => gastoInicial ? gastoInicial.dist.map(d => ({ ...d })) : [{ area: 'General empresa', pct: 100 }])
+  const [dist, setDist] = useState(() => base ? base.dist.map(d => ({ ...d })) : [{ area: 'General empresa', pct: 100 }])
   const suma = dist.reduce((a, d) => a + (parseFloat(d.pct) || 0), 0)
   const ok = Math.abs(suma - 100) < 0.01
 
   function guardar() {
     if (!f.nombre || (f.esUF ? num(f.uf) : num(f.neto)) <= 0 || !ok) return
     const neto = f.esUF ? Math.round(num(f.uf) * (fin.ufValor || 0)) : num(f.neto)
-    const g = { id: editando ? gastoInicial.id : 'g' + Date.now(), tipo: editando ? gastoInicial.tipo : tipo, nombre: f.nombre, categoria: f.categoria, proveedor: f.proveedor, documento: f.documento, neto, iva: f.conIva ? Math.round(neto * 0.19) : 0, vencimiento: f.vencimiento, frecuencia: f.frecuencia, estado: f.estado, ot: f.ot, dist: dist.map(d => ({ area: d.area, pct: parseFloat(d.pct) })), obs: f.obs, esUF: f.esUF, uf: num(f.uf), formaPago: f.formaPago, numeroCheque: f.formaPago === 'Cheque' ? f.numeroCheque : '', fechaCheque: f.formaPago === 'Cheque' ? f.fechaCheque : '' }
+    const distFinal = dist.map(d => ({ area: d.area, pct: parseFloat(d.pct) }))
+    if (materializando) {
+      materializarGastoProyectado(fin, setFin, base.id, f.vencimiento, {
+        nombre: f.nombre, categoria: f.categoria, proveedor: f.proveedor, documento: f.documento, neto, iva: f.conIva ? Math.round(neto * 0.19) : 0,
+        estado: f.estado, ot: f.ot, dist: distFinal, obs: f.obs, esUF: f.esUF, uf: num(f.uf), formaPago: f.formaPago,
+        numeroCheque: f.formaPago === 'Cheque' ? f.numeroCheque : '', fechaCheque: f.formaPago === 'Cheque' ? f.fechaCheque : '',
+      })
+      onCerrar()
+      return
+    }
+    const g = { id: editando ? gastoInicial.id : 'g' + Date.now(), serieId: editando ? gastoInicial.serieId : undefined, tipo: editando ? gastoInicial.tipo : tipo, nombre: f.nombre, categoria: f.categoria, proveedor: f.proveedor, documento: f.documento, neto, iva: f.conIva ? Math.round(neto * 0.19) : 0, vencimiento: f.vencimiento, frecuencia: f.frecuencia, estado: f.estado, ot: f.ot, dist: distFinal, obs: f.obs, esUF: f.esUF, uf: num(f.uf), formaPago: f.formaPago, numeroCheque: f.formaPago === 'Cheque' ? f.numeroCheque : '', fechaCheque: f.formaPago === 'Cheque' ? f.fechaCheque : '' }
     if (editando) editarGastoFresco(fin, setFin, g); else agregarGastoFresco(fin, setFin, g)
     onCerrar()
   }
@@ -248,8 +279,9 @@ function FormGasto({ tipo, fin, setFin, otsDisponibles = [], onCerrar, gastoInic
   return (
     <div style={{ background: '#fff', border: `2px solid ${C.naranja}`, padding: 16, marginBottom: 14 }}>
       <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>
-        {editando ? 'Editar gasto' : `Nuevo gasto ${tipo === 'fijo' ? 'fijo' : 'variable / compra'}`}
+        {materializando ? `Confirmar ${f.vencimiento.slice(0, 7)} de "${base.nombre}"` : editando ? 'Editar gasto' : `Nuevo gasto ${tipo === 'fijo' ? 'fijo' : 'variable / compra'}`}
       </div>
+      {materializando && <div style={{ fontSize: 12, color: C.gris, marginBottom: 10 }}>Edita lo que cambie este mes en particular (monto, proveedor, etc.) — no afecta a los demás meses, que se siguen proyectando desde el gasto original.</div>}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
         <input style={inp} placeholder="Nombre del gasto *" value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} />
         <select style={inp} value={f.categoria} onChange={e => setF({ ...f, categoria: e.target.value })}>{cats.map(c => <option key={c}>{c}</option>)}</select>
@@ -265,7 +297,7 @@ function FormGasto({ tipo, fin, setFin, otsDisponibles = [], onCerrar, gastoInic
         <label style={{ fontSize: 12, color: C.gris }}>Vencimiento
           <input type="date" style={{ ...inp, width: '100%' }} value={f.vencimiento} onChange={e => setF({ ...f, vencimiento: e.target.value })} />
         </label>
-        <select style={inp} value={f.frecuencia} onChange={e => setF({ ...f, frecuencia: e.target.value })}>{FRECUENCIAS.map(x => <option key={x}>{x}</option>)}</select>
+        {!materializando && <select style={inp} value={f.frecuencia} onChange={e => setF({ ...f, frecuencia: e.target.value })}>{FRECUENCIAS.map(x => <option key={x}>{x}</option>)}</select>}
         <select style={inp} value={f.estado} onChange={e => setF({ ...f, estado: e.target.value })}>{ESTADOS_GASTO.map(x => <option key={x}>{x}</option>)}</select>
         <select style={inp} value={f.ot} onChange={e => setF({ ...f, ot: e.target.value })}>
           <option value="">Sin OT/OC (gasto general)</option>
@@ -281,7 +313,7 @@ function FormGasto({ tipo, fin, setFin, otsDisponibles = [], onCerrar, gastoInic
       <input style={{ ...inp, width: '100%', marginTop: 8 }} placeholder="Observaciones" value={f.obs} onChange={e => setF({ ...f, obs: e.target.value })} />
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
         <button onClick={guardar} disabled={!ok}
-          style={{ background: ok ? C.verde : '#DFE4EA', color: '#fff', border: 'none', padding: '9px 18px', cursor: ok ? 'pointer' : 'not-allowed', fontSize: 13 }}>{editando ? 'Guardar cambios' : 'Guardar gasto'}</button>
+          style={{ background: ok ? C.verde : '#DFE4EA', color: '#fff', border: 'none', padding: '9px 18px', cursor: ok ? 'pointer' : 'not-allowed', fontSize: 13 }}>{materializando ? 'Confirmar este mes' : editando ? 'Guardar cambios' : 'Guardar gasto'}</button>
         <button onClick={onCerrar} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
       </div>
     </div>
@@ -292,6 +324,7 @@ function FormGasto({ tipo, fin, setFin, otsDisponibles = [], onCerrar, gastoInic
 function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
   const [creando, setCreando] = useState(false)
   const [editando, setEditando] = useState(null)
+  const [editandoProyectado, setEditandoProyectado] = useState(null)
   const [fArea, setFArea] = useState('')
   // Pestañas de mes (Ene-Dic de un año elegible con ‹ ›): reemplaza el
   // selector "Todos los meses"/un mes suelto de antes — se navega el año
@@ -310,7 +343,7 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
   // los debo cargar solo 1 vez y luego deberían aparecer todos los meses").
   const gastosReales = porArea.filter(g => mesDe(g.vencimiento) === mesKey)
   const gastosProyectados = porArea
-    .filter(g => g.estado !== 'Anulado' && (g.frecuencia === 'Mensual' || g.frecuencia === 'Anual') && mesDe(g.vencimiento) !== mesKey && gastoOcurreEnMes(g, mesKey))
+    .filter(g => g.estado !== 'Anulado' && (g.frecuencia === 'Mensual' || g.frecuencia === 'Anual') && mesDe(g.vencimiento) !== mesKey && gastoOcurreEnMes(g, mesKey) && !serieTieneFilaPropiaEnMes(todosDelTipo, serieDe(g), mesKey))
     .map(g => ({ ...g, vencimiento: fechaOcurrenciaEnMes(g, mesKey), _proyectado: true }))
   const gastos = [...gastosReales, ...gastosProyectados].sort((a, b) => (a.vencimiento || '').localeCompare(b.vencimiento || ''))
   // Con filtro de area, se cuenta solo la parte del gasto asignada a esa area
@@ -397,7 +430,7 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
 
   return (
     <div>
-      {!creando && !editando && (
+      {!creando && !editando && !editandoProyectado && (
         <button onClick={() => setCreando(true)}
           style={{ background: C.naranja, color: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
           <Plus size={15} /> Nuevo gasto {tipo === 'fijo' ? 'fijo' : 'variable'}
@@ -405,6 +438,7 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
       )}
       {creando && <FormGasto tipo={tipo} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} onCerrar={() => setCreando(false)} />}
       {editando && <FormGasto tipo={editando.tipo} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} gastoInicial={editando} onCerrar={() => setEditando(null)} />}
+      {editandoProyectado && <FormGasto tipo={tipo} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} proyectadoInicial={editandoProyectado} onCerrar={() => setEditandoProyectado(null)} />}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '14px 0 6px' }}>
         <button onClick={() => setAnioSel(a => a - 1)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '4px 9px', cursor: 'pointer', fontSize: 13 }}>‹</button>
@@ -470,7 +504,7 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
                 <td style={{ padding: '8px', color: C.gris, fontSize: 12 }}>{g.frecuencia}</td>
                 <td style={{ padding: '8px' }}>
                   {g._proyectado ? (
-                    <select defaultValue="" onChange={e => e.target.value && materializarGastoProyectado(fin, setFin, g.id, g.vencimiento, e.target.value)} title="Elegir un estado carga este mes como una cuenta real"
+                    <select defaultValue="" onChange={e => e.target.value && materializarGastoProyectado(fin, setFin, g.id, g.vencimiento, { estado: e.target.value })} title="Elegir un estado carga este mes como una cuenta real"
                       style={{ border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '3px 6px', background: '#EEE', color: C.gris }}>
                       <option value="" disabled>Proyectado</option>
                       {ESTADOS_GASTO.map(x => <option key={x} value={x}>{x}</option>)}
@@ -484,7 +518,10 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
                 </td>
                 <td style={{ padding: '8px', fontSize: 12 }}>{g.dist.map(d => <div key={d.area}>{d.area}: {d.pct}% ({clp(netoEf(g, fin.ufValor) * d.pct / 100)})</div>)}</td>
                 <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>
-                  {g._proyectado ? <span style={{ fontSize: 11, color: C.gris }}>—</span> : (<>
+                  {g._proyectado ? (<>
+                    <button title="Editar este mes antes de confirmar" onClick={() => setEditandoProyectado({ gasto: g, vencimiento: g.vencimiento })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Pencil size={14} /></button>
+                    <button title="Eliminar este mes (no afecta los demás)" onClick={() => window.confirm(`¿Marcar "${g.nombre}" de ${g.vencimiento} como que no corresponde pagarlo? No afecta otros meses.`) && materializarGastoProyectado(fin, setFin, g.id, g.vencimiento, { estado: 'Anulado' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
+                  </>) : (<>
                     <button title="Editar" onClick={() => setEditando(g)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Pencil size={14} /></button>
                     <button title="Duplicar al mes siguiente" onClick={() => duplicarMesSiguiente(g)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Copy size={14} /></button>
                     <button title="Eliminar" onClick={() => window.confirm(`¿Eliminar "${g.nombre}"?`) && eliminarGastoFresco(fin, setFin, g.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
@@ -1110,6 +1147,7 @@ export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setPara
   const [editandoGasto, setEditandoGasto] = useState(null)
   const [creandoGasto, setCreandoGasto] = useState(null) // 'fijo' | 'variable' | null
   const [editandoCompra, setEditandoCompra] = useState(null)
+  const [editandoProyectado, setEditandoProyectado] = useState(null)
   const puedeEditarProyectos = !!setProyectos
   const items = itemsPorPagar(fin, proyectos)
   const h = hoy()
@@ -1129,7 +1167,7 @@ export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setPara
   const mesPagosKey = anioPagos + '-' + String(mesPagos).padStart(2, '0')
   const itemsRealesMes = items.filter(x => mesDe(x.vencimiento) === mesPagosKey)
   const gastosProyectadosMes = fin.gastos
-    .filter(g => g.estado !== 'Anulado' && (g.frecuencia === 'Mensual' || g.frecuencia === 'Anual') && mesDe(g.vencimiento) !== mesPagosKey && gastoOcurreEnMes(g, mesPagosKey))
+    .filter(g => g.estado !== 'Anulado' && (g.frecuencia === 'Mensual' || g.frecuencia === 'Anual') && mesDe(g.vencimiento) !== mesPagosKey && gastoOcurreEnMes(g, mesPagosKey) && !serieTieneFilaPropiaEnMes(fin.gastos, serieDe(g), mesPagosKey))
     .map(g => ({
       id: 'proy-' + g.id + '-' + mesPagosKey,
       vencimiento: fechaOcurrenciaEnMes(g, mesPagosKey),
@@ -1184,16 +1222,19 @@ export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setPara
       <button title="Editar" onClick={() => setEditandoCompra(x)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Pencil size={14} /></button>
       <button title="Eliminar" onClick={() => window.confirm(`¿Eliminar la compra de "${x.proveedor || x.detalle}"?`) && eliminarCompraProyecto(proyectos, setProyectos, x.proyectoId, x.compraIndex)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
     </>) : <span title="Se edita en la ficha del proyecto correspondiente" style={{ color: C.gris, fontSize: 11 }}>—</span>
-    // Proyectado: al elegir un estado se crea recien ahi la fila real de
-    // ese mes (materializarGastoProyectado) — antes de eso no existe nada
-    // que editar/eliminar, por eso este select reemplaza directo al
-    // badge "Proyectado" en vez de sumarse a él.
-    if (x.origen === 'proyectado') return (
-      <select defaultValue="" onChange={e => e.target.value && materializarGastoProyectado(fin, setFin, x.gasto.id, x.vencimiento, e.target.value)} title="Elegir un estado carga este mes como una cuenta real" style={{ ...estiloEstado(''), background: '#EEE', color: C.gris }}>
+    // Proyectado: al elegir un estado, o al guardar el formulario de
+    // Editar, se crea recien ahi la fila real de ese mes puntual
+    // (materializarGastoProyectado) — antes de eso no existe nada que
+    // tocar. Eliminar = confirmar ese mes como Anulado (no corresponde
+    // pagarlo), sin afectar ningun otro mes de la misma serie.
+    if (x.origen === 'proyectado') return (<>
+      <select defaultValue="" onChange={e => e.target.value && materializarGastoProyectado(fin, setFin, x.gasto.id, x.vencimiento, { estado: e.target.value })} title="Elegir un estado carga este mes como una cuenta real" style={{ ...estiloEstado(''), background: '#EEE', color: C.gris }}>
         <option value="" disabled>Proyectado</option>
         {ESTADOS_GASTO.map(v => <option key={v} value={v}>{v}</option>)}
       </select>
-    )
+      <button title="Editar este mes antes de confirmar" onClick={() => setEditandoProyectado(x)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris }}><Pencil size={14} /></button>
+      <button title="Eliminar este mes (no afecta los demás)" onClick={() => window.confirm(`¿Marcar "${x.detalle}" de ${x.vencimiento} como que no corresponde pagarlo? No afecta otros meses.`) && materializarGastoProyectado(fin, setFin, x.gasto.id, x.vencimiento, { estado: 'Anulado' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
+    </>)
     return null
   }
   const seccion = (titulo, color, filas, icono) => filas.length > 0 && (
@@ -1245,6 +1286,7 @@ export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setPara
       {editandoGasto && <OverlayFormulario onClose={() => setEditandoGasto(null)}><FormGasto tipo={editandoGasto.tipo} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} gastoInicial={editandoGasto} onCerrar={() => setEditandoGasto(null)} /></OverlayFormulario>}
       {creandoGasto && <OverlayFormulario onClose={() => setCreandoGasto(null)}><FormGasto tipo={creandoGasto} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} onCerrar={() => setCreandoGasto(null)} /></OverlayFormulario>}
       {editandoCompra && <OverlayFormulario onClose={() => setEditandoCompra(null)}><FormEditarCompra item={editandoCompra} proyectos={proyectos} setProyectos={setProyectos} onCerrar={() => setEditandoCompra(null)} /></OverlayFormulario>}
+      {editandoProyectado && <OverlayFormulario onClose={() => setEditandoProyectado(null)}><FormGasto tipo={editandoProyectado.gasto.tipo} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} proyectadoInicial={editandoProyectado} onCerrar={() => setEditandoProyectado(null)} /></OverlayFormulario>}
       <div style={{ fontSize: 11.5, color: C.gris, marginBottom: 16 }}>Total general pendiente: <b style={{ color: C.carbon }}>{clp(totalGeneral)}</b></div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
         <button onClick={() => irA('fijos')} style={btnAgregar}><Plus size={13} /> Gasto fijo</button>
