@@ -508,6 +508,201 @@ function FichaEditor({ p, onUpdate, onClose }) {
   )
 }
 
+// Monto que le corresponde a un estado de avance — si el hito quedó
+// definido en pesos (monto != null) se usa tal cual; si quedó en % se
+// recalcula en vivo contra el monto total vigente de la OC (nunca queda
+// "congelado": si se corrige el monto total de la OC despues, los hitos
+// en % se ajustan solos).
+const montoEstadoAvance = (estado, montoTotalOC) => estado.monto != null ? estado.monto : Math.round(((estado.pct || 0) / 100) * (montoTotalOC || 0))
+
+// Orden de Compra del cliente + Estados de avance (EDP) — pedido
+// explícito: "subir la OC de nosotros [el cliente a Serein] y que de ahí
+// se vaya facturando según estados de avance". Se sube el documento real
+// (lectura con IA, misma mecánica ya probada en toda la app: nunca
+// escribe directo, siempre pasa por una vista previa editable) para sacar
+// el monto total y, si el documento lo trae, el desglose de pago por
+// hitos — si no lo trae, quedan en blanco y se arman a mano. El monto
+// total de la OC pasa a ser el venta_cotizada del proyecto (la misma
+// fuente que ya usan venta/facturado/porFacturar), asi no hay dos montos
+// "totales" distintos dando vueltas.
+// Al marcar un estado de avance como facturado, se reusa el MISMO camino
+// que "Agregar factura manual" (p.facturasManuales, lo que ya lee
+// facturadoDe/ventaDe) en vez de un mecanismo aparte — con vista previa
+// para completar el folio real antes de confirmar.
+function SeccionOCAvance({ p, onUpdate }) {
+  const [subiendo, setSubiendo] = useState(false)
+  const [error, setError] = useState('')
+  const [revision, setRevision] = useState(null)
+  const [agregandoManual, setAgregandoManual] = useState(false)
+  const [nuevoHito, setNuevoHito] = useState({ nombre: '', pct: '', monto: '' })
+  const [facturando, setFacturando] = useState(null) // id del estado de avance que se esta facturando
+  const [fFact, setFFact] = useState({ numero: '', fecha: '', monto: '' })
+
+  const oc = p.ocDocumento || null
+  const estados = p.estadosAvance || []
+  const montoTotalOC = (oc && oc.montoTotal) || p.venta_cotizada || 0
+  const totalHitos = estados.reduce((a, e) => a + montoEstadoAvance(e, montoTotalOC), 0)
+  const totalFacturadoHitos = estados.filter(e => e.estado === 'Facturado').reduce((a, e) => a + montoEstadoAvance(e, montoTotalOC), 0)
+
+  const subir = async e => {
+    const fl = e.target.files && e.target.files[0]
+    e.target.value = ''
+    if (!fl) return
+    setSubiendo(true); setError(''); setRevision(null)
+    try {
+      const base64 = await fileToBase64(fl)
+      const { data, error: err } = await supabase.functions.invoke('extraer-oc-comercial', { body: { archivos: [{ base64, mimeType: fl.type || 'application/pdf', filename: fl.name }], filename: fl.name } })
+      if (err) throw err
+      if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo leer el documento.')
+      const d = data.datos || {}
+      setRevision({
+        ocNumero: d.ocNumero || p.oc || '', cliente: d.cliente || p.cliente || '', fecha: d.fecha || '',
+        montoTotal: d.montoTotal != null ? String(d.montoTotal) : '', exento: !!d.exento,
+        estadosAvance: (d.estadosAvance || []).map((h, i) => ({ id: 'ea' + Date.now() + i, nombre: h.nombre || ('Estado ' + (i + 1)), pct: h.pct != null ? String(h.pct) : '', monto: h.monto != null ? String(h.monto) : '' })),
+      })
+    } catch (err) { setError('No se pudo leer la OC: ' + ((err && err.message) || String(err))) }
+    setSubiendo(false)
+  }
+
+  const confirmarOC = () => {
+    if (!revision) return
+    const montoTotal = num(revision.montoTotal)
+    if (!montoTotal) { window.alert('Falta el monto total de la OC — revísalo antes de confirmar.'); return }
+    onUpdate(p.id, {
+      ocDocumento: { ocNumero: revision.ocNumero, cliente: revision.cliente, fecha: revision.fecha, montoTotal, exento: !!revision.exento },
+      venta_cotizada: montoTotal,
+      estadosAvance: revision.estadosAvance.map(h => ({ id: h.id, nombre: h.nombre, pct: h.pct !== '' ? num(h.pct) : null, monto: h.monto !== '' ? num(h.monto) : null, estado: 'Pendiente', facturaNumero: null, fechaFacturado: null })),
+    })
+    setRevision(null)
+  }
+
+  const agregarHitoManual = () => {
+    if (!nuevoHito.nombre.trim()) return
+    const nuevo = { id: 'ea' + Date.now(), nombre: nuevoHito.nombre.trim(), pct: nuevoHito.pct !== '' ? num(nuevoHito.pct) : null, monto: nuevoHito.monto !== '' ? num(nuevoHito.monto) : null, estado: 'Pendiente', facturaNumero: null, fechaFacturado: null }
+    onUpdate(p.id, { estadosAvance: [...estados, nuevo] })
+    setNuevoHito({ nombre: '', pct: '', monto: '' })
+    setAgregandoManual(false)
+  }
+  const eliminarHito = id => { if (window.confirm('¿Eliminar este estado de avance?')) onUpdate(p.id, { estadosAvance: estados.filter(e => e.id !== id) }) }
+
+  const abrirFacturar = estado => { setFacturando(estado.id); setFFact({ numero: '', fecha: '', monto: String(montoEstadoAvance(estado, montoTotalOC)) }) }
+  const confirmarFacturar = estado => {
+    const numero = fFact.numero.trim()
+    const montoF = num(fFact.monto)
+    if (!numero || !montoF) { window.alert('Ingresa el N° de factura y el monto — sin eso no queda registrada.'); return }
+    onUpdate(p.id, {
+      facturasManuales: [...(p.facturasManuales || []), { id: 'fm' + Date.now(), numero, fecha_emision: fFact.fecha || '', neto: montoF, notaCredito: false, refNumero: '' }],
+      estadosAvance: estados.map(e => e.id === estado.id ? { ...e, estado: 'Facturado', facturaNumero: numero, fechaFacturado: fFact.fecha || '' } : e),
+    })
+    setFacturando(null)
+  }
+
+  return (
+    <div style={{ marginBottom: 16, border: '1px solid #DFE4EA', borderRadius: 8, padding: 12, background: '#F2F4F7' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.teal }}>Orden de Compra y Estados de Avance</span>
+        <label style={{ cursor: subiendo ? 'wait' : 'pointer', background: C.carbon, color: '#fff', border: 'none', padding: '6px 12px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6, opacity: subiendo ? 0.7 : 1 }}>
+          <Upload size={13} /> {subiendo ? 'Leyendo…' : (oc ? 'Actualizar OC (leer con IA)' : 'Subir OC (leer con IA)')}
+          <input type="file" accept="application/pdf,image/*" onChange={subir} disabled={subiendo} style={{ display: 'none' }} />
+        </label>
+      </div>
+      {error && <div style={{ fontSize: 12, color: C.rojo, marginBottom: 8 }}>{error}</div>}
+
+      {revision && (
+        <div style={{ background: '#fff', border: `2px solid ${C.teal}`, padding: 12, marginBottom: 10 }}>
+          <div style={{ fontSize: 11, color: C.gris, marginBottom: 8 }}>Revisa antes de confirmar — si el documento no traía estados de avance, la lista queda vacía y los agregas a mano después.</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input style={{ ...inp, width: 130 }} placeholder="N° OC" value={revision.ocNumero} onChange={e => setRevision(r => ({ ...r, ocNumero: e.target.value }))} />
+            <input style={{ ...inp, width: 160 }} placeholder="Cliente" value={revision.cliente} onChange={e => setRevision(r => ({ ...r, cliente: e.target.value }))} />
+            <input style={{ ...inp, width: 130 }} type="date" value={revision.fecha} onChange={e => setRevision(r => ({ ...r, fecha: e.target.value }))} />
+            <input style={{ ...inp, width: 140 }} placeholder="Monto total neto CLP" value={revision.montoTotal} onChange={e => setRevision(r => ({ ...r, montoTotal: e.target.value }))} />
+            <label style={{ fontSize: 12, color: C.gris, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" checked={revision.exento} onChange={e => setRevision(r => ({ ...r, exento: e.target.checked }))} /> Exenta (sin IVA)</label>
+          </div>
+          <div style={{ fontSize: 11.5, color: C.gris, marginTop: 10, marginBottom: 4 }}>Estados de avance detectados ({revision.estadosAvance.length}):</div>
+          {revision.estadosAvance.map((h, i) => (
+            <div key={h.id} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 4 }}>
+              <input style={{ ...inp, width: 160 }} value={h.nombre} onChange={e => setRevision(r => ({ ...r, estadosAvance: r.estadosAvance.map((x, j) => j === i ? { ...x, nombre: e.target.value } : x) }))} />
+              <input style={{ ...inp, width: 70 }} placeholder="%" value={h.pct} onChange={e => setRevision(r => ({ ...r, estadosAvance: r.estadosAvance.map((x, j) => j === i ? { ...x, pct: e.target.value, monto: '' } : x) }))} />
+              <span style={{ fontSize: 11, color: C.gris }}>ó</span>
+              <input style={{ ...inp, width: 110 }} placeholder="Monto CLP" value={h.monto} onChange={e => setRevision(r => ({ ...r, estadosAvance: r.estadosAvance.map((x, j) => j === i ? { ...x, monto: e.target.value, pct: '' } : x) }))} />
+              <button onClick={() => setRevision(r => ({ ...r, estadosAvance: r.estadosAvance.filter((_, j) => j !== i) }))} style={btnMini}><Trash2 size={13} /></button>
+            </div>
+          ))}
+          <button onClick={() => setRevision(r => ({ ...r, estadosAvance: [...r.estadosAvance, { id: 'ea' + Date.now(), nombre: '', pct: '', monto: '' }] }))} style={{ background: 'none', border: '1px dashed #C9C4B8', padding: '4px 10px', fontSize: 11.5, cursor: 'pointer', marginTop: 4 }}>+ Agregar estado de avance</button>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button onClick={confirmarOC} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Confirmar OC</button>
+            <button onClick={() => setRevision(null)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {oc && (
+        <div style={{ fontSize: 12.5, marginBottom: 10 }}>
+          <b>OC {oc.ocNumero || '—'}</b> · {oc.cliente || p.cliente} · Monto total: <b>{clp(oc.montoTotal)}</b>{oc.fecha ? ' · ' + oc.fecha : ''}
+        </div>
+      )}
+      {!oc && estados.length === 0 && <div style={{ fontSize: 12.5, color: C.gris, marginBottom: 8 }}>Todavía no hay OC subida ni estados de avance cargados — sube el documento o agrégalos a mano.</div>}
+
+      {estados.length > 0 && (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Estado de avance', '% / Monto', 'Facturable', 'Estado', 'Factura', ''].map((h, i) => <th key={i} style={{ textAlign: i === 2 ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+            <tbody>
+              {estados.map(estado => {
+                const monto = montoEstadoAvance(estado, montoTotalOC)
+                return (
+                  <tr key={estado.id} style={{ borderBottom: '1px solid #DFE4EA' }}>
+                    <td style={{ padding: '5px 8px', fontWeight: 600 }}>{estado.nombre}</td>
+                    <td style={{ padding: '5px 8px', color: C.gris }}>{estado.pct != null ? estado.pct + '%' : clp(estado.monto)}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right' }}>{clp(monto)}</td>
+                    <td style={{ padding: '5px 8px' }}><span style={{ background: estado.estado === 'Facturado' ? '#E6F7EE' : '#FCEBEA', color: estado.estado === 'Facturado' ? C.verde : '#D9600A', padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700 }}>{estado.estado}</span></td>
+                    <td style={{ padding: '5px 8px', color: C.gris }}>{estado.facturaNumero || '—'}</td>
+                    <td style={{ padding: '5px 8px', whiteSpace: 'nowrap' }}>
+                      {estado.estado !== 'Facturado' && <button onClick={() => abrirFacturar(estado)} style={{ background: 'none', border: `1px solid ${C.verde}`, color: C.verde, borderRadius: 4, padding: '3px 8px', fontSize: 11, cursor: 'pointer', marginRight: 4 }}>Facturar</button>}
+                      <button onClick={() => eliminarHito(estado.id)} style={btnMini}><Trash2 size={13} /></button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          <div style={{ fontSize: 11.5, color: C.gris, marginTop: 6 }}>
+            Total hitos: <b>{clp(totalHitos)}</b>{montoTotalOC > 0 && Math.abs(totalHitos - montoTotalOC) > 1 && <span style={{ color: '#D9600A' }}> — no calza con el monto total de la OC ({clp(montoTotalOC)})</span>} · Facturado por hitos: <b style={{ color: C.verde }}>{clp(totalFacturadoHitos)}</b>
+          </div>
+        </div>
+      )}
+
+      {facturando && (() => { const estado = estados.find(e => e.id === facturando); if (!estado) return null; return (
+        <div style={{ background: '#fff', border: `2px solid ${C.verde}`, padding: 12, marginTop: 10 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 8 }}>Facturar "{estado.nombre}"</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input style={{ ...inp, width: 130 }} placeholder="N° de factura" value={fFact.numero} onChange={e => setFFact(f => ({ ...f, numero: e.target.value }))} />
+            <input style={{ ...inp, width: 130 }} type="date" value={fFact.fecha} onChange={e => setFFact(f => ({ ...f, fecha: e.target.value }))} />
+            <input style={{ ...inp, width: 140 }} placeholder="Monto neto CLP" value={fFact.monto} onChange={e => setFFact(f => ({ ...f, monto: e.target.value }))} />
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <button onClick={() => confirmarFacturar(estado)} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Confirmar factura</button>
+            <button onClick={() => setFacturando(null)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+          </div>
+        </div>
+      )})()}
+
+      {agregandoManual ? (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 10, paddingTop: 10, borderTop: '1px dashed #DFE4EA' }}>
+          <input style={{ ...inp, width: 160 }} placeholder="Nombre del estado de avance" value={nuevoHito.nombre} onChange={e => setNuevoHito(h => ({ ...h, nombre: e.target.value }))} />
+          <input style={{ ...inp, width: 70 }} placeholder="%" value={nuevoHito.pct} onChange={e => setNuevoHito(h => ({ ...h, pct: e.target.value, monto: '' }))} />
+          <span style={{ fontSize: 11, color: C.gris }}>ó</span>
+          <input style={{ ...inp, width: 110 }} placeholder="Monto CLP" value={nuevoHito.monto} onChange={e => setNuevoHito(h => ({ ...h, monto: e.target.value, pct: '' }))} />
+          <button onClick={agregarHitoManual} style={{ background: C.verde, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}>Agregar</button>
+          <button onClick={() => setAgregandoManual(false)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '6px 10px', cursor: 'pointer', fontSize: 12 }}>Cancelar</button>
+        </div>
+      ) : (
+        <button onClick={() => setAgregandoManual(true)} style={{ background: 'none', border: '1px dashed #C9C4B8', padding: '6px 12px', fontSize: 12, cursor: 'pointer', marginTop: 10 }}>+ Agregar estado de avance a mano</button>
+      )}
+    </div>
+  )
+}
+
 // Registrar pago con metodo "Factoring": se ingresa el monto BRUTO de la
 // factura factorizada, se elige cual factoring (misma lista de Parametros
 // que ya usa el resto de la app) y se calcula la perdida con la misma
@@ -886,6 +1081,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
               </>
             )}
           </div>
+          <SeccionOCAvance p={p} onUpdate={onUpdate} />
           <AbonosOT p={p} facturasOT={facturasOT} onUpdate={onUpdate} params={params} />
           <datalist id="serein-bancos"><option value="Banco de Chile" /><option value="BancoEstado" /><option value="BCI" /><option value="Santander" /><option value="Scotiabank" /><option value="Itaú" /><option value="BICE" /><option value="Security" /><option value="Banco Falabella" /><option value="Banco Ripley" /><option value="Consorcio" /><option value="Internacional" /><option value="HSBC" /></datalist>
 
