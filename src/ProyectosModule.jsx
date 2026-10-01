@@ -723,6 +723,7 @@ function SeccionOCAvance({ p, onUpdate }) {
     setAgregandoManual(false)
   }
   const eliminarHito = id => { if (window.confirm('¿Eliminar este estado de avance?')) onUpdate(p.id, { estadosAvance: estados.filter(e => e.id !== id) }) }
+  const eliminarOC = () => { if (window.confirm('¿Eliminar la OC subida? Los estados de avance ya cargados no se borran con esto — se editan o eliminan por separado.')) onUpdate(p.id, { ocDocumento: null }) }
   // Edición en el sitio (nombre/%/monto/CC) de un estado de avance ya
   // confirmado — pedido explícito: "que se puedan ir agregando o
   // quitando [y editando] siempre, porque finalmente siempre puede ir
@@ -785,8 +786,9 @@ function SeccionOCAvance({ p, onUpdate }) {
       )}
 
       {oc && (
-        <div style={{ fontSize: 12.5, marginBottom: 10 }}>
-          <b>OC {oc.ocNumero || '—'}</b> · {oc.cliente || p.cliente} · Monto total: <b>{clp(oc.montoTotal)}</b>{oc.fecha ? ' · ' + oc.fecha : ''}
+        <div style={{ fontSize: 12.5, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span><b>OC {oc.ocNumero || '—'}</b> · {oc.cliente || p.cliente} · Monto total: <b>{clp(oc.montoTotal)}</b>{oc.fecha ? ' · ' + oc.fecha : ''}</span>
+          <button onClick={eliminarOC} title="Eliminar OC subida" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo, display: 'inline-flex', alignItems: 'center' }}><Trash2 size={13} /></button>
         </div>
       )}
       {!oc && estados.length === 0 && <div style={{ fontSize: 12.5, color: C.gris, marginBottom: 8 }}>Todavía no hay OC subida ni estados de avance cargados — sube el documento o agrégalos a mano.</div>}
