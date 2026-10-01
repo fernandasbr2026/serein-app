@@ -920,7 +920,7 @@ function AbonosOT({ p, facturasOT, onUpdate, params }) {
     }] })
     setF({ monto: '', fecha: '', banco: '', metodo: 'Transferencia', factoringId: '', dias: '30', diasMora: '', manualNombre: '', manualTasa: '', manualTasaMora: '', manualCostoOp: '' }); setAdd(false)
   }
-  const eliminar = id => onUpdate(p.id, { abonos: abonos.filter(a => a.id !== id) })
+  const eliminar = id => { if (window.confirm('¿Eliminar este pago?')) onUpdate(p.id, { abonos: abonos.filter(a => a.id !== id) }) }
   return (
     <div style={{ marginBottom: 16, border: '1px solid #DFE4EA', borderRadius: 8, padding: 12, background: '#F2F4F7' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -1000,7 +1000,7 @@ function AbonosOT({ p, facturasOT, onUpdate, params }) {
           {abonos.map(a => (
             <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '3px 0', borderBottom: '1px solid #F2F4F7' }}>
               <span style={{ color: C.gris }}>{a.numero ? 'Factura ' + a.numero + ' · ' : 'Pago · '}{a.fecha}{a.banco ? ' · ' + a.banco : ''}{a.metodo && a.metodo !== 'Transferencia' ? ' · ' + a.metodo : ''}{a.perdidaFactoring > 0 && <span style={{ color: C.rojo }}> · bruto {clp(a.montoBruto)} − pérdida {clp(a.perdidaFactoring)} ({a.factoringNombre})</span>}</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}><b>{clp(a.monto)}</b><button onClick={() => eliminar(a.id)} style={{ background: 'none', border: 'none', color: '#D9600A', cursor: 'pointer', fontSize: 13 }}>x</button></span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}><b>{clp(a.monto)}</b><button onClick={() => eliminar(a.id)} title="Eliminar pago" style={{ background: 'none', border: 'none', color: C.rojo, cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}><Trash2 size={13} /></button></span>
             </div>
           ))}
         </div>
