@@ -553,10 +553,24 @@ function FilaOCProveedor({ oc, p, upd, onDelete }) {
   )
 }
 
+// Etapas detectadas por la IA (ocProveedorEtapasDeRevision) llegan solo con
+// nombre/pct/monto — forma de pago nunca la propone la IA (no suele venir
+// en el documento), siempre arranca en Contado y la persona la ajusta a
+// mano si corresponde, igual que el CC en ImportadorFacturaCompra.
+const ocProveedorEtapasDeRevision = (etapas, montoTotal) => (etapas || []).map((h, i) => ({
+  id: 'et' + Date.now() + i,
+  etiqueta: h.nombre || ('Etapa ' + (i + 1)),
+  monto: h.monto != null ? String(h.monto) : (h.pct != null && montoTotal ? String(Math.round(montoTotal * h.pct / 100)) : ''),
+  fecha: '', formaPago: 'Contado', factoringEmpresa: '', plazo: '', estadoPago: 'Pendiente', fechaPago: '',
+}))
+
 function BloqueOCProveedor({ p, onUpdate, params }) {
   const ocs = p.ordenesCompra || []
   const [creando, setCreando] = useState(false)
   const [f, setF] = useState(null)
+  const [subiendo, setSubiendo] = useState(false)
+  const [errorIA, setErrorIA] = useState('')
+  const [revision, setRevision] = useState(null)
   const abrirNueva = () => { setF({ proveedor: '', rut: '', cc: ccCodigos(p)[0] || CC_DEFS[0].id, detalle: '', fecha: hoy(), numero: '', montoTotal: '' }); setCreando(true) }
   const agregar = () => {
     if (!f.proveedor.trim()) return
@@ -568,15 +582,83 @@ function BloqueOCProveedor({ p, onUpdate, params }) {
   const totalComprometido = ocs.reduce((a, o) => a + ocProvNeto(o), 0)
   const totalPagado = ocs.reduce((a, o) => a + ocProvPagado(o), 0)
 
+  const subirPDF = async e => {
+    const fl = e.target.files && e.target.files[0]
+    e.target.value = ''
+    if (!fl) return
+    setSubiendo(true); setErrorIA(''); setRevision(null)
+    try {
+      const base64 = await fileToBase64(fl)
+      const { data, error: err } = await supabase.functions.invoke('extraer-oc-proveedor', { body: { archivos: [{ base64, mimeType: fl.type || 'application/pdf', filename: fl.name }], filename: fl.name } })
+      if (err) throw err
+      if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo leer el documento.')
+      const d = data.datos || {}
+      const montoTotal = d.montoTotal != null ? String(d.montoTotal) : ''
+      setRevision({
+        numero: d.ocNumero || '', proveedor: d.proveedor || '', rut: d.rut || '', fecha: d.fecha || '',
+        montoTotal, exento: !!d.exento, cc: ccCodigos(p)[0] || CC_DEFS[0].id, detalle: '',
+        etapas: ocProveedorEtapasDeRevision(d.etapasAvance || d.etapas, num(montoTotal)),
+      })
+    } catch (err) { setErrorIA('No se pudo leer la OC: ' + ((err && err.message) || String(err))) }
+    setSubiendo(false)
+  }
+  const setRevEtapa = (i, cambios) => setRevision(r => ({ ...r, etapas: r.etapas.map((x, j) => j === i ? { ...x, ...cambios } : x) }))
+  const addRevEtapa = () => setRevision(r => ({ ...r, etapas: [...r.etapas, { id: 'et' + Date.now(), etiqueta: r.etapas.length === 0 ? 'Anticipo' : 'Avance ' + r.etapas.length, monto: '', fecha: '', formaPago: 'Contado', factoringEmpresa: '', plazo: '', estadoPago: 'Pendiente', fechaPago: '' }] }))
+  const delRevEtapa = i => setRevision(r => ({ ...r, etapas: r.etapas.filter((_, j) => j !== i) }))
+  const confirmarRevision = () => {
+    if (!revision.proveedor.trim()) { window.alert('Falta el proveedor — revísalo antes de confirmar.'); return }
+    onUpdate(p.id, { ordenesCompra: [{
+      id: 'ocp' + Date.now(), numero: revision.numero, proveedor: revision.proveedor, rut: revision.rut,
+      cc: revision.cc, fecha: revision.fecha, detalle: revision.detalle, montoTotal: num(revision.montoTotal),
+      etapas: revision.etapas.map(({ id, etiqueta, monto, fecha, formaPago, factoringEmpresa, plazo, estadoPago, fechaPago }) => ({ id, etiqueta, monto: num(monto), fecha, formaPago, factoringEmpresa, plazo, estadoPago, fechaPago })),
+    }, ...ocs] })
+    setRevision(null)
+  }
+
   return (
-    <div style={{ marginBottom: 10 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0 4px', flexWrap: 'wrap', gap: 8 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.gris, display: 'flex', alignItems: 'center', gap: 5 }}><ShoppingCart size={13} /> Órdenes de compra a proveedores</span>
-        {!creando && <button onClick={abrirNueva} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Nueva OC a proveedor</button>}
+    <div style={{ marginBottom: 10, border: '1px solid ' + SEREIN.blue, borderRadius: 8, padding: 12, background: SEREIN.blueSoft }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap', gap: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: SEREIN.blue, display: 'flex', alignItems: 'center', gap: 5 }}><ShoppingCart size={13} /> Órdenes de compra a proveedores</span>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <label style={{ cursor: subiendo ? 'wait' : 'pointer', background: SEREIN.blue, color: '#fff', border: 'none', padding: '6px 12px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6, opacity: subiendo ? 0.7 : 1 }}>
+            <Upload size={13} /> {subiendo ? 'Leyendo…' : 'Subir OC (leer con IA)'}
+            <input type="file" accept="application/pdf,image/*" onChange={subirPDF} disabled={subiendo} style={{ display: 'none' }} />
+          </label>
+          {!creando && <button onClick={abrirNueva} style={{ background: '#fff', color: SEREIN.blue, border: '1px solid ' + SEREIN.blue, padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Nueva OC a mano</button>}
+        </div>
       </div>
       <div style={{ fontSize: 11.5, color: C.gris, marginBottom: 8 }}>Compromiso de compra con el proveedor — a nombre de quién, cuánto, a qué Centro de Costo, y cómo se paga (anticipo, estados de avance, al contado o factorizado). Cuando llegue la factura real, se carga igual que siempre en "Compras imputadas" más abajo — esa es la que descuenta el Centro de Costo, para no contar el gasto dos veces.</div>
+      {errorIA && <div style={{ fontSize: 12, color: C.rojo, marginBottom: 8 }}>{errorIA}</div>}
+
+      {revision && (
+        <div style={{ background: '#fff', border: '2px solid ' + SEREIN.blue, padding: 12, marginBottom: 8 }}>
+          <div style={{ fontSize: 11, color: C.gris, marginBottom: 8 }}>Revisa antes de confirmar — si el documento no traía desglose de etapas, la lista queda vacía y la armas a mano abajo.</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input style={{ ...inp, width: 80 }} placeholder="N° OC" value={revision.numero} onChange={e => setRevision(r => ({ ...r, numero: e.target.value }))} />
+            <input style={{ ...inp, width: 150 }} placeholder="Proveedor" value={revision.proveedor} onChange={e => setRevision(r => ({ ...r, proveedor: e.target.value }))} />
+            <input style={{ ...inp, width: 110 }} placeholder="RUT proveedor" value={revision.rut} onChange={e => setRevision(r => ({ ...r, rut: e.target.value }))} />
+            <select style={inp} value={revision.cc} onChange={e => setRevision(r => ({ ...r, cc: e.target.value }))}>{ccCodigos(p).map(id => <option key={id} value={id}>{id} · {nombreCC(p, id)}</option>)}</select>
+            <input style={{ ...inp, width: 130 }} placeholder="Detalle" value={revision.detalle} onChange={e => setRevision(r => ({ ...r, detalle: e.target.value }))} />
+            <input style={{ ...inp, width: 132 }} type="date" value={revision.fecha} onChange={e => setRevision(r => ({ ...r, fecha: e.target.value }))} />
+            <input style={{ ...inp, width: 120 }} placeholder="Monto total CLP" value={revision.montoTotal} onChange={e => setRevision(r => ({ ...r, montoTotal: e.target.value }))} />
+          </div>
+          <div style={{ fontSize: 11.5, color: C.gris, marginTop: 10, marginBottom: 4 }}>Etapas de pago detectadas ({revision.etapas.length}):</div>
+          {revision.etapas.map((e, i) => (
+            <div key={e.id} style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 6 }}>
+              <input value={e.etiqueta} onChange={ev => setRevEtapa(i, { etiqueta: ev.target.value })} style={{ ...inp, width: 110 }} />
+              <input value={e.monto} onChange={ev => setRevEtapa(i, { monto: ev.target.value })} placeholder="Monto" style={{ ...inp, width: 100, textAlign: 'right' }} />
+              <button onClick={() => delRevEtapa(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button>
+            </div>
+          ))}
+          <button onClick={addRevEtapa} style={{ background: 'none', border: '1px dashed #C9C4B8', padding: '4px 10px', fontSize: 11.5, cursor: 'pointer', marginTop: 4 }}>+ Agregar etapa</button>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button onClick={confirmarRevision} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Confirmar OC</button>
+            <button onClick={() => setRevision(null)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+          </div>
+        </div>
+      )}
       {creando && (
-        <div style={{ background: '#F2F4F7', padding: 12, marginBottom: 8 }}>
+        <div style={{ background: '#fff', padding: 12, marginBottom: 8 }}>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             <input style={{ ...inp, width: 80 }} placeholder="N° OC" value={f.numero} onChange={e => setF({ ...f, numero: e.target.value })} />
             <input style={{ ...inp, width: 150 }} placeholder="Proveedor" value={f.proveedor} onChange={e => setF({ ...f, proveedor: e.target.value })} />
@@ -596,7 +678,7 @@ function BloqueOCProveedor({ p, onUpdate, params }) {
         <div style={{ fontSize: 13, color: C.gris }}>Sin órdenes de compra a proveedores.</div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, background: '#fff' }}>
             <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['N° OC', 'Proveedor', 'CC', 'Fecha', 'Monto total', 'Pagado', 'Pendiente', ''].map((h, i) => <th key={i} style={{ textAlign: ['Monto total', 'Pagado', 'Pendiente'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap', ...(h === '' ? { position: 'sticky', right: 0, background: '#fff', zIndex: 3 } : {}) }}>{h || 'Acciones'}</th>)}</tr></thead>
             <tbody>
               {ocs.map(oc => <FilaOCProveedor key={oc.id} oc={oc} p={p} upd={actualizar} onDelete={eliminar} />)}
@@ -606,6 +688,27 @@ function BloqueOCProveedor({ p, onUpdate, params }) {
       )}
       <datalist id="serein-factoring-ocprov">{((params && params.factoring) || []).map(fc => <option key={fc.id} value={fc.nombre} />)}</datalist>
       {ocs.length > 0 && <div style={{ fontSize: 12, color: C.gris, marginTop: 6 }}>Comprometido: <b>{clp(totalComprometido)}</b> · Pagado: <b style={{ color: C.verde }}>{clp(totalPagado)}</b> · Pendiente: <b style={{ color: C.rojo }}>{clp(totalComprometido - totalPagado)}</b></div>}
+    </div>
+  )
+}
+
+// Recordatorio compacto, junto a Compras imputadas, de qué OC a proveedor
+// siguen con saldo pendiente — mismo azul que el bloque de arriba para que
+// se note que es el mismo tipo de item, no una compra ya realizada. El
+// detalle completo (etapas, editar, eliminar) sigue viviendo solo arriba
+// en BloqueOCProveedor; esto es solo una vista rápida, no un segundo editor.
+function OCsProveedorActivas({ p }) {
+  const activas = (p.ordenesCompra || []).filter(oc => ocProvNeto(oc) - ocProvPagado(oc) > 0)
+  if (activas.length === 0) return null
+  return (
+    <div style={{ border: '1px solid ' + SEREIN.blue, borderRadius: 8, padding: 10, marginBottom: 12, background: SEREIN.blueSoft }}>
+      <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: SEREIN.blue, marginBottom: 6 }}>Órdenes de compra a proveedores activas</div>
+      {activas.map(oc => (
+        <div key={oc.id} style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, fontSize: 12.5, padding: '3px 0' }}>
+          <span>{oc.numero ? 'OC ' + oc.numero + ' · ' : ''}{oc.proveedor || '(sin proveedor)'} <span style={{ color: C.gris }}>({oc.cc})</span></span>
+          <span style={{ color: SEREIN.blue, fontWeight: 600 }}>Pendiente {clp(ocProvNeto(oc) - ocProvPagado(oc))}</span>
+        </div>
+      ))}
     </div>
   )
 }
@@ -1254,6 +1357,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
           <BloqueOCProveedor p={p} onUpdate={onUpdate} params={params} />
 
           {/* COMPRAS */}
+          <OCsProveedorActivas p={p} />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0 8px' }}>
             <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.gris, display: 'flex', alignItems: 'center', gap: 5 }}><ShoppingCart size={13} /> Compras imputadas (por CC)</span>
             <div style={{ display: 'flex', gap: 6 }}>
