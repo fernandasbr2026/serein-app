@@ -315,7 +315,12 @@ function ImportadorFacturaCompra({ p, onAdd, params }) {
 // cuenta igual en venta/facturado/cobrado) y se sube a Drive en
 // VENTAS/<OT> — el OT y el cliente ya se conocen porque estamos dentro
 // de esta ficha, no hace falta tipearlos de nuevo.
-function ImportadorFacturaVenta({ p, onUpdate }) {
+// estadoAvanceId/onConfirmado (opcionales): cuando se sube la factura
+// desde el boton "Facturar" de un estado de avance (SeccionOCAvance), la
+// misma escritura que agrega la factura tambien marca ese estado como
+// Facturado — una sola escritura atomica, no dos llamadas separadas que
+// podrían pisarse entre sí.
+function ImportadorFacturaVenta({ p, onUpdate, estadoAvanceId, onConfirmado }) {
   const [abierto, setAbierto] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
   const [error, setError] = useState('')
@@ -350,7 +355,9 @@ function ImportadorFacturaVenta({ p, onUpdate }) {
     const neta = num(revision.neto)
     if (!folio || !(neta > 0)) { window.alert('Falta el N° de factura o el monto neto no es válido — revisa antes de confirmar.'); return }
     const facturaId = 'fm' + Date.now() + Math.random().toString(36).slice(2, 7)
-    onUpdate(p.id, { facturasManuales: [...(p.facturasManuales || []), { id: facturaId, numero: folio, fecha_emision: revision.fecha || '', neto: neta, notaCredito: false, refNumero: '' }] })
+    const cambios = { facturasManuales: [...(p.facturasManuales || []), { id: facturaId, numero: folio, fecha_emision: revision.fecha || '', neto: neta, notaCredito: false, refNumero: '' }] }
+    if (estadoAvanceId) cambios.estadosAvance = (p.estadosAvance || []).map(e => e.id === estadoAvanceId ? { ...e, estado: 'Facturado', facturaNumero: folio, fechaFacturado: revision.fecha || '' } : e)
+    onUpdate(p.id, cambios)
     setGuardando(true)
     try {
       const filename = (folio ? folio + ' - ' : '') + (p.cliente || 'Cliente') + '.pdf'
@@ -362,6 +369,7 @@ function ImportadorFacturaVenta({ p, onUpdate }) {
     setGuardando(false)
     setRevision(null)
     setAbierto(false)
+    if (onConfirmado) onConfirmado()
   }
 
   return (
@@ -691,13 +699,19 @@ function SeccionOCAvance({ p, onUpdate }) {
       {facturando && (() => { const estado = estados.find(e => e.id === facturando); if (!estado) return null; return (
         <div style={{ background: '#fff', border: `2px solid ${C.verde}`, padding: 12, marginTop: 10 }}>
           <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 8 }}>Facturar "{estado.nombre}"</div>
+          {/* Subir el PDF real de la factura (IA lee folio/fecha/monto y la
+              sube a Drive, mismo mecanismo que ya existia en Facturas) es
+              la opcion recomendada; el formulario de abajo sigue
+              disponible para cuando todavia no se tiene el PDF a mano. */}
+          <ImportadorFacturaVenta p={p} onUpdate={onUpdate} estadoAvanceId={estado.id} onConfirmado={() => setFacturando(null)} />
+          <div style={{ fontSize: 11, color: C.gris, margin: '10px 0 6px' }}>— o cárgala a mano si todavía no tienes el PDF —</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             <input style={{ ...inp, width: 130 }} placeholder="N° de factura" value={fFact.numero} onChange={e => setFFact(f => ({ ...f, numero: e.target.value }))} />
             <input style={{ ...inp, width: 130 }} type="date" value={fFact.fecha} onChange={e => setFFact(f => ({ ...f, fecha: e.target.value }))} />
             <input style={{ ...inp, width: 140 }} placeholder="Monto neto CLP" value={fFact.monto} onChange={e => setFFact(f => ({ ...f, monto: e.target.value }))} />
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button onClick={() => confirmarFacturar(estado)} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Confirmar factura</button>
+            <button onClick={() => confirmarFacturar(estado)} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Confirmar factura (sin PDF)</button>
             <button onClick={() => setFacturando(null)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
           </div>
         </div>
