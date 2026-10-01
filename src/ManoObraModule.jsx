@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx'
 
 import { SEREIN } from './theme-serein.js'
 import { pullState, pushState } from './sync.js'
+import { obtenerFeriadosChile } from './feriadosChile.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
 const C = { naranja: SEREIN.orange, carbon: SEREIN.text, verde: SEREIN.green, rojo: SEREIN.red, gris: SEREIN.textFaint, azul: '#0E7A8F', morado: '#5B4E8C' }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
@@ -689,11 +690,68 @@ function FilaEditarHorasExtras({ h, otsDisponibles, onGuardar, onCancelar }) {
 
 // ================= LISTA DE REGISTROS =================
 const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+const DIAS_SEMANA_CORTOS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+
+// Calendario mensual genérico (cuadritos Lun-Dom). Pinta cada día según
+// lo que tenga: naranjo si es feriado legal (prioridad visual — siempre
+// se ve "Feriado" aunque ese día también tenga registros), o el color
+// propio del calendario (verde en Asistencia, amarillo en Extras) si
+// tuvo registros ese día. Clic en un día con feriado o registros abre
+// el detalle debajo; los días sin nada no son clicables.
+function CalendarioMes({ anio, mes, feriados, conteoPorDia, colorEvento, diaSel, onSelectDia }) {
+  const feriadoDe = fecha => (feriados || []).find(f => f.fecha === fecha)
+  const primerDia = new Date(anio, mes - 1, 1)
+  const diasEnMes = new Date(anio, mes, 0).getDate()
+  let diaSemanaInicio = primerDia.getDay()
+  diaSemanaInicio = diaSemanaInicio === 0 ? 6 : diaSemanaInicio - 1
+  const celdas = []
+  for (let i = 0; i < diaSemanaInicio; i++) celdas.push(null)
+  for (let d = 1; d <= diasEnMes; d++) celdas.push(d)
+
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4, marginBottom: 4 }}>
+        {DIAS_SEMANA_CORTOS.map(d => (
+          <div key={d} style={{ textAlign: 'center', fontSize: 10.5, color: C.gris, fontWeight: 600, textTransform: 'uppercase' }}>{d}</div>
+        ))}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4 }}>
+        {celdas.map((d, i) => {
+          if (d == null) return <div key={i} />
+          const fecha = anio + '-' + String(mes).padStart(2, '0') + '-' + String(d).padStart(2, '0')
+          const feriado = feriadoDe(fecha)
+          const cant = conteoPorDia.get(fecha) || 0
+          const esHoy = fecha === hoy()
+          const clicable = !!feriado || cant > 0
+          let bg = '#fff', border = '1px solid #DFE4EA'
+          if (feriado) { bg = '#FCE9D9'; border = '1px solid ' + C.naranja }
+          else if (cant > 0) { bg = colorEvento.bg; border = '1px solid ' + colorEvento.border }
+          return (
+            <button key={i} onClick={() => clicable && onSelectDia(fecha)} disabled={!clicable}
+              style={{
+                minHeight: 56, background: bg, border: diaSel === fecha ? `2px solid ${C.carbon}` : border, borderRadius: 6,
+                cursor: clicable ? 'pointer' : 'default', padding: '5px 6px', display: 'flex', flexDirection: 'column',
+                alignItems: 'flex-start', justifyContent: 'space-between', fontSize: 11.5, textAlign: 'left',
+              }}>
+              <span style={{ fontWeight: esHoy ? 800 : 500, textDecoration: esHoy ? 'underline' : 'none' }}>{d}</span>
+              {feriado && <span style={{ fontSize: 9, color: C.naranja, fontWeight: 700, lineHeight: 1.2 }}>Feriado</span>}
+              {!feriado && cant > 0 && <span style={{ fontSize: 9, color: colorEvento.text, fontWeight: 700 }}>{cant} registro{cant > 1 ? 's' : ''}</span>}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function ListaRegistros({ mo, setMo, esGerencia, usuario, otsDisponibles = [] }) {
   // Pestañas Ene-Dic (con año navegable) — antes se mostraba TODO el
   // historial junto en una sola lista, cada vez más larga; ahora abre en
   // el mes actual y se navega mes a mes, mismo patrón ya usado en
-  // Pagos/Gastos fijos.
+  // Pagos/Gastos fijos. Cada tabla (Extras/Asistencias) se puede ver
+  // como Lista o como Calendario (cuadritos por día, clic para ver el
+  // detalle de ese día) — el calendario pinta además los feriados
+  // legales de Chile (obtenerFeriadosChile).
   const [anioSel, setAnioSel] = useState(Number(hoy().slice(0, 4)))
   const [mesSel, setMesSel] = useState(Number(hoy().slice(5, 7)))
   const mesKey = anioSel + '-' + String(mesSel).padStart(2, '0')
@@ -706,9 +764,118 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario, otsDisponibles = [] })
   const esAsistenciaEditable = regId => !!((mo.asistencias || []).find(x => x.id === regId) || {}).trabajadorId
   const [editandoA, setEditandoA] = useState(null) // regId
   const [editandoH, setEditandoH] = useState(null) // id
+  const [vistaExtras, setVistaExtras] = useState('calendario')
+  const [vistaAsist, setVistaAsist] = useState('calendario')
+  const [diaSelExtras, setDiaSelExtras] = useState(null)
+  const [diaSelAsist, setDiaSelAsist] = useState(null)
+  const [feriados, setFeriados] = useState([])
+
+  useEffect(() => {
+    setDiaSelExtras(null); setDiaSelAsist(null)
+    let cancelado = false
+    obtenerFeriadosChile(anioSel).then(f => { if (!cancelado) setFeriados(f) })
+    return () => { cancelado = true }
+  }, [anioSel])
 
   const borrarAsistencia = regId => eliminarAsistenciaFresca(mo, setMo, regId)
   const borrarHorasExtras = id => eliminarHorasExtrasFresca(mo, setMo, id)
+
+  const conteoExtrasPorDia = useMemo(() => {
+    const m = new Map()
+    hexVisibles.forEach(h => m.set(h.fecha, (m.get(h.fecha) || 0) + 1))
+    return m
+  }, [hexVisibles])
+  const conteoAsistPorDia = useMemo(() => {
+    const m = new Map()
+    filas.forEach(a => m.set(a.fecha, (m.get(a.fecha) || 0) + 1))
+    return m
+  }, [filas])
+
+  const ToggleVista = ({ vista, setVista }) => (
+    <div style={{ display: 'flex', gap: 4 }}>
+      <button onClick={() => setVista('calendario')} title="Ver calendario"
+        style={{ background: vista === 'calendario' ? C.carbon : '#fff', color: vista === 'calendario' ? '#fff' : C.gris, border: '1px solid #DFE4EA', borderRadius: 6, padding: '5px 9px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+        <CalendarDays size={14} />
+      </button>
+      <button onClick={() => setVista('lista')} title="Ver lista"
+        style={{ background: vista === 'lista' ? C.carbon : '#fff', color: vista === 'lista' ? '#fff' : C.gris, border: '1px solid #DFE4EA', borderRadius: 6, padding: '5px 9px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+        <Table2 size={14} />
+      </button>
+    </div>
+  )
+
+  const tablaExtras = lista => (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <thead>
+          <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+            {['Fecha', 'Tipo', 'Trabajador', 'Horas', 'OT/OC', esGerencia ? 'Costo' : null, esGerencia ? 'Colación' : null, ''].filter(x => x !== null).map((h, i) => (
+              <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {lista.map(h => (<React.Fragment key={h.id}>
+            <tr style={{ borderBottom: '1px solid #DFE4EA' }}>
+              <td style={{ padding: '8px' }}>{h.fecha}</td>
+              <td style={{ padding: '8px' }}>{TIPOS_EXTRA.find(x => x.id === (h.tipo || 'Semana'))?.label || 'Horas extra semana'}</td>
+              <td style={{ padding: '8px' }}>{nombreDe(h.trabajadorId)}</td>
+              <td style={{ padding: '8px' }}>{h.horas ? h.horas + ' h' : '—'}</td>
+              <td style={{ padding: '8px', fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{otsDeExtra(h).join(', ')}</td>
+              {esGerencia && <td style={{ padding: '8px', fontWeight: 600 }}>{clp(h.costo.total)}</td>}
+              {esGerencia && <td style={{ padding: '8px', fontSize: 12, color: C.gris }}>{h.costo.colacion > 0 ? clp(h.costo.colacion) : '—'}</td>}
+              <td style={{ padding: '8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                {esGerencia && <button title="Editar" onClick={() => setEditandoH(editandoH === h.id ? null : h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris, marginRight: 6 }}><Pencil size={14} /></button>}
+                {esGerencia && <button title="Eliminar" onClick={() => window.confirm('¿Eliminar este extra?') && borrarHorasExtras(h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
+              </td>
+            </tr>
+            {editandoH === h.id && (
+              <FilaEditarHorasExtras h={h} otsDisponibles={otsDisponibles}
+                onGuardar={async f => { await actualizarHorasExtrasFresca(mo, setMo, h.id, f); setEditandoH(null) }}
+                onCancelar={() => setEditandoH(null)} />
+            )}
+          </React.Fragment>))}
+        </tbody>
+      </table>
+    </div>
+  )
+
+  const tablaAsistencias = lista => (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <thead>
+          <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+            {['Fecha', 'Trabajador', 'Estado', 'Hora / Atraso', 'OT/OC', esGerencia ? 'Costo' : null, ''].filter(x => x !== null).map((h, i) => (
+              <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {lista.map((a, i) => (<React.Fragment key={a.regId + '-' + a.trabajadorId + '-' + i}>
+            <tr style={{ borderBottom: '1px solid #DFE4EA', verticalAlign: 'top' }}>
+              <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>{a.fecha}</td>
+              <td style={{ padding: '8px' }}>{nombreDe(a.trabajadorId)}</td>
+              <td style={{ padding: '8px' }}><span style={{ color: TIPO_COLOR[a.tipo] || C.carbon, fontWeight: 600, fontSize: 12 }}>{a.tipo}</span></td>
+              <td style={{ padding: '8px', fontSize: 12 }}>{a.tipo === 'Trabajó' ? (a.horaLlegada || '—') : '—'}{a.tipo === 'Trabajó' && a.horaSalida ? ` – ${a.horaSalida}` : ''}{a.atrasoMin > 0 && <span style={{ color: C.rojo }}> · {a.atrasoMin} min atraso</span>}{a.salidaAnticipadaMin > 0 && <span style={{ color: C.rojo }}> · salió {a.salidaAnticipadaMin} min antes</span>}</td>
+              <td style={{ padding: '8px', fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{a.ots.join(', ')}</td>
+              {esGerencia && <td style={{ padding: '8px', fontWeight: 600 }}>{clp(a.pago)}{a.descuento > 0 && <div style={{ fontSize: 11, color: C.rojo, fontWeight: 400 }}>−{clp(a.descuento)}</div>}</td>}
+              <td style={{ padding: '8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                {esGerencia && esAsistenciaEditable(a.regId) && <button title="Editar" onClick={() => setEditandoA(editandoA === a.regId ? null : a.regId)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris, marginRight: 6 }}><Pencil size={14} /></button>}
+                {esGerencia && <button title="Eliminar" onClick={() => window.confirm('¿Eliminar este registro de asistencia?') && borrarAsistencia(a.regId)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
+              </td>
+            </tr>
+            {editandoA === a.regId && (
+              <FilaEditarAsistencia a={{ ...a, fecha: a.fecha }} trabajador={trabajadorDe(a.trabajadorId)} otsDisponibles={otsDisponibles}
+                onGuardar={async f => { await actualizarAsistenciaFresca(mo, setMo, a.regId, f); setEditandoA(null) }}
+                onCancelar={() => setEditandoA(null)} />
+            )}
+          </React.Fragment>))}
+        </tbody>
+      </table>
+    </div>
+  )
+
+  const feriadoSel = fecha => (feriados || []).find(f => f.fecha === fecha)
 
   return (
     <div>
@@ -719,7 +886,7 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario, otsDisponibles = [] })
       </div>
       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 16 }}>
         {MESES_CORTOS.map((m, i) => (
-          <button key={m} onClick={() => setMesSel(i + 1)}
+          <button key={m} onClick={() => { setMesSel(i + 1); setDiaSelExtras(null); setDiaSelAsist(null) }}
             style={{ background: mesSel === i + 1 ? C.naranja : '#fff', color: mesSel === i + 1 ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '6px 11px', fontSize: 12.5, fontWeight: mesSel === i + 1 ? 700 : 500, cursor: 'pointer' }}>
             {m}
           </button>
@@ -727,78 +894,53 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario, otsDisponibles = [] })
       </div>
 
       <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 10, padding: 18, marginBottom: 14 }}>
-        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Extras registrados (horas semana / feriados / turno noche)</div>
-        {hexVisibles.length === 0 ? <div style={{ fontSize: 13, color: '#9AA3AD' }}>Sin extras en {MESES_CORTOS[mesSel - 1]} {anioSel}.</div> : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-                  {['Fecha', 'Tipo', 'Trabajador', 'Horas', 'OT/OC', esGerencia ? 'Costo' : null, esGerencia ? 'Colación' : null, ''].filter(x => x !== null).map((h, i) => (
-                    <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {hexVisibles.map(h => (<React.Fragment key={h.id}>
-                  <tr style={{ borderBottom: '1px solid #DFE4EA' }}>
-                    <td style={{ padding: '8px' }}>{h.fecha}</td>
-                    <td style={{ padding: '8px' }}>{TIPOS_EXTRA.find(x => x.id === (h.tipo || 'Semana'))?.label || 'Horas extra semana'}</td>
-                    <td style={{ padding: '8px' }}>{nombreDe(h.trabajadorId)}</td>
-                    <td style={{ padding: '8px' }}>{h.horas ? h.horas + ' h' : '—'}</td>
-                    <td style={{ padding: '8px', fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{otsDeExtra(h).join(', ')}</td>
-                    {esGerencia && <td style={{ padding: '8px', fontWeight: 600 }}>{clp(h.costo.total)}</td>}
-                    {esGerencia && <td style={{ padding: '8px', fontSize: 12, color: C.gris }}>{h.costo.colacion > 0 ? clp(h.costo.colacion) : '—'}</td>}
-                    <td style={{ padding: '8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      {esGerencia && <button title="Editar" onClick={() => setEditandoH(editandoH === h.id ? null : h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris, marginRight: 6 }}><Pencil size={14} /></button>}
-                      {esGerencia && <button title="Eliminar" onClick={() => window.confirm('¿Eliminar este extra?') && borrarHorasExtras(h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
-                    </td>
-                  </tr>
-                  {editandoH === h.id && (
-                    <FilaEditarHorasExtras h={h} otsDisponibles={otsDisponibles}
-                      onGuardar={async f => { await actualizarHorasExtrasFresca(mo, setMo, h.id, f); setEditandoH(null) }}
-                      onCancelar={() => setEditandoH(null)} />
-                  )}
-                </React.Fragment>))}
-              </tbody>
-            </table>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Extras registrados (horas semana / feriados / turno noche)</div>
+          <ToggleVista vista={vistaExtras} setVista={setVistaExtras} />
+        </div>
+        {hexVisibles.length === 0 && vistaExtras === 'lista' ? <div style={{ fontSize: 13, color: '#9AA3AD' }}>Sin extras en {MESES_CORTOS[mesSel - 1]} {anioSel}.</div> : null}
+        {vistaExtras === 'lista' && hexVisibles.length > 0 && tablaExtras(hexVisibles)}
+        {vistaExtras === 'calendario' && (
+          <div>
+            <CalendarioMes anio={anioSel} mes={mesSel} feriados={feriados} conteoPorDia={conteoExtrasPorDia}
+              colorEvento={{ bg: '#FEF6DA', border: '#E8B931', text: '#8A6D12' }}
+              diaSel={diaSelExtras} onSelectDia={f => setDiaSelExtras(diaSelExtras === f ? null : f)} />
+            {diaSelExtras && (
+              <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #DFE4EA' }}>
+                <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
+                  {diaSelExtras}{feriadoSel(diaSelExtras) && <span style={{ color: C.naranja }}> · Feriado — {feriadoSel(diaSelExtras).nombre}</span>}
+                </div>
+                {hexVisibles.filter(h => h.fecha === diaSelExtras).length === 0
+                  ? <div style={{ fontSize: 13, color: '#9AA3AD' }}>Sin extras registrados este día.</div>
+                  : tablaExtras(hexVisibles.filter(h => h.fecha === diaSelExtras))}
+              </div>
+            )}
           </div>
         )}
       </div>
 
       <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 10, padding: 18, marginBottom: 14 }}>
-        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Asistencias registradas</div>
-        {filas.length === 0 ? <div style={{ fontSize: 13, color: '#9AA3AD' }}>Sin registros aún.</div> : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-                  {['Fecha', 'Trabajador', 'Estado', 'Hora / Atraso', 'OT/OC', esGerencia ? 'Costo' : null, ''].filter(x => x !== null).map((h, i) => (
-                    <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filas.map((a, i) => (<React.Fragment key={a.regId + '-' + a.trabajadorId + '-' + i}>
-                  <tr style={{ borderBottom: '1px solid #DFE4EA', verticalAlign: 'top' }}>
-                    <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>{a.fecha}</td>
-                    <td style={{ padding: '8px' }}>{nombreDe(a.trabajadorId)}</td>
-                    <td style={{ padding: '8px' }}><span style={{ color: TIPO_COLOR[a.tipo] || C.carbon, fontWeight: 600, fontSize: 12 }}>{a.tipo}</span></td>
-                    <td style={{ padding: '8px', fontSize: 12 }}>{a.tipo === 'Trabajó' ? (a.horaLlegada || '—') : '—'}{a.tipo === 'Trabajó' && a.horaSalida ? ` – ${a.horaSalida}` : ''}{a.atrasoMin > 0 && <span style={{ color: C.rojo }}> · {a.atrasoMin} min atraso</span>}{a.salidaAnticipadaMin > 0 && <span style={{ color: C.rojo }}> · salió {a.salidaAnticipadaMin} min antes</span>}</td>
-                    <td style={{ padding: '8px', fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{a.ots.join(', ')}</td>
-                    {esGerencia && <td style={{ padding: '8px', fontWeight: 600 }}>{clp(a.pago)}{a.descuento > 0 && <div style={{ fontSize: 11, color: C.rojo, fontWeight: 400 }}>−{clp(a.descuento)}</div>}</td>}
-                    <td style={{ padding: '8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      {esGerencia && esAsistenciaEditable(a.regId) && <button title="Editar" onClick={() => setEditandoA(editandoA === a.regId ? null : a.regId)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris, marginRight: 6 }}><Pencil size={14} /></button>}
-                      {esGerencia && <button title="Eliminar" onClick={() => window.confirm('¿Eliminar este registro de asistencia?') && borrarAsistencia(a.regId)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
-                    </td>
-                  </tr>
-                  {editandoA === a.regId && (
-                    <FilaEditarAsistencia a={{ ...a, fecha: a.fecha }} trabajador={trabajadorDe(a.trabajadorId)} otsDisponibles={otsDisponibles}
-                      onGuardar={async f => { await actualizarAsistenciaFresca(mo, setMo, a.regId, f); setEditandoA(null) }}
-                      onCancelar={() => setEditandoA(null)} />
-                  )}
-                </React.Fragment>))}
-              </tbody>
-            </table>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Asistencias registradas</div>
+          <ToggleVista vista={vistaAsist} setVista={setVistaAsist} />
+        </div>
+        {filas.length === 0 && vistaAsist === 'lista' ? <div style={{ fontSize: 13, color: '#9AA3AD' }}>Sin registros aún.</div> : null}
+        {vistaAsist === 'lista' && filas.length > 0 && tablaAsistencias(filas)}
+        {vistaAsist === 'calendario' && (
+          <div>
+            <CalendarioMes anio={anioSel} mes={mesSel} feriados={feriados} conteoPorDia={conteoAsistPorDia}
+              colorEvento={{ bg: '#E1F4E6', border: C.verde, text: '#1D6B3A' }}
+              diaSel={diaSelAsist} onSelectDia={f => setDiaSelAsist(diaSelAsist === f ? null : f)} />
+            {diaSelAsist && (
+              <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #DFE4EA' }}>
+                <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
+                  {diaSelAsist}{feriadoSel(diaSelAsist) && <span style={{ color: C.naranja }}> · Feriado — {feriadoSel(diaSelAsist).nombre}</span>}
+                </div>
+                {filas.filter(a => a.fecha === diaSelAsist).length === 0
+                  ? <div style={{ fontSize: 13, color: '#9AA3AD' }}>Sin asistencia registrada este día.</div>
+                  : tablaAsistencias(filas.filter(a => a.fecha === diaSelAsist))}
+              </div>
+            )}
           </div>
         )}
       </div>
