@@ -515,9 +515,9 @@ function FilaOCProveedor({ oc, p, upd, onDelete }) {
         <td style={{ padding: '5px 8px', textAlign: 'right' }}><input value={oc.montoTotal} readOnly={etapas.length > 0} title={etapas.length > 0 ? 'Se calcula desde las etapas de pago' : ''} onChange={ev => upd(oc.id, { montoTotal: num(ev.target.value) })} style={{ ...inp, width: 110, padding: '5px 7px', textAlign: 'right', fontWeight: 600, background: etapas.length > 0 ? '#E2E7EC' : '#fff' }} /></td>
         <td style={{ padding: '5px 8px', textAlign: 'right', color: C.verde }}>{clp(pagado)}</td>
         <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600, color: (neto - pagado) > 0 ? C.rojo : C.verde }}>{clp(neto - pagado)}</td>
-        <td style={{ padding: '5px 8px', whiteSpace: 'nowrap', textAlign: 'right' }}>
+        <td style={{ padding: '5px 8px', whiteSpace: 'nowrap', textAlign: 'right', position: 'sticky', right: 0, background: '#fff', zIndex: 1, boxShadow: '-6px 0 6px -4px rgba(0,0,0,.12)' }}>
           <button onClick={() => setAbierta(!abierta)} title="Anticipo y estados de avance" style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '3px 6px', marginRight: 4 }}>{abierta ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</button>
-          <button onClick={() => onDelete(oc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
+          <button onClick={() => onDelete(oc.id)} title="Eliminar OC" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
         </td>
       </tr>
       {abierta && (
@@ -597,7 +597,7 @@ function BloqueOCProveedor({ p, onUpdate, params }) {
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['N° OC', 'Proveedor', 'CC', 'Fecha', 'Monto total', 'Pagado', 'Pendiente', ''].map((h, i) => <th key={i} style={{ textAlign: ['Monto total', 'Pagado', 'Pendiente'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+            <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['N° OC', 'Proveedor', 'CC', 'Fecha', 'Monto total', 'Pagado', 'Pendiente', ''].map((h, i) => <th key={i} style={{ textAlign: ['Monto total', 'Pagado', 'Pendiente'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap', ...(h === '' ? { position: 'sticky', right: 0, background: '#fff', zIndex: 3 } : {}) }}>{h || 'Acciones'}</th>)}</tr></thead>
             <tbody>
               {ocs.map(oc => <FilaOCProveedor key={oc.id} oc={oc} p={p} upd={actualizar} onDelete={eliminar} />)}
             </tbody>
