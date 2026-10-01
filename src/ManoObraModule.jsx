@@ -612,10 +612,12 @@ async function eliminarHorasExtrasFresca(mo, setMo, id) {
 // Fila de edición en el sitio para una asistencia — se abre debajo de la
 // fila real (misma tabla), con el mismo selector de tipo/hora que ya usa
 // RegistroDiario, para que editar se sienta igual a cargar.
-function FilaEditarAsistencia({ a, trabajador, otsDisponibles, onGuardar, onCancelar }) {
+function FilaEditarAsistencia({ a, trabajador, otsDisponibles, esGerencia = true, onGuardar, onCancelar }) {
   const [f, setF] = useState({ tipo: a.tipo || 'Trabajó', horaLlegada: a.horaLlegada || '', horaSalida: a.horaSalida || '', ots: a.ots || [], obs: a.obs || '', jornada: a.jornada || 'Completa' })
   const factor = f.jornada === 'Media' ? 0.5 : 1
-  const preview = (trabajador && f.tipo === 'Trabajó') ? costoDia(trabajador, f.tipo, f.horaLlegada, factor, f.horaSalida, a.fecha) : null
+  // Sin esGerencia (ej. editora de asistencia sin ver valores) no se
+  // calcula costoDia — evita exponer el pago/descuento en pesos al editar.
+  const preview = (esGerencia && trabajador && f.tipo === 'Trabajó') ? costoDia(trabajador, f.tipo, f.horaLlegada, factor, f.horaSalida, a.fecha) : null
   const toggleOt = o => setF(s => ({ ...s, ots: s.ots.includes(o) ? s.ots.filter(x => x !== o) : [...s.ots, o] }))
   return (
     <tr style={{ background: '#FFF7E6' }}>
@@ -744,7 +746,7 @@ function CalendarioMes({ anio, mes, feriados, conteoPorDia, colorEvento, diaSel,
   )
 }
 
-function ListaRegistros({ mo, setMo, esGerencia, usuario, otsDisponibles = [] }) {
+function ListaRegistros({ mo, setMo, esGerencia, puedeEditarTodo = false, usuario, otsDisponibles = [] }) {
   // Pestañas Ene-Dic (con año navegable) — antes se mostraba TODO el
   // historial junto en una sola lista, cada vez más larga; ahora abre en
   // el mes actual y se navega mes a mes, mismo patrón ya usado en
@@ -755,7 +757,7 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario, otsDisponibles = [] })
   const [anioSel, setAnioSel] = useState(Number(hoy().slice(0, 4)))
   const [mesSel, setMesSel] = useState(Number(hoy().slice(5, 7)))
   const mesKey = anioSel + '-' + String(mesSel).padStart(2, '0')
-  const filas = useMemo(() => (mo.asistencias || []).flatMap(filasDeAsistencia).filter(x => (esGerencia || x.supervisor === usuario) && x.fecha.startsWith(mesKey)), [mo, esGerencia, usuario, mesKey])
+  const filas = useMemo(() => (mo.asistencias || []).flatMap(filasDeAsistencia).filter(x => (esGerencia || puedeEditarTodo || x.supervisor === usuario) && x.fecha.startsWith(mesKey)), [mo, esGerencia, puedeEditarTodo, usuario, mesKey])
   const hexVisibles = (mo.horasExtras || []).filter(h => h.fecha.startsWith(mesKey))
   const nombreDe = id => (mo.trabajadores || []).find(t => t.id === id)?.nombre || id
   const trabajadorDe = id => (mo.trabajadores || []).find(t => t.id === id)
@@ -825,8 +827,8 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario, otsDisponibles = [] })
               {esGerencia && <td style={{ padding: '8px', fontWeight: 600 }}>{clp(h.costo.total)}</td>}
               {esGerencia && <td style={{ padding: '8px', fontSize: 12, color: C.gris }}>{h.costo.colacion > 0 ? clp(h.costo.colacion) : '—'}</td>}
               <td style={{ padding: '8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                {esGerencia && <button title="Editar" onClick={() => setEditandoH(editandoH === h.id ? null : h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris, marginRight: 6 }}><Pencil size={14} /></button>}
-                {esGerencia && <button title="Eliminar" onClick={() => window.confirm('¿Eliminar este extra?') && borrarHorasExtras(h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
+                {puedeEditarTodo && <button title="Editar" onClick={() => setEditandoH(editandoH === h.id ? null : h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris, marginRight: 6 }}><Pencil size={14} /></button>}
+                {puedeEditarTodo && <button title="Eliminar" onClick={() => window.confirm('¿Eliminar este extra?') && borrarHorasExtras(h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
               </td>
             </tr>
             {editandoH === h.id && (
@@ -860,12 +862,12 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario, otsDisponibles = [] })
               <td style={{ padding: '8px', fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{a.ots.join(', ')}</td>
               {esGerencia && <td style={{ padding: '8px', fontWeight: 600 }}>{clp(a.pago)}{a.descuento > 0 && <div style={{ fontSize: 11, color: C.rojo, fontWeight: 400 }}>−{clp(a.descuento)}</div>}</td>}
               <td style={{ padding: '8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                {esGerencia && esAsistenciaEditable(a.regId) && <button title="Editar" onClick={() => setEditandoA(editandoA === a.regId ? null : a.regId)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris, marginRight: 6 }}><Pencil size={14} /></button>}
-                {esGerencia && <button title="Eliminar" onClick={() => window.confirm('¿Eliminar este registro de asistencia?') && borrarAsistencia(a.regId)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
+                {puedeEditarTodo && esAsistenciaEditable(a.regId) && <button title="Editar" onClick={() => setEditandoA(editandoA === a.regId ? null : a.regId)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris, marginRight: 6 }}><Pencil size={14} /></button>}
+                {puedeEditarTodo && <button title="Eliminar" onClick={() => window.confirm('¿Eliminar este registro de asistencia?') && borrarAsistencia(a.regId)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
               </td>
             </tr>
             {editandoA === a.regId && (
-              <FilaEditarAsistencia a={{ ...a, fecha: a.fecha }} trabajador={trabajadorDe(a.trabajadorId)} otsDisponibles={otsDisponibles}
+              <FilaEditarAsistencia a={{ ...a, fecha: a.fecha }} trabajador={trabajadorDe(a.trabajadorId)} otsDisponibles={otsDisponibles} esGerencia={esGerencia}
                 onGuardar={async f => { await actualizarAsistenciaFresca(mo, setMo, a.regId, f); setEditandoA(null) }}
                 onCancelar={() => setEditandoA(null)} />
             )}
@@ -1530,12 +1532,17 @@ function Informes({ mo }) {
 }
 
 // ================= MÓDULO PRINCIPAL =================
-export default function ManoObraModule({ esGerencia, otsDisponibles = [], usuario = 'supervisor@serein.cl', areas = ['Santa Rosa', 'Istria', 'Proyectos'], mo: moExt, setMo: setMoExt }) {
+export default function ManoObraModule({ esGerencia, editaRegistros = false, otsDisponibles = [], usuario = 'supervisor@serein.cl', areas = ['Santa Rosa', 'Istria', 'Proyectos'], mo: moExt, setMo: setMoExt }) {
   const [moInt, setMoInt] = useState(MO_SEED)
   const moRaw = moExt ?? moInt
   // Normaliza: si los datos guardados son de una versión anterior, se usa la nómina real al vuelo.
   const mo = (moRaw && moRaw.ver === MO_VER) ? moRaw : MO_SEED
   const setMo = setMoExt ?? setMoInt
+  // editaRegistros: permiso puntual (sin ser Gerencia) para editar/eliminar
+  // CUALQUIER registro de Asistencia/Extras — ve todas las filas (no solo
+  // las suyas) pero nunca los montos en pesos, esos siguen atados a
+  // esGerencia en ListaRegistros.
+  const puedeEditarTodo = esGerencia || editaRegistros
 
   // Persiste la migración una vez (sin bloquear el render).
   useEffect(() => { if (moExt && moExt.ver !== MO_VER && setMoExt) setMoExt(MO_SEED) }, [])
@@ -1551,7 +1558,7 @@ export default function ManoObraModule({ esGerencia, otsDisponibles = [], usuari
   ] : [
     { id: 'registro', label: 'Registro diario', icono: <CalendarDays size={13} /> },
     { id: 'hex', label: 'Extras', icono: <Clock3 size={13} /> },
-    { id: 'lista', label: 'Mis registros', icono: <Users size={13} /> },
+    { id: 'lista', label: puedeEditarTodo ? 'Todos los registros' : 'Mis registros', icono: <Users size={13} /> },
     { id: 'trabajadores', label: 'Trabajadores', icono: <Users size={13} /> },
   ]
   const [tab, setTab] = useState('registro')
@@ -1561,7 +1568,7 @@ export default function ManoObraModule({ esGerencia, otsDisponibles = [], usuari
       <TabsInternos tabs={tabs} sel={tab} onSel={setTab} />
       {tab === 'registro' && <RegistroDiario mo={mo} setMo={setMo} otsDisponibles={otsDisponibles} esGerencia={esGerencia} usuario={usuario} areas={areas} />}
       {tab === 'hex' && <HorasExtras mo={mo} setMo={setMo} otsDisponibles={otsDisponibles} esGerencia={esGerencia} usuario={usuario} />}
-      {tab === 'lista' && <ListaRegistros mo={mo} setMo={setMo} esGerencia={esGerencia} usuario={usuario} otsDisponibles={otsDisponibles} />}
+      {tab === 'lista' && <ListaRegistros mo={mo} setMo={setMo} esGerencia={esGerencia} puedeEditarTodo={puedeEditarTodo} usuario={usuario} otsDisponibles={otsDisponibles} />}
       {tab === 'trabajadores' && !esGerencia && <TrabajadoresView mo={mo} />}
       {tab === 'costos' && esGerencia && <CostosPorOT mo={mo} />}
       {tab === 'resumen' && esGerencia && <ResumenMensual mo={mo} setMo={setMo} otsDisponibles={otsDisponibles} />}

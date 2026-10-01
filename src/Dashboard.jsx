@@ -191,6 +191,11 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const _email = (email || '').toLowerCase()
   const areaPorEmail = EMAIL_AREA[_email] || null
   const veTodasLasOT = esGerencia || _email === 'caro@sereinspa.com'
+  // Permiso puntual: puede editar/eliminar CUALQUIER registro de Asistencia
+  // (hora, tipo, OT, trabajador) sin ser Gerencia — por eso NO ve montos en
+  // pesos (sueldo/costo/descuento), solo desbloquea los botones de editar.
+  const EDITORES_ASISTENCIA = ['joce@sereinspa.com']
+  const editaAsistenciaSinValores = EDITORES_ASISTENCIA.includes(_email)
   const areasOTUsuario = veTodasLasOT
     ? ['Santa Rosa', 'Istria', 'Proyectos']
     : [...new Set([...areasUsuario.filter(a => ['Santa Rosa', 'Istria', 'Proyectos'].includes(a)), ...(areaPorEmail ? [areaPorEmail] : [])])]
@@ -879,6 +884,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
         ) : esModuloMO ? (
           <ManoObraModule
             esGerencia={esGerencia && !sinValores.includes('ASISTENCIA')}
+            editaRegistros={editaAsistenciaSinValores}
             otsDisponibles={ots.map(o => o.numero)}
             usuario={email}
             mo={mo} setMo={setMo}
