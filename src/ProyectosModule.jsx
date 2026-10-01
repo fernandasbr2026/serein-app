@@ -994,17 +994,17 @@ function AbonosOT({ p, facturasOT, onUpdate, params }) {
           <div style={{ fontSize: 11, color: C.gris, marginTop: 6 }}>El pago se reparte solo: cubre primero la factura mas antigua y el sobrante pasa a la siguiente.{f.metodo === 'Factoring' ? ' Con factoring, lo que se reparte/abona es el monto NETO (bruto menos la pérdida).' : ''}</div>
         </div>
       )}
-      {abonos.length > 0 && (
-        <div style={{ marginTop: 10 }}>
-          <div style={{ fontSize: 10, color: C.gris, textTransform: 'uppercase', marginBottom: 4 }}>Pagos registrados</div>
-          {abonos.map(a => (
-            <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '3px 0', borderBottom: '1px solid #F2F4F7' }}>
-              <span style={{ color: C.gris }}>{a.numero ? 'Factura ' + a.numero + ' · ' : 'Pago · '}{a.fecha}{a.banco ? ' · ' + a.banco : ''}{a.metodo && a.metodo !== 'Transferencia' ? ' · ' + a.metodo : ''}{a.perdidaFactoring > 0 && <span style={{ color: C.rojo }}> · bruto {clp(a.montoBruto)} − pérdida {clp(a.perdidaFactoring)} ({a.factoringNombre})</span>}</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}><b>{clp(a.monto)}</b><button onClick={() => eliminar(a.id)} title="Eliminar pago" style={{ background: 'none', border: 'none', color: C.rojo, cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}><Trash2 size={13} /></button></span>
-            </div>
-          ))}
-        </div>
-      )}
+      <div style={{ marginTop: 10 }}>
+        <div style={{ fontSize: 10, color: C.gris, textTransform: 'uppercase', marginBottom: 4 }}>Pagos registrados</div>
+        {abonos.length === 0 ? (
+          <div style={{ fontSize: 12, color: C.gris }}>Sin pagos registrados todavía — usa "Registrar pago" arriba.</div>
+        ) : abonos.map(a => (
+          <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '3px 0', borderBottom: '1px solid #F2F4F7' }}>
+            <span style={{ color: C.gris }}>{a.numero ? 'Factura ' + a.numero + ' · ' : 'Pago · '}{a.fecha}{a.banco ? ' · ' + a.banco : ''}{a.metodo && a.metodo !== 'Transferencia' ? ' · ' + a.metodo : ''}{a.perdidaFactoring > 0 && <span style={{ color: C.rojo }}> · bruto {clp(a.montoBruto)} − pérdida {clp(a.perdidaFactoring)} ({a.factoringNombre})</span>}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}><b>{clp(a.monto)}</b><button onClick={() => eliminar(a.id)} title="Eliminar pago" style={{ background: 'none', border: 'none', color: C.rojo, cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}><Trash2 size={13} /></button></span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
