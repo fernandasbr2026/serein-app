@@ -534,7 +534,7 @@ function SeccionOCAvance({ p, onUpdate }) {
   const [error, setError] = useState('')
   const [revision, setRevision] = useState(null)
   const [agregandoManual, setAgregandoManual] = useState(false)
-  const [nuevoHito, setNuevoHito] = useState({ nombre: '', pct: '', monto: '' })
+  const [nuevoHito, setNuevoHito] = useState({ nombre: '', pct: '', monto: '', cc: ccCodigos(p)[0] || CC_DEFS[0].id })
   const [facturando, setFacturando] = useState(null) // id del estado de avance que se esta facturando
   const [fFact, setFFact] = useState({ numero: '', fecha: '', monto: '' })
 
@@ -558,7 +558,7 @@ function SeccionOCAvance({ p, onUpdate }) {
       setRevision({
         ocNumero: d.ocNumero || p.oc || '', cliente: d.cliente || p.cliente || '', fecha: d.fecha || '',
         montoTotal: d.montoTotal != null ? String(d.montoTotal) : '', exento: !!d.exento,
-        estadosAvance: (d.estadosAvance || []).map((h, i) => ({ id: 'ea' + Date.now() + i, nombre: h.nombre || ('Estado ' + (i + 1)), pct: h.pct != null ? String(h.pct) : '', monto: h.monto != null ? String(h.monto) : '' })),
+        estadosAvance: (d.estadosAvance || []).map((h, i) => ({ id: 'ea' + Date.now() + i, nombre: h.nombre || ('Estado ' + (i + 1)), pct: h.pct != null ? String(h.pct) : '', monto: h.monto != null ? String(h.monto) : '', cc: ccCodigos(p)[0] || CC_DEFS[0].id })),
       })
     } catch (err) { setError('No se pudo leer la OC: ' + ((err && err.message) || String(err))) }
     setSubiendo(false)
@@ -571,19 +571,25 @@ function SeccionOCAvance({ p, onUpdate }) {
     onUpdate(p.id, {
       ocDocumento: { ocNumero: revision.ocNumero, cliente: revision.cliente, fecha: revision.fecha, montoTotal, exento: !!revision.exento },
       venta_cotizada: montoTotal,
-      estadosAvance: revision.estadosAvance.map(h => ({ id: h.id, nombre: h.nombre, pct: h.pct !== '' ? num(h.pct) : null, monto: h.monto !== '' ? num(h.monto) : null, estado: 'Pendiente', facturaNumero: null, fechaFacturado: null })),
+      estadosAvance: revision.estadosAvance.map(h => ({ id: h.id, nombre: h.nombre, pct: h.pct !== '' ? num(h.pct) : null, monto: h.monto !== '' ? num(h.monto) : null, cc: h.cc, estado: 'Pendiente', facturaNumero: null, fechaFacturado: null })),
     })
     setRevision(null)
   }
 
   const agregarHitoManual = () => {
     if (!nuevoHito.nombre.trim()) return
-    const nuevo = { id: 'ea' + Date.now(), nombre: nuevoHito.nombre.trim(), pct: nuevoHito.pct !== '' ? num(nuevoHito.pct) : null, monto: nuevoHito.monto !== '' ? num(nuevoHito.monto) : null, estado: 'Pendiente', facturaNumero: null, fechaFacturado: null }
+    const nuevo = { id: 'ea' + Date.now(), nombre: nuevoHito.nombre.trim(), pct: nuevoHito.pct !== '' ? num(nuevoHito.pct) : null, monto: nuevoHito.monto !== '' ? num(nuevoHito.monto) : null, cc: nuevoHito.cc, estado: 'Pendiente', facturaNumero: null, fechaFacturado: null }
     onUpdate(p.id, { estadosAvance: [...estados, nuevo] })
-    setNuevoHito({ nombre: '', pct: '', monto: '' })
+    setNuevoHito({ nombre: '', pct: '', monto: '', cc: ccCodigos(p)[0] || CC_DEFS[0].id })
     setAgregandoManual(false)
   }
   const eliminarHito = id => { if (window.confirm('¿Eliminar este estado de avance?')) onUpdate(p.id, { estadosAvance: estados.filter(e => e.id !== id) }) }
+  // Edición en el sitio (nombre/%/monto/CC) de un estado de avance ya
+  // confirmado — pedido explícito: "que se puedan ir agregando o
+  // quitando [y editando] siempre, porque finalmente siempre puede ir
+  // variando" (ej. repartir el saldo en más hitos a medida que avanza el
+  // proyecto). Mismo patrón updCompra ya usado en este archivo.
+  const updHito = (id, cambios) => onUpdate(p.id, { estadosAvance: estados.map(e => e.id === id ? { ...e, ...cambios } : e) })
 
   const abrirFacturar = estado => { setFacturando(estado.id); setFFact({ numero: '', fecha: '', monto: String(montoEstadoAvance(estado, montoTotalOC)) }) }
   const confirmarFacturar = estado => {
@@ -625,10 +631,13 @@ function SeccionOCAvance({ p, onUpdate }) {
               <input style={{ ...inp, width: 70 }} placeholder="%" value={h.pct} onChange={e => setRevision(r => ({ ...r, estadosAvance: r.estadosAvance.map((x, j) => j === i ? { ...x, pct: e.target.value, monto: '' } : x) }))} />
               <span style={{ fontSize: 11, color: C.gris }}>ó</span>
               <input style={{ ...inp, width: 110 }} placeholder="Monto CLP" value={h.monto} onChange={e => setRevision(r => ({ ...r, estadosAvance: r.estadosAvance.map((x, j) => j === i ? { ...x, monto: e.target.value, pct: '' } : x) }))} />
+              <select value={h.cc} onChange={e => setRevision(r => ({ ...r, estadosAvance: r.estadosAvance.map((x, j) => j === i ? { ...x, cc: e.target.value } : x) }))} style={{ ...inp, width: 150 }}>
+                {ccCodigos(p).map(id => <option key={id} value={id}>{id} · {nombreCC(p, id)}</option>)}
+              </select>
               <button onClick={() => setRevision(r => ({ ...r, estadosAvance: r.estadosAvance.filter((_, j) => j !== i) }))} style={btnMini}><Trash2 size={13} /></button>
             </div>
           ))}
-          <button onClick={() => setRevision(r => ({ ...r, estadosAvance: [...r.estadosAvance, { id: 'ea' + Date.now(), nombre: '', pct: '', monto: '' }] }))} style={{ background: 'none', border: '1px dashed #C9C4B8', padding: '4px 10px', fontSize: 11.5, cursor: 'pointer', marginTop: 4 }}>+ Agregar estado de avance</button>
+          <button onClick={() => setRevision(r => ({ ...r, estadosAvance: [...r.estadosAvance, { id: 'ea' + Date.now(), nombre: '', pct: '', monto: '', cc: ccCodigos(p)[0] || CC_DEFS[0].id }] }))} style={{ background: 'none', border: '1px dashed #C9C4B8', padding: '4px 10px', fontSize: 11.5, cursor: 'pointer', marginTop: 4 }}>+ Agregar estado de avance</button>
           <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
             <button onClick={confirmarOC} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Confirmar OC</button>
             <button onClick={() => setRevision(null)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
@@ -646,15 +655,22 @@ function SeccionOCAvance({ p, onUpdate }) {
       {estados.length > 0 && (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Estado de avance', '% / Monto', 'Facturable', 'Estado', 'Factura', ''].map((h, i) => <th key={i} style={{ textAlign: i === 2 ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+            <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Estado de avance', '%', 'Monto fijo', 'CC', 'Facturable', 'Estado', 'Factura', ''].map((h, i) => <th key={i} style={{ textAlign: i === 4 ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
             <tbody>
               {estados.map(estado => {
                 const monto = montoEstadoAvance(estado, montoTotalOC)
+                const bloqueado = estado.estado === 'Facturado'
                 return (
                   <tr key={estado.id} style={{ borderBottom: '1px solid #DFE4EA' }}>
-                    <td style={{ padding: '5px 8px', fontWeight: 600 }}>{estado.nombre}</td>
-                    <td style={{ padding: '5px 8px', color: C.gris }}>{estado.pct != null ? estado.pct + '%' : clp(estado.monto)}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right' }}>{clp(monto)}</td>
+                    <td style={{ padding: '5px 8px' }}><input value={estado.nombre} disabled={bloqueado} onChange={e => updHito(estado.id, { nombre: e.target.value })} style={{ ...inp, width: 150, padding: '4px 6px', fontWeight: 600 }} /></td>
+                    <td style={{ padding: '5px 8px' }}><input value={estado.pct != null ? estado.pct : ''} disabled={bloqueado} placeholder="—" onChange={e => updHito(estado.id, { pct: e.target.value !== '' ? num(e.target.value) : null, monto: e.target.value !== '' ? null : estado.monto })} style={{ ...inp, width: 55, padding: '4px 6px', textAlign: 'right' }} /></td>
+                    <td style={{ padding: '5px 8px' }}><input value={estado.monto != null ? estado.monto : ''} disabled={bloqueado} placeholder="—" onChange={e => updHito(estado.id, { monto: e.target.value !== '' ? num(e.target.value) : null, pct: e.target.value !== '' ? null : estado.pct })} style={{ ...inp, width: 100, padding: '4px 6px', textAlign: 'right' }} /></td>
+                    <td style={{ padding: '5px 8px' }}>
+                      <select value={estado.cc || ccCodigos(p)[0] || CC_DEFS[0].id} disabled={bloqueado} onChange={e => updHito(estado.id, { cc: e.target.value })} style={{ ...inp, padding: '4px 6px' }}>
+                        {ccCodigos(p).map(id => <option key={id} value={id}>{id}</option>)}
+                      </select>
+                    </td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600 }}>{clp(monto)}</td>
                     <td style={{ padding: '5px 8px' }}><span style={{ background: estado.estado === 'Facturado' ? '#E6F7EE' : '#FCEBEA', color: estado.estado === 'Facturado' ? C.verde : '#D9600A', padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700 }}>{estado.estado}</span></td>
                     <td style={{ padding: '5px 8px', color: C.gris }}>{estado.facturaNumero || '—'}</td>
                     <td style={{ padding: '5px 8px', whiteSpace: 'nowrap' }}>
@@ -693,6 +709,9 @@ function SeccionOCAvance({ p, onUpdate }) {
           <input style={{ ...inp, width: 70 }} placeholder="%" value={nuevoHito.pct} onChange={e => setNuevoHito(h => ({ ...h, pct: e.target.value, monto: '' }))} />
           <span style={{ fontSize: 11, color: C.gris }}>ó</span>
           <input style={{ ...inp, width: 110 }} placeholder="Monto CLP" value={nuevoHito.monto} onChange={e => setNuevoHito(h => ({ ...h, monto: e.target.value, pct: '' }))} />
+          <select value={nuevoHito.cc} onChange={e => setNuevoHito(h => ({ ...h, cc: e.target.value }))} style={{ ...inp, width: 150 }}>
+            {ccCodigos(p).map(id => <option key={id} value={id}>{id} · {nombreCC(p, id)}</option>)}
+          </select>
           <button onClick={agregarHitoManual} style={{ background: C.verde, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}>Agregar</button>
           <button onClick={() => setAgregandoManual(false)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '6px 10px', cursor: 'pointer', fontSize: 12 }}>Cancelar</button>
         </div>
