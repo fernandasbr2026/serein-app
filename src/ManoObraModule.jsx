@@ -688,9 +688,17 @@ function FilaEditarHorasExtras({ h, otsDisponibles, onGuardar, onCancelar }) {
 }
 
 // ================= LISTA DE REGISTROS =================
+const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 function ListaRegistros({ mo, setMo, esGerencia, usuario, otsDisponibles = [] }) {
-  const filas = useMemo(() => (mo.asistencias || []).flatMap(filasDeAsistencia).filter(x => esGerencia || x.supervisor === usuario), [mo, esGerencia, usuario])
-  const hexVisibles = mo.horasExtras || []
+  // Pestañas Ene-Dic (con año navegable) — antes se mostraba TODO el
+  // historial junto en una sola lista, cada vez más larga; ahora abre en
+  // el mes actual y se navega mes a mes, mismo patrón ya usado en
+  // Pagos/Gastos fijos.
+  const [anioSel, setAnioSel] = useState(Number(hoy().slice(0, 4)))
+  const [mesSel, setMesSel] = useState(Number(hoy().slice(5, 7)))
+  const mesKey = anioSel + '-' + String(mesSel).padStart(2, '0')
+  const filas = useMemo(() => (mo.asistencias || []).flatMap(filasDeAsistencia).filter(x => (esGerencia || x.supervisor === usuario) && x.fecha.startsWith(mesKey)), [mo, esGerencia, usuario, mesKey])
+  const hexVisibles = (mo.horasExtras || []).filter(h => h.fecha.startsWith(mesKey))
   const nombreDe = id => (mo.trabajadores || []).find(t => t.id === id)?.nombre || id
   const trabajadorDe = id => (mo.trabajadores || []).find(t => t.id === id)
   // Solo los registros "formato nuevo" (un registro = un trabajador) se
@@ -704,6 +712,59 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario, otsDisponibles = [] })
 
   return (
     <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <button onClick={() => setAnioSel(a => a - 1)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '4px 9px', cursor: 'pointer', fontSize: 13 }}>‹</button>
+        <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 14, minWidth: 44, textAlign: 'center' }}>{anioSel}</span>
+        <button onClick={() => setAnioSel(a => a + 1)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '4px 9px', cursor: 'pointer', fontSize: 13 }}>›</button>
+      </div>
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 16 }}>
+        {MESES_CORTOS.map((m, i) => (
+          <button key={m} onClick={() => setMesSel(i + 1)}
+            style={{ background: mesSel === i + 1 ? C.naranja : '#fff', color: mesSel === i + 1 ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '6px 11px', fontSize: 12.5, fontWeight: mesSel === i + 1 ? 700 : 500, cursor: 'pointer' }}>
+            {m}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 10, padding: 18, marginBottom: 14 }}>
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Extras registrados (horas semana / feriados / turno noche)</div>
+        {hexVisibles.length === 0 ? <div style={{ fontSize: 13, color: '#9AA3AD' }}>Sin extras en {MESES_CORTOS[mesSel - 1]} {anioSel}.</div> : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                  {['Fecha', 'Tipo', 'Trabajador', 'Horas', 'OT/OC', esGerencia ? 'Costo' : null, esGerencia ? 'Colación' : null, ''].filter(x => x !== null).map((h, i) => (
+                    <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {hexVisibles.map(h => (<React.Fragment key={h.id}>
+                  <tr style={{ borderBottom: '1px solid #DFE4EA' }}>
+                    <td style={{ padding: '8px' }}>{h.fecha}</td>
+                    <td style={{ padding: '8px' }}>{TIPOS_EXTRA.find(x => x.id === (h.tipo || 'Semana'))?.label || 'Horas extra semana'}</td>
+                    <td style={{ padding: '8px' }}>{nombreDe(h.trabajadorId)}</td>
+                    <td style={{ padding: '8px' }}>{h.horas ? h.horas + ' h' : '—'}</td>
+                    <td style={{ padding: '8px', fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{otsDeExtra(h).join(', ')}</td>
+                    {esGerencia && <td style={{ padding: '8px', fontWeight: 600 }}>{clp(h.costo.total)}</td>}
+                    {esGerencia && <td style={{ padding: '8px', fontSize: 12, color: C.gris }}>{h.costo.colacion > 0 ? clp(h.costo.colacion) : '—'}</td>}
+                    <td style={{ padding: '8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      {esGerencia && <button title="Editar" onClick={() => setEditandoH(editandoH === h.id ? null : h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris, marginRight: 6 }}><Pencil size={14} /></button>}
+                      {esGerencia && <button title="Eliminar" onClick={() => window.confirm('¿Eliminar este extra?') && borrarHorasExtras(h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
+                    </td>
+                  </tr>
+                  {editandoH === h.id && (
+                    <FilaEditarHorasExtras h={h} otsDisponibles={otsDisponibles}
+                      onGuardar={async f => { await actualizarHorasExtrasFresca(mo, setMo, h.id, f); setEditandoH(null) }}
+                      onCancelar={() => setEditandoH(null)} />
+                  )}
+                </React.Fragment>))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 10, padding: 18, marginBottom: 14 }}>
         <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Asistencias registradas</div>
         {filas.length === 0 ? <div style={{ fontSize: 13, color: '#9AA3AD' }}>Sin registros aún.</div> : (
@@ -734,45 +795,6 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario, otsDisponibles = [] })
                     <FilaEditarAsistencia a={{ ...a, fecha: a.fecha }} trabajador={trabajadorDe(a.trabajadorId)} otsDisponibles={otsDisponibles}
                       onGuardar={async f => { await actualizarAsistenciaFresca(mo, setMo, a.regId, f); setEditandoA(null) }}
                       onCancelar={() => setEditandoA(null)} />
-                  )}
-                </React.Fragment>))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 10, padding: 18 }}>
-        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Extras registrados (horas semana / feriados / turno noche)</div>
-        {hexVisibles.length === 0 ? <div style={{ fontSize: 13, color: '#9AA3AD' }}>Sin extras.</div> : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-                  {['Fecha', 'Tipo', 'Trabajador', 'Horas', 'OT/OC', esGerencia ? 'Costo' : null, esGerencia ? 'Colación' : null, ''].filter(x => x !== null).map((h, i) => (
-                    <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {hexVisibles.map(h => (<React.Fragment key={h.id}>
-                  <tr style={{ borderBottom: '1px solid #DFE4EA' }}>
-                    <td style={{ padding: '8px' }}>{h.fecha}</td>
-                    <td style={{ padding: '8px' }}>{TIPOS_EXTRA.find(x => x.id === (h.tipo || 'Semana'))?.label || 'Horas extra semana'}</td>
-                    <td style={{ padding: '8px' }}>{nombreDe(h.trabajadorId)}</td>
-                    <td style={{ padding: '8px' }}>{h.horas ? h.horas + ' h' : '—'}</td>
-                    <td style={{ padding: '8px', fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{otsDeExtra(h).join(', ')}</td>
-                    {esGerencia && <td style={{ padding: '8px', fontWeight: 600 }}>{clp(h.costo.total)}</td>}
-                    {esGerencia && <td style={{ padding: '8px', fontSize: 12, color: C.gris }}>{h.costo.colacion > 0 ? clp(h.costo.colacion) : '—'}</td>}
-                    <td style={{ padding: '8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      {esGerencia && <button title="Editar" onClick={() => setEditandoH(editandoH === h.id ? null : h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris, marginRight: 6 }}><Pencil size={14} /></button>}
-                      {esGerencia && <button title="Eliminar" onClick={() => window.confirm('¿Eliminar este extra?') && borrarHorasExtras(h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
-                    </td>
-                  </tr>
-                  {editandoH === h.id && (
-                    <FilaEditarHorasExtras h={h} otsDisponibles={otsDisponibles}
-                      onGuardar={async f => { await actualizarHorasExtrasFresca(mo, setMo, h.id, f); setEditandoH(null) }}
-                      onCancelar={() => setEditandoH(null)} />
                   )}
                 </React.Fragment>))}
               </tbody>
