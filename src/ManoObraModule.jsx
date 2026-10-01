@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react'
-import { Plus, Trash2, CalendarDays, Clock3, Users, Wallet, Table2, EyeOff, Download, FileText, FileSpreadsheet, Moon, Sun, AlertTriangle } from 'lucide-react'
+import { Plus, Trash2, Pencil, CalendarDays, Clock3, Users, Wallet, Table2, EyeOff, Download, FileText, FileSpreadsheet, Moon, Sun, AlertTriangle } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 import { SEREIN } from './theme-serein.js'
@@ -519,33 +519,188 @@ function HorasExtras({ mo, setMo, otsDisponibles, esGerencia, usuario }) {
   )
 }
 
+// Edita una asistencia YA guardada — recalcula el costo con la MISMA
+// función (costoDia) que usa el alta en RegistroDiario, así una fila
+// editada queda calculada exactamente igual que si se hubiera cargado
+// así desde el principio. Solo aplica a registros "formato nuevo" (un
+// registro = un trabajador, con tipo/horaLlegada) — los registros
+// históricos de antes de esta versión (un registro = varios
+// trabajadores, sin tipo) se muestran igual pero no se editan, para no
+// desarmar un dato que no se sabe cómo reconstruir fila por fila.
+async function actualizarAsistenciaFresca(mo, setMo, regId, cambios) {
+  try { await pullState() } catch (e) {}
+  let fresco = null
+  try { fresco = JSON.parse(localStorage.getItem('serein_mo') || 'null') } catch (e) {}
+  const baseMo = (fresco && fresco.ver === MO_VER) ? fresco : mo
+  const original = (baseMo.asistencias || []).find(x => x.id === regId)
+  if (!original) return
+  const merged = { ...original, ...cambios }
+  const t = (baseMo.trabajadores || []).find(x => x.id === merged.trabajadorId)
+  const factor = merged.jornada === 'Media' ? 0.5 : 1
+  const esTrabajo = merged.tipo === 'Trabajó'
+  const d = costoDia(t, merged.tipo, esTrabajo ? merged.horaLlegada : '', factor, esTrabajo ? merged.horaSalida : '', merged.fecha)
+  const ots = esTrabajo ? (merged.ots || []) : []
+  const nuevoReg = {
+    ...merged, ots,
+    horaLlegada: esTrabajo ? (merged.horaLlegada || '') : '',
+    horaSalida: esTrabajo ? (merged.horaSalida || '') : '',
+    costo: esTrabajo
+      ? { valorDia: d.valorDia, atrasoMin: d.atrasoMin, descuentoAtraso: d.descuentoAtraso, salidaAnticipadaMin: d.salidaAnticipadaMin, descuentoSalida: d.descuentoSalida, total: d.pago, porOT: Object.fromEntries(ots.map(o => [o, ots.length ? Math.round(d.pago / ots.length) : 0])) }
+      : { valorDia: d.valorDia, descuentoDia: d.descuentoDia, total: d.pago },
+  }
+  const nuevo = { ...baseMo, asistencias: (baseMo.asistencias || []).map(x => x.id === regId ? nuevoReg : x) }
+  try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
+  setMo(nuevo)
+  pushState()
+}
+// Mismo criterio para un extra (horas semana / feriado / turno noche) —
+// recalcula con la misma lógica que HorasExtras.guardar().
+async function actualizarHorasExtrasFresca(mo, setMo, id, cambios) {
+  try { await pullState() } catch (e) {}
+  let fresco = null
+  try { fresco = JSON.parse(localStorage.getItem('serein_mo') || 'null') } catch (e) {}
+  const baseMo = (fresco && fresco.ver === MO_VER) ? fresco : mo
+  const original = (baseMo.horasExtras || []).find(x => x.id === id)
+  if (!original) return
+  const { colacion, ...merged } = { ...original, ...cambios }
+  const t = (baseMo.trabajadores || []).find(x => x.id === merged.trabajadorId)
+  const ots = (merged.ots && merged.ots.length) ? merged.ots : otsDeExtra(merged)
+  let total, costo
+  if (merged.tipo === 'Semana') {
+    const horas = horasEntre(merged.horaInicio, merged.horaFin)
+    const valorHex = valorHexDe(t)
+    total = Math.round(valorHex * horas)
+    costo = { valorHex, total, colacion: colacion ? num(baseMo.valorColacion) : 0 }
+    merged.horas = horas
+  } else if (merged.tipo === 'Feriado') {
+    total = calc(t).domingo
+    costo = { valorFeriado: total, total, colacion: num(baseMo.valorColacion) }
+  } else {
+    total = calc(t).turnoNoche
+    costo = { valorTurno: total, total, colacion: colacion ? num(baseMo.valorColacion) : 0 }
+  }
+  costo.porOT = Object.fromEntries(ots.map(o => [o, (ots.length ? Math.round(total / ots.length) : 0) + (ots.length ? Math.round((costo.colacion || 0) / ots.length) : 0)]))
+  const nuevoReg = { ...merged, ots, costo }
+  const nuevo = { ...baseMo, horasExtras: (baseMo.horasExtras || []).map(x => x.id === id ? nuevoReg : x) }
+  try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
+  setMo(nuevo)
+  pushState()
+}
+
+async function eliminarAsistenciaFresca(mo, setMo, regId) {
+  try { await pullState() } catch (e) {}
+  let fresco = null
+  try { fresco = JSON.parse(localStorage.getItem('serein_mo') || 'null') } catch (e) {}
+  const baseMo = (fresco && fresco.ver === MO_VER) ? fresco : mo
+  const nuevo = { ...baseMo, asistencias: (baseMo.asistencias || []).filter(x => x.id !== regId) }
+  try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
+  setMo(nuevo)
+  pushState()
+}
+async function eliminarHorasExtrasFresca(mo, setMo, id) {
+  try { await pullState() } catch (e) {}
+  let fresco = null
+  try { fresco = JSON.parse(localStorage.getItem('serein_mo') || 'null') } catch (e) {}
+  const baseMo = (fresco && fresco.ver === MO_VER) ? fresco : mo
+  const nuevo = { ...baseMo, horasExtras: (baseMo.horasExtras || []).filter(x => x.id !== id) }
+  try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
+  setMo(nuevo)
+  pushState()
+}
+
+// Fila de edición en el sitio para una asistencia — se abre debajo de la
+// fila real (misma tabla), con el mismo selector de tipo/hora que ya usa
+// RegistroDiario, para que editar se sienta igual a cargar.
+function FilaEditarAsistencia({ a, trabajador, otsDisponibles, onGuardar, onCancelar }) {
+  const [f, setF] = useState({ tipo: a.tipo || 'Trabajó', horaLlegada: a.horaLlegada || '', horaSalida: a.horaSalida || '', ots: a.ots || [], obs: a.obs || '', jornada: a.jornada || 'Completa' })
+  const factor = f.jornada === 'Media' ? 0.5 : 1
+  const preview = (trabajador && f.tipo === 'Trabajó') ? costoDia(trabajador, f.tipo, f.horaLlegada, factor, f.horaSalida, a.fecha) : null
+  const toggleOt = o => setF(s => ({ ...s, ots: s.ots.includes(o) ? s.ots.filter(x => x !== o) : [...s.ots, o] }))
+  return (
+    <tr style={{ background: '#FFF7E6' }}>
+      <td colSpan={99} style={{ padding: 12 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+          {TIPOS_DIA.map(ti => (
+            <button key={ti} onClick={() => setF(s => ({ ...s, tipo: ti }))} style={{ background: f.tipo === ti ? TIPO_COLOR[ti] : '#fff', color: f.tipo === ti ? '#fff' : C.carbon, border: `1px solid ${f.tipo === ti ? TIPO_COLOR[ti] : '#DFE4EA'}`, borderRadius: 20, padding: '5px 10px', cursor: 'pointer', fontSize: 12 }}>{ti}</button>
+          ))}
+        </div>
+        {f.tipo === 'Trabajó' && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+            <label style={{ fontSize: 11, color: C.gris }}>Hora llegada<input type="time" value={f.horaLlegada} onChange={e => setF({ ...f, horaLlegada: e.target.value })} style={{ ...inp, display: 'block' }} /></label>
+            <label style={{ fontSize: 11, color: C.gris }}>Hora salida<input type="time" value={f.horaSalida} onChange={e => setF({ ...f, horaSalida: e.target.value })} style={{ ...inp, display: 'block' }} /></label>
+            <label style={{ fontSize: 11, color: C.gris }}>Jornada<select value={f.jornada} onChange={e => setF({ ...f, jornada: e.target.value })} style={{ ...inp, display: 'block' }}><option>Completa</option><option>Media</option></select></label>
+          </div>
+        )}
+        {f.tipo === 'Trabajó' && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+            {otsDisponibles.map(o => (
+              <button key={o} onClick={() => toggleOt(o)} style={{ background: f.ots.includes(o) ? C.carbon : '#fff', color: f.ots.includes(o) ? '#fff' : C.carbon, border: `1px solid ${f.ots.includes(o) ? C.carbon : '#DFE4EA'}`, borderRadius: 6, padding: '4px 9px', cursor: 'pointer', fontSize: 12, fontFamily: "'JetBrains Mono',monospace" }}>{o}</button>
+            ))}
+          </div>
+        )}
+        <input placeholder="Observación" value={f.obs} onChange={e => setF({ ...f, obs: e.target.value })} style={{ ...inp, width: '100%', marginBottom: 8 }} />
+        {preview && <div style={{ fontSize: 12, color: C.gris, marginBottom: 8 }}>Atraso: {preview.atrasoMin} min (−{clp(preview.descuentoAtraso)}){preview.salidaAnticipadaMin > 0 ? ` · Salida anticipada: ${preview.salidaAnticipadaMin} min (−${clp(preview.descuentoSalida)})` : ''} · Pago: <b>{clp(preview.pago)}</b></div>}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => onGuardar(f)} style={{ background: C.verde, color: '#fff', border: 'none', padding: '6px 14px', cursor: 'pointer', fontSize: 12.5 }}>Guardar</button>
+          <button onClick={onCancelar} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '6px 12px', cursor: 'pointer', fontSize: 12.5 }}>Cancelar</button>
+        </div>
+      </td>
+    </tr>
+  )
+}
+// Fila de edición en el sitio para un extra — mismo criterio, reusa los
+// selectores de HorasExtras.
+function FilaEditarHorasExtras({ h, otsDisponibles, onGuardar, onCancelar }) {
+  const [f, setF] = useState({ tipo: h.tipo || 'Semana', horaInicio: h.horaInicio || '', horaFin: h.horaFin || '', ots: otsDeExtra(h), obs: h.obs || '', colacion: ((h.costo && h.costo.colacion) || 0) > 0 })
+  const toggleOt = o => setF(s => ({ ...s, ots: s.ots.includes(o) ? s.ots.filter(x => x !== o) : [...s.ots, o] }))
+  const horasPreview = f.tipo === 'Semana' ? horasEntre(f.horaInicio, f.horaFin) : null
+  return (
+    <tr style={{ background: '#FFF7E6' }}>
+      <td colSpan={99} style={{ padding: 12 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+          {TIPOS_EXTRA.map(te => (
+            <button key={te.id} onClick={() => setF(s => ({ ...s, tipo: te.id }))} style={{ background: f.tipo === te.id ? C.naranja : '#fff', color: f.tipo === te.id ? '#fff' : C.carbon, border: `1px solid ${f.tipo === te.id ? C.naranja : '#DFE4EA'}`, borderRadius: 20, padding: '5px 10px', cursor: 'pointer', fontSize: 12 }}>{te.label}</button>
+          ))}
+        </div>
+        {f.tipo === 'Semana' && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
+            <label style={{ fontSize: 11, color: C.gris }}>Hora inicio<input type="time" value={f.horaInicio} onChange={e => setF({ ...f, horaInicio: e.target.value })} style={{ ...inp, display: 'block' }} /></label>
+            <label style={{ fontSize: 11, color: C.gris }}>Hora término<input type="time" value={f.horaFin} onChange={e => setF({ ...f, horaFin: e.target.value })} style={{ ...inp, display: 'block' }} /></label>
+            {horasPreview != null && <div style={{ fontSize: 12, color: C.gris }}>{horasPreview} h</div>}
+          </div>
+        )}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+          {otsDisponibles.map(o => (
+            <button key={o} onClick={() => toggleOt(o)} style={{ background: f.ots.includes(o) ? C.carbon : '#fff', color: f.ots.includes(o) ? '#fff' : C.carbon, border: `1px solid ${f.ots.includes(o) ? C.carbon : '#DFE4EA'}`, borderRadius: 6, padding: '4px 9px', cursor: 'pointer', fontSize: 12, fontFamily: "'JetBrains Mono',monospace" }}>{o}</button>
+          ))}
+        </div>
+        {(f.tipo === 'Semana' || f.tipo === 'TurnoNoche') && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginBottom: 8 }}><input type="checkbox" checked={f.colacion} onChange={e => setF({ ...f, colacion: e.target.checked })} /> Corresponde colación</label>
+        )}
+        <input placeholder="Observación" value={f.obs} onChange={e => setF({ ...f, obs: e.target.value })} style={{ ...inp, width: '100%', marginBottom: 8 }} />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => onGuardar(f)} style={{ background: C.verde, color: '#fff', border: 'none', padding: '6px 14px', cursor: 'pointer', fontSize: 12.5 }}>Guardar</button>
+          <button onClick={onCancelar} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '6px 12px', cursor: 'pointer', fontSize: 12.5 }}>Cancelar</button>
+        </div>
+      </td>
+    </tr>
+  )
+}
+
 // ================= LISTA DE REGISTROS =================
-function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
+function ListaRegistros({ mo, setMo, esGerencia, usuario, otsDisponibles = [] }) {
   const filas = useMemo(() => (mo.asistencias || []).flatMap(filasDeAsistencia).filter(x => esGerencia || x.supervisor === usuario), [mo, esGerencia, usuario])
   const hexVisibles = mo.horasExtras || []
   const nombreDe = id => (mo.trabajadores || []).find(t => t.id === id)?.nombre || id
+  const trabajadorDe = id => (mo.trabajadores || []).find(t => t.id === id)
+  // Solo los registros "formato nuevo" (un registro = un trabajador) se
+  // pueden editar — ver nota en actualizarAsistenciaFresca.
+  const esAsistenciaEditable = regId => !!((mo.asistencias || []).find(x => x.id === regId) || {}).trabajadorId
+  const [editandoA, setEditandoA] = useState(null) // regId
+  const [editandoH, setEditandoH] = useState(null) // id
 
-  async function borrarAsistencia(regId) {
-    try { await pullState() } catch (e) {}
-    let fresco = null
-    try { fresco = JSON.parse(localStorage.getItem('serein_mo') || 'null') } catch (e) {}
-    const baseMo = (fresco && fresco.ver === MO_VER) ? fresco : mo
-    const nuevo = { ...baseMo, asistencias: (baseMo.asistencias || []).filter(x => x.id !== regId) }
-    try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
-    setMo(nuevo)
-    pushState()
-  }
-
-  async function borrarHorasExtras(id) {
-    try { await pullState() } catch (e) {}
-    let fresco = null
-    try { fresco = JSON.parse(localStorage.getItem('serein_mo') || 'null') } catch (e) {}
-    const baseMo = (fresco && fresco.ver === MO_VER) ? fresco : mo
-    const nuevo = { ...baseMo, horasExtras: (baseMo.horasExtras || []).filter(x => x.id !== id) }
-    try { localStorage.setItem('serein_mo', JSON.stringify(nuevo)) } catch (e) {}
-    setMo(nuevo)
-    pushState()
-  }
+  const borrarAsistencia = regId => eliminarAsistenciaFresca(mo, setMo, regId)
+  const borrarHorasExtras = id => eliminarHorasExtrasFresca(mo, setMo, id)
 
   return (
     <div>
@@ -562,19 +717,25 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
                 </tr>
               </thead>
               <tbody>
-                {filas.map((a, i) => (
-                  <tr key={a.regId + '-' + a.trabajadorId + '-' + i} style={{ borderBottom: '1px solid #DFE4EA', verticalAlign: 'top' }}>
+                {filas.map((a, i) => (<React.Fragment key={a.regId + '-' + a.trabajadorId + '-' + i}>
+                  <tr style={{ borderBottom: '1px solid #DFE4EA', verticalAlign: 'top' }}>
                     <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>{a.fecha}</td>
                     <td style={{ padding: '8px' }}>{nombreDe(a.trabajadorId)}</td>
                     <td style={{ padding: '8px' }}><span style={{ color: TIPO_COLOR[a.tipo] || C.carbon, fontWeight: 600, fontSize: 12 }}>{a.tipo}</span></td>
                     <td style={{ padding: '8px', fontSize: 12 }}>{a.tipo === 'Trabajó' ? (a.horaLlegada || '—') : '—'}{a.tipo === 'Trabajó' && a.horaSalida ? ` – ${a.horaSalida}` : ''}{a.atrasoMin > 0 && <span style={{ color: C.rojo }}> · {a.atrasoMin} min atraso</span>}{a.salidaAnticipadaMin > 0 && <span style={{ color: C.rojo }}> · salió {a.salidaAnticipadaMin} min antes</span>}</td>
                     <td style={{ padding: '8px', fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{a.ots.join(', ')}</td>
                     {esGerencia && <td style={{ padding: '8px', fontWeight: 600 }}>{clp(a.pago)}{a.descuento > 0 && <div style={{ fontSize: 11, color: C.rojo, fontWeight: 400 }}>−{clp(a.descuento)}</div>}</td>}
-                    <td style={{ padding: '8px', textAlign: 'right' }}>
-                      {esGerencia && <button onClick={() => window.confirm('¿Eliminar este registro de asistencia?') && borrarAsistencia(a.regId)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
+                    <td style={{ padding: '8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      {esGerencia && esAsistenciaEditable(a.regId) && <button title="Editar" onClick={() => setEditandoA(editandoA === a.regId ? null : a.regId)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris, marginRight: 6 }}><Pencil size={14} /></button>}
+                      {esGerencia && <button title="Eliminar" onClick={() => window.confirm('¿Eliminar este registro de asistencia?') && borrarAsistencia(a.regId)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
                     </td>
                   </tr>
-                ))}
+                  {editandoA === a.regId && (
+                    <FilaEditarAsistencia a={{ ...a, fecha: a.fecha }} trabajador={trabajadorDe(a.trabajadorId)} otsDisponibles={otsDisponibles}
+                      onGuardar={async f => { await actualizarAsistenciaFresca(mo, setMo, a.regId, f); setEditandoA(null) }}
+                      onCancelar={() => setEditandoA(null)} />
+                  )}
+                </React.Fragment>))}
               </tbody>
             </table>
           </div>
@@ -594,8 +755,8 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
                 </tr>
               </thead>
               <tbody>
-                {hexVisibles.map(h => (
-                  <tr key={h.id} style={{ borderBottom: '1px solid #DFE4EA' }}>
+                {hexVisibles.map(h => (<React.Fragment key={h.id}>
+                  <tr style={{ borderBottom: '1px solid #DFE4EA' }}>
                     <td style={{ padding: '8px' }}>{h.fecha}</td>
                     <td style={{ padding: '8px' }}>{TIPOS_EXTRA.find(x => x.id === (h.tipo || 'Semana'))?.label || 'Horas extra semana'}</td>
                     <td style={{ padding: '8px' }}>{nombreDe(h.trabajadorId)}</td>
@@ -603,11 +764,17 @@ function ListaRegistros({ mo, setMo, esGerencia, usuario }) {
                     <td style={{ padding: '8px', fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{otsDeExtra(h).join(', ')}</td>
                     {esGerencia && <td style={{ padding: '8px', fontWeight: 600 }}>{clp(h.costo.total)}</td>}
                     {esGerencia && <td style={{ padding: '8px', fontSize: 12, color: C.gris }}>{h.costo.colacion > 0 ? clp(h.costo.colacion) : '—'}</td>}
-                    <td style={{ padding: '8px', textAlign: 'right' }}>
-                      {esGerencia && <button onClick={() => window.confirm('¿Eliminar este extra?') && borrarHorasExtras(h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
+                    <td style={{ padding: '8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      {esGerencia && <button title="Editar" onClick={() => setEditandoH(editandoH === h.id ? null : h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris, marginRight: 6 }}><Pencil size={14} /></button>}
+                      {esGerencia && <button title="Eliminar" onClick={() => window.confirm('¿Eliminar este extra?') && borrarHorasExtras(h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>}
                     </td>
                   </tr>
-                ))}
+                  {editandoH === h.id && (
+                    <FilaEditarHorasExtras h={h} otsDisponibles={otsDisponibles}
+                      onGuardar={async f => { await actualizarHorasExtrasFresca(mo, setMo, h.id, f); setEditandoH(null) }}
+                      onCancelar={() => setEditandoH(null)} />
+                  )}
+                </React.Fragment>))}
               </tbody>
             </table>
           </div>
@@ -844,9 +1011,12 @@ function NominaMO({ mo, setMo }) {
 // descuento), vacaciones tomadas, licencias, y los adicionales (horas
 // extra, feriados, turno noche) — para que al descargar el detalle del mes
 // se vea todo lo que hay que descontar o sumar antes de pagar.
-function ResumenMensual({ mo }) {
+function ResumenMensual({ mo, setMo, otsDisponibles = [] }) {
   const [mes, setMes] = useState(hoy().slice(0, 7))
   const [abierto, setAbierto] = useState(null)
+  const [editandoA, setEditandoA] = useState(null)
+  const [editandoH, setEditandoH] = useState(null)
+  const trabajadorDe = id => (mo.trabajadores || []).find(t => t.id === id)
 
   const resumen = useMemo(() => {
     return (mo.trabajadores || []).map(t => {
@@ -882,6 +1052,7 @@ function ResumenMensual({ mo }) {
         minutosAtraso, descuentoAtraso, minutosSalidaAnticipada, descuentoSalidaAnticipada, descuentoFaltas, descuentoPermisos, totalDescuentos,
         horasExtraSemana: hexSemana.reduce((s, h) => s + (h.horas || 0), 0), pagoHex, feriadosTrabajados: feriados.length, pagoFeriados, turnosNoche: turnoNoche.length, pagoTurnoNoche, totalAdicionales,
         colacionMes, pagoDiasTrabajados, totalNeto, saldoVacaciones: vacacionesDe(t),
+        filasMes: [...filasMes].sort((a, b) => a.fecha.localeCompare(b.fecha)), extrasMes: [...extrasMes].sort((a, b) => a.fecha.localeCompare(b.fecha)),
       }
     })
   }, [mo, mes])
@@ -958,6 +1129,65 @@ function ResumenMensual({ mo }) {
                   <div style={{ fontWeight: 700, color: C.gris, marginBottom: 4, textTransform: 'uppercase', fontSize: 11 }}>Colación (no afecta el pago)</div>
                   <div>Gasto de colación del mes: {clp(r.colacionMes)}</div>
                 </div>
+              </div>
+            )}
+            {abierto === r.t.id && (r.filasMes.length > 0 || r.extrasMes.length > 0) && (
+              <div style={{ padding: '14px 16px', borderTop: '1px solid #F2F0EB' }}>
+                <div style={{ fontWeight: 700, color: C.carbon, marginBottom: 8, textTransform: 'uppercase', fontSize: 11 }}>Detalle día a día — editable</div>
+                {r.filasMes.length > 0 && (
+                  <div style={{ overflowX: 'auto', marginBottom: r.extrasMes.length > 0 ? 14 : 0 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                      <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Fecha', 'Estado', 'Hora / Atraso', 'OT/OC', 'Pago', ''].map(h => <th key={h} style={{ textAlign: 'left', padding: '4px 8px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+                      <tbody>
+                        {r.filasMes.map(a => (<React.Fragment key={a.regId}>
+                          <tr style={{ borderBottom: '1px solid #F2F0EB' }}>
+                            <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{a.fecha}</td>
+                            <td style={{ padding: '6px 8px' }}><span style={{ color: TIPO_COLOR[a.tipo] || C.carbon, fontWeight: 600 }}>{a.tipo}</span></td>
+                            <td style={{ padding: '6px 8px' }}>{a.tipo === 'Trabajó' ? (a.horaLlegada || '—') : '—'}{a.tipo === 'Trabajó' && a.horaSalida ? ` – ${a.horaSalida}` : ''}{a.atrasoMin > 0 && <span style={{ color: C.rojo }}> · {a.atrasoMin} min</span>}</td>
+                            <td style={{ padding: '6px 8px', fontFamily: "'JetBrains Mono',monospace" }}>{a.ots.join(', ')}</td>
+                            <td style={{ padding: '6px 8px', fontWeight: 600 }}>{clp(a.pago)}</td>
+                            <td style={{ padding: '6px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                              {!!((mo.asistencias || []).find(x => x.id === a.regId) || {}).trabajadorId && <button title="Editar" onClick={() => setEditandoA(editandoA === a.regId ? null : a.regId)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris, marginRight: 6 }}><Pencil size={13} /></button>}
+                              <button title="Eliminar" onClick={() => window.confirm('¿Eliminar este registro de asistencia?') && eliminarAsistenciaFresca(mo, setMo, a.regId)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button>
+                            </td>
+                          </tr>
+                          {editandoA === a.regId && (
+                            <FilaEditarAsistencia a={a} trabajador={trabajadorDe(a.trabajadorId)} otsDisponibles={otsDisponibles}
+                              onGuardar={async f => { await actualizarAsistenciaFresca(mo, setMo, a.regId, f); setEditandoA(null) }}
+                              onCancelar={() => setEditandoA(null)} />
+                          )}
+                        </React.Fragment>))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {r.extrasMes.length > 0 && (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                      <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Fecha', 'Tipo', 'Horas', 'OT/OC', 'Pago', ''].map(h => <th key={h} style={{ textAlign: 'left', padding: '4px 8px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+                      <tbody>
+                        {r.extrasMes.map(h => (<React.Fragment key={h.id}>
+                          <tr style={{ borderBottom: '1px solid #F2F0EB' }}>
+                            <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{h.fecha}</td>
+                            <td style={{ padding: '6px 8px' }}>{TIPOS_EXTRA.find(x => x.id === (h.tipo || 'Semana'))?.label || 'Horas extra semana'}</td>
+                            <td style={{ padding: '6px 8px' }}>{h.horas ? h.horas + ' h' : '—'}</td>
+                            <td style={{ padding: '6px 8px', fontFamily: "'JetBrains Mono',monospace" }}>{otsDeExtra(h).join(', ')}</td>
+                            <td style={{ padding: '6px 8px', fontWeight: 600 }}>{clp(h.costo.total)}</td>
+                            <td style={{ padding: '6px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                              <button title="Editar" onClick={() => setEditandoH(editandoH === h.id ? null : h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gris, marginRight: 6 }}><Pencil size={13} /></button>
+                              <button title="Eliminar" onClick={() => window.confirm('¿Eliminar este extra?') && eliminarHorasExtrasFresca(mo, setMo, h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button>
+                            </td>
+                          </tr>
+                          {editandoH === h.id && (
+                            <FilaEditarHorasExtras h={h} otsDisponibles={otsDisponibles}
+                              onGuardar={async f => { await actualizarHorasExtrasFresca(mo, setMo, h.id, f); setEditandoH(null) }}
+                              onCancelar={() => setEditandoH(null)} />
+                          )}
+                        </React.Fragment>))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1167,10 +1397,10 @@ export default function ManoObraModule({ esGerencia, otsDisponibles = [], usuari
       <TabsInternos tabs={tabs} sel={tab} onSel={setTab} />
       {tab === 'registro' && <RegistroDiario mo={mo} setMo={setMo} otsDisponibles={otsDisponibles} esGerencia={esGerencia} usuario={usuario} areas={areas} />}
       {tab === 'hex' && <HorasExtras mo={mo} setMo={setMo} otsDisponibles={otsDisponibles} esGerencia={esGerencia} usuario={usuario} />}
-      {tab === 'lista' && <ListaRegistros mo={mo} setMo={setMo} esGerencia={esGerencia} usuario={usuario} />}
+      {tab === 'lista' && <ListaRegistros mo={mo} setMo={setMo} esGerencia={esGerencia} usuario={usuario} otsDisponibles={otsDisponibles} />}
       {tab === 'trabajadores' && !esGerencia && <TrabajadoresView mo={mo} />}
       {tab === 'costos' && esGerencia && <CostosPorOT mo={mo} />}
-      {tab === 'resumen' && esGerencia && <ResumenMensual mo={mo} />}
+      {tab === 'resumen' && esGerencia && <ResumenMensual mo={mo} setMo={setMo} otsDisponibles={otsDisponibles} />}
       {tab === 'nomina' && esGerencia && <NominaMO mo={mo} setMo={setMo} />}
       {tab === 'informes' && esGerencia && <Informes mo={mo} />}
     </div>
