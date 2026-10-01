@@ -38,6 +38,7 @@ const clpSigned = n => (n || 0) < 0 ? '-' + clp(-n) : clp(n)
 const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
 const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 const btnMini = { background: 'none', border: 'none', cursor: 'pointer', color: C.rojo, padding: 4 }
+const hoy = () => new Date().toISOString().slice(0, 10)
 const nombreDefault = id => (CC_DEFS.find(c => c.id === id)?.nombre) || id
 const nombreCC = (p, id) => (p.ccNombres && p.ccNombres[id]) || nombreDefault(id)
 
@@ -479,6 +480,136 @@ function BloqueCC({ p, onUpdate }) {
     </div>
   )
 }
+
+// ---------- Órdenes de Compra A PROVEEDORES (compromiso previo: anticipo +
+// estados de avance) ----------
+// Distinto de "Compras imputadas" (mas abajo): la OC es el COMPROMISO que
+// Serein le entrega al proveedor para confirmar una compra — a nombre de
+// quien, monto total, a que Centro de Costo, y como se va a pagar (anticipo
+// + estados de avance, cada uno al contado o factorizado por el proveedor,
+// con su plazo). Cuando despues llega la factura REAL de esa compra, se
+// sigue cargando igual que siempre (ImportadorFacturaCompra/FormCompra, mas
+// abajo) — esa es la que de verdad descuenta el Centro de Costo. La OC en
+// si NO lo descuenta, para no contar el gasto dos veces.
+const ocProvNeto = oc => (oc.etapas && oc.etapas.length) ? oc.etapas.reduce((a, e) => a + num(e.monto), 0) : num(oc.montoTotal)
+const ocProvPagado = oc => (oc.etapas || []).filter(e => e.estadoPago === 'Pagado').reduce((a, e) => a + num(e.monto), 0)
+const ETAPA_FORMAS_PAGO = ['Contado', 'Factoring']
+
+function FilaOCProveedor({ oc, p, upd, onDelete }) {
+  const [abierta, setAbierta] = useState(false)
+  const etapas = oc.etapas || []
+  const neto = ocProvNeto(oc)
+  const pagado = ocProvPagado(oc)
+  const sumaEtapas = etapas.reduce((a, e) => a + num(e.monto), 0)
+  const descuadrada = etapas.length > 0 && num(oc.montoTotal) > 0 && sumaEtapas !== num(oc.montoTotal)
+  const addEtapa = () => upd(oc.id, { etapas: [...etapas, { id: 'et' + Date.now(), etiqueta: etapas.length === 0 ? 'Anticipo' : 'Avance ' + etapas.length, monto: '', fecha: '', formaPago: 'Contado', factoringEmpresa: '', plazo: '', estadoPago: 'Pendiente', fechaPago: '' }] })
+  const updEtapa = (i, cambios) => upd(oc.id, { etapas: etapas.map((x, j) => j === i ? { ...x, ...cambios } : x) })
+  const delEtapa = i => upd(oc.id, { etapas: etapas.filter((_, j) => j !== i) })
+  return (
+    <>
+      <tr style={{ borderBottom: abierta ? 'none' : '1px solid #DFE4EA' }}>
+        <td style={{ padding: '5px 8px' }}><input value={oc.numero} onChange={ev => upd(oc.id, { numero: ev.target.value })} placeholder="N° OC" style={{ ...inp, width: 80, padding: '5px 7px' }} /></td>
+        <td style={{ padding: '5px 8px' }}><input value={oc.proveedor} onChange={ev => upd(oc.id, { proveedor: ev.target.value })} style={{ ...inp, width: 150, padding: '5px 7px' }} /></td>
+        <td style={{ padding: '5px 8px' }}><select value={oc.cc || CC_DEFS[0].id} onChange={ev => upd(oc.id, { cc: ev.target.value })} style={{ ...inp, padding: '5px 7px' }}>{ccCodigos(p).map(id => <option key={id} value={id}>{id} · {nombreCC(p, id)}</option>)}</select></td>
+        <td style={{ padding: '5px 8px' }}><input type="date" value={oc.fecha || ''} onChange={ev => upd(oc.id, { fecha: ev.target.value })} style={{ ...inp, width: 132, padding: '5px 7px' }} /></td>
+        <td style={{ padding: '5px 8px', textAlign: 'right' }}><input value={oc.montoTotal} readOnly={etapas.length > 0} title={etapas.length > 0 ? 'Se calcula desde las etapas de pago' : ''} onChange={ev => upd(oc.id, { montoTotal: num(ev.target.value) })} style={{ ...inp, width: 110, padding: '5px 7px', textAlign: 'right', fontWeight: 600, background: etapas.length > 0 ? '#E2E7EC' : '#fff' }} /></td>
+        <td style={{ padding: '5px 8px', textAlign: 'right', color: C.verde }}>{clp(pagado)}</td>
+        <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600, color: (neto - pagado) > 0 ? C.rojo : C.verde }}>{clp(neto - pagado)}</td>
+        <td style={{ padding: '5px 8px', whiteSpace: 'nowrap', textAlign: 'right' }}>
+          <button onClick={() => setAbierta(!abierta)} title="Anticipo y estados de avance" style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '3px 6px', marginRight: 4 }}>{abierta ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</button>
+          <button onClick={() => onDelete(oc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
+        </td>
+      </tr>
+      {abierta && (
+        <tr style={{ borderBottom: '1px solid #DFE4EA', background: '#F2F4F7' }}>
+          <td colSpan={8} style={{ padding: '10px 14px' }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+              <input value={oc.rut || ''} onChange={ev => upd(oc.id, { rut: ev.target.value })} placeholder="RUT proveedor" style={{ ...inp, width: 120 }} />
+              <input value={oc.detalle || ''} onChange={ev => upd(oc.id, { detalle: ev.target.value })} placeholder="Detalle de la compra" style={{ ...inp, width: 240 }} />
+            </div>
+            <div style={{ fontSize: 11.5, fontWeight: 600, color: C.gris, textTransform: 'uppercase', marginBottom: 6 }}>Anticipo y estados de avance</div>
+            {etapas.map((e, i) => (
+              <div key={e.id} style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 6, background: '#fff', padding: '6px 8px', border: '1px solid #DFE4EA' }}>
+                <input value={e.etiqueta} onChange={ev => updEtapa(i, { etiqueta: ev.target.value })} style={{ ...inp, width: 110 }} />
+                <input value={e.monto} onChange={ev => updEtapa(i, { monto: num(ev.target.value) })} placeholder="Monto" style={{ ...inp, width: 100, textAlign: 'right' }} />
+                <input type="date" value={e.fecha || ''} onChange={ev => updEtapa(i, { fecha: ev.target.value })} style={{ ...inp, width: 132 }} />
+                <select value={e.formaPago || 'Contado'} onChange={ev => updEtapa(i, { formaPago: ev.target.value })} style={{ ...inp, width: 100 }}>{ETAPA_FORMAS_PAGO.map(x => <option key={x}>{x}</option>)}</select>
+                {e.formaPago === 'Factoring' && (<>
+                  <input list="serein-factoring-ocprov" value={e.factoringEmpresa || ''} onChange={ev => updEtapa(i, { factoringEmpresa: ev.target.value })} placeholder="Empresa de factoring" style={{ ...inp, width: 140 }} />
+                  <input value={e.plazo || ''} onChange={ev => updEtapa(i, { plazo: num(ev.target.value) })} placeholder="Plazo" style={{ ...inp, width: 56, textAlign: 'right' }} />
+                  <span style={{ fontSize: 11, color: C.gris }}>días</span>
+                </>)}
+                <select value={e.estadoPago || 'Pendiente'} onChange={ev => updEtapa(i, { estadoPago: ev.target.value })} style={{ border: 'none', background: e.estadoPago === 'Pagado' ? '#E6F7EE' : '#FDECDD', color: e.estadoPago === 'Pagado' ? C.verde : '#D9600A', padding: '4px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}><option>Pendiente</option><option>Pagado</option></select>
+                {e.estadoPago === 'Pagado' && <input type="date" value={e.fechaPago || ''} onChange={ev => updEtapa(i, { fechaPago: ev.target.value })} style={{ ...inp, width: 132 }} />}
+                <button onClick={() => delEtapa(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button>
+              </div>
+            ))}
+            <button onClick={addEtapa} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Agregar etapa de pago</button>
+            {descuadrada && <div style={{ fontSize: 11.5, color: C.rojo, marginTop: 6 }}>Las etapas suman {clp(sumaEtapas)}, distinto del monto total ingresado ({clp(num(oc.montoTotal))}).</div>}
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
+
+function BloqueOCProveedor({ p, onUpdate, params }) {
+  const ocs = p.ordenesCompra || []
+  const [creando, setCreando] = useState(false)
+  const [f, setF] = useState(null)
+  const abrirNueva = () => { setF({ proveedor: '', rut: '', cc: ccCodigos(p)[0] || CC_DEFS[0].id, detalle: '', fecha: hoy(), numero: '', montoTotal: '' }); setCreando(true) }
+  const agregar = () => {
+    if (!f.proveedor.trim()) return
+    onUpdate(p.id, { ordenesCompra: [{ id: 'ocp' + Date.now(), ...f, montoTotal: num(f.montoTotal), etapas: [] }, ...ocs] })
+    setCreando(false)
+  }
+  const actualizar = (id, cambios) => onUpdate(p.id, { ordenesCompra: ocs.map(o => o.id === id ? { ...o, ...cambios } : o) })
+  const eliminar = id => window.confirm('¿Eliminar esta orden de compra?') && onUpdate(p.id, { ordenesCompra: ocs.filter(o => o.id !== id) })
+  const totalComprometido = ocs.reduce((a, o) => a + ocProvNeto(o), 0)
+  const totalPagado = ocs.reduce((a, o) => a + ocProvPagado(o), 0)
+
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0 4px', flexWrap: 'wrap', gap: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.gris, display: 'flex', alignItems: 'center', gap: 5 }}><ShoppingCart size={13} /> Órdenes de compra a proveedores</span>
+        {!creando && <button onClick={abrirNueva} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Nueva OC a proveedor</button>}
+      </div>
+      <div style={{ fontSize: 11.5, color: C.gris, marginBottom: 8 }}>Compromiso de compra con el proveedor — a nombre de quién, cuánto, a qué Centro de Costo, y cómo se paga (anticipo, estados de avance, al contado o factorizado). Cuando llegue la factura real, se carga igual que siempre en "Compras imputadas" más abajo — esa es la que descuenta el Centro de Costo, para no contar el gasto dos veces.</div>
+      {creando && (
+        <div style={{ background: '#F2F4F7', padding: 12, marginBottom: 8 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input style={{ ...inp, width: 80 }} placeholder="N° OC" value={f.numero} onChange={e => setF({ ...f, numero: e.target.value })} />
+            <input style={{ ...inp, width: 150 }} placeholder="Proveedor" value={f.proveedor} onChange={e => setF({ ...f, proveedor: e.target.value })} />
+            <input style={{ ...inp, width: 110 }} placeholder="RUT proveedor" value={f.rut} onChange={e => setF({ ...f, rut: e.target.value })} />
+            <select style={inp} value={f.cc} onChange={e => setF({ ...f, cc: e.target.value })}>{ccCodigos(p).map(id => <option key={id} value={id}>{id} · {nombreCC(p, id)}</option>)}</select>
+            <input style={{ ...inp, width: 130 }} placeholder="Detalle" value={f.detalle} onChange={e => setF({ ...f, detalle: e.target.value })} />
+            <input style={{ ...inp, width: 132 }} type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} />
+            <input style={{ ...inp, width: 120 }} placeholder="Monto total CLP" value={f.montoTotal} onChange={e => setF({ ...f, montoTotal: e.target.value })} />
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <button onClick={agregar} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Agregar OC</button>
+            <button onClick={() => setCreando(false)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+          </div>
+        </div>
+      )}
+      {ocs.length === 0 ? (
+        <div style={{ fontSize: 13, color: C.gris }}>Sin órdenes de compra a proveedores.</div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['N° OC', 'Proveedor', 'CC', 'Fecha', 'Monto total', 'Pagado', 'Pendiente', ''].map((h, i) => <th key={i} style={{ textAlign: ['Monto total', 'Pagado', 'Pendiente'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+            <tbody>
+              {ocs.map(oc => <FilaOCProveedor key={oc.id} oc={oc} p={p} upd={actualizar} onDelete={eliminar} />)}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <datalist id="serein-factoring-ocprov">{((params && params.factoring) || []).map(fc => <option key={fc.id} value={fc.nombre} />)}</datalist>
+      {ocs.length > 0 && <div style={{ fontSize: 12, color: C.gris, marginTop: 6 }}>Comprometido: <b>{clp(totalComprometido)}</b> · Pagado: <b style={{ color: C.verde }}>{clp(totalPagado)}</b> · Pendiente: <b style={{ color: C.rojo }}>{clp(totalComprometido - totalPagado)}</b></div>}
+    </div>
+  )
+}
+
 function StatHeader({ label, valor, color }) {
   return (
     <div style={{ textAlign: 'right' }}>
@@ -1117,6 +1248,8 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
           <SeccionOCAvance p={p} onUpdate={onUpdate} />
           <AbonosOT p={p} facturasOT={facturasOT} onUpdate={onUpdate} params={params} />
           <datalist id="serein-bancos"><option value="Banco de Chile" /><option value="BancoEstado" /><option value="BCI" /><option value="Santander" /><option value="Scotiabank" /><option value="Itaú" /><option value="BICE" /><option value="Security" /><option value="Banco Falabella" /><option value="Banco Ripley" /><option value="Consorcio" /><option value="Internacional" /><option value="HSBC" /></datalist>
+
+          <BloqueOCProveedor p={p} onUpdate={onUpdate} params={params} />
 
           {/* COMPRAS */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0 8px' }}>
