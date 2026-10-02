@@ -40,6 +40,36 @@ const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return 
 const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 const btnMini = { background: 'none', border: 'none', cursor: 'pointer', color: C.rojo, padding: 4 }
 const hoy = () => new Date().toISOString().slice(0, 10)
+
+// Empresas de factoring sugeridas en compras y OC a proveedor: las de
+// Parámetros + cualquier nombre ya escrito antes en una compra, etapa de
+// OC o pago de cualquier proyecto. Así, escribir un factoring nuevo una
+// vez lo deja disponible para las próximas veces, sin pasos extra y sin
+// tocar la lista de Parámetros (que además lleva tasas para el cálculo de
+// pérdida en ventas — acá, en compras, solo importa quién y a cuántos días).
+const FactoringCtx = React.createContext([])
+const nombresFactoringUsados = (proyectos, params) => {
+  const vistos = new Map()
+  const agregar = n => { const t = String(n || '').trim(); if (t && !vistos.has(t.toLowerCase())) vistos.set(t.toLowerCase(), t) }
+  ;((params && params.factoring) || []).forEach(f => agregar(f.nombre))
+  ;(proyectos || []).forEach(pr => {
+    ;(pr.compras || []).forEach(c => agregar(c.factoringNombre))
+    ;(pr.ordenesCompra || []).forEach(o => (o.etapas || []).forEach(e => agregar(e.factoringEmpresa)))
+    ;(pr.abonos || []).forEach(a => agregar(a.factoringNombre))
+  })
+  return [...vistos.values()]
+}
+function FactoringInput({ value, onChange, style }) {
+  const nombres = React.useContext(FactoringCtx)
+  const t = String(value || '').trim()
+  const esNuevo = t !== '' && !nombres.some(n => n.toLowerCase() === t.toLowerCase())
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <input list="serein-factoring-sugeridos" value={value || ''} onChange={e => onChange(e.target.value)} placeholder="Elige o escribe otra empresa" title="Elige una de la lista o escribe otra — queda guardada para las próximas veces" style={style} />
+      {esNuevo && <span style={{ fontSize: 10.5, color: C.verde, fontWeight: 600 }}>+ Factoring nuevo — se agrega a la lista</span>}
+    </div>
+  )
+}
 const nombreDefault = id => (CC_DEFS.find(c => c.id === id)?.nombre) || id
 const nombreCC = (p, id) => (p.ccNombres && p.ccNombres[id]) || nombreDefault(id)
 
@@ -184,7 +214,6 @@ const guardarCuentaDeCompra = (contactos, setContactos, d) => {
 function FormCompra({ p, onAdd, onCancel, params, contactos, setContactos }) {
   const [f, setF] = useState({ proveedor: '', detalle: '', fecha: '', monto: '', cc: CC_DEFS[0].id, folio: '', rut: '', exento: false, abonado: '', pagadaCompleta: false, formaPago: 'Contado', vencimiento: '', factorizada: false, factoringNombre: '', ...CUENTA_VACIA })
   const bruto = montoBrutoCompra({ monto: num(f.monto), exento: f.exento })
-  const factoringList = (params && params.factoring) || []
   return (
     <div style={{ background: '#F2F4F7', padding: 12, marginTop: 8 }}>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -209,18 +238,13 @@ function FormCompra({ p, onAdd, onCancel, params, contactos, setContactos }) {
         )}
         <label style={{ fontSize: 12, color: C.gris, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" checked={f.factorizada} onChange={e => setF({ ...f, factorizada: e.target.checked })} /> Factorizada</label>
         {f.factorizada && (
-          <input list="factoring-sugeridos" style={{ ...inp, width: 160 }} placeholder="Empresa de factoring" value={f.factoringNombre} onChange={e => setF({ ...f, factoringNombre: e.target.value })} />
+          <FactoringInput style={{ ...inp, width: 190 }} value={f.factoringNombre} onChange={v => setF({ ...f, factoringNombre: v })} />
         )}
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
         <input style={{ ...inp, width: 120 }} placeholder="Abonado CLP" value={f.pagadaCompleta ? bruto : f.abonado} disabled={f.pagadaCompleta} onChange={e => setF({ ...f, abonado: e.target.value })} />
         <label style={{ fontSize: 12, color: C.gris, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" checked={f.pagadaCompleta} onChange={e => setF({ ...f, pagadaCompleta: e.target.checked })} /> Pagada por completo</label>
       </div>
-      {/* Lista de sugerencias para el campo de factoring de arriba — reusa
-          las empresas ya cargadas en Parámetros, pero el campo sigue
-          siendo texto libre (pedido explícito: "más opciones para
-          escribir manual"), no obliga a elegir de la lista. */}
-      <datalist id="factoring-sugeridos">{factoringList.map(fc => <option key={fc.id} value={fc.nombre} />)}</datalist>
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         <button onClick={() => { if (f.proveedor && num(f.monto) > 0) { const ok = onAdd({ proveedor: f.proveedor, detalle: f.detalle, fecha: f.fecha || '—', monto: num(f.monto), cc: f.cc, folio: f.folio, rut: f.rut, exento: !!f.exento, abonado: f.pagadaCompleta ? bruto : num(f.abonado), formaPago: f.formaPago, vencimiento: f.formaPago === 'Programado' ? f.vencimiento : '', factorizada: !!f.factorizada, factoringNombre: f.factorizada ? f.factoringNombre.trim() : '', banco: f.banco, tipoCuenta: f.tipoCuenta, numeroCuenta: f.numeroCuenta }); if (ok !== false) guardarCuentaDeCompra(contactos, setContactos, f) } }}
           style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Agregar compra</button>
@@ -239,7 +263,6 @@ function FormCompra({ p, onAdd, onCancel, params, contactos, setContactos }) {
 // anti-duplicado por folio+RUT) y ademas se sube el PDF a Drive,
 // organizado OT / Centro de Costo.
 function ImportadorFacturaCompra({ p, onAdd, params, contactos, setContactos }) {
-  const factoringList = (params && params.factoring) || []
   const [abierto, setAbierto] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
   const [error, setError] = useState('')
@@ -326,9 +349,8 @@ function ImportadorFacturaCompra({ p, onAdd, params, contactos, setContactos }) 
                 )}
                 <label style={{ fontSize: 12, color: C.gris, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" checked={revision.factorizada} onChange={e => setRevision(r => ({ ...r, factorizada: e.target.checked }))} /> Factorizada</label>
                 {revision.factorizada && (
-                  <input list="factoring-sugeridos-importador" style={{ ...inp, width: 160 }} placeholder="Empresa de factoring" value={revision.factoringNombre} onChange={e => setRevision(r => ({ ...r, factoringNombre: e.target.value }))} />
+                  <FactoringInput style={{ ...inp, width: 190 }} value={revision.factoringNombre} onChange={v => setRevision(r => ({ ...r, factoringNombre: v }))} />
                 )}
-                <datalist id="factoring-sugeridos-importador">{factoringList.map(fc => <option key={fc.id} value={fc.nombre} />)}</datalist>
               </div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
                 <input style={{ ...inp, width: 120 }} placeholder="Abonado CLP" value={revision.pagadaCompleta ? brutoRevision : revision.abonado} disabled={revision.pagadaCompleta} onChange={e => setRevision(r => ({ ...r, abonado: e.target.value }))} />
@@ -572,7 +594,7 @@ function FilaOCProveedor({ oc, p, upd, onDelete }) {
                 <input type="date" value={e.fecha || ''} onChange={ev => updEtapa(i, { fecha: ev.target.value })} style={{ ...inp, width: 132 }} />
                 <select value={e.formaPago || 'Contado'} onChange={ev => updEtapa(i, { formaPago: ev.target.value })} style={{ ...inp, width: 100 }}>{ETAPA_FORMAS_PAGO.map(x => <option key={x}>{x}</option>)}</select>
                 {e.formaPago === 'Factoring' && (<>
-                  <input list="serein-factoring-ocprov" value={e.factoringEmpresa || ''} onChange={ev => updEtapa(i, { factoringEmpresa: ev.target.value })} placeholder="Empresa de factoring" style={{ ...inp, width: 140 }} />
+                  <FactoringInput value={e.factoringEmpresa} onChange={v => updEtapa(i, { factoringEmpresa: v })} style={{ ...inp, width: 190 }} />
                   <input value={e.plazo || ''} onChange={ev => updEtapa(i, { plazo: num(ev.target.value) })} placeholder="Plazo" style={{ ...inp, width: 56, textAlign: 'right' }} />
                   <span style={{ fontSize: 11, color: C.gris }}>días</span>
                 </>)}
@@ -723,7 +745,6 @@ function BloqueOCProveedor({ p, onUpdate, params }) {
           </table>
         </div>
       )}
-      <datalist id="serein-factoring-ocprov">{((params && params.factoring) || []).map(fc => <option key={fc.id} value={fc.nombre} />)}</datalist>
       {ocs.length > 0 && <div style={{ fontSize: 12, color: C.gris, marginTop: 6 }}>Comprometido: <b>{clp(totalComprometido)}</b> · Pagado: <b style={{ color: C.verde }}>{clp(totalPagado)}</b> · Pendiente: <b style={{ color: C.rojo }}>{clp(totalComprometido - totalPagado)}</b></div>}
     </div>
   )
@@ -1445,7 +1466,6 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, contactos
               </div>
             )}
             {comprasFilt.length === 0 && <div style={{ fontSize: 13, color: C.gris, padding: '8px 0' }}>Ninguna compra coincide con los filtros.</div>}
-            <datalist id="factoring-sugeridos-tabla">{((params && params.factoring) || []).map(fc => <option key={fc.id} value={fc.nombre} />)}</datalist>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['CC', 'Proveedor', 'N° doc', 'Detalle', 'Fecha', 'Pago', 'Monto neto', 'Abonado', 'Estado pago', ''].map((h, i) => <th key={i} style={{ textAlign: ['Monto neto', 'Abonado'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
@@ -1469,7 +1489,9 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, contactos
                           <input type="checkbox" checked={!!c.factorizada} onChange={ev => updCompra(i, { factorizada: ev.target.checked, factoringNombre: ev.target.checked ? c.factoringNombre : '' })} /> Factorizada
                         </label>
                         {c.factorizada && (
-                          <input list="factoring-sugeridos-tabla" value={c.factoringNombre || ''} onChange={ev => updCompra(i, { factoringNombre: ev.target.value })} placeholder="Empresa de factoring" style={{ ...inp, width: '100%', padding: '5px 7px', marginTop: 3 }} />
+                          <div style={{ marginTop: 3 }}>
+                            <FactoringInput value={c.factoringNombre} onChange={v => updCompra(i, { factoringNombre: v })} style={{ ...inp, width: '100%', padding: '5px 7px' }} />
+                          </div>
                         )}
                       </td>
                       <td style={{ padding: '5px 8px', textAlign: 'right' }}><input value={c.monto} onChange={ev => updCompra(i, { monto: num(ev.target.value) })} style={{ ...inp, width: 110, padding: '5px 7px', textAlign: 'right' }} /><label style={{ display: 'block', marginTop: 3, fontSize: 10.5, color: C.gris }}><input type="checkbox" checked={!!c.exento} onChange={ev => updCompra(i, { exento: ev.target.checked })} /> Exenta</label></td>
@@ -1754,6 +1776,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
   const [proyInt, setProyInt] = useState(PROYECTOS)
   const proyectos = proyExt ?? proyInt
   const setProyectos = setProyExt ?? setProyInt
+  const factoringNombres = useMemo(() => nombresFactoringUsados(proyectos, params), [proyectos, params])
   const facturasProy = (facturas && facturas['Proyectos']) || []
   const [creando, setCreando] = useState(false)
   const [vista, setVista] = useState('tarjetas')
@@ -1952,7 +1975,10 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
                   <button onClick={() => setSel(null)} style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><X size={15} /> Cerrar</button>
                 </div>
                 <div style={{ padding: 12 }}>
-                  <TarjetaProyecto p={sp} onUpdate={actualizar} onDelete={id => { eliminar(id); setSel(null) }} onAddCompra={agregarCompra} params={params} contactos={contactos} setContactos={setContactos} facturasProy={facturasProy} ppmPct={ppmPct} enModal />
+                  <FactoringCtx.Provider value={factoringNombres}>
+                    <datalist id="serein-factoring-sugeridos">{factoringNombres.map(n => <option key={n} value={n} />)}</datalist>
+                    <TarjetaProyecto p={sp} onUpdate={actualizar} onDelete={id => { eliminar(id); setSel(null) }} onAddCompra={agregarCompra} params={params} contactos={contactos} setContactos={setContactos} facturasProy={facturasProy} ppmPct={ppmPct} enModal />
+                  </FactoringCtx.Provider>
                 </div>
               </div>
             </div>
