@@ -47,6 +47,11 @@ const COLS_PROVEEDORES = [
   { key: 'giro', label: 'Giro', width: 180 },
   { key: 'direccion', label: 'Dirección', width: 180 },
   { key: 'comuna', label: 'Comuna', width: 120 },
+  { key: 'banco', label: 'Banco', width: 120 },
+  { key: 'tipoCuenta', label: 'Tipo de cuenta', width: 130 },
+  { key: 'numeroCuenta', label: 'N° de cuenta', width: 130 },
+  { key: 'titularCuenta', label: 'Titular', width: 150 },
+  { key: 'emailPago', label: 'Correo (aviso de pago)', width: 170 },
   { key: 'estado', label: 'Estado', width: 90, type: 'estado' },
 ]
 

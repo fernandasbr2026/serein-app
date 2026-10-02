@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx'
 import { SEREIN } from './theme-serein.js'
 import { pullState, pushState } from './sync.js'
 import { montoBrutoCompra } from './ProyectosModule.jsx'
+import { cuentaDe, textoCuenta, guardarCuentaProveedor, buscarProveedor, TIPOS_CUENTA } from './cuentasProveedor.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
 const C = { naranja: SEREIN.orange, carbon: SEREIN.text, verde: SEREIN.green, rojo: SEREIN.red, gris: SEREIN.textFaint }
 const clp = n => '$' + Math.round(n).toLocaleString('es-CL')
@@ -1010,6 +1011,9 @@ function itemsPorPagar(fin, proyectos = []) {
         tipo: 'Compra proyecto',
         detalle: (c.detalle || c.proveedor || 'Compra') + ' · OT ' + (p.ot || p.nombre || '—') + (c.formaPago === 'Programado' ? ' · Pago programado' : '') + notaFactoring,
         proveedor: c.proveedor || '',
+        rut: c.rut || '',
+        folio: c.folio || '',
+        ot: p.ot || '',
         area: '',
         monto: Math.round(pendiente),
         tabDestino: null,
@@ -1057,17 +1061,62 @@ function kpiSolida(label, valor, color, icono, sub, onClick) {
     </div>
   )
 }
+// Celda "Cuenta bancaria" de cada fila: si el proveedor ya tiene cuenta en su
+// ficha se muestra (y se puede corregir); si no, deja cargarla ahi mismo. Las
+// cuotas de credito no llevan (el banco ya es el acreedor).
+function celdaCuenta(x, cuentas) {
+  if (x.origen === 'cuota' || !x.proveedor) return <span style={{ color: C.gris }}>—</span>
+  const c = cuentas.de(x)
+  return c ? (
+    <div>
+      <div style={{ fontWeight: 600 }}>{c.banco}{c.tipoCuenta ? ' · ' + c.tipoCuenta : ''}</div>
+      <div style={{ color: C.gris }}>{c.numeroCuenta ? 'N° ' + c.numeroCuenta : ''}{c.titularCuenta ? ' · ' + c.titularCuenta : ''}</div>
+      <button onClick={() => cuentas.editar(x)} style={{ background: 'none', border: 'none', color: C.naranja, cursor: 'pointer', fontSize: 11, padding: 0 }}>Editar</button>
+    </div>
+  ) : (
+    <button onClick={() => cuentas.editar(x)} style={{ background: 'none', border: `1px dashed ${C.naranja}`, color: C.naranja, cursor: 'pointer', fontSize: 11, padding: '3px 8px' }}>+ Agregar cuenta</button>
+  )
+}
+const BANCOS_CL = ['Banco de Chile', 'BancoEstado', 'Banco Santander', 'Banco BCI', 'Scotiabank', 'Banco Itaú', 'Banco Security', 'Banco Falabella', 'Banco Ripley', 'Banco Consorcio', 'Banco Internacional', 'Banco BICE', 'Tenpo', 'Mercado Pago', 'Mach']
+function FormCuentaProveedor({ proveedor, rut, contactos, setContactos, onCerrar }) {
+  const actual = cuentaDe(contactos, { nombre: proveedor, rut }) || {}
+  const [f, setF] = useState({ banco: actual.banco || '', tipoCuenta: actual.tipoCuenta || 'Cuenta corriente', numeroCuenta: actual.numeroCuenta || '', titularCuenta: actual.titularCuenta || '', emailPago: actual.emailPago || '', rut: rut || (buscarProveedor(contactos, { nombre: proveedor, rut }) || {}).rut || '' })
+  const guardar = async () => {
+    if (!f.banco.trim() || !f.numeroCuenta.trim()) return
+    await guardarCuentaProveedor(contactos, setContactos, { nombre: proveedor, rut: f.rut }, f)
+    onCerrar()
+  }
+  return (
+    <div style={{ background: '#fff', border: `2px solid ${C.naranja}`, padding: 16 }}>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 2 }}>Cuenta bancaria · {proveedor}</div>
+      <div style={{ fontSize: 11.5, color: C.gris, marginBottom: 10 }}>Queda guardada en la ficha del proveedor: en la próxima factura o pago de este proveedor ya no hay que volver a escribirla.</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
+        <input list="bancos-cl" style={inp} placeholder="Banco *" value={f.banco} onChange={e => setF({ ...f, banco: e.target.value })} />
+        <datalist id="bancos-cl">{BANCOS_CL.map(b => <option key={b} value={b} />)}</datalist>
+        <select style={inp} value={f.tipoCuenta} onChange={e => setF({ ...f, tipoCuenta: e.target.value })}>{TIPOS_CUENTA.map(t => <option key={t}>{t}</option>)}</select>
+        <input style={inp} placeholder="N° de cuenta *" value={f.numeroCuenta} onChange={e => setF({ ...f, numeroCuenta: e.target.value })} />
+        <input style={inp} placeholder="RUT del titular / proveedor" value={f.rut} onChange={e => setF({ ...f, rut: e.target.value })} />
+        <input style={inp} placeholder="Titular (si es distinto)" value={f.titularCuenta} onChange={e => setF({ ...f, titularCuenta: e.target.value })} />
+        <input style={inp} placeholder="Correo para aviso de pago" value={f.emailPago} onChange={e => setF({ ...f, emailPago: e.target.value })} />
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <button onClick={guardar} style={{ background: C.verde, color: '#fff', border: 'none', padding: '9px 18px', cursor: 'pointer', fontSize: 13 }}>Guardar cuenta</button>
+        <button onClick={onCerrar} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+      </div>
+    </div>
+  )
+}
 // Tabla de filas de itemsPorPagar() — reutilizada tanto por cada seccion()
 // de la pantalla (solo lectura, sin acciones) como por el modal de detalle
 // que abren las tarjetas KPI (con acciones), para no mantener dos veces el
 // mismo marcado. acciones() opcional: recibe la fila y devuelve el JSX de
 // la columna de la derecha (editar/eliminar/marcar pagada segun el origen).
-function tablaItemsPago(filas, acciones) {
+function tablaItemsPago(filas, acciones, cuentas) {
   return (
     <div style={{ background: '#fff', border: '1px solid #DFE4EA', overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead><tr style={{ borderBottom: '1px solid #DFE4EA' }}>
-          {['Vencimiento', 'Tipo', 'Detalle', 'Forma de pago', 'Monto', ...(acciones ? [''] : [])].map(hh => (
+          {['Vencimiento', 'Tipo', 'Detalle', 'Forma de pago', ...(cuentas ? ['Cuenta bancaria'] : []), 'Monto', ...(acciones ? [''] : [])].map(hh => (
             <th key={hh} style={{ textAlign: hh === 'Monto' ? 'right' : 'left', padding: '6px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{hh}</th>
           ))}
         </tr></thead>
@@ -1078,6 +1127,7 @@ function tablaItemsPago(filas, acciones) {
               <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}><span style={{ background: colorTipo + '22', color: colorTipo, fontWeight: 700, fontSize: 11, padding: '3px 8px', borderRadius: 20 }}>{x.tipo}</span></td>
               <td style={{ padding: '6px 10px' }}>{x.detalle}{x.proveedor ? <span style={{ color: C.gris }}> · {x.proveedor}</span> : ''}</td>
               <td style={{ padding: '6px 10px', fontSize: 12 }}>{x.formaPago === 'Cheque' ? <span title={x.chequeInfo}>🧾 Cheque{x.chequeInfo ? ' · ' + x.chequeInfo : ''}</span> : <span style={{ color: C.gris }}>Transferencia</span>}</td>
+              {cuentas && <td style={{ padding: '6px 10px', fontSize: 12, minWidth: 150 }}>{celdaCuenta(x, cuentas)}</td>}
               <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600 }}>{clp(x.monto)}</td>
               {acciones && <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>{acciones(x)}</td>}
             </tr>
@@ -1102,11 +1152,11 @@ function tablaItemsPago(filas, acciones) {
 // (onCrearGasto), para que editar/crear se comporte identico venga el clic
 // de esta ventana o de las secciones de la pantalla principal de Pagos: un
 // solo estado de edicion, un solo formulario, nunca dos copias.
-function ModalDetallePago({ titulo, color, filas, sub, onClose, acciones, onCrearGasto }) {
+function ModalDetallePago({ titulo, color, filas, sub, onClose, acciones, onCrearGasto, cuentas, onExcel }) {
   const total = (filas || []).reduce((a, x) => a + x.monto, 0)
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,26,46,.55)', zIndex: 70, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '28px 16px', overflowY: 'auto' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#F7F6F3', width: '100%', maxWidth: 860, boxShadow: '0 20px 60px -12px rgba(0,0,0,.4)', borderRadius: 6, overflow: 'hidden' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#F7F6F3', width: '100%', maxWidth: 1080, boxShadow: '0 20px 60px -12px rgba(0,0,0,.4)', borderRadius: 6, overflow: 'hidden' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', borderBottom: `3px solid ${color}`, background: '#fff' }}>
           <div>
             <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 15, textTransform: 'uppercase', color }}>{titulo}</div>
@@ -1119,6 +1169,7 @@ function ModalDetallePago({ titulo, color, filas, sub, onClose, acciones, onCrea
             <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
               <button onClick={() => onCrearGasto('fijo')} style={{ background: C.naranja, color: '#fff', border: 'none', padding: '8px 14px', cursor: 'pointer', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={13} /> Gasto fijo</button>
               <button onClick={() => onCrearGasto('variable')} style={{ background: 'none', border: `1px dashed ${C.naranja}`, color: C.carbon, padding: '8px 14px', cursor: 'pointer', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={13} /> Gasto variable</button>
+              {onExcel && filas && filas.length > 0 && <button onClick={onExcel} style={{ marginLeft: 'auto', background: 'none', border: `1px solid ${C.verde}`, color: C.verde, padding: '8px 14px', cursor: 'pointer', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}><Download size={13} /> Descargar Excel</button>}
             </div>
           )}
           {filas ? (
@@ -1126,7 +1177,7 @@ function ModalDetallePago({ titulo, color, filas, sub, onClose, acciones, onCrea
               <div style={{ fontSize: 13, color: C.gris }}>No hay cuentas en este grupo.</div>
             ) : (<>
               <div style={{ fontSize: 12.5, color: C.gris, marginBottom: 8 }}>{filas.length} cuenta(s) · total <b style={{ color: C.carbon }}>{clp(total)}</b></div>
-              {tablaItemsPago(filas, acciones)}
+              {tablaItemsPago(filas, acciones, cuentas)}
             </>)
           ) : null}
         </div>
@@ -1145,7 +1196,42 @@ function OverlayFormulario({ onClose, children }) {
     </div>
   )
 }
-export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setParams, otsDisponibles, irA }) {
+// Excel de pagos con todos los datos de cada fila + la cuenta bancaria fija del
+// proveedor (de su ficha en Clientes y Proveedores), lista para transferir.
+function descargarExcelPagos(filas, contactos, nombreArchivo) {
+  const h = hoy()
+  const data = filas.map(x => {
+    const prov = buscarProveedor(contactos, { nombre: x.proveedor, rut: x.rut }) || {}
+    const c = cuentaDe(contactos, { nombre: x.proveedor, rut: x.rut }) || {}
+    return {
+      Vencimiento: x.vencimiento || '',
+      Estado: x.origen === 'proyectado' ? 'Proyectado' : (x.vencimiento && x.vencimiento < h) ? 'Vencido' : 'Pendiente',
+      Tipo: x.tipo || '',
+      Detalle: x.detalle || '',
+      Proveedor: x.proveedor || '',
+      RUT: x.rut || prov.rut || '',
+      'N° documento': x.folio || '',
+      OT: x.ot || '',
+      Área: x.area || '',
+      Categoría: x.categoria || '',
+      'Forma de pago': x.formaPago === 'Cheque' ? 'Cheque' + (x.chequeInfo ? ' · ' + x.chequeInfo : '') : 'Transferencia',
+      Banco: c.banco || '',
+      'Tipo de cuenta': c.tipoCuenta || '',
+      'N° de cuenta': c.numeroCuenta || '',
+      Titular: c.titularCuenta || '',
+      'Correo aviso de pago': c.emailPago || prov.emailPago || '',
+      Monto: x.monto || 0,
+    }
+  })
+  const total = data.reduce((a, r) => a + (r.Monto || 0), 0)
+  const hoja = XLSX.utils.json_to_sheet(data.length ? data : [{ Vencimiento: 'Sin cuentas pendientes' }])
+  if (data.length) XLSX.utils.sheet_add_aoa(hoja, [['', '', '', 'TOTAL', '', '', '', '', '', '', '', '', '', '', '', '', total]], { origin: -1 })
+  hoja['!cols'] = [12, 11, 16, 46, 32, 13, 12, 10, 14, 14, 18, 16, 16, 16, 24, 26, 14].map(w => ({ wch: w }))
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, hoja, 'Pagos')
+  XLSX.writeFile(wb, nombreArchivo + '_' + h + '.xlsx')
+}
+export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setParams, contactos, setContactos, otsDisponibles, irA }) {
   const [detalle, setDetalle] = useState(null)
   // Un solo estado de edicion/creacion para TODA la pantalla — lo usan por
   // igual las secciones de abajo (Nominas, Proveedores, Vencido, etc.) y el
@@ -1155,6 +1241,8 @@ export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setPara
   const [creandoGasto, setCreandoGasto] = useState(null) // 'fijo' | 'variable' | null
   const [editandoCompra, setEditandoCompra] = useState(null)
   const [editandoProyectado, setEditandoProyectado] = useState(null)
+  const [editandoCuenta, setEditandoCuenta] = useState(null)
+  const cuentas = setContactos ? { de: x => cuentaDe(contactos, { nombre: x.proveedor, rut: x.rut }), editar: x => setEditandoCuenta(x) } : null
   const puedeEditarProyectos = !!setProyectos
   const items = itemsPorPagar(fin, proyectos)
   const h = hoy()
@@ -1256,7 +1344,7 @@ export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setPara
         <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 13, textTransform: 'uppercase', color, display: 'flex', alignItems: 'center', gap: 6 }}>{icono} {titulo} ({filas.length})</span>
         <span style={{ fontWeight: 700, fontFamily: SEREIN.fontDisplay }}>{clp(filas.reduce((a, x) => a + x.monto, 0))}</span>
       </div>
-      {tablaItemsPago(filas, acciones)}
+      {tablaItemsPago(filas, acciones, cuentas)}
     </div>
   )
   return (
@@ -1294,13 +1382,17 @@ export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setPara
           proveedores: { titulo: 'Proveedores (proyectos)', color: COLOR_TIPO_PAGO['Compra proyecto'], sub: 'Compras de proyecto con saldo pendiente', filas: proveedores },
           vencido: { titulo: 'Vencido', color: C.rojo, sub: 'Antes de ' + h, filas: items.filter(grupos[0].filtro) },
         }[detalle]
-        return <ModalDetallePago titulo={cfg.titulo} color={cfg.color} sub={cfg.sub} filas={cfg.filas} acciones={acciones} onCrearGasto={setCreandoGasto} onClose={() => setDetalle(null)} />
+        return <ModalDetallePago titulo={cfg.titulo} color={cfg.color} sub={cfg.sub} filas={cfg.filas} acciones={acciones} cuentas={cuentas} onExcel={() => descargarExcelPagos(cfg.filas, contactos, 'Pagos_' + detalle)} onCrearGasto={setCreandoGasto} onClose={() => setDetalle(null)} />
       })()}
       {editandoGasto && <OverlayFormulario onClose={() => setEditandoGasto(null)}><FormGasto tipo={editandoGasto.tipo} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} gastoInicial={editandoGasto} onCerrar={() => setEditandoGasto(null)} /></OverlayFormulario>}
       {creandoGasto && <OverlayFormulario onClose={() => setCreandoGasto(null)}><FormGasto tipo={creandoGasto} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} onCerrar={() => setCreandoGasto(null)} /></OverlayFormulario>}
       {editandoCompra && <OverlayFormulario onClose={() => setEditandoCompra(null)}><FormEditarCompra item={editandoCompra} proyectos={proyectos} setProyectos={setProyectos} onCerrar={() => setEditandoCompra(null)} /></OverlayFormulario>}
+      {editandoCuenta && <OverlayFormulario onClose={() => setEditandoCuenta(null)}><FormCuentaProveedor proveedor={editandoCuenta.proveedor} rut={editandoCuenta.rut} contactos={contactos} setContactos={setContactos} onCerrar={() => setEditandoCuenta(null)} /></OverlayFormulario>}
       {editandoProyectado && <OverlayFormulario onClose={() => setEditandoProyectado(null)}><FormGasto tipo={editandoProyectado.gasto.tipo} fin={fin} setFin={setFin} otsDisponibles={otsDisponibles} proyectadoInicial={editandoProyectado} onCerrar={() => setEditandoProyectado(null)} /></OverlayFormulario>}
-      <div style={{ fontSize: 11.5, color: C.gris, marginBottom: 16 }}>Total general pendiente: <b style={{ color: C.carbon }}>{clp(totalGeneral)}</b></div>
+      <div style={{ fontSize: 11.5, color: C.gris, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <span>Total general pendiente: <b style={{ color: C.carbon }}>{clp(totalGeneral)}</b></span>
+        <button onClick={() => descargarExcelPagos(items, contactos, 'Pagos_pendientes')} style={{ background: 'none', border: `1px solid ${C.verde}`, color: C.verde, padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}><Download size={13} /> Excel: todo lo pendiente</button>
+      </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
         <button onClick={() => irA('fijos')} style={btnAgregar}><Plus size={13} /> Gasto fijo</button>
         <button onClick={() => irA('variables')} style={btnAgregar}><Plus size={13} /> Gasto variable</button>
@@ -1322,7 +1414,10 @@ export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setPara
           </button>
         ))}
       </div>
-      <div style={{ fontSize: 13, color: C.carbon, marginBottom: 14 }}>Total de {MESES_PAGOS[mesPagos - 1]} {anioPagos}: <b style={{ fontFamily: SEREIN.fontDisplay }}>{clp(totalMesPagos)}</b></div>
+      <div style={{ fontSize: 13, color: C.carbon, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <span>Total de {MESES_PAGOS[mesPagos - 1]} {anioPagos}: <b style={{ fontFamily: SEREIN.fontDisplay }}>{clp(totalMesPagos)}</b></span>
+        {itemsMes.length > 0 && <button onClick={() => descargarExcelPagos(itemsMes, contactos, 'Pagos_' + mesPagosKey)} style={{ background: 'none', border: `1px solid ${C.verde}`, color: C.verde, padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}><Download size={13} /> Descargar Excel de {MESES_PAGOS[mesPagos - 1]}</button>}
+      </div>
 
       {itemsMes.length === 0 && <div style={{ fontSize: 13, color: C.gris, background: '#fff', border: '1px solid #DFE4EA', padding: 16 }}>No hay pagos para {MESES_PAGOS[mesPagos - 1]} {anioPagos}.</div>}
       {seccion('Nóminas (sueldos e imposiciones)', COLOR_TIPO_PAGO['Nómina'], nominasMes, '👥')}
