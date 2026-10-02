@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { ChevronDown, ChevronUp, Target, Receipt, Hammer, ShoppingCart, Pencil, Plus, Trash2, X, AlertTriangle, LayoutGrid, Table2, Flame, Upload, UserCheck } from 'lucide-react'
 import { PROYECTOS, CC_DEFS } from './proyectos-data.js'
 import { calcularPerdidaFactoring, perdidaFactoringFactura, dec } from './ParametrosModule.jsx'
@@ -31,6 +31,7 @@ const facturasDeOT = (facturasProy, p) => [
 ]
 
 import { SEREIN } from './theme-serein.js'
+import { cuentaDe, guardarCuentaProveedor, TIPOS_CUENTA } from './cuentasProveedor.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
 const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
@@ -147,8 +148,41 @@ function FormEdp({ params, onAdd, onCancel }) {
 }
 
 // ---------- Form compra (con CC, folio, rut) ----------
-function FormCompra({ p, onAdd, onCancel, params }) {
-  const [f, setF] = useState({ proveedor: '', detalle: '', fecha: '', monto: '', cc: CC_DEFS[0].id, folio: '', rut: '', exento: false, abonado: '', pagadaCompleta: false, formaPago: 'Contado', vencimiento: '', factorizada: false, factoringNombre: '' })
+// Cuenta bancaria del proveedor dentro de una compra: se rellena sola si el
+// proveedor (por RUT o nombre) ya tiene cuenta guardada en su ficha, y al
+// agregar la compra se guarda de vuelta — asi se escribe una sola vez.
+const CUENTA_VACIA = { banco: '', tipoCuenta: 'Cuenta corriente', numeroCuenta: '', titularCuenta: '', emailPago: '', cuentaAuto: false }
+function CampoCuentaProveedor({ valor, setValor, proveedor, rut, contactos }) {
+  const hallada = cuentaDe(contactos, { nombre: proveedor, rut })
+  useEffect(() => {
+    if (hallada && (valor.cuentaAuto || (!valor.banco && !valor.numeroCuenta))) {
+      setValor({ banco: hallada.banco, tipoCuenta: hallada.tipoCuenta || 'Cuenta corriente', numeroCuenta: hallada.numeroCuenta, titularCuenta: hallada.titularCuenta, emailPago: hallada.emailPago, cuentaAuto: true })
+    } else if (!hallada && valor.cuentaAuto) {
+      setValor({ ...CUENTA_VACIA })
+    }
+  }, [proveedor, rut, hallada && hallada.numeroCuenta, hallada && hallada.banco])
+  const cambiar = cambios => setValor({ ...valor, ...cambios, cuentaAuto: false })
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: '1px dashed #DFE4EA' }}>
+      <span style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase', fontWeight: 600 }}>Cuenta del proveedor</span>
+      <input list="bancos-compra" style={{ ...inp, width: 130 }} placeholder="Banco" value={valor.banco} onChange={e => cambiar({ banco: e.target.value })} />
+      <datalist id="bancos-compra">{['Banco de Chile', 'BancoEstado', 'Banco Santander', 'Banco BCI', 'Scotiabank', 'Banco Itaú', 'Banco Security', 'Banco Falabella', 'Banco Ripley', 'Banco Consorcio', 'Banco Internacional', 'Banco BICE', 'Tenpo', 'Mercado Pago', 'Mach'].map(b => <option key={b} value={b} />)}</datalist>
+      <select style={inp} value={valor.tipoCuenta} onChange={e => cambiar({ tipoCuenta: e.target.value })}>{TIPOS_CUENTA.map(t => <option key={t}>{t}</option>)}</select>
+      <input style={{ ...inp, width: 140 }} placeholder="N° de cuenta" value={valor.numeroCuenta} onChange={e => cambiar({ numeroCuenta: e.target.value })} />
+      {valor.cuentaAuto
+        ? <span style={{ fontSize: 11.5, color: C.verde, fontWeight: 600 }}>✓ Cuenta ya guardada de este proveedor</span>
+        : (valor.banco && valor.numeroCuenta ? <span style={{ fontSize: 11.5, color: C.gris }}>Se guardará en la ficha del proveedor</span> : null)}
+    </div>
+  )
+}
+const guardarCuentaDeCompra = (contactos, setContactos, d) => {
+  if (!setContactos || !d.banco || !d.numeroCuenta) return
+  const previa = cuentaDe(contactos, { nombre: d.proveedor, rut: d.rut })
+  if (previa && previa.banco === d.banco && previa.numeroCuenta === d.numeroCuenta && previa.tipoCuenta === d.tipoCuenta) return
+  guardarCuentaProveedor(contactos, setContactos, { nombre: d.proveedor, rut: d.rut }, d)
+}
+function FormCompra({ p, onAdd, onCancel, params, contactos, setContactos }) {
+  const [f, setF] = useState({ proveedor: '', detalle: '', fecha: '', monto: '', cc: CC_DEFS[0].id, folio: '', rut: '', exento: false, abonado: '', pagadaCompleta: false, formaPago: 'Contado', vencimiento: '', factorizada: false, factoringNombre: '', ...CUENTA_VACIA })
   const bruto = montoBrutoCompra({ monto: num(f.monto), exento: f.exento })
   const factoringList = (params && params.factoring) || []
   return (
@@ -164,6 +198,7 @@ function FormCompra({ p, onAdd, onCancel, params }) {
         <label style={{ fontSize: 11, color: C.gris }}>Fecha emisión<input style={{ ...inp, width: 120, display: 'block' }} type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} /></label>
         <input style={{ ...inp, width: 120 }} placeholder="Monto neto CLP" value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} /><label style={{ fontSize: 12, color: C.gris, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" checked={!!f.exento} onChange={e => setF({ ...f, exento: e.target.checked })} /> Exenta (sin IVA)</label>
       </div>
+      <CampoCuentaProveedor valor={f} setValor={c => setF(s => ({ ...s, ...c }))} proveedor={f.proveedor} rut={f.rut} contactos={contactos} />
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: '1px dashed #DFE4EA' }}>
         <select style={inp} value={f.formaPago} onChange={e => setF({ ...f, formaPago: e.target.value })}>
           <option value="Contado">Pago al contado</option>
@@ -187,7 +222,7 @@ function FormCompra({ p, onAdd, onCancel, params }) {
           escribir manual"), no obliga a elegir de la lista. */}
       <datalist id="factoring-sugeridos">{factoringList.map(fc => <option key={fc.id} value={fc.nombre} />)}</datalist>
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-        <button onClick={() => f.proveedor && num(f.monto) > 0 && onAdd({ proveedor: f.proveedor, detalle: f.detalle, fecha: f.fecha || '—', monto: num(f.monto), cc: f.cc, folio: f.folio, rut: f.rut, exento: !!f.exento, abonado: f.pagadaCompleta ? bruto : num(f.abonado), formaPago: f.formaPago, vencimiento: f.formaPago === 'Programado' ? f.vencimiento : '', factorizada: !!f.factorizada, factoringNombre: f.factorizada ? f.factoringNombre.trim() : '' })}
+        <button onClick={() => { if (f.proveedor && num(f.monto) > 0) { const ok = onAdd({ proveedor: f.proveedor, detalle: f.detalle, fecha: f.fecha || '—', monto: num(f.monto), cc: f.cc, folio: f.folio, rut: f.rut, exento: !!f.exento, abonado: f.pagadaCompleta ? bruto : num(f.abonado), formaPago: f.formaPago, vencimiento: f.formaPago === 'Programado' ? f.vencimiento : '', factorizada: !!f.factorizada, factoringNombre: f.factorizada ? f.factoringNombre.trim() : '', banco: f.banco, tipoCuenta: f.tipoCuenta, numeroCuenta: f.numeroCuenta }); if (ok !== false) guardarCuentaDeCompra(contactos, setContactos, f) } }}
           style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Agregar compra</button>
         <button onClick={onCancel} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
       </div>
@@ -203,7 +238,7 @@ function FormCompra({ p, onAdd, onCancel, params }) {
 // se agrega la compra (mismo onAdd que ya usa FormCompra, con su
 // anti-duplicado por folio+RUT) y ademas se sube el PDF a Drive,
 // organizado OT / Centro de Costo.
-function ImportadorFacturaCompra({ p, onAdd, params }) {
+function ImportadorFacturaCompra({ p, onAdd, params, contactos, setContactos }) {
   const factoringList = (params && params.factoring) || []
   const [abierto, setAbierto] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
@@ -228,7 +263,7 @@ function ImportadorFacturaCompra({ p, onAdd, params }) {
         proveedor: d.proveedor || '', rut: d.rut || '', folio: d.folio || '',
         fecha: d.fecha || '', monto: d.neto != null ? String(d.neto) : '', exento: !!d.exento,
         detalle: d.detalle || '', cc: ccCodigos(p)[0] || CC_DEFS[0].id, abonado: '', pagadaCompleta: false,
-        formaPago: 'Contado', vencimiento: '', factorizada: false, factoringNombre: '',
+        formaPago: 'Contado', vencimiento: '', factorizada: false, factoringNombre: '', ...CUENTA_VACIA,
       })
     } catch (err) { setError('No se pudo leer la factura: ' + ((err && err.message) || String(err))) }
     setSubiendo(false)
@@ -238,8 +273,9 @@ function ImportadorFacturaCompra({ p, onAdd, params }) {
   const confirmar = async () => {
     if (!revision) return
     if (!revision.proveedor.trim() || !(num(revision.monto) > 0)) { window.alert('Falta el proveedor o el monto no es válido — revisa antes de confirmar.'); return }
-    const agregada = onAdd({ proveedor: revision.proveedor, detalle: revision.detalle, fecha: revision.fecha || '—', monto: num(revision.monto), cc: revision.cc, folio: revision.folio, rut: revision.rut, exento: !!revision.exento, abonado: revision.pagadaCompleta ? brutoRevision : num(revision.abonado), formaPago: revision.formaPago, vencimiento: revision.formaPago === 'Programado' ? revision.vencimiento : '', factorizada: !!revision.factorizada, factoringNombre: revision.factorizada ? revision.factoringNombre.trim() : '' })
-    if (!agregada) return // anti-duplicado ya avisó (folio+RUT repetido) — la persona decide, no se sube a Drive de vuelta
+    const agregada = onAdd({ proveedor: revision.proveedor, detalle: revision.detalle, fecha: revision.fecha || '—', monto: num(revision.monto), cc: revision.cc, folio: revision.folio, rut: revision.rut, exento: !!revision.exento, abonado: revision.pagadaCompleta ? brutoRevision : num(revision.abonado), formaPago: revision.formaPago, vencimiento: revision.formaPago === 'Programado' ? revision.vencimiento : '', factorizada: !!revision.factorizada, factoringNombre: revision.factorizada ? revision.factoringNombre.trim() : '', banco: revision.banco, tipoCuenta: revision.tipoCuenta, numeroCuenta: revision.numeroCuenta })
+    if (!agregada) return
+    guardarCuentaDeCompra(contactos, setContactos, revision) // anti-duplicado ya avisó (folio+RUT repetido) — la persona decide, no se sube a Drive de vuelta
     setGuardando(true)
     try {
       const filename = (revision.folio ? revision.folio + ' - ' : '') + (revision.proveedor || 'Proveedor') + '.pdf'
@@ -279,6 +315,7 @@ function ImportadorFacturaCompra({ p, onAdd, params }) {
                 <input style={{ ...inp, width: 120 }} placeholder="Monto neto CLP" value={revision.monto} onChange={e => setRevision(r => ({ ...r, monto: e.target.value }))} />
                 <label style={{ fontSize: 12, color: C.gris, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" checked={!!revision.exento} onChange={e => setRevision(r => ({ ...r, exento: e.target.checked }))} /> Exenta (sin IVA)</label>
               </div>
+              <CampoCuentaProveedor valor={revision} setValor={c => setRevision(r => ({ ...r, ...c }))} proveedor={revision.proveedor} rut={revision.rut} contactos={contactos} />
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: '1px dashed #DFE4EA' }}>
                 <select style={inp} value={revision.formaPago} onChange={e => setRevision(r => ({ ...r, formaPago: e.target.value }))}>
                   <option value="Contado">Pago al contado</option>
@@ -1139,7 +1176,7 @@ function descargarProyectoXlsx(p, facturasProy, params, ppmPct) {
   XLSX.writeFile(wb, 'Proyecto_' + (p.ot || 'OT') + '_' + new Date().toISOString().slice(0, 10) + '.xlsx')
 }
 
-function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasProy = [], ppmPct = 2, enModal = false }) {
+function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, contactos, setContactos, facturasProy = [], ppmPct = 2, enModal = false }) {
   const facturasOT = facturasDeOT(facturasProy, p)
   const factNetoOT = facturasOT.reduce((a, f) => a + (f.neto || 0), 0)
   const remIvaVenta = Math.round(facturasOT.reduce((a, f) => a + ((f.monto || Math.round((f.neto || 0) * 1.19)) - (f.neto || 0)), 0))
@@ -1361,7 +1398,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0 8px' }}>
             <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.gris, display: 'flex', alignItems: 'center', gap: 5 }}><ShoppingCart size={13} /> Compras imputadas (por CC)</span>
             <div style={{ display: 'flex', gap: 6 }}>
-              <ImportadorFacturaCompra p={p} params={params} onAdd={c => onAddCompra(p.id, c)} />
+              <ImportadorFacturaCompra p={p} params={params} contactos={contactos} setContactos={setContactos} onAdd={c => onAddCompra(p.id, c)} />
               <button onClick={() => setAddCompra(true)} style={{ background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={13} /> Agregar compra</button>
             </div>
           </div>
@@ -1450,7 +1487,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, facturasP
             </>
             )
           })()}
-          {addCompra && <FormCompra p={p} params={params} onAdd={c => { if (onAddCompra(p.id, c)) setAddCompra(false) }} onCancel={() => setAddCompra(false)} />}
+          {addCompra && <FormCompra p={p} params={params} contactos={contactos} setContactos={setContactos} onAdd={c => { if (onAddCompra(p.id, c)) setAddCompra(false) }} onCancel={() => setAddCompra(false)} />}
 
           {/* Resumen */}
           <div style={{ marginTop: 16, padding: '10px 14px', background: '#F2F4F7', fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
@@ -1713,7 +1750,7 @@ function ProyCotizacionesList({ setProyectos }) {
   )
 }
 
-export default function ProyectosModule({ proyectos: proyExt, setProyectos: setProyExt, params = { factoring: [] }, facturas = {}, setFacturas = () => {}, comisionPct = 2, setComisionPct = () => {}, ppmPct = 2, setPpmPct = () => {}, clientesSugeridos = [], ocultarResumenFinanciero = false }) {
+export default function ProyectosModule({ proyectos: proyExt, setProyectos: setProyExt, params = { factoring: [] }, facturas = {}, setFacturas = () => {}, comisionPct = 2, setComisionPct = () => {}, ppmPct = 2, setPpmPct = () => {}, clientesSugeridos = [], contactos, setContactos, ocultarResumenFinanciero = false }) {
   const [proyInt, setProyInt] = useState(PROYECTOS)
   const proyectos = proyExt ?? proyInt
   const setProyectos = setProyExt ?? setProyInt
@@ -1915,7 +1952,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
                   <button onClick={() => setSel(null)} style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><X size={15} /> Cerrar</button>
                 </div>
                 <div style={{ padding: 12 }}>
-                  <TarjetaProyecto p={sp} onUpdate={actualizar} onDelete={id => { eliminar(id); setSel(null) }} onAddCompra={agregarCompra} params={params} facturasProy={facturasProy} ppmPct={ppmPct} enModal />
+                  <TarjetaProyecto p={sp} onUpdate={actualizar} onDelete={id => { eliminar(id); setSel(null) }} onAddCompra={agregarCompra} params={params} contactos={contactos} setContactos={setContactos} facturasProy={facturasProy} ppmPct={ppmPct} enModal />
                 </div>
               </div>
             </div>

@@ -821,7 +821,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
           return (
             <>
             {!sinValores.includes('RESUMEN_FINANCIERO_PROYECTOS') && resumenFinancieroArea('Proyectos')}
-            <ProyectosModule proyectos={proyectosVisibles} setProyectos={setProyectosSeguro} params={params} facturas={facturas} setFacturas={setFacturas} comisionPct={comisiones['Proyectos'] ?? 2} setComisionPct={v => setComisiones(c => ({ ...c, Proyectos: v }))} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={nombresClientes(contactos)} ocultarResumenFinanciero={sinValores.includes('RESUMEN_FINANCIERO_PROYECTOS')} />
+            <ProyectosModule proyectos={proyectosVisibles} setProyectos={setProyectosSeguro} params={params} facturas={facturas} setFacturas={setFacturas} comisionPct={comisiones['Proyectos'] ?? 2} setComisionPct={v => setComisiones(c => ({ ...c, Proyectos: v }))} ppmPct={ppmPct} setPpmPct={setPpmPct} clientesSugeridos={nombresClientes(contactos)} contactos={contactos} setContactos={setContactos} ocultarResumenFinanciero={sinValores.includes('RESUMEN_FINANCIERO_PROYECTOS')} />
             </>
           )
         })() : esModuloOT ? (
@@ -864,7 +864,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
         ) : esModuloFin && puedeVer('FINANZAS') ? (
           <FinanzasModule otsDisponibles={ots.map(o => o.numero)} fin={fin} setFin={setFin} proyectos={proyectos} params={params} setParams={setParams} tabInicial={tabFinanzasInicial} />
         ) : esModuloCalendarioPagos && puedeVer('CALENDARIO_PAGOS') ? (
-          <PorPagar fin={fin} setFin={setFin} proyectos={proyectos} setProyectos={setProyectos} params={params} setParams={setParams} otsDisponibles={ots.map(o => o.numero)} irA={tabId => { setTabFinanzasInicial(tabId); setAreaSel('FINANZAS') }} />
+          <PorPagar fin={fin} setFin={setFin} proyectos={proyectos} setProyectos={setProyectos} params={params} setParams={setParams} contactos={contactos} setContactos={setContactos} otsDisponibles={ots.map(o => o.numero)} irA={tabId => { setTabFinanzasInicial(tabId); setAreaSel('FINANZAS') }} />
         ) : esModuloPagos && puedeVer('PAGOS') ? (
           <ProveedoresPagosModule pp={pp} setPp={setPp} gastos={fin.gastos || []} />
         ) : esModuloOC && puedeVer('ORDENES_COMPRA') ? (
