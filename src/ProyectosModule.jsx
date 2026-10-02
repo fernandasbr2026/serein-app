@@ -551,14 +551,135 @@ function BloqueCC({ p, onUpdate }) {
 // abajo) — esa es la que de verdad descuenta el Centro de Costo. La OC en
 // si NO lo descuenta, para no contar el gasto dos veces.
 const ocProvNeto = oc => (oc.etapas && oc.etapas.length) ? oc.etapas.reduce((a, e) => a + num(e.monto), 0) : num(oc.montoTotal)
-const ocProvPagado = oc => (oc.etapas || []).filter(e => e.estadoPago === 'Pagado').reduce((a, e) => a + num(e.monto), 0)
+const ocProvPagado = (oc, p) => (oc.etapas || []).reduce((a, e) => {
+  const c = (p && e.compraId) ? (p.compras || []).find(x => x.id === e.compraId) : null
+  if (c) { const b = montoBrutoCompra(c); return a + (b > 0 ? Math.round(num(e.monto) * Math.min(1, (+c.abonado || 0) / b)) : 0) }
+  return a + (e.estadoPago === 'Pagado' ? num(e.monto) : 0)
+}, 0)
 const ETAPA_FORMAS_PAGO = ['Contado', 'Factoring']
 
-function FilaOCProveedor({ oc, p, upd, onDelete }) {
+// Factura REAL de una etapa de la OC (anticipo / estado de avance): se carga
+// aca mismo con los datos de la OC ya puestos (proveedor, RUT, CC, monto de la
+// etapa, forma de pago, factoring y plazo) y entra a "Compras imputadas" —
+// esa fila es la que descuenta el Centro de Costo. La etapa queda enlazada a
+// la compra (compraId): su estado de pago se lee de la compra, asi marcar
+// pagada en Pagos o en Compras se refleja aca sin tocar nada a mano.
+const sumarDias = (iso, dias) => {
+  if (!iso || !(Number(dias) > 0)) return ''
+  const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + Number(dias))
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+}
+const compraDeEtapa = (p, e) => (e && e.compraId) ? ((p.compras || []).find(c => c.id === e.compraId) || null) : null
+
+function FacturaDeEtapa({ p, oc, etapa, onConfirmar, onCancelar, contactos, setContactos }) {
+  const esFactoring = etapa.formaPago === 'Factoring'
+  const [f, setF] = useState(() => ({
+    proveedor: oc.proveedor || '', rut: oc.rut || '', folio: '', fecha: hoy(), monto: String(num(etapa.monto) || ''), exento: false,
+    detalle: ['OC ' + (oc.numero || 's/n'), etapa.etiqueta, oc.detalle].filter(Boolean).join(' · '),
+    cc: oc.cc || ccCodigos(p)[0] || CC_DEFS[0].id,
+    programado: !!etapa.fecha || esFactoring, vencimiento: etapa.fecha || '', vencTocado: false,
+    factorizada: esFactoring, factoringNombre: etapa.factoringEmpresa || '', factoringPlazo: etapa.plazo ? String(etapa.plazo) : '',
+    pdfBase64: '', ...CUENTA_VACIA,
+  }))
+  const [leyendo, setLeyendo] = useState(false)
+  const [error, setError] = useState('')
+  const [guardando, setGuardando] = useState(false)
+  const set = c => setF(s => ({ ...s, ...c }))
+  const vencEf = f.vencTocado ? f.vencimiento : ((f.factorizada && num(f.factoringPlazo) > 0 && f.fecha) ? sumarDias(f.fecha, num(f.factoringPlazo)) : (etapa.fecha || f.vencimiento))
+  const bruto = montoBrutoCompra({ monto: num(f.monto), exento: f.exento })
+
+  const leerPDF = async e => {
+    const fl = e.target.files && e.target.files[0]
+    e.target.value = ''
+    if (!fl) return
+    setLeyendo(true); setError('')
+    try {
+      const base64 = await fileToBase64(fl)
+      const { data, error: err } = await supabase.functions.invoke('extraer-factura-compra', { body: { archivos: [{ base64, mimeType: fl.type || 'application/pdf', filename: fl.name }], filename: fl.name } })
+      if (err) throw err
+      if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo leer el documento.')
+      const d = data.datos || {}
+      setF(s => ({ ...s, pdfBase64: base64, folio: d.folio || s.folio, fecha: d.fecha || s.fecha, monto: d.neto != null ? String(d.neto) : s.monto, exento: d.exento != null ? !!d.exento : s.exento, proveedor: s.proveedor || d.proveedor || '', rut: s.rut || d.rut || '' }))
+    } catch (err) { setError('No se pudo leer la factura: ' + ((err && err.message) || String(err))) }
+    setLeyendo(false)
+  }
+
+  const confirmar = async () => {
+    if (!f.proveedor.trim() || !(num(f.monto) > 0)) { window.alert('Falta el proveedor o el monto no es válido.'); return }
+    const compra = {
+      id: 'cmp' + Date.now(), proveedor: f.proveedor, detalle: f.detalle, fecha: f.fecha || '—', monto: num(f.monto), cc: f.cc,
+      folio: f.folio, rut: f.rut, exento: !!f.exento, abonado: 0,
+      formaPago: f.programado ? 'Programado' : 'Contado', vencimiento: f.programado ? vencEf : '',
+      factorizada: !!f.factorizada, factoringNombre: f.factorizada ? f.factoringNombre.trim() : '', factoringPlazo: f.factorizada ? num(f.factoringPlazo) : '',
+      banco: f.banco, tipoCuenta: f.tipoCuenta, numeroCuenta: f.numeroCuenta,
+      ocId: oc.id, ocNumero: oc.numero || '', etapaId: etapa.id, etapaEtiqueta: etapa.etiqueta,
+    }
+    const ok = onConfirmar(compra)
+    if (ok === false) return
+    guardarCuentaDeCompra(contactos, setContactos, f)
+    if (f.pdfBase64) {
+      setGuardando(true)
+      try {
+        const filename = (f.folio ? f.folio + ' - ' : '') + (f.proveedor || 'Proveedor') + '.pdf'
+        const { data, error: err } = await supabase.functions.invoke('subir-factura-compra-drive', { body: { pdfBase64: f.pdfBase64, filename, ot: p.ot || p.nombre || 'Sin OT', centroCosto: nombreCC(p, f.cc) } })
+        if (err) throw err
+        if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo subir a Drive.')
+      } catch (err) { window.alert('La factura quedó cargada en Compras, pero no se pudo subir el PDF a Drive: ' + ((err && err.message) || String(err))) }
+      setGuardando(false)
+    }
+    onCancelar()
+  }
+
+  return (
+    <div style={{ background: '#fff', border: '2px solid ' + SEREIN.blue, padding: 10, marginBottom: 8 }}>
+      <div style={{ fontSize: 11.5, fontWeight: 600, color: SEREIN.blue, textTransform: 'uppercase', marginBottom: 6 }}>Cargar factura · {etapa.etiqueta}</div>
+      <div style={{ fontSize: 11, color: C.gris, marginBottom: 8 }}>Entra a "Compras imputadas" con la forma de pago de esta etapa y descuenta el Centro de Costo {f.cc}. Puedes subir el PDF (se lee con IA y se guarda en Drive) o escribir los datos a mano.</div>
+      <label style={{ cursor: leyendo ? 'wait' : 'pointer', background: C.carbon, color: '#fff', padding: '6px 12px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6, opacity: leyendo ? 0.7 : 1, marginBottom: 8 }}>
+        <Upload size={13} /> {leyendo ? 'Leyendo…' : (f.pdfBase64 ? 'PDF leído — cambiar' : 'Subir PDF de la factura')}
+        <input type="file" accept="application/pdf,image/*" onChange={leerPDF} disabled={leyendo} style={{ display: 'none' }} />
+      </label>
+      {error && <div style={{ fontSize: 12, color: C.rojo, marginBottom: 6 }}>{error}</div>}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input style={{ ...inp, width: 140 }} placeholder="Proveedor" value={f.proveedor} onChange={e => set({ proveedor: e.target.value })} />
+        <input style={{ ...inp, width: 110 }} placeholder="RUT proveedor" value={f.rut} onChange={e => set({ rut: e.target.value })} />
+        <input style={{ ...inp, width: 100 }} placeholder="N° factura" value={f.folio} onChange={e => set({ folio: e.target.value })} />
+        <label style={{ fontSize: 11, color: C.gris }}>Fecha emisión<input style={{ ...inp, width: 130, display: 'block' }} type="date" value={f.fecha} onChange={e => set({ fecha: e.target.value })} /></label>
+        <select style={inp} value={f.cc} onChange={e => set({ cc: e.target.value })}>{ccCodigos(p).map(id => <option key={id} value={id}>{id} · {nombreCC(p, id)}</option>)}</select>
+        <input style={{ ...inp, width: 120, textAlign: 'right' }} placeholder="Monto neto CLP" value={f.monto} onChange={e => set({ monto: e.target.value })} />
+        <label style={{ fontSize: 12, color: C.gris, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" checked={f.exento} onChange={e => set({ exento: e.target.checked })} /> Exenta</label>
+        <span style={{ fontSize: 11.5, color: C.gris }}>Total c/IVA: <b>{clp(bruto)}</b></span>
+      </div>
+      <input style={{ ...inp, width: '100%', marginTop: 6 }} placeholder="Detalle" value={f.detalle} onChange={e => set({ detalle: e.target.value })} />
+      <CampoCuentaProveedor valor={f} setValor={c => set(c)} proveedor={f.proveedor} rut={f.rut} contactos={contactos} />
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: '1px dashed #DFE4EA' }}>
+        <select style={inp} value={f.programado ? 'Programado' : 'Contado'} onChange={e => set({ programado: e.target.value === 'Programado' })}>
+          <option value="Contado">Pago al contado</option>
+          <option value="Programado">Pago programado</option>
+        </select>
+        <label style={{ fontSize: 12, color: C.gris, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" checked={f.factorizada} onChange={e => set({ factorizada: e.target.checked })} /> Factoring</label>
+        {f.factorizada && (<>
+          <FactoringInput style={{ ...inp, width: 190 }} value={f.factoringNombre} onChange={v => set({ factoringNombre: v })} />
+          <input style={{ ...inp, width: 56, textAlign: 'right' }} placeholder="Plazo" value={f.factoringPlazo} onChange={e => set({ factoringPlazo: e.target.value })} />
+          <span style={{ fontSize: 11, color: C.gris }}>días</span>
+        </>)}
+        {f.programado && (
+          <label style={{ fontSize: 11, color: C.gris }}>Vencimiento del pago<input style={{ ...inp, width: 140, display: 'block' }} type="date" value={vencEf || ''} onChange={e => set({ vencimiento: e.target.value, vencTocado: true })} /></label>
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <button onClick={confirmar} disabled={guardando} style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>{guardando ? 'Subiendo a Drive…' : 'Cargar factura en Compras'}</button>
+        <button onClick={onCancelar} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+      </div>
+    </div>
+  )
+}
+
+function FilaOCProveedor({ oc, p, upd, onDelete, onAddCompraEtapa, contactos, setContactos }) {
   const [abierta, setAbierta] = useState(false)
+  const [facturando, setFacturando] = useState(null)
   const etapas = oc.etapas || []
   const neto = ocProvNeto(oc)
-  const pagado = ocProvPagado(oc)
+  const pagado = ocProvPagado(oc, p)
   const sumaEtapas = etapas.reduce((a, e) => a + num(e.monto), 0)
   const descuadrada = etapas.length > 0 && num(oc.montoTotal) > 0 && sumaEtapas !== num(oc.montoTotal)
   const addEtapa = () => upd(oc.id, { etapas: [...etapas, { id: 'et' + Date.now(), etiqueta: etapas.length === 0 ? 'Anticipo' : 'Avance ' + etapas.length, monto: '', fecha: '', formaPago: 'Contado', factoringEmpresa: '', plazo: '', estadoPago: 'Pendiente', fechaPago: '' }] })
@@ -598,11 +719,21 @@ function FilaOCProveedor({ oc, p, upd, onDelete }) {
                   <input value={e.plazo || ''} onChange={ev => updEtapa(i, { plazo: num(ev.target.value) })} placeholder="Plazo" style={{ ...inp, width: 56, textAlign: 'right' }} />
                   <span style={{ fontSize: 11, color: C.gris }}>días</span>
                 </>)}
-                <select value={e.estadoPago || 'Pendiente'} onChange={ev => updEtapa(i, { estadoPago: ev.target.value })} style={{ border: 'none', background: e.estadoPago === 'Pagado' ? '#E6F7EE' : '#FDECDD', color: e.estadoPago === 'Pagado' ? C.verde : '#D9600A', padding: '4px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}><option>Pendiente</option><option>Pagado</option></select>
-                {e.estadoPago === 'Pagado' && <input type="date" value={e.fechaPago || ''} onChange={ev => updEtapa(i, { fechaPago: ev.target.value })} style={{ ...inp, width: 132 }} />}
+                {compraDeEtapa(p, e) ? (() => { const cE = compraDeEtapa(p, e); const est = estadoPagoCompra(cE); return (
+                  <span title="Factura cargada en Compras imputadas — el pago se marca allá o en Pagos" style={{ fontSize: 12, fontWeight: 600, color: COLOR_PAGO_COMPRA[est], background: '#fff', border: '1px solid ' + COLOR_PAGO_COMPRA[est], padding: '3px 8px' }}>
+                    Factura {cE.folio ? 'N° ' + cE.folio : 's/n'} · {est}
+                  </span>) })() : (<>
+                  <select value={e.estadoPago || 'Pendiente'} onChange={ev => updEtapa(i, { estadoPago: ev.target.value })} style={{ border: 'none', background: e.estadoPago === 'Pagado' ? '#E6F7EE' : '#FDECDD', color: e.estadoPago === 'Pagado' ? C.verde : '#D9600A', padding: '4px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}><option>Pendiente</option><option>Pagado</option></select>
+                  {e.estadoPago === 'Pagado' && <input type="date" value={e.fechaPago || ''} onChange={ev => updEtapa(i, { fechaPago: ev.target.value })} style={{ ...inp, width: 132 }} />}
+                  <button onClick={() => setFacturando(facturando === e.id ? null : e.id)} style={{ background: SEREIN.blue, color: '#fff', border: 'none', padding: '4px 10px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}><Upload size={12} /> Cargar factura</button>
+                </>)}
                 <button onClick={() => delEtapa(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button>
               </div>
             ))}
+            {facturando && (() => { const eF = etapas.find(x => x.id === facturando); return eF ? (
+              <FacturaDeEtapa p={p} oc={oc} etapa={eF} contactos={contactos} setContactos={setContactos}
+                onConfirmar={c => onAddCompraEtapa(p.id, oc.id, eF.id, c)} onCancelar={() => setFacturando(null)} />
+            ) : null })()}
             <button onClick={addEtapa} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Agregar etapa de pago</button>
             {descuadrada && <div style={{ fontSize: 11.5, color: C.rojo, marginTop: 6 }}>Las etapas suman {clp(sumaEtapas)}, distinto del monto total ingresado ({clp(num(oc.montoTotal))}).</div>}
           </td>
@@ -623,7 +754,7 @@ const ocProveedorEtapasDeRevision = (etapas, montoTotal) => (etapas || []).map((
   fecha: '', formaPago: 'Contado', factoringEmpresa: '', plazo: '', estadoPago: 'Pendiente', fechaPago: '',
 }))
 
-function BloqueOCProveedor({ p, onUpdate, params }) {
+function BloqueOCProveedor({ p, onUpdate, params, onAddCompraEtapa, contactos, setContactos }) {
   const ocs = p.ordenesCompra || []
   const [creando, setCreando] = useState(false)
   const [f, setF] = useState(null)
@@ -639,7 +770,7 @@ function BloqueOCProveedor({ p, onUpdate, params }) {
   const actualizar = (id, cambios) => onUpdate(p.id, { ordenesCompra: ocs.map(o => o.id === id ? { ...o, ...cambios } : o) })
   const eliminar = id => window.confirm('¿Eliminar esta orden de compra?') && onUpdate(p.id, { ordenesCompra: ocs.filter(o => o.id !== id) })
   const totalComprometido = ocs.reduce((a, o) => a + ocProvNeto(o), 0)
-  const totalPagado = ocs.reduce((a, o) => a + ocProvPagado(o), 0)
+  const totalPagado = ocs.reduce((a, o) => a + ocProvPagado(o, p), 0)
 
   const subirPDF = async e => {
     const fl = e.target.files && e.target.files[0]
@@ -740,7 +871,7 @@ function BloqueOCProveedor({ p, onUpdate, params }) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, background: '#fff' }}>
             <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['N° OC', 'Proveedor', 'CC', 'Fecha', 'Monto total', 'Pagado', 'Pendiente', ''].map((h, i) => <th key={i} style={{ textAlign: ['Monto total', 'Pagado', 'Pendiente'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap', ...(h === '' ? { position: 'sticky', right: 0, background: '#fff', zIndex: 3 } : {}) }}>{h || 'Acciones'}</th>)}</tr></thead>
             <tbody>
-              {ocs.map(oc => <FilaOCProveedor key={oc.id} oc={oc} p={p} upd={actualizar} onDelete={eliminar} />)}
+              {ocs.map(oc => <FilaOCProveedor key={oc.id} oc={oc} p={p} upd={actualizar} onDelete={eliminar} onAddCompraEtapa={onAddCompraEtapa} contactos={contactos} setContactos={setContactos} />)}
             </tbody>
           </table>
         </div>
@@ -756,7 +887,7 @@ function BloqueOCProveedor({ p, onUpdate, params }) {
 // detalle completo (etapas, editar, eliminar) sigue viviendo solo arriba
 // en BloqueOCProveedor; esto es solo una vista rápida, no un segundo editor.
 function OCsProveedorActivas({ p }) {
-  const activas = (p.ordenesCompra || []).filter(oc => ocProvNeto(oc) - ocProvPagado(oc) > 0)
+  const activas = (p.ordenesCompra || []).filter(oc => ocProvNeto(oc) - ocProvPagado(oc, p) > 0)
   if (activas.length === 0) return null
   return (
     <div style={{ border: '1px solid ' + SEREIN.blue, borderRadius: 8, padding: 10, marginBottom: 12, background: SEREIN.blueSoft }}>
@@ -764,7 +895,7 @@ function OCsProveedorActivas({ p }) {
       {activas.map(oc => (
         <div key={oc.id} style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, fontSize: 12.5, padding: '3px 0' }}>
           <span>{oc.numero ? 'OC ' + oc.numero + ' · ' : ''}{oc.proveedor || '(sin proveedor)'} <span style={{ color: C.gris }}>({oc.cc})</span></span>
-          <span style={{ color: SEREIN.blue, fontWeight: 600 }}>Pendiente {clp(ocProvNeto(oc) - ocProvPagado(oc))}</span>
+          <span style={{ color: SEREIN.blue, fontWeight: 600 }}>Pendiente {clp(ocProvNeto(oc) - ocProvPagado(oc, p))}</span>
         </div>
       ))}
     </div>
@@ -1197,7 +1328,7 @@ function descargarProyectoXlsx(p, facturasProy, params, ppmPct) {
   XLSX.writeFile(wb, 'Proyecto_' + (p.ot || 'OT') + '_' + new Date().toISOString().slice(0, 10) + '.xlsx')
 }
 
-function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, contactos, setContactos, facturasProy = [], ppmPct = 2, enModal = false }) {
+function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, onAddCompraEtapa, params, contactos, setContactos, facturasProy = [], ppmPct = 2, enModal = false }) {
   const facturasOT = facturasDeOT(facturasProy, p)
   const factNetoOT = facturasOT.reduce((a, f) => a + (f.neto || 0), 0)
   const remIvaVenta = Math.round(facturasOT.reduce((a, f) => a + ((f.monto || Math.round((f.neto || 0) * 1.19)) - (f.neto || 0)), 0))
@@ -1412,7 +1543,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, contactos
           <AbonosOT p={p} facturasOT={facturasOT} onUpdate={onUpdate} params={params} />
           <datalist id="serein-bancos"><option value="Banco de Chile" /><option value="BancoEstado" /><option value="BCI" /><option value="Santander" /><option value="Scotiabank" /><option value="Itaú" /><option value="BICE" /><option value="Security" /><option value="Banco Falabella" /><option value="Banco Ripley" /><option value="Consorcio" /><option value="Internacional" /><option value="HSBC" /></datalist>
 
-          <BloqueOCProveedor p={p} onUpdate={onUpdate} params={params} />
+          <BloqueOCProveedor p={p} onUpdate={onUpdate} params={params} onAddCompraEtapa={onAddCompraEtapa} contactos={contactos} setContactos={setContactos} />
 
           {/* COMPRAS */}
           <OCsProveedorActivas p={p} />
@@ -1475,7 +1606,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, contactos
                       <td style={{ padding: '5px 8px' }}><select value={c.cc || CC_DEFS[0].id} onChange={ev => updCompra(i, { cc: ev.target.value })} style={{ ...inp, padding: '5px 7px' }}>{ccCodigos(p).map(id => <option key={id} value={id}>{id} · {nombreCC(p, id)}</option>)}</select></td>
                       <td style={{ padding: '5px 8px' }}><input value={c.proveedor} onChange={ev => updCompra(i, { proveedor: ev.target.value })} style={{ ...inp, width: 130, padding: '5px 7px' }} /></td>
                       <td style={{ padding: '5px 8px' }}><input value={c.folio || ''} onChange={ev => updCompra(i, { folio: ev.target.value })} placeholder="N° doc" style={{ ...inp, width: 90, padding: '5px 7px' }} /></td>
-                      <td style={{ padding: '5px 8px' }}><input value={c.detalle || ''} onChange={ev => updCompra(i, { detalle: ev.target.value })} placeholder="Detalle" style={{ ...inp, width: 130, padding: '5px 7px' }} /></td>
+                      <td style={{ padding: '5px 8px' }}><input value={c.detalle || ''} onChange={ev => updCompra(i, { detalle: ev.target.value })} placeholder="Detalle" style={{ ...inp, width: 130, padding: '5px 7px' }} />{c.ocId && <div style={{ fontSize: 10.5, color: SEREIN.blue, marginTop: 3 }}>OC {c.ocNumero || 's/n'} · {c.etapaEtiqueta}</div>}</td>
                       <td style={{ padding: '5px 8px' }}><input type="date" value={c.fecha && c.fecha !== '—' ? c.fecha : ''} onChange={ev => updCompra(i, { fecha: ev.target.value || '—' })} style={{ ...inp, width: 140, padding: '5px 7px' }} /></td>
                       <td style={{ padding: '5px 8px', minWidth: 150 }}>
                         <select value={c.formaPago || 'Contado'} onChange={ev => updCompra(i, { formaPago: ev.target.value })} style={{ ...inp, width: '100%', padding: '5px 7px' }}>
@@ -1491,6 +1622,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, params, contactos
                         {c.factorizada && (
                           <div style={{ marginTop: 3 }}>
                             <FactoringInput value={c.factoringNombre} onChange={v => updCompra(i, { factoringNombre: v })} style={{ ...inp, width: '100%', padding: '5px 7px' }} />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3, fontSize: 10.5, color: C.gris }}>Plazo <input value={c.factoringPlazo || ''} onChange={ev => updCompra(i, { factoringPlazo: num(ev.target.value) })} style={{ ...inp, width: 50, padding: '3px 5px', textAlign: 'right' }} /> días</div>
                           </div>
                         )}
                       </td>
@@ -1842,6 +1974,30 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
     })()
     return true
   }
+  // Factura de una etapa de OC a proveedor: agrega la compra Y enlaza la etapa
+  // (compraId) en la misma escritura pull-fresh — dos escrituras seguidas
+  // (agregarCompra + actualizar) se pisarian entre si.
+  function agregarCompraDeEtapa(pId, ocId, etapaId, compra) {
+    if (compra.folio && compra.rut) {
+      const dup = proyectos.some(p => (p.compras || []).some(c => c.folio && c.rut && c.folio.trim() === compra.folio.trim() && c.rut.trim() === compra.rut.trim()))
+      if (dup && !window.confirm(`Ya existe una compra con folio ${compra.folio} y RUT ${compra.rut} en el consolidado. ¿Agregar de todas formas?`)) return false
+    }
+    ;(async () => {
+      try { await pullState() } catch (e) {}
+      let fresco = null
+      try { fresco = JSON.parse(localStorage.getItem('serein_proyectos') || 'null') } catch (e) {}
+      const base = Array.isArray(fresco) ? fresco : proyectos
+      const nuevo = base.map(p => p.id === pId ? {
+        ...p,
+        compras: [...(p.compras || []), compra],
+        ordenesCompra: (p.ordenesCompra || []).map(o => o.id === ocId ? { ...o, etapas: (o.etapas || []).map(e => e.id === etapaId ? { ...e, compraId: compra.id, facturaFolio: compra.folio || '' } : e) } : o),
+      } : p)
+      try { localStorage.setItem('serein_proyectos', JSON.stringify(nuevo)) } catch (e) {}
+      setProyectos(nuevo)
+      pushState()
+    })()
+    return true
+  }
   // Puente entre una factura de subcontratista aceptada (SubcontratistasModule,
   // que solo conoce el N° de OT, no el id interno del proyecto) y
   // agregarCompra() de siempre — busca el proyecto por ot y reusa el mismo
@@ -1977,7 +2133,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
                 <div style={{ padding: 12 }}>
                   <FactoringCtx.Provider value={factoringNombres}>
                     <datalist id="serein-factoring-sugeridos">{factoringNombres.map(n => <option key={n} value={n} />)}</datalist>
-                    <TarjetaProyecto p={sp} onUpdate={actualizar} onDelete={id => { eliminar(id); setSel(null) }} onAddCompra={agregarCompra} params={params} contactos={contactos} setContactos={setContactos} facturasProy={facturasProy} ppmPct={ppmPct} enModal />
+                    <TarjetaProyecto p={sp} onUpdate={actualizar} onDelete={id => { eliminar(id); setSel(null) }} onAddCompra={agregarCompra} onAddCompraEtapa={agregarCompraDeEtapa} params={params} contactos={contactos} setContactos={setContactos} facturasProy={facturasProy} ppmPct={ppmPct} enModal />
                   </FactoringCtx.Provider>
                 </div>
               </div>
