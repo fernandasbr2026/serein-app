@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
-import { ChevronDown, ChevronUp, Plus, Trash2, X, Ruler, Paintbrush, FileText, Receipt, ShoppingCart, CircleDollarSign, Download, Camera, Search, RotateCcw, Lock, Unlock, CalendarDays, Save, TrendingUp } from 'lucide-react'
+import { ChevronDown, ChevronUp, Plus, Trash2, X, Ruler, Paintbrush, FileText, Receipt, ShoppingCart, CircleDollarSign, Download, Camera, Search, RotateCcw, Lock, Unlock, CalendarDays, Save, TrendingUp, Pencil } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { descargarOTDesdeOT } from './CotizacionesModule.jsx'
 import { costoOCdeOT } from './OrdenesCompraModule.jsx'
@@ -2047,7 +2047,7 @@ function TileOT({ ot, onOpen, onDragStart, onDropOn, verValores }) {
   )
 }
 
-function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateProtocolo, onUpdateMarcasEsperadas, onDelete, onCambiarEstado, onAgregarVenta, onEliminarVenta, onAgregarArray, verValores = true, ordenesCompra = [], mo = null, otsAll = [], instrumentos = null, libroCompras = [], enModal = false }) {
+function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateProtocolo, onUpdateMarcasEsperadas, onDelete, onCambiarEstado, onAgregarVenta, onEliminarVenta, onAgregarArray, verValores = true, ordenesCompra = [], mo = null, otsAll = [], instrumentos = null, libroCompras = [], clientesActivos = [], enModal = false }) {
   const [abierta, setAbierta] = useState(false)
   const [addVenta, setAddVenta] = useState(false)
   const [addAbono, setAddAbono] = useState(false)
@@ -2102,7 +2102,7 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateProtocolo, onUpda
       if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo leer el documento.')
       const d = data.datos || {}
       setRevisionOC({
-        cliente: { valor: d.cliente || '', aplicar: !!d.cliente },
+        cliente: { valor: d.cliente || '', aplicar: !!d.cliente && !/serein|revestimientos industriales/i.test(d.cliente) },
         ocNumero: { valor: d.ocNumero || '', aplicar: !!d.ocNumero },
         nv: { valor: d.nv || '', aplicar: !!d.nv },
         marcas: (d.marcas || []).map(m => ({ ...m, aplicar: true })),
@@ -2170,6 +2170,7 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateProtocolo, onUpda
             <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 14, background: '#F77716', color: '#fff', padding: '3px 10px', borderRadius: 4, letterSpacing: 0.4 }}>NV {ot.nv || '\u2014'}</span>
             <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 14, background: C.carbon, color: '#fff', padding: '3px 9px' }}>{ot.numero}</span>
             <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15 }}>{ot.cliente}</span>
+            {enModal && <button title="Editar el nombre del cliente" onClick={e => { e.stopPropagation(); setTab('datos') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9AA3AD', padding: 2, display: 'flex' }}><Pencil size={13} /></button>}
             <ChipEstado ot={ot} />
           </div>
           <div style={{ fontSize: 12, color: '#9AA3AD', marginTop: 5, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
@@ -2629,6 +2630,7 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateProtocolo, onUpda
           <div style={{ marginTop: 14, paddingTop: 12 }}>
             <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase', marginBottom: 8 }}>Datos del encargado</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8 }}>
+              <div><div style={{ fontSize: 11, color: '#9AA3AD', marginBottom: 2 }}>Cliente</div><input list="dl-ot-cliente-edit" style={{ padding: '6px 8px', border: '1px solid #DFE4EA', fontSize: 12.5, width: '100%', boxSizing: 'border-box', fontWeight: 600 }} value={ot.cliente || ''} onChange={e => onUpdate(ot.id, { cliente: e.target.value })} /><datalist id="dl-ot-cliente-edit">{clientesActivos.map(n => <option key={n} value={n} />)}</datalist></div>
               <div><div style={{ fontSize: 11, color: '#9AA3AD', marginBottom: 2 }}>Nombre encargo</div><input style={{ padding: '6px 8px', border: '1px solid #DFE4EA', fontSize: 12.5, width: '100%', boxSizing: 'border-box' }} value={ot.nombreEncargo || ''} onChange={e => onUpdate(ot.id, { nombreEncargo: e.target.value })} /></div>
               <div><div style={{ fontSize: 11, color: '#9AA3AD', marginBottom: 2 }}>Correo</div><input style={{ padding: '6px 8px', border: '1px solid #DFE4EA', fontSize: 12.5, width: '100%', boxSizing: 'border-box' }} value={ot.correo || ''} onChange={e => onUpdate(ot.id, { correo: e.target.value })} /></div>
               <div><div style={{ fontSize: 11, color: '#9AA3AD', marginBottom: 2 }}>Telefono</div><input style={{ padding: '6px 8px', border: '1px solid #DFE4EA', fontSize: 12.5, width: '100%', boxSizing: 'border-box' }} value={ot.telefono || ''} onChange={e => onUpdate(ot.id, { telefono: e.target.value })} /></div>
@@ -3864,7 +3866,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
                 <button onClick={() => setSel(null)} style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><X size={15} /> Cerrar</button>
               </div>
               <div style={{ padding: 12 }}>
-                <TarjetaOT ot={so} onUpdate={actualizar} onUpdateProtocolos={actualizarProtocolos} onUpdateProtocolo={actualizarUnProtocolo} onUpdateMarcasEsperadas={actualizarMarcasEsperadas} onDelete={id => { eliminar(id); setSel(null) }} onCambiarEstado={cambiarEstado} onAgregarVenta={agregarVenta} onEliminarVenta={eliminarVenta} onAgregarArray={agregarAArray} verValores={verValores} ordenesCompra={ordenesCompra} mo={mo} otsAll={otsAll} instrumentos={instrumentos} libroCompras={libroCompras} enModal />
+                <TarjetaOT ot={so} onUpdate={actualizar} onUpdateProtocolos={actualizarProtocolos} onUpdateProtocolo={actualizarUnProtocolo} onUpdateMarcasEsperadas={actualizarMarcasEsperadas} onDelete={id => { eliminar(id); setSel(null) }} onCambiarEstado={cambiarEstado} onAgregarVenta={agregarVenta} onEliminarVenta={eliminarVenta} onAgregarArray={agregarAArray} verValores={verValores} ordenesCompra={ordenesCompra} mo={mo} otsAll={otsAll} instrumentos={instrumentos} libroCompras={libroCompras} clientesActivos={clientesActivos} enModal />
               </div>
             </div>
           </div>
