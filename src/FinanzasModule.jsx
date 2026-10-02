@@ -1004,7 +1004,7 @@ function itemsPorPagar(fin, proyectos = []) {
       // vencimiento"); si es al contado o no se cargó vencimiento, se usa
       // la fecha de emisión como antes, para no perder las compras viejas.
       const vencimientoPago = (c.formaPago === 'Programado' && c.vencimiento) ? c.vencimiento : ((c.fecha && c.fecha !== '—') ? c.fecha : '')
-      const notaFactoring = c.factorizada ? (' · Factorizada' + (c.factoringNombre ? (' a ' + c.factoringNombre) : '')) : ''
+      const notaFactoring = c.factorizada ? (' · Factorizada' + (c.factoringNombre ? (' a ' + c.factoringNombre) : '') + (c.factoringPlazo ? ' (' + c.factoringPlazo + ' días)' : '')) : ''
       items.push({
         id: 'c-' + p.id + '-' + (c.folio || '') + '-' + (c.fecha || '') + '-' + bruto,
         vencimiento: vencimientoPago,
