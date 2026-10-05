@@ -489,6 +489,10 @@ export default function ComprasOperativasModule({ esGerencia, planta = null, usu
     pushState()
   }
 
+  // Un perfil que no es Gerencia ni supervisor de una planta (planta = null,
+  // ej. Facturación) no tiene "su" planta: ve todas las OT al registrar y no
+  // tiene sentido la pestaña "Mis OT/OC/Proyectos" (filtra por planta).
+  const veTodasLasOT = esGerencia || !planta
   const tabs = esGerencia ? [
     { id: 'revision', label: 'Todas las compras', icono: <ClipboardList size={13} /> },
     { id: 'totales', label: 'Totales, alertas y permisos', icono: <Settings2 size={13} /> },
@@ -496,7 +500,7 @@ export default function ComprasOperativasModule({ esGerencia, planta = null, usu
   ] : [
     { id: 'registrar', label: 'Registrar compra', icono: <Plus size={13} /> },
     { id: 'mias', label: 'Mis compras', icono: <ShoppingCart size={13} /> },
-    { id: 'misots', label: 'Mis OT/OC/Proyectos', icono: <Factory size={13} /> },
+    ...(planta ? [{ id: 'misots', label: 'Mis OT/OC/Proyectos', icono: <Factory size={13} /> }] : []),
   ]
   const [tab, setTab] = useState(tabs[0].id)
 
@@ -510,7 +514,7 @@ export default function ComprasOperativasModule({ esGerencia, planta = null, usu
           </button>
         ))}
       </div>
-      {tab === 'registrar' && <FormCompra config={config} ots={esGerencia ? ots : ots.filter(o => o.area === planta)} proyectos={proyectos} planta={planta} usuario={usuario} onGuardar={agregarCompraFresca} />}
+      {tab === 'registrar' && <FormCompra config={config} ots={veTodasLasOT ? ots : ots.filter(o => o.area === planta)} proyectos={proyectos} planta={planta} usuario={usuario} onGuardar={agregarCompraFresca} />}
       {tab === 'mias' && !esGerencia && <MisCompras comprasOp={comprasOp} usuario={usuario} config={config} />}
       {tab === 'misots' && !esGerencia && <MisOTs ots={ots} proyectos={proyectos} mo={mo} comprasOp={comprasOp} planta={planta} />}
       {tab === 'revision' && esGerencia && <RevisionGerencia comprasOp={comprasOp} setComprasOp={setComprasOp} />}
