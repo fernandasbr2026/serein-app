@@ -218,6 +218,7 @@ export const cruceFacturacionOT = ot => {
     facturadas, pendientes, sinM2,
     m2Facturado: m2FacturadoEf, m2Pendiente: m2PendienteEf,
     m2Recibido, hayM2Declarado,
+    m2PorFacturar: Math.max(0, Math.round((m2Base - m2FacturadoEf) * 100) / 100),
     precioM2: precio,
     montoPendienteEstimado: precio != null ? Math.round(m2PendienteEf * precio) : null,
     montoFacturadoEstimado: precio != null ? Math.round(m2FacturadoEf * precio) : null,
@@ -2254,7 +2255,7 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateProtocolo, onUpda
             return (
               <div style={{ fontSize: 12, color: '#D9600A', marginTop: 4 }}>
                 Falta por facturar: <b>{cf.pendientes.length} de {cf.total} pieza(s)</b>
-                {cf.m2Pendiente > 0 && <> · {cf.m2Pendiente.toFixed(2)} m²</>}
+                {cf.m2PorFacturar > 0 && <> · {cf.m2PorFacturar.toFixed(2)} m² por facturar</>}
                 {cf.montoPendienteEstimado != null && cf.montoPendienteEstimado > 0 && <> · ≈ <b>{clp(cf.montoPendienteEstimado)}</b></>}
               </div>
             )
@@ -2351,11 +2352,14 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateProtocolo, onUpda
             const m2d = r2((ot.despachos || []).reduce((s, p) => s + (parseFloat(p.m2) || 0), 0));
             const planta = r2(m2r - m2d);
             const over = m2c > 0 && m2r > m2c;
+            const cfM2 = cruceFacturacionOT(ot)
             return (
               <div style={{ marginTop: 16, display:'flex', gap:12, flexWrap:'wrap' }}>
                 <div style={{ flex:'1 1 120px', border:'1px solid #D8DCE5', borderRadius:6, padding:'10px 12px', background:'#F2F4F7' }}><div style={{ fontSize:11, color:'#9AA3AD', textTransform:'uppercase', fontWeight:700 }}>M² cotización</div><div style={{ fontSize:20, fontWeight:700, color:C.carbon }}>{m2c}</div></div>
                 <div style={{ flex:'1 1 120px', border:'1px solid ' + (over ? '#C5453D' : '#D8DCE5'), borderRadius:6, padding:'10px 12px', background: over ? '#FDECEC' : '#F2F4F7' }}><div style={{ fontSize:11, color: over ? '#C5453D' : '#9AA3AD', textTransform:'uppercase', fontWeight:700 }}>M² reales</div><div style={{ fontSize:20, fontWeight:700, color: over ? '#C5453D' : C.carbon }}>{m2r}</div>{over ? <div style={{ fontSize:10.5, color:'#C5453D', fontWeight:700, marginTop:2 }}>⚠ Supera lo cotizado (+{r2(m2r - m2c)} m²)</div> : null}</div>
                 <div style={{ flex:'1 1 120px', border:'1px solid #D8DCE5', borderRadius:6, padding:'10px 12px', background:'#F2F4F7' }}><div style={{ fontSize:11, color:'#9AA3AD', textTransform:'uppercase', fontWeight:700 }}>M² en planta</div><div style={{ fontSize:20, fontWeight:700, color: planta < 0 ? '#C5453D' : C.carbon }}>{planta}</div></div>
+                <div title="Suma de los m² declarados en cada factura (Comercial)" style={{ flex:'1 1 120px', border:'1px solid #B7E0C4', borderRadius:6, padding:'10px 12px', background:'#E6F5EA' }}><div style={{ fontSize:11, color:'#2F6B44', textTransform:'uppercase', fontWeight:700 }}>M² facturados</div><div style={{ fontSize:20, fontWeight:700, color:'#2F6B44' }}>{r2(cfM2.m2Facturado)}</div></div>
+                <div title="M² recibidos menos m² facturados" style={{ flex:'1 1 120px', border:'1px solid #F3C9A6', borderRadius:6, padding:'10px 12px', background:'#FDECDD' }}><div style={{ fontSize:11, color:'#D9600A', textTransform:'uppercase', fontWeight:700 }}>M² por facturar</div><div style={{ fontSize:20, fontWeight:700, color:'#D9600A' }}>{r2(cfM2.m2PorFacturar)}</div></div>
               </div>
             );
           })()}
