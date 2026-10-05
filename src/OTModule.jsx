@@ -199,13 +199,28 @@ export const cruceFacturacionOT = ot => {
   // se listan aparte para que se note que falta el dato, en vez de
   // sumarlas como $0 y dar un pendiente falsamente bajo.
   const sinM2 = pendientes.filter(m => m2De(m) <= 0)
+  // m² facturados declarados a mano en cada factura (campo `m2` de la venta):
+  // si hay alguno, lo por facturar deja de depender de que cada pieza tenga
+  // m² cargados y pasa a ser  recibido en planta − facturado.  Las facturas
+  // sin m² declarado aportan los m² de las piezas ligadas a ellas.
+  const m2Num = x => { const n = parseFloat(x); return Number.isFinite(n) && n > 0 ? n : 0 }
+  const m2Recibido = (ot.partidas || []).reduce((a, pa) => a + m2Num(pa.m2), 0)
+  const m2Declarado = ventas.reduce((a, v) => a + m2Num(v.m2), 0)
+  const hayM2Declarado = m2Declarado > 0
+  const idsConM2 = new Set(ventas.filter(v => m2Num(v.m2) > 0).map(v => v.id).filter(Boolean))
+  const m2PiezasSinDeclarar = facturadas.filter(m => !idsConM2.has(m.facturaId)).reduce((a, m) => a + m2De(m), 0)
+  const m2FacturadoTotal = m2Declarado + m2PiezasSinDeclarar
+  const m2Base = m2Recibido > 0 ? m2Recibido : (marcas.reduce((a, m) => a + m2De(m), 0) || numDec(ot.m2))
+  const m2PendienteEf = hayM2Declarado ? Math.max(0, Math.round((m2Base - m2FacturadoTotal) * 100) / 100) : m2Pendiente
+  const m2FacturadoEf = hayM2Declarado ? m2FacturadoTotal : m2Facturado
   return {
     total: marcas.length,
     facturadas, pendientes, sinM2,
-    m2Facturado, m2Pendiente,
+    m2Facturado: m2FacturadoEf, m2Pendiente: m2PendienteEf,
+    m2Recibido, hayM2Declarado,
     precioM2: precio,
-    montoPendienteEstimado: precio != null ? Math.round(m2Pendiente * precio) : null,
-    montoFacturadoEstimado: precio != null ? Math.round(m2Facturado * precio) : null,
+    montoPendienteEstimado: precio != null ? Math.round(m2PendienteEf * precio) : null,
+    montoFacturadoEstimado: precio != null ? Math.round(m2FacturadoEf * precio) : null,
   }
 }
 const montoTotalItemsReal = items => (items || []).reduce((a, it) => a + montoItemReal(it), 0)
@@ -321,7 +336,7 @@ function ChipEstado({ ot }) {
 
 // ---------- Formularios inline ----------
 function FormVenta({ onAdd, onCancel, abonoTotal = 0, ventaTotalActual = 0 }) {
-  const [f, setF] = useState({ folio: '', fecha: '', neta: '', estadoPago: 'Pendiente', observacion: '' })
+  const [f, setF] = useState({ folio: '', fecha: '', neta: '', m2: '', estadoPago: 'Pendiente', observacion: '' })
   const iva = Math.round(num(f.neta) * 0.19)
   const totalBruto = num(f.neta) + iva
   const ventaTrasFactura = ventaTotalActual + num(f.neta)
@@ -332,6 +347,7 @@ function FormVenta({ onAdd, onCancel, abonoTotal = 0, ventaTotalActual = 0 }) {
         <input style={{ ...inp, width: 100 }} placeholder="Folio fact." value={f.folio} onChange={e => setF({ ...f, folio: e.target.value })} />
         <input style={{ ...inp, width: 130 }} type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} />
         <input style={{ ...inp, width: 140 }} placeholder="Venta neta CLP" value={f.neta} onChange={e => setF({ ...f, neta: e.target.value })} />
+        <input style={{ ...inp, width: 110 }} type="number" step="0.01" min="0" placeholder="m² facturados" title="Total de m² que cubre esta factura — se rebajan de lo recibido" value={f.m2} onChange={e => setF({ ...f, m2: e.target.value })} />
         <select style={inp} value={f.estadoPago} onChange={e => setF({ ...f, estadoPago: e.target.value })}>
           <option>Pendiente</option><option>Pagado</option><option>Factoring</option>
         </select>
@@ -339,7 +355,7 @@ function FormVenta({ onAdd, onCancel, abonoTotal = 0, ventaTotalActual = 0 }) {
         {/* id: necesario para poder ligarle piezas del checklist (ver
             FacturacionOT). Las ventas cargadas antes de esta funcion no
             lo tienen y simplemente no aceptan piezas ligadas. */}
-        <button onClick={() => num(f.neta) > 0 && onAdd({ id: 'vt' + Date.now() + Math.random().toString(36).slice(2, 7), folio: f.folio || 's/f', fecha: f.fecha || '—', neta: num(f.neta), iva, totalBruto, estadoPago: f.estadoPago, observacion: f.observacion || '' })}
+        <button onClick={() => num(f.neta) > 0 && onAdd({ id: 'vt' + Date.now() + Math.random().toString(36).slice(2, 7), folio: f.folio || 's/f', fecha: f.fecha || '—', neta: num(f.neta), iva, totalBruto, estadoPago: f.estadoPago, observacion: f.observacion || '', ...(parseFloat(f.m2) > 0 ? { m2: parseFloat(f.m2) } : {}) })}
           style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Agregar</button>
         <button onClick={onCancel} style={{ ...btnMini, color: '#9AA3AD' }}><X size={16} /></button>
       </div>
@@ -1390,7 +1406,7 @@ function DespachoOT({ ot, onUpdate, onAgregarArray, onUpdateMarcasEsperadas }) {
 // toca ninguna venta ya cargada: las facturas antiguas simplemente no
 // tienen piezas ligadas, y todas sus piezas aparecen como pendientes
 // hasta que alguien las asocie.
-function FacturacionOT({ ot, onAgregarVenta, onUpdateMarcasEsperadas }) {
+function FacturacionOT({ ot, onAgregarVenta, onUpdateMarcasEsperadas, onUpdate }) {
   const marcasEsperadas = ot.marcasEsperadas || []
   const ventas = ot.ventas || []
   const cruce = cruceFacturacionOT(ot)
@@ -1582,6 +1598,7 @@ function FacturacionOT({ ot, onAgregarVenta, onUpdateMarcasEsperadas }) {
     ) : (<>
       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 10 }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: C.carbon }}>{cruce.total} piezas</span>
+        {cruce.m2Recibido > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: C.carbon }}>{cruce.m2Recibido.toFixed(2)} m² recibidos</span>}
         <span style={{ fontSize: 12, fontWeight: 700, color: C.verde }}>{cruce.facturadas.length} facturadas · {cruce.m2Facturado.toFixed(2)} m²</span>
         <span style={{ fontSize: 12, fontWeight: 700, color: cruce.pendientes.length ? '#D9600A' : C.verde }}>{cruce.pendientes.length} por facturar · {cruce.m2Pendiente.toFixed(2)} m²</span>
         {cruce.montoPendienteEstimado != null && cruce.pendientes.length > 0 && (
@@ -1591,7 +1608,22 @@ function FacturacionOT({ ot, onAgregarVenta, onUpdateMarcasEsperadas }) {
       {cruce.precioM2 == null && cruce.pendientes.length > 0 && (
         <div style={{ fontSize: 11, color: '#9AA3AD', marginBottom: 8 }}>Sin precio por m² en la cotización ni monto cotizado, así que lo pendiente se muestra solo en piezas y m².</div>
       )}
-      {cruce.sinM2.length > 0 && (
+      {ventas.length > 0 && onUpdate && (
+        <div style={{ border: '1px solid #D8DCE5', background: '#fff', borderRadius: 6, padding: 8, marginBottom: 10 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: '#41618A', textTransform: 'uppercase', marginBottom: 2 }}>m² facturados por factura</div>
+          <div style={{ fontSize: 11, color: '#9AA3AD', marginBottom: 6 }}>Escribe el total de m² de cada factura: se rebajan de lo recibido y calculan lo que falta por facturar, sin tener que marcar pieza por pieza.</div>
+          {ventas.map((v, i) => (
+            <div key={v.id || i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, minWidth: 110 }}>Factura {v.folio || 's/f'}</span>
+              <span style={{ fontSize: 11.5, color: '#9AA3AD', minWidth: 90 }}>{clp(v.neta)} neto</span>
+              <input type="number" step="0.01" min="0" value={v.m2 ?? ''} placeholder="m²" onChange={ev => onUpdate(ot.id, { ventas: ventas.map((x, j) => j === i ? { ...x, m2: ev.target.value === '' ? null : parseFloat(ev.target.value) } : x) })} style={{ ...inp2, width: 100, textAlign: 'right' }} />
+              <span style={{ fontSize: 11.5, color: '#9AA3AD' }}>m²</span>
+            </div>
+          ))}
+          {cruce.hayM2Declarado && <div style={{ fontSize: 12, fontWeight: 700, color: '#D9600A', marginTop: 6 }}>Por facturar: {cruce.m2Pendiente.toFixed(2)} m² ({cruce.m2Recibido > 0 ? cruce.m2Recibido.toFixed(2) + ' recibidos' : 'total de piezas'} − {cruce.m2Facturado.toFixed(2)} facturados)</div>}
+        </div>
+      )}
+      {cruce.sinM2.length > 0 && !cruce.hayM2Declarado && (
         <div style={{ fontSize: 11, color: '#D9600A', marginBottom: 8 }}>{cruce.sinM2.length} pieza(s) pendiente(s) sin m² cargados — no suman al monto estimado hasta que se les cargue la superficie.</div>
       )}
 
@@ -2436,7 +2468,7 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateProtocolo, onUpda
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-                      {['Folio', 'Fecha', 'Neta', 'IVA', 'Total', 'Piezas', 'Pago', ''].map((h, i) => (
+                      {['Folio', 'Fecha', 'Neta', 'IVA', 'Total', 'm² fact.', 'Piezas', 'Pago', ''].map((h, i) => (
                         <th key={i} style={{ textAlign: ['Neta', 'IVA', 'Total'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>{h}</th>
                       ))}
                     </tr>
@@ -2449,6 +2481,9 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateProtocolo, onUpda
                         <td style={{ padding: '7px 8px', textAlign: 'right' }}>{clp(v.neta)}</td>
                         <td style={{ padding: '7px 8px', textAlign: 'right', color: '#9AA3AD' }}>{clp(v.neta * 0.19)}</td>
                         <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 500 }}>{clp(v.neta * 1.19)}</td>
+                        <td style={{ padding: '4px 8px' }}><input type="number" step="0.01" min="0" value={v.m2 ?? ''} placeholder="—" title="Total de m² que cubre esta factura — se rebajan de lo recibido"
+                          onChange={ev => onUpdate(ot.id, { ventas: (ot.ventas || []).map((x, j) => j === i ? { ...x, m2: ev.target.value === '' ? null : parseFloat(ev.target.value) } : x) })}
+                          style={{ width: 80, padding: '4px 6px', border: '1px solid #DFE4EA', fontSize: 12.5, textAlign: 'right' }} /></td>
                         {/* Cuantas piezas del checklist respalda esta factura
                             (ver FacturacionOT). Sin vinculo se muestra "—",
                             que es el caso de todas las facturas cargadas
@@ -2497,7 +2532,7 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateProtocolo, onUpda
 
               {/* Cruce de las facturas contra el checklist de piezas —
                   que se facturó, qué falta, y cuánto vale lo que falta. */}
-              <FacturacionOT ot={ot} onAgregarVenta={onAgregarVenta} onUpdateMarcasEsperadas={onUpdMarcas} />
+              <FacturacionOT ot={ot} onAgregarVenta={onAgregarVenta} onUpdateMarcasEsperadas={onUpdMarcas} onUpdate={onUpdate} />
 
               {/* ABONOS DE CLIENTES (pagos anticipados, sin IVA) */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0 8px' }}>
