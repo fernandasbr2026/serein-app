@@ -261,7 +261,7 @@ function htmlOferta(cot) {
   const precioDesc = cot.precioDescripcion ? ' · ' + escH(cot.precioDescripcion) : ''
   // Precio unitario (abajo a la izquierda): por m² cuando hay base de m²; en cotizaciones de un solo ítem, por la unidad del ítem (un, gl, ml…).
   const puValor = baseM2 ? num(precioCub) : (items.length === 1 ? num(it0.pUnitario) : 0)
-  const puUnidad = baseM2 ? 'm²' : (/^m\s*2$|^m²$/i.test(String(it0.unidad || '').trim()) ? 'm²' : String(it0.unidad || 'UN').trim().toLowerCase())
+  const puUnidad = baseM2 ? 'm²' : (/^m\s*2$|^m²$|^(un|und|unid|unidad|unidades)?\.?$/i.test(String(it0.unidad || '').trim()) ? 'm²' : String(it0.unidad || 'UN').trim().toLowerCase())
   const valorFinal = hayCub ? ' El valor final se ajusta según los m² verificados al ingreso a planta, manteniendo el precio unitario.' : ''
   const calidad = '<ul><li><b>Protocolo por lote:</b> preparación, perfil de rugosidad, condiciones ambientales y espesores.</li><li><b>Instrumentos</b> Elcometer con calibración externa vigente.</li><li><b>Registro fotográfico</b> del proceso.</li></ul>'
   return `<!doctype html><html><head><meta charset="utf-8"><title>Cotización ${escH(cot.folio)}${rev ? ' Rev. ' + rev : ''}</title><style>${estilosOferta()}</style></head><body>
