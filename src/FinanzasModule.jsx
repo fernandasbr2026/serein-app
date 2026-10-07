@@ -874,19 +874,19 @@ function ProyeccionFin({ fin }) {
           <div key={m.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 0 }}>
             <div style={{ width: '100%', height: 115, position: 'relative' }}>
               <div title={'Fijos + variables ' + clp(m.total)} style={{ width: '68%', height: (m.total / max * 115) + 'px', background: '#F77716', position: 'absolute', bottom: 0, left: '16%' }} />
-              <div title={'Fijos ' + clp(m.fijos)} style={{ width: '68%', height: (m.fijos / max * 115) + 'px', background: '#101315', position: 'absolute', bottom: 0, left: '16%' }} />
+              <div title={'Fijos ' + clp(m.fijos)} style={{ width: '68%', height: (m.fijos / max * 115) + 'px', background: '#59626C', borderRadius: '3px 3px 0 0', position: 'absolute', bottom: 0, left: '16%' }} />
             </div>
             <div style={{ fontSize: 9, color: '#9AA3AD', whiteSpace: 'nowrap' }}>{m.etiqueta}</div>
           </div>
         ))}
       </div>
       <div style={{ display: 'flex', gap: 16, fontSize: 11.5, color: '#9AA3AD', marginBottom: 10 }}>
-        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#101315', marginRight: 5 }} />Gastos fijos</span>
+        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#59626C', borderRadius: 2, marginRight: 5 }} />Gastos fijos</span>
         <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#F77716', marginRight: 5 }} />Fijos + variables</span>
       </div>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-          <thead><tr style={{ borderBottom: '2px solid #101315' }}>{['Mes', 'Fijos', 'Fijos + variables'].map((h, i) => <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '6px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+          <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['Mes', 'Fijos', 'Fijos + variables'].map((h, i) => <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '6px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
           <tbody>
             {meses.map(m => (<tr key={m.key} style={{ borderBottom: '1px solid #DFE4EA' }}><td style={{ padding: '6px 8px' }}>{m.etiqueta}</td><td style={{ padding: '6px 8px', textAlign: 'right' }}>{clp(m.fijos)}</td><td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{clp(m.total)}</td></tr>))}
           </tbody>
