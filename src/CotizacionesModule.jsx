@@ -199,7 +199,7 @@ function estilosOferta() {
     '.fn{font-size:10.5px;color:#69717F;margin-top:7px;line-height:1.45}',
     '.bf{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin-top:10px}',
     '.bf .pu{font-size:11.5px;color:#69717F}.bf .pu b{display:block;font-size:26px;color:#1B294A;margin-top:2px}',
-    '.bf .tt{text-align:right;font-size:13px;color:#69717F;line-height:1.7;margin-left:auto}.bf .tt b{color:#1B294A}.bf .tt .g{font-size:30px;font-weight:800;color:#1B294A;line-height:1.15;margin-top:3px}',
+    '.bf .tt{text-align:right;font-size:13px;color:#69717F;line-height:1.7;margin-left:auto}.bf .tt b{color:#1B294A}.bf .tt .nt{font-size:13px;color:#69717F;line-height:1.4}.bf .tt .nt b{font-size:21px}.bf .tt .g{font-size:30px;font-weight:800;color:#1B294A;line-height:1.15;margin-top:3px}',
     '.words{margin:7px 3px 0;font-size:11.5px;color:#69717F;font-style:italic;line-height:1.45}',
     '.sec{font-size:17px;font-weight:800;color:#1B294A;margin:16px 0 8px}.nota{font-size:10.5px;color:#69717F;margin-top:7px;line-height:1.5}',
     '.bar{display:flex;height:5px;border-radius:3px;overflow:hidden;margin-bottom:10px}.bar i{flex:1}',
@@ -282,7 +282,7 @@ function htmlOferta(cot) {
       ${hayCub ? tablaCub : tablaItems}
       <div class="bf">
         ${baseM2 && precioCub ? `<div class="pu">Precio unitario${precioDesc}<b>${clp(precioCub)} / m²</b></div>` : ''}
-        <div class="tt">Neto <b>${clp(t.afecto)}</b><br>IVA 19 % <b>${clp(t.iva)}</b><div class="g">${clp(t.total)}</div></div>
+        <div class="tt"><div class="nt">Neto <b>${clp(t.afecto)}</b></div>IVA 19 % <b>${clp(t.iva)}</b><div class="g">${clp(t.total)}</div></div>
       </div>
     </div>
     <div class="words">Son: ${escH(sonPalabras(t.total))}.${escH(valorFinal)}</div>
