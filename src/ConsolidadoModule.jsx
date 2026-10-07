@@ -20,7 +20,7 @@ function fechaCL(f) { if (!f) return '-'; const s = ('' + f).slice(0, 10); const
 const num = n => (+n || 0)
 
 function Card({ titulo, icon: Ico, children, borde }) {
-  return (<div style={{ background: SEREIN.paper, border: '1px solid ' + C.line, borderTop: '3px solid ' + (borde || C.orange), borderRadius: SEREIN.radius, boxShadow: SEREIN.shadow, padding: '16px 18px', marginBottom: 18 }}>
+  return (<div style={{ background: SEREIN.paper, border: '1px solid ' + C.line, borderTop: '2px solid ' + (borde || C.orange), borderRadius: SEREIN.radius, boxShadow: SEREIN.shadow, padding: '16px 18px', marginBottom: 18 }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
       {Ico && <Ico size={16} color={borde || C.navy} />}
       <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 13.5, textTransform: 'uppercase', letterSpacing: 0.4, color: C.carbon }}>{titulo}</span>

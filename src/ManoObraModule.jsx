@@ -168,7 +168,7 @@ function TabsInternos({ tabs, sel, onSel }) {
     <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap', borderBottom: '1px solid #E7E2D8', paddingBottom: 10 }}>
       {tabs.map(t => (
         <button key={t.id} onClick={() => onSel(t.id)}
-          style={{ background: sel === t.id ? C.carbon : '#fff', color: sel === t.id ? '#fff' : C.carbon, border: '1px solid ' + (sel === t.id ? C.carbon : '#DFE4EA'), borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6, transition: 'background .15s' }}>
+          style={{ background: sel === t.id ? '#FDECDD' : '#fff', color: sel === t.id ? '#C2570B' : '#5A636E', border: '1px solid ' + (sel === t.id ? '#F7C89E' : '#DFE4EA'), borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontBody, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, transition: 'background .15s' }}>
           {t.icono}{t.label}
         </button>
       ))}

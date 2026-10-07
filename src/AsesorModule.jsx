@@ -20,7 +20,7 @@ const mesLabel = ym => { if (!ym) return ''; const p = ym.split('-'); return MES
 
 function Tarjeta({ icon: Ico, titulo, color, vacio, children }) {
   return (
-    <div style={{ background: '#fff', border: '1px solid ' + C.line, borderTop: '3px solid ' + (color || C.navy), borderRadius: 6, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div style={{ background: '#fff', border: '1px solid ' + C.line, borderTop: '2px solid ' + (color || C.navy), borderRadius: 6, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <Ico size={16} color={color || C.navy} />
         <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', color: C.navy, letterSpacing: 0.4 }}>{titulo}</span>
@@ -34,7 +34,7 @@ function Fila({ k, v, color }) {
 }
 
 const TEMAS = ['Ventas', 'OT', 'OC', 'Facturas', 'Clientes', 'Produccion', 'Compras', 'Cobranza']
-const tabBtn = on => ({ background: on ? C.navy : '#fff', color: on ? '#fff' : C.navy, border: '1px solid ' + C.line, borderRadius: 4, padding: '7px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: SEREIN.fontDisplay, textTransform: 'uppercase' })
+const tabBtn = on => ({ background: on ? '#FDECDD' : '#fff', color: on ? '#C2570B' : '#5A636E', border: '1px solid ' + (on ? '#F7C89E' : C.line), borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: SEREIN.fontBody })
 
 function ChatIA() {
   const [convs, setConvs] = useState([])
@@ -509,7 +509,7 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
         {analisisOp.length === 0 ? <div style={{ color: C.gray, fontSize: 13, border: '1px dashed ' + C.line, borderRadius: 6, padding: 16, textAlign: 'center' }}>Aun no hay analisis guardado. Si es la primera vez, corre serein_ai_setup.sql en Supabase.</div> : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
             {['OT', 'Produccion', 'Planta', 'Calidad', 'Retrasos', 'Horas Hombre', 'Capacidad'].map(area => { const a = analisisOp.find(x => x.area === area); if (!a) return null; const v = (area === 'Produccion' || area === 'Calidad' || area === 'Capacidad') ? (a.valor + '%') : String(a.valor); return (
-              <div key={area} style={{ background: '#fff', border: '1px solid ' + C.line, borderTop: '3px solid ' + C.navy, borderRadius: 6, padding: '12px 14px' }}>
+              <div key={area} style={{ background: '#fff', border: '1px solid ' + C.line, borderTop: '2px solid ' + C.navy, borderRadius: 6, padding: '12px 14px' }}>
                 <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase', color: C.navy }}>{a.area}</div>
                 <div style={{ fontSize: 21, fontWeight: 700, color: C.navy, fontFamily: SEREIN.fontDisplay, margin: '2px 0 4px' }}>{v}</div>
                 <div style={{ fontSize: 12, color: '#5A636E' }}>{a.resumen}</div>
@@ -524,7 +524,7 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
         {analisisCom.length === 0 ? <div style={{ color: C.gray, fontSize: 13, border: '1px dashed ' + C.line, borderRadius: 6, padding: 16, textAlign: 'center' }}>Aun no hay analisis guardado. Si es la primera vez, corre serein_ai_setup.sql en Supabase.</div> : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
             {['Cotizaciones', 'Clientes', 'Seguimientos', 'Conversion', 'Ventas', 'Margenes'].map(area => { const a = analisisCom.find(x => x.area === area); if (!a) return null; const v = (area === 'Conversion' || area === 'Margenes') ? (a.valor + '%') : (area === 'Clientes' || area === 'Seguimientos') ? String(a.valor) : clp(a.valor); return (
-              <div key={area} style={{ background: '#fff', border: '1px solid ' + C.line, borderTop: '3px solid ' + C.navy, borderRadius: 6, padding: '12px 14px' }}>
+              <div key={area} style={{ background: '#fff', border: '1px solid ' + C.line, borderTop: '2px solid ' + C.navy, borderRadius: 6, padding: '12px 14px' }}>
                 <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase', color: C.navy }}>{a.area}</div>
                 <div style={{ fontSize: 21, fontWeight: 700, color: C.navy, fontFamily: SEREIN.fontDisplay, margin: '2px 0 4px' }}>{v}</div>
                 <div style={{ fontSize: 12, color: '#5A636E' }}>{a.resumen}</div>
@@ -574,7 +574,7 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
         {analisisFin.length === 0 ? <div style={{ color: C.gray, fontSize: 13, border: '1px dashed ' + C.line, borderRadius: 6, padding: 16, textAlign: 'center' }}>Aun no hay analisis guardado. Si es la primera vez, corre serein_ai_setup.sql en Supabase.</div> : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
             {['Ventas', 'Compras', 'IVA', 'Factoring', 'Creditos', 'Leasing', 'Gastos', 'Flujo de Caja', 'Rentabilidad'].map(area => { const a = analisisFin.find(x => x.area === area); if (!a) return null; return (
-              <div key={area} style={{ background: '#fff', border: '1px solid ' + C.line, borderTop: '3px solid ' + C.navy, borderRadius: 6, padding: '12px 14px' }}>
+              <div key={area} style={{ background: '#fff', border: '1px solid ' + C.line, borderTop: '2px solid ' + C.navy, borderRadius: 6, padding: '12px 14px' }}>
                 <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase', color: C.navy }}>{a.area}</div>
                 <div style={{ fontSize: 21, fontWeight: 700, color: C.navy, fontFamily: SEREIN.fontDisplay, margin: '2px 0 4px' }}>{clp(a.valor)}</div>
                 <div style={{ fontSize: 12, color: '#5A636E' }}>{a.resumen}</div>

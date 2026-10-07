@@ -475,7 +475,7 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
         {[['Gastos', String(resumen.n)], [fArea ? 'Neto ' + fArea : 'Neto total', clp(Math.round(resumen.neto))], [fArea ? 'Total ' + fArea : 'Total con IVA', clp(Math.round(resumen.total))]].map(([k, v], n) => (
-          <div key={n} style={{ flex: '1 1 180px', background: '#fff', border: '1px solid #DFE4EA', borderTop: '3px solid ' + C.naranja, padding: '12px 14px' }}>
+          <div key={n} style={{ flex: '1 1 180px', background: '#fff', border: '1px solid #DFE4EA', borderTop: '2px solid ' + C.naranja, padding: '12px 14px' }}>
             <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase', fontWeight: 700 }}>{k}</div>
             <div style={{ fontSize: 21, fontWeight: 700, color: C.carbon, fontFamily: SEREIN.fontDisplay }}>{v}</div>
           </div>
@@ -1511,7 +1511,7 @@ export default function FinanzasModule({ otsDisponibles = [], fin: finExt, setFi
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {tabs.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
-              style={{ background: tab === t.id ? C.carbon : '#fff', color: tab === t.id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
+              style={{ background: tab === t.id ? '#FDECDD' : '#fff', color: tab === t.id ? '#C2570B' : '#5A636E', border: '1px solid ' + (tab === t.id ? '#F7C89E' : '#DFE4EA'), borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontBody, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
               {t.icono}{t.label}
             </button>
           ))}

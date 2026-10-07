@@ -209,7 +209,7 @@ function FormCompra({ config, ots, proyectos, planta, usuario, onGuardar }) {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
           {TIPOS_ASIG.map(t => (
             <button key={t} onClick={() => cambiarTipo(t)}
-              style={{ background: tipoAsig === t ? C.carbon : '#fff', color: tipoAsig === t ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '6px 11px', cursor: 'pointer', fontSize: 12 }}>
+              style={{ background: tipoAsig === t ? '#FDECDD' : '#fff', color: tipoAsig === t ? '#C2570B' : '#5A636E', border: '1px solid ' + (tipoAsig === t ? '#F7C89E' : '#DFE4EA'), padding: '6px 11px', cursor: 'pointer', fontSize: 12 }}>
               {t}
             </button>
           ))}
@@ -509,7 +509,7 @@ export default function ComprasOperativasModule({ esGerencia, planta = null, usu
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            style={{ background: tab === t.id ? C.carbon : '#fff', color: tab === t.id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
+            style={{ background: tab === t.id ? '#FDECDD' : '#fff', color: tab === t.id ? '#C2570B' : '#5A636E', border: '1px solid ' + (tab === t.id ? '#F7C89E' : '#DFE4EA'), borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontBody, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
             {t.icono}{t.label}
           </button>
         ))}

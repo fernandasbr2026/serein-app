@@ -250,7 +250,7 @@ export default function CotizadorIntumescenteModule({ proyectoInicial = null, cl
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
         {[['cotizacion', 'Cotización'], ['aplicador', 'Aplicador'], ['catalogo', 'Catálogo'], ['oferta', 'Oferta / Guardar']].map(([id, lbl]) => (
-          <button key={id} onClick={() => setTab(id)} style={{ background: tab === id ? C.carbon : '#fff', color: tab === id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase' }}>{lbl}</button>
+          <button key={id} onClick={() => setTab(id)} style={{ background: tab === id ? '#FDECDD' : '#fff', color: tab === id ? '#C2570B' : '#5A636E', border: '1px solid ' + (tab === id ? '#F7C89E' : '#DFE4EA'), borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontBody, fontWeight: 600 }}>{lbl}</button>
         ))}
       </div>
 

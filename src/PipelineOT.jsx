@@ -38,7 +38,7 @@ export default function PipelineOT({ ots }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16, marginBottom: 16 }}>
       {/* POR FACTURAR */}
-      <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `4px solid ${C.ambar}` }}>
+      <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `3px solid ${C.ambar}` }}>
         <div style={{ padding: '14px 18px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
           <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 7 }}>
             <Hourglass size={15} color={C.ambar} /> OT por facturar · Santa Rosa e Istria
@@ -64,7 +64,7 @@ export default function PipelineOT({ ots }) {
       </div>
 
       {/* FACTURADAS */}
-      <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `4px solid ${C.verde}` }}>
+      <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `3px solid ${C.verde}` }}>
         <div style={{ padding: '14px 18px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
           <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 7 }}>
             <CheckCircle2 size={15} color={C.verde} /> OT facturadas

@@ -20,7 +20,7 @@ export default function PipelineProyectos({ proyectos }) {
   const porCobrar = proyectos.reduce((a, p) => a + (p.edps || []).filter(e => e.estado !== 'Pagado').reduce((x, e) => x + (e.venta || 0), 0), 0)
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `4px solid ${C.azul}`, marginBottom: 16 }}>
+    <div style={{ background: '#fff', border: '1px solid #E2DED4', borderTop: `3px solid ${C.azul}`, marginBottom: 16 }}>
       <div style={{ padding: '14px 18px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
         <span style={{ fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: 14, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 7 }}>
           <Hourglass size={15} color={C.azul} /> Proyectos en curso · por facturar

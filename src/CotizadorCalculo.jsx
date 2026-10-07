@@ -325,7 +325,7 @@ export default function CotizadorCalculo({ clientes = [], onAddCliente = () => {
       </div>
     </div>
 
-    <div style={{ ...card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, borderTop: '3px solid ' + T.orange }}>
+    <div style={{ ...card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, borderTop: '2px solid ' + T.orange }}>
       <div><div style={{ fontSize: 12, color: T.textMute, textTransform: 'uppercase', fontWeight: 600 }}>Total cotizacion (neto)</div><div style={{ fontFamily: T.fontDisplay, fontSize: 26, fontWeight: 700, color: T.navy }}>{clp(totalCot)}</div></div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         {guardado && <span style={{ color: T.success, fontSize: 13, fontWeight: 600 }}>{guardado}</span>}

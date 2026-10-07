@@ -738,7 +738,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     return (
       <div>
         <PeriodoSelector />
-        <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: `4px solid ${AREA_COLOR[a] || C.teal}`, marginBottom: 16 }}>
+        <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: `3px solid ${AREA_COLOR[a] || C.teal}`, marginBottom: 16 }}>
           <div style={{ padding: '14px 18px 6px', fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Resumen financiero · {a}</div>
           <div style={{ padding: '4px 18px 18px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
             <MontoNetoBruto label="Venta total" neto={clp(af.ventaNetaTot)} bruto={clp(af.ventaBrutaTot)} icon={TrendingUp} iconColor={C.azul} iconBg="#E7EFFB" />

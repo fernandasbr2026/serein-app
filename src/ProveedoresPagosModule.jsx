@@ -499,7 +499,7 @@ function SeccionCalendarioPagos({ pp }) {
   }, [items])
 
   const totalRango = items.reduce((a, d) => a + saldoDe(d), 0)
-  const btn = (id, lbl) => <button key={id} onClick={() => setRango(id)} style={{ background: rango === id ? C.carbon : '#fff', color: rango === id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '6px 12px', cursor: 'pointer', fontSize: 12.5 }}>{lbl}</button>
+  const btn = (id, lbl) => <button key={id} onClick={() => setRango(id)} style={{ background: rango === id ? '#FDECDD' : '#fff', color: rango === id ? '#C2570B' : '#5A636E', border: '1px solid ' + (rango === id ? '#F7C89E' : '#DFE4EA'), padding: '6px 12px', cursor: 'pointer', fontSize: 12.5 }}>{lbl}</button>
 
   return (
     <div>
@@ -957,7 +957,7 @@ export default function ProveedoresPagosModule({ pp: ppExt, setPp: setPpExt, gas
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            style={{ background: tab === t.id ? C.carbon : '#fff', color: tab === t.id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
+            style={{ background: tab === t.id ? '#FDECDD' : '#fff', color: tab === t.id ? '#C2570B' : '#5A636E', border: '1px solid ' + (tab === t.id ? '#F7C89E' : '#DFE4EA'), borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontBody, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
             {t.icono}{t.label}
           </button>
         ))}
@@ -968,7 +968,7 @@ export default function ProveedoresPagosModule({ pp: ppExt, setPp: setPpExt, gas
         const pend = (gastos || []).filter(g => g.tipo === 'fijo' && g.estado !== 'Pagada' && g.estado !== 'Anulado');
         if (!pend.length) return null;
         const hayVencido = pend.some(g => g.vencimiento && g.vencimiento < hoyStr);
-        return (<div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: '3px solid ' + (hayVencido ? '#C5453D' : '#F77716'), marginBottom: 16, padding: 14 }}>
+        return (<div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: '2px solid ' + (hayVencido ? '#C5453D' : '#F77716'), marginBottom: 16, padding: 14 }}>
           <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 8 }}>Gastos fijos por pagar ({pend.length})</div>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}><tbody>
           {pend.slice().sort((a, b) => (a.vencimiento || '').localeCompare(b.vencimiento || '')).map((g, i) => {
@@ -991,7 +991,7 @@ export default function ProveedoresPagosModule({ pp: ppExt, setPp: setPpExt, gas
         const cheques = (pp.cheques || []).filter(c => chequeVencido(c, hoyStr) || chequeProximo(c, hoyStr, en7))
         if (!cheques.length) return null
         const hayVencido = cheques.some(c => chequeVencido(c, hoyStr))
-        return (<div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: '3px solid ' + (hayVencido ? '#C5453D' : '#F77716'), marginBottom: 16, padding: 14 }}>
+        return (<div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: '2px solid ' + (hayVencido ? '#C5453D' : '#F77716'), marginBottom: 16, padding: 14 }}>
           <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 8 }}>Cheques por vencer o vencidos ({cheques.length})</div>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}><tbody>
           {cheques.slice().sort((a, b) => (a.fechaCobro || '').localeCompare(b.fechaCobro || '')).map(c => {
