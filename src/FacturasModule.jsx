@@ -9,6 +9,7 @@ import { ocultarFacturasDeLibro } from './facturasOcultas.js'
 import { descargarInformeCobranza as descargarInformeCobranzaPDF } from './informeCobranzaPDF.js'
 import { supabase } from './supabase.js'
 import { fileToBase64 } from './protocolo-pdf.js'
+import { PLAZOS_SUGERIDOS, PLAZO_POR_DEFECTO, PLAZO_MAX, plazoValido, sumarDias, vencimientoPorPlazo, vencimientoAlCambiarEmision, conFechasCoherentes, plazoDe } from './vencimientos.js'
 export { FACTURAS_SEED } from './facturas-data.js'
 const CONDICIONES_DIAS = [{ label: '30 días', dias: 30 }, { label: '45 días', dias: 45 }, { label: '60 días', dias: 60 }, { label: '90 días', dias: 90 }]
 const norm = s => (s || '').toString().toLowerCase()
@@ -27,6 +28,10 @@ const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREI
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
 const inp = { padding: '6px 8px', border: '1px solid #DFE4EA', fontSize: 12.5, boxSizing: 'border-box' }
+// Columna fija (casilla + N° de factura): se queda a la vista cuando la tabla se desplaza hacia la derecha.
+// Sombra en vez de borde: en una tabla con bordes colapsados el borde no acompaña a la celda.
+const FIJA_TD = { position: 'sticky', left: 0, zIndex: 2, background: '#fff', boxShadow: '4px 0 6px -4px rgba(15, 23, 42, 0.28)' }
+const FIJA_TH = { ...FIJA_TD, zIndex: 3 }
 const ESTADOS = ['Pendiente', 'Pagado', 'Factoring', 'Vencida', 'Anulada']
 const BANCOS = ['', 'Banco de Chile', 'BCI', 'Santander', 'Estado', 'Scotiabank', 'Itaú', 'Security', 'BICE', 'Otro']
 const MEDIOS_PAGO = ['', 'Transferencia', 'Cheque', 'Efectivo', 'Tarjeta', 'Otro']
@@ -121,11 +126,32 @@ export function estadoPublicacionDe(x) {
   return (dias != null && dias >= 21) ? 'Pendiente de publicación' : 'No publicada'
 }
 
+// El Libro de Ventas es el dueño del vencimiento de las facturas que vienen de él: cada vez que se edita
+// una fila allá se vuelve a copiar a esta ficha. Si el plazo se cambia aquí y no se devuelve al libro, la
+// próxima edición del libro lo pisaría con la fecha vieja. Fila de Excel → su copia local; fila de la base → libro_ventas.
+async function guardarVencimientoEnLibro(libroId, vencimiento) {
+  const id = String(libroId || '').replace(/^LV/, '')
+  if (!id) return
+  try {
+    const filas = JSON.parse(localStorage.getItem('serein_libroVentasXlsx') || '[]')
+    if (Array.isArray(filas) && filas.some(r => String(r.id) === id)) {
+      localStorage.setItem('serein_libroVentasXlsx', JSON.stringify(filas.map(r => String(r.id) === id ? { ...r, vencimiento: vencimiento || '' } : r)))
+      pushState()
+      return
+    }
+  } catch (e) {}
+  try {
+    const { error } = await supabase.from('libro_ventas').update({ vencimiento: vencimiento || null }).eq('id', id)
+    if (error) console.warn('No se pudo copiar el vencimiento al Libro de Ventas:', error.message)
+  } catch (e) { console.warn('No se pudo copiar el vencimiento al Libro de Ventas:', e && e.message) }
+}
+
 export default function FacturasModule({ area, facturas, setFacturas, params = { factoring: [] }, comisionPct = 0, setComisionPct = () => {}, ppmPct = 2, setPpmPct = () => {}, clientesSugeridos = [], proyectos = [], ots = [] }) {
   const lista = (facturas && facturas[area]) || []
   const esIstria = area === 'Istria'
   const dlId = 'dl-cli-' + norm(area).replace(/\s/g, '')
   const dlOtId = 'dl-ot-' + norm(area).replace(/\s/g, '')
+  const dlPlazoId = 'dl-plazo-' + norm(area).replace(/\s/g, '')
   const otNumProy = p => String(p.ot || '').trim()
   const otNumOT = o => String(o.numero || o.ot || o.n || o.id || '').trim()
   const otsActivas = [
@@ -135,7 +161,8 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
   const proyDeOT = n => (proyectos || []).find(p => otNumProy(p) === String(n || '').trim())
   const ccsDeOT = n => { const p = proyDeOT(n); if (!p) return []; const codes = [...new Set([...Object.keys(p.cc || {}), ...(p.compras || []).map(c => c.cc)])].filter(Boolean); return codes.map(c => ({ id: c, nombre: (p.ccNombres && p.ccNombres[c]) || c })) }
   const [creando, setCreando] = useState(false)
-  const nueva = () => ({ numero: '', cliente: '', ot: '', oc: '', cc: '', proyecto: '', nv: '', fecha_emision: '', vencimiento: '', neto: '', monto: '', iva: 'afecta', estado: 'Pendiente', fecha_pago: '', banco: '', medioPago: '', numeroCheque: '', comentarios: '', vendedor: 'General' })
+  // `plazo` es solo del formulario (días de pago): no se guarda en la factura, queda como vencimiento
+  const nueva = () => ({ numero: '', cliente: '', ot: '', oc: '', cc: '', proyecto: '', nv: '', fecha_emision: '', plazo: String(PLAZO_POR_DEFECTO), vencimiento: '', neto: '', monto: '', iva: 'afecta', estado: 'Pendiente', fecha_pago: '', banco: '', medioPago: '', numeroCheque: '', comentarios: '', vendedor: 'General' })
   const comisionDe = x => x.vendedor === 'Mario' ? Math.round((x.neto || x.monto || 0) * (comisionPct / 100)) : 0
   const [f, setF] = useState(nueva())
   // PDF de la factura de venta pendiente de subir a Drive: se guarda al leerla
@@ -212,9 +239,29 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
       try { localStorage.setItem('serein_facturas', JSON.stringify(nuevo)) } catch (e) {}
       setFacturas(nuevo)
       pushState()
+      // Si cambió el vencimiento de una factura que viene del Libro de Ventas, se devuelve allá también
+      if ('vencimiento' in acumulados) {
+        const orig = baseLista.find(x => x.id === id)
+        if (orig && orig.libroId) guardarVencimientoEnLibro(orig.libroId, acumulados.vencimiento)
+      }
     }, 700)
   }
   const actualizar = (id, campo, valor) => guardarCambiosFactura(id, { [campo]: valor })
+  // Se escribe el plazo → el sistema calcula el vencimiento desde la emisión (días corridos). El plazo no
+  // se guarda: se deduce de emisión y vencimiento (ver vencimientos.js), así Libro de Ventas y esta tabla cuentan lo mismo.
+  const cambiarPlazo = (x, texto) => {
+    const n = plazoValido(texto)
+    if (n === null) { if (String(texto).trim() === '') guardarCambiosFactura(x.id, { vencimiento: '' }); return }
+    const fecha = sumarDias(x.fecha_emision, n)
+    if (fecha) guardarCambiosFactura(x.id, { vencimiento: fecha })   // sin fecha de emisión no hay desde dónde contar: se deja como está
+  }
+  // Al corregir la emisión, el vencimiento acompaña con el mismo plazo que ya tenía
+  const cambiarEmision = (x, fecha) => {
+    const venc = vencimientoAlCambiarEmision(x.fecha_emision, x.vencimiento, fecha)
+    guardarCambiosFactura(x.id, venc === (x.vencimiento || '') ? { fecha_emision: fecha } : { fecha_emision: fecha, vencimiento: venc })
+  }
+  // Formulario de alta: emisión, plazo y vencimiento se acompañan entre sí
+  const setFFecha = (campo, valor) => setF(prev => conFechasCoherentes(prev, campo, valor, { emision: 'fecha_emision', plazo: 'plazo', vencimiento: 'vencimiento' }))
   // Lee una factura de venta en PDF/foto con IA (folio, fecha, neto, IVA,
   // OC) y precarga el formulario de "Nueva factura" — cliente y OT los
   // sigue eligiendo la persona, la IA no los propone. El archivo se guarda
@@ -230,14 +277,16 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
       if (err) throw err
       if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo leer la factura.')
       const d = data.datos || {}
-      setF({
+      const leida = {
         ...nueva(),
         numero: d.folio != null ? String(d.folio) : '',
         fecha_emision: /^\d{4}-\d{2}-\d{2}$/.test(String(d.fecha || '')) ? d.fecha : '',
         neto: d.neto != null ? String(Math.round(d.neto)) : '',
         iva: (d.iva === 0 || d.iva == null) && d.total != null && d.neto != null && Math.round(d.total) === Math.round(d.neto) ? 'exenta' : 'afecta',
         oc: d.ordenCompra || '',
-      })
+      }
+      // La factura trae la fecha de emisión: el vencimiento sale de ahí con el plazo por defecto (se puede cambiar en el formulario)
+      setF({ ...leida, vencimiento: vencimientoPorPlazo(leida.fecha_emision, leida.plazo) })
       setFacturaPdf({ base64, filename: fl.name })
       setCreando(true)
     } catch (err) { setErrorPdf('No se pudo leer la factura: ' + ((err && err.message) || String(err))) }
@@ -261,7 +310,8 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
     const nt = num(f.neto)
     if (!f.numero || nt <= 0) return
     if (lista.some(x => claveFacturaDup(x) === claveFacturaDup(f))) { window.alert('Ya existe una factura con ese N°, cliente y tipo en ' + area + '. No se agrego (duplicado).'); return }
-    setLista([{ id: 'f' + Date.now(), ...f, neto: nt, monto: f.iva === 'exenta' ? nt : brutoDe(nt) }, ...lista])
+    const { plazo: _plazoDelFormulario, ...datos } = f
+    setLista([{ id: 'f' + Date.now(), ...datos, neto: nt, monto: f.iva === 'exenta' ? nt : brutoDe(nt) }, ...lista])
     if (facturaPdf) subirFacturaADrive(f, facturaPdf)
     setF(nueva()); setCreando(false); setFacturaPdf(null)
   }
@@ -440,7 +490,8 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
       factoringPlazo: x.estado === 'Factoring' ? x.dias : null,
     })))
   }
-  const headers = ['N° factura', 'Cliente', 'OT', 'OC', 'Centro de costo', ...(esIstria ? ['Proyecto'] : []), 'NV', 'Emisión', 'Vencimiento', 'Neto', 'IVA', 'Total', `PPM ${ppmPct}%`, 'Estado', 'Medio de pago', 'Abonos', 'Saldo pendiente', 'Fecha pago', 'Banco depósito', 'Comentarios', 'Vendedor', 'Comisión', '']
+  // El N° de factura va aparte, como primera columna fija junto a la casilla (ver FIJA_TD): por eso no está en esta lista.
+  const headers = ['Cliente', 'OT', 'OC', 'Centro de costo', ...(esIstria ? ['Proyecto'] : []), 'NV', 'Emisión', 'Plazo (días)', 'Vencimiento', 'Neto', 'IVA', 'Total', `PPM ${ppmPct}%`, 'Estado', 'Medio de pago', 'Abonos', 'Saldo pendiente', 'Fecha pago', 'Banco depósito', 'Comentarios', 'Vendedor', 'Comisión', '']
   const totalMonto = mostradas.reduce((a, x) => a + montoFacturaDe(x), 0)
   const saldoPendienteTotal = mostradas.reduce((a, x) => a + saldoPendienteDe(x).bruto, 0)
   const cobrado = totalMonto - saldoPendienteTotal
@@ -572,8 +623,9 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
               <input style={inp} placeholder="NV (codigo)" value={f.nv} onChange={e => setF({ ...f, nv: e.target.value })} />
               <select style={inp} value={f.medioPago || ''} onChange={e => setF({ ...f, medioPago: e.target.value })}>{MEDIOS_PAGO.map(m => <option key={m} value={m}>{m || 'Medio de pago…'}</option>)}</select>
               {f.medioPago === 'Cheque' && <input style={inp} placeholder="N° cheque" value={f.numeroCheque} onChange={e => setF({ ...f, numeroCheque: e.target.value })} />}
-              <label style={{ fontSize: 11, color: C.gris }}>Emisión<input type="date" style={{ ...inp, width: '100%' }} value={f.fecha_emision} onChange={e => setF({ ...f, fecha_emision: e.target.value })} /></label>
-              <label style={{ fontSize: 11, color: C.gris }}>Vencimiento<input type="date" style={{ ...inp, width: '100%' }} value={f.vencimiento} onChange={e => setF({ ...f, vencimiento: e.target.value })} /></label>
+              <label style={{ fontSize: 11, color: C.gris }}>Emisión<input type="date" style={{ ...inp, width: '100%' }} value={f.fecha_emision} onChange={e => setFFecha('fecha_emision', e.target.value)} /></label>
+              <label style={{ fontSize: 11, color: C.gris }}>Plazo de pago (días)<input type="number" min="0" max={PLAZO_MAX} list={dlPlazoId} style={{ ...inp, width: '100%' }} value={f.plazo} onChange={e => setFFecha('plazo', e.target.value)} placeholder="30" title="El vencimiento se calcula solo desde la emisión" /></label>
+              <label style={{ fontSize: 11, color: C.gris }}>Vencimiento<input type="date" style={{ ...inp, width: '100%' }} value={f.vencimiento} onChange={e => setFFecha('vencimiento', e.target.value)} /></label>
               <input style={inp} placeholder="Neto CLP *" value={f.neto} onChange={e => setF({ ...f, neto: e.target.value })} /><select style={inp} value={f.iva} onChange={e => setF({ ...f, iva: e.target.value })}><option value="afecta">Afecta (con IVA)</option><option value="exenta">Exenta (sin IVA)</option></select>
               <div style={{ ...inp, background: '#E2E7EC', color: C.gris, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>IVA {clp(f.iva === 'exenta' ? 0 : ivaDe(f.neto))} · Total <b style={{ color: C.carbon, marginLeft: 4 }}>{clp(f.iva === 'exenta' ? num(f.neto) : brutoDe(f.neto))}</b></div>
               <select style={inp} value={f.vendedor} onChange={e => setF({ ...f, vendedor: e.target.value })}>{VENDEDORES.map(v => <option key={v} value={v}>Vendedor: {v}</option>)}</select>
@@ -594,10 +646,12 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
           <button onClick={vaciarArea} disabled={!lista.length} style={{ background: 'transparent', border: '1px solid ' + C.rojo, color: C.rojo, padding: '7px 12px', borderRadius: 6, fontSize: 12.5, fontWeight: 700, cursor: lista.length ? 'pointer' : 'default' }}>Vaciar area {area}</button>
           <button onClick={detectarDuplicados} disabled={!lista.length} style={{ background: 'transparent', border: '1px solid ' + C.azul, color: C.azul, padding: '7px 12px', borderRadius: 6, fontSize: 12.5, fontWeight: 700, cursor: lista.length ? 'pointer' : 'default' }}>Detectar duplicadas</button>
         </div>
-        <div style={{ overflowX: 'auto', padding: 12 }}>
+        <div style={{ overflowX: 'auto', padding: '12px 12px 12px 0' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
             <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
-              <th style={{ padding: '5px 6px', width: 30 }}><input type="checkbox" checked={mostradas.length > 0 && sel.size === mostradas.length} onChange={toggleTodas} /></th>
+              <th style={{ ...FIJA_TH, textAlign: 'left', padding: '5px 6px 5px 18px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><input type="checkbox" checked={mostradas.length > 0 && sel.size === mostradas.length} onChange={toggleTodas} aria-label="Seleccionar todas" />N° factura</span>
+              </th>
               {headers.map((h, i) => (
                 <th key={i} style={{ textAlign: ['Neto', 'IVA', 'Total', 'Comisión', 'Abonos', 'Saldo pendiente'].includes(h) || h.startsWith('PPM') ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
@@ -610,16 +664,21 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                 return (
                 <React.Fragment key={x.id}>
                 <tr style={{ borderBottom: '1px solid #DFE4EA', opacity: x.estado === 'Anulada' ? 0.5 : 1 }}>
-                  <td style={{ padding: '5px 4px' }}><input type="checkbox" checked={sel.has(x.id)} onChange={() => toggleSel(x.id)} /></td>
-                  <td style={{ padding: '4px 6px' }}><input value={x.numero} onChange={e => actualizar(x.id, 'numero', e.target.value)} style={{ ...inp, width: 80, fontWeight: 600 }} /></td>
+                  <td style={{ ...FIJA_TD, padding: '4px 6px 4px 18px' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <input type="checkbox" checked={sel.has(x.id)} onChange={() => toggleSel(x.id)} aria-label={'Seleccionar factura ' + (x.numero || '')} />
+                      <input value={x.numero} onChange={e => actualizar(x.id, 'numero', e.target.value)} style={{ ...inp, width: 80, fontWeight: 600 }} aria-label="N° factura" />
+                    </span>
+                  </td>
                   <td style={{ padding: '4px 6px' }}><input value={x.cliente} list={dlId} onChange={e => actualizar(x.id, 'cliente', e.target.value)} style={{ ...inp, width: 150 }} /></td>
                   <td style={{ padding: '4px 6px' }}><input value={x.ot} list={dlOtId} onChange={e => actualizar(x.id, 'ot', e.target.value)} placeholder="OT" style={{ ...inp, width: 90 }} /></td>
                   <td style={{ padding: '4px 6px' }}><input value={x.oc || ''} onChange={e => actualizar(x.id, 'oc', e.target.value)} placeholder="Orden de compra" style={{ ...inp, width: 110 }} /></td>
                   <td style={{ padding: '4px 6px' }}><select value={x.cc || ''} onChange={e => actualizar(x.id, 'cc', e.target.value)} disabled={ccsDeOT(x.ot).length === 0} style={{ ...inp, width: 150 }}><option value="">{ccsDeOT(x.ot).length ? 'Sin imputar' : '—'}</option>{ccsDeOT(x.ot).map(c => <option key={c.id} value={c.id}>{c.id} · {c.nombre}</option>)}</select></td>
                   {esIstria && <td style={{ padding: '4px 6px' }}><input value={x.proyecto || ''} onChange={e => actualizar(x.id, 'proyecto', e.target.value)} placeholder="Proyecto" style={{ ...inp, width: 130 }} /></td>}
                   <td style={{ padding: '4px 6px' }}><input value={x.nv || ''} onChange={e => actualizar(x.id, 'nv', e.target.value)} placeholder="NV" style={{ ...inp, width: 90 }} /></td>
-                  <td style={{ padding: '4px 6px' }}><input type="date" value={x.fecha_emision} onChange={e => actualizar(x.id, 'fecha_emision', e.target.value)} style={{ ...inp, width: 130 }} /></td>
-                  <td style={{ padding: '4px 6px' }}><input type="date" value={x.vencimiento || ''} onChange={e => actualizar(x.id, 'vencimiento', e.target.value)} style={{ ...inp, width: 130 }} /></td>
+                  <td style={{ padding: '4px 6px' }}><input type="date" value={x.fecha_emision} onChange={e => cambiarEmision(x, e.target.value)} style={{ ...inp, width: 130 }} /></td>
+                  <td style={{ padding: '4px 6px' }}><input type="number" min="0" max={PLAZO_MAX} list={dlPlazoId} value={plazoDe(x.fecha_emision, x.vencimiento) ?? ''} onChange={e => cambiarPlazo(x, e.target.value)} placeholder="días" title="Días de plazo desde la emisión: el vencimiento se calcula solo" aria-label={'Plazo de pago en días de la factura ' + (x.numero || '')} style={{ ...inp, width: 76 }} /></td>
+                  <td style={{ padding: '4px 6px' }}><input type="date" value={x.vencimiento || ''} onChange={e => actualizar(x.id, 'vencimiento', e.target.value)} title={diasMoraDe(x) != null ? 'Atrasada ' + diasMoraDe(x) + (diasMoraDe(x) === 1 ? ' día' : ' días') : 'Se calcula con el plazo; también puedes elegir la fecha directamente'} style={{ ...inp, width: 130, ...(diasMoraDe(x) != null ? { color: C.rojo, fontWeight: 600, borderColor: C.rojo } : {}) }} /></td>
                   <td style={{ padding: '4px 6px', textAlign: 'right' }}><input value={x.neto} onChange={e => setNeto(x.id, e.target.value)} style={{ ...inp, width: 100, textAlign: 'right' }} /></td>
                   <td style={{ padding: '4px 6px', textAlign: 'right', color: C.gris, whiteSpace: 'nowrap' }}>{clp(ivaFacturaDe(x))}</td>
                   <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }}>{clp(montoFacturaDe(x))}</td>
@@ -691,10 +750,11 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
               {mostradas.length === 0 && <tr><td colSpan={headers.length + 1} style={{ padding: 14, textAlign: 'center', color: '#9AA3AD' }}>{busca ? 'Sin resultados para la búsqueda.' : 'Sin facturas en esta área.'}</td></tr>}
             </tbody>
           </table>
-          <Paginador page={pg.page} paginas={pg.paginas} total={pg.total} setPage={setPage} />
+          <div style={{ paddingLeft: 12 }}><Paginador page={pg.page} paginas={pg.paginas} total={pg.total} setPage={setPage} /></div>
         </div>
         <datalist id={dlId}>{sugerencias.map(s => <option key={s} value={s} />)}</datalist>
         <datalist id={dlOtId}>{otsActivas.map(o => <option key={o.etq} value={o.n}>{o.etq}</option>)}</datalist>
+        <datalist id={dlPlazoId}>{PLAZOS_SUGERIDOS.map(d => <option key={d} value={d}>{d === 0 ? 'Contado' : d + ' días'}</option>)}</datalist>
       </div>
       <div style={{ fontSize: 11, color: '#9AA3AD', marginTop: 6 }}>
         Estas facturas se llenarán automáticamente desde Defontana/SII cuando activemos la sincronización. Por ahora puedes cargarlas y editarlas a mano.
@@ -818,14 +878,14 @@ export function CobranzaAtrasadaModule({ area, facturas, setFacturas, usuarioEma
           <select value={fEstadoPub} onChange={e => setFEstadoPub(e.target.value)} style={inp}><option value="">Toda publicación</option>{ESTADOS_PUBLICACION_FILTRO.map(s => <option key={s} value={s}>{s}</option>)}</select>
           {hayFiltro && <button onClick={limpiarFiltros} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '5px 8px', cursor: 'pointer', fontSize: 12 }}>Limpiar</button>}
         </div>
-        <div style={{ overflowX: 'auto', padding: 12 }}>
+        <div style={{ overflowX: 'auto', padding: '12px 12px 12px 0' }}>
           {filtradas.length === 0 ? (
-            <div style={{ color: C.verde, fontSize: 14, padding: '14px 4px' }}>✓ Sin facturas atrasadas{hayFiltro ? ' para este filtro' : ''} en {area}.</div>
+            <div style={{ color: C.verde, fontSize: 14, padding: '14px 4px 14px 16px' }}>✓ Sin facturas atrasadas{hayFiltro ? ' para este filtro' : ''} en {area}.</div>
           ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
             <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
               {['N° factura', 'Cliente', 'Emisión', 'Vencimiento', 'Neto original', 'Bruto original', 'Pagado', 'Saldo neto', 'Saldo bruto', 'Días mora', 'Estado cobranza', 'Publicación', ''].map(h => (
-                <th key={h} style={{ textAlign: ['Neto original', 'Bruto original', 'Pagado', 'Saldo neto', 'Saldo bruto', 'Días mora'].includes(h) ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                <th key={h} style={{ textAlign: ['Neto original', 'Bruto original', 'Pagado', 'Saldo neto', 'Saldo bruto', 'Días mora'].includes(h) ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap', ...(h === 'N° factura' ? { ...FIJA_TH, paddingLeft: 18 } : {}) }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
@@ -842,7 +902,7 @@ export function CobranzaAtrasadaModule({ area, facturas, setFacturas, usuarioEma
                 return (
                   <React.Fragment key={x.id}>
                   <tr style={{ borderBottom: '1px solid #DFE4EA' }}>
-                    <td style={{ padding: '5px 6px', fontWeight: 600 }}>{x.numero}</td>
+                    <td style={{ ...FIJA_TD, padding: '5px 6px 5px 18px', fontWeight: 600 }}>{x.numero}</td>
                     <td style={{ padding: '5px 6px' }}>{x.cliente}</td>
                     <td style={{ padding: '5px 6px', whiteSpace: 'nowrap' }}>{x.fecha_emision}</td>
                     <td style={{ padding: '5px 6px', whiteSpace: 'nowrap' }}>{x.vencimiento}</td>

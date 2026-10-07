@@ -32,6 +32,7 @@ const facturasDeOT = (facturasProy, p) => [
 
 import { SEREIN } from './theme-serein.js'
 import { cuentaDe, guardarCuentaProveedor, TIPOS_CUENTA } from './cuentasProveedor.js'
+import { hoyISO } from './vencimientos.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
 const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
@@ -1492,9 +1493,9 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, onAddCompraEtapa,
               <>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                  <thead><tr style={{ borderBottom: `1px solid ${C.carbon}` }}>{['N° factura', 'Fecha', 'EDP', 'Neto', 'Total c/IVA', 'PPM ' + ppmPct + '%', 'Estado pago', 'Fecha pago', 'Banco', ''].map(h => <th key={h} style={{ textAlign: (h === 'Neto' || h === 'Total c/IVA' || h.indexOf('PPM') === 0) ? 'right' : 'left', padding: '4px 6px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+                  <thead><tr style={{ borderBottom: `1px solid ${C.carbon}` }}>{['N° factura', 'Fecha', 'Vence', 'EDP', 'Neto', 'Total c/IVA', 'PPM ' + ppmPct + '%', 'Estado pago', 'Fecha pago', 'Banco', ''].map(h => <th key={h} style={{ textAlign: (h === 'Neto' || h === 'Total c/IVA' || h.indexOf('PPM') === 0) ? 'right' : 'left', padding: '4px 6px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
                   <tbody>
-                    {facturasOT.map(fx => { const ov = (p.facEdp || {})[fx.numero] || {}; const est = ov.estado || fx.estado || 'Pendiente'; const esFact = /factor/i.test(est); const ppmF = Math.round((fx.neto || 0) * (ppmPct / 100)); const facs = (params && params.factoring) || []; const esManual = ov.factoringId === 'manual'; const fcSel = facs.find(x => x.id === ov.factoringId) || facs.find(x => (fx.banco || '').toLowerCase().includes((x.nombre || '').toLowerCase().split(' ')[0])) || facs[0]; const fcEfectivo = esManual ? { tasa: dec(ov.manualTasa || '0'), tasaMora: dec(ov.manualTasaMora || '0'), costoOp: ov.manualCostoOp || 0 } : fcSel; const baseF = fx.monto || Math.round((fx.neto || 0) * 1.19); const perdF = esFact && fcEfectivo ? calcularPerdidaFactoring(baseF, ov.plazo != null ? ov.plazo : (fx.plazo || fx.dias || 30), ov.diasMora || fx.diasMora || 0, fcEfectivo).total : 0; return (
+                    {facturasOT.map(fx => { const ov = (p.facEdp || {})[fx.numero] || {}; const est = ov.estado || fx.estado || 'Pendiente'; const esFact = /factor/i.test(est); const vencida = !!fx.vencimiento && !fx.notaCredito && !/pagad|factor|anulad/i.test(est) && fx.vencimiento < hoyISO(); const ppmF = Math.round((fx.neto || 0) * (ppmPct / 100)); const facs = (params && params.factoring) || []; const esManual = ov.factoringId === 'manual'; const fcSel = facs.find(x => x.id === ov.factoringId) || facs.find(x => (fx.banco || '').toLowerCase().includes((x.nombre || '').toLowerCase().split(' ')[0])) || facs[0]; const fcEfectivo = esManual ? { tasa: dec(ov.manualTasa || '0'), tasaMora: dec(ov.manualTasaMora || '0'), costoOp: ov.manualCostoOp || 0 } : fcSel; const baseF = fx.monto || Math.round((fx.neto || 0) * 1.19); const perdF = esFact && fcEfectivo ? calcularPerdidaFactoring(baseF, ov.plazo != null ? ov.plazo : (fx.plazo || fx.dias || 30), ov.diasMora || fx.diasMora || 0, fcEfectivo).total : 0; return (
                       <React.Fragment key={fx.id}>
                       <tr style={{ borderBottom: esFact ? 'none' : '1px solid #DFE4EA', background: fx.notaCredito ? '#FCEBEA' : 'transparent' }}>
                         <td style={{ padding: '4px 6px', fontWeight: 600 }}>
@@ -1503,6 +1504,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, onAddCompraEtapa,
                           {fx._manual && !fx.notaCredito && <span title="Agregada manualmente" style={{ marginLeft: 5, fontSize: 10, fontWeight: 700, color: C.teal, background: '#E5F1F3', padding: '1px 5px', borderRadius: 3 }}>MANUAL</span>}
                         </td>
                         <td style={{ padding: '4px 6px', color: C.gris }}>{fx.fecha_emision || '—'}</td>
+                        <td style={{ padding: '4px 6px', whiteSpace: 'nowrap', color: vencida ? C.rojo : C.gris, fontWeight: vencida ? 600 : 400 }} title={fx.vencimiento ? (vencida ? 'Vencida: aún sin pagar' : 'Vencimiento de pago (según el plazo puesto en el Libro de Ventas o en Facturas)') : 'Sin vencimiento: ponle un plazo en el Libro de Ventas o en Facturas'}>{fx.vencimiento || '—'}</td>
                         <td style={{ padding: '4px 6px' }}><input value={ov.edp || ''} onChange={ev => updFac(fx.numero, { edp: ev.target.value })} placeholder="EDP" style={{ ...inp, width: 90, padding: '4px 6px' }} /></td>
                         <td style={{ padding: '4px 6px', textAlign: 'right', color: fx.neto < 0 ? C.rojo : 'inherit' }}>{clpSigned(fx.neto)}</td>
                         <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600, color: baseF < 0 ? C.rojo : 'inherit' }}>{clpSigned(baseF)}</td>
@@ -1514,7 +1516,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, onAddCompraEtapa,
                       </tr>
                       {esFact && (
                       <tr style={{ borderBottom: '1px solid #DFE4EA', background: '#F2F4F7' }}>
-                        <td colSpan={10} style={{ padding: '2px 8px 8px' }}>
+                        <td colSpan={11} style={{ padding: '2px 8px 8px' }}>
                           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', fontSize: 11.5, color: '#D9600A' }}>
                             <span style={{ fontWeight: 700 }}>Factoring:</span>
                             <select value={ov.factoringId || (fcSel ? fcSel.id : '')} onChange={ev => updFac(fx.numero, { factoringId: ev.target.value })} style={{ ...inp, padding: '3px 6px' }}>{facs.length === 0 && <option value="">(define en Parámetros)</option>}{facs.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}<option value="manual">Otro (tasa manual)</option></select>
