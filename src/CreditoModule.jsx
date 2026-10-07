@@ -39,7 +39,7 @@ function Resultado({ res }) {
     <div style={{ ...card, borderLeft: '4px solid ' + CAT_COLOR[res.categoria] }}>
       <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
         <ChipCat cat={res.categoria} grande />
-        <div><div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>Puntaje</div><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 24 }}>{res.puntaje}<span style={{ fontSize: 13, color: C.gris }}> / {res.parcial ? (100 - res.puntosPendientes) + ' (parcial)' : 100}</span></div></div>
+        <div><div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>Puntaje</div><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 24 }}>{res.puntaje}<span style={{ fontSize: 13, color: C.gris }}> / {res.parcial ? (res.puntajeTope != null ? res.puntajeTope : 100 - res.puntosPendientes) + ' (parcial)' : 100}</span></div></div>
         <div><div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>Línea sugerida</div><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 24 }}>{clp(res.lineaSugerida)}</div></div>
         <div><div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>Anticipo mínimo</div><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 24 }}>{Math.round(res.anticipoMinimo * 100)}%</div></div>
       </div>
@@ -47,6 +47,7 @@ function Resultado({ res }) {
         {res.califica30 ? '✓ ' : ''}{res.condicionTexto}
         <div style={{ fontSize: 12, fontWeight: 400, color: C.gris, marginTop: 3 }}>Garantía: {res.garantia} · Próxima revisión en {res.revisionMeses} meses.</div>
       </div>
+      {res.normalizado && <div style={{ padding: '8px 12px', background: '#EEF3FB', border: '1px solid #C9D8F0', fontSize: 12.5, marginBottom: 10 }}><b style={{ color: C.azul }}>Puntaje normalizado.</b> {res.puntajeBruto} de {res.maxAplicable} puntos aplicables = {res.puntaje} / 100. Los factores de los documentos marcados como completos sin documento no cuentan (ni suman ni restan).</div>}
       {res.parcial && <div style={{ padding: '8px 12px', background: '#FFF6F1', border: '1px solid #FAD9C4', fontSize: 12.5, marginBottom: 10 }}><b style={{ color: C.naranja }}>Puntaje parcial.</b> Faltan datos que valen hasta {res.puntosPendientes} puntos: {res.factoresPendientes.join(', ')}. Mientras no se tengan, el puntaje y la categoría están incompletos.</div>}
       {res.potencial && (res.parcial || res.hayRechazo) && res.potencial.categoria !== res.categoria && (
         <div style={{ padding: '8px 12px', background: '#EEF7F1', border: '1px solid #BFE3CC', fontSize: 12.5, marginBottom: 10 }}>
@@ -67,7 +68,7 @@ function Resultado({ res }) {
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
         <thead><tr style={{ borderBottom: '2px solid ' + C.carbon }}>{['Factor', 'Dato observado', 'Puntos', 'Máx.'].map((h, i) => <th key={h} style={{ textAlign: i > 1 ? 'right' : 'left', padding: '4px 6px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
         <tbody>
-          {res.detalle.map(x => <tr key={x.factor} style={{ borderBottom: '1px solid #EEF1F4', ...(x.pendiente ? { fontStyle: 'italic', color: C.gris } : {}) }}><td style={{ padding: '4px 6px' }}>{x.factor}</td><td style={{ padding: '4px 6px', color: C.gris }}>{x.dato}</td><td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600 }}>{x.pendiente ? '—' : x.puntos}</td><td style={{ padding: '4px 6px', textAlign: 'right', color: C.gris }}>{x.max}</td></tr>)}
+          {res.detalle.map(x => <tr key={x.factor} style={{ borderBottom: '1px solid #EEF1F4', ...((x.pendiente || x.noAplica) ? { fontStyle: 'italic', color: C.gris } : {}) }}><td style={{ padding: '4px 6px' }}>{x.factor}</td><td style={{ padding: '4px 6px', color: C.gris }}>{x.dato}</td><td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600 }}>{(x.pendiente || x.noAplica) ? '—' : x.puntos}</td><td style={{ padding: '4px 6px', textAlign: 'right', color: C.gris }}>{x.max}</td></tr>)}
           <tr><td colSpan={2} style={{ padding: '5px 6px', fontWeight: 700 }}>Total</td><td style={{ padding: '5px 6px', textAlign: 'right', fontWeight: 700 }}>{res.puntaje}</td><td style={{ padding: '5px 6px', textAlign: 'right', color: C.gris }}>100</td></tr>
         </tbody>
       </table>
@@ -81,7 +82,7 @@ function Resultado({ res }) {
 const DATOS_VACIOS = { registros: '', chequesProtestados: false, observacionesTributarias: false, referenciaMala: false, antecedentesCompletos: false, fechaCarpeta: '', mesesIvaAlDia: '', ventas12m: '', ventasPrevias12m: '', resultadoUltimoAnio: '', antiguedadCtaCteAnios: '', referenciasBuenas: '', bienesRaices: false, contribucionesVencidas: false, diasFacturaVencida: 0, lineaSolicitada: '' }
 
 function FormEvaluacion({ cliente, ultima, iniciales, extraidos, hallazgos, params, esGerencia, onCerrar, onGuardada }) {
-  const [d, setD] = useState({ ...DATOS_VACIOS, ...(ultima || {}), fechaCarpeta: '', trabajosPagados: cliente.trabajos_pagados || 0, fechaInicioActividades: cliente.fecha_inicio_actividades || '', ...(iniciales || {}) })
+  const [d, setD] = useState({ ...DATOS_VACIOS, ...(ultima || {}), fechaCarpeta: '', exentos: [], trabajosPagados: cliente.trabajos_pagados || 0, fechaInicioActividades: cliente.fecha_inicio_actividades || '', ...(iniciales || {}) })
   const [obs, setObs] = useState('')
   const [guardada, setGuardada] = useState(null) // { id, res }
   const [linea, setLinea] = useState('')
@@ -94,7 +95,7 @@ function FormEvaluacion({ cliente, ultima, iniciales, extraidos, hallazgos, para
   const guardar = async () => {
     setTrabajando(true); setErr('')
     const { data, error } = await supabase.from('credito_evaluaciones').insert({
-      cliente_id: cliente.id, datos_extraidos: extraidos || null, datos_confirmados: d, resultado: { filtros: res.filtros, detalle: res.detalle, notas: res.notas, resumen: res.resumen, condicionTexto: res.condicionTexto, califica30: res.califica30, revisionMeses: res.revisionMeses, parcial: res.parcial, puntosPendientes: res.puntosPendientes, factoresPendientes: res.factoresPendientes, potencial: res.potencial, hayRechazo: res.hayRechazo },
+      cliente_id: cliente.id, datos_extraidos: extraidos || null, datos_confirmados: d, resultado: { filtros: res.filtros, detalle: res.detalle, notas: res.notas, resumen: res.resumen, condicionTexto: res.condicionTexto, califica30: res.califica30, revisionMeses: res.revisionMeses, normalizado: res.normalizado, puntajeBruto: res.puntajeBruto, maxAplicable: res.maxAplicable, puntajeTope: res.puntajeTope, parcial: res.parcial, puntosPendientes: res.puntosPendientes, factoresPendientes: res.factoresPendientes, potencial: res.potencial, hayRechazo: res.hayRechazo },
       puntaje: res.puntaje, categoria: res.categoria, linea_sugerida: res.lineaSugerida, anticipo_minimo: res.anticipoMinimo, garantia: res.garantia, estado: 'evaluada', observaciones: obs,
     }).select('id').single()
     setTrabajando(false)
@@ -215,6 +216,9 @@ const leerDocumentoIA = async (d, file) => {
   return { tipoFinal, datos }
 }
 
+const EXENTABLES = ['dicom', 'certificado_bancario', 'solicitud']
+const esExento = d => !!(d.datos_extraidos && d.datos_extraidos.exento)
+
 function Documentos({ cliente, docs, params, extraidos, setExtraidos, onCambio, onEvaluar, onCompletarFicha }) {
   const [trabajando, setTrabajando] = useState('')
   const [err, setErr] = useState('')
@@ -264,6 +268,15 @@ function Documentos({ cliente, docs, params, extraidos, setExtraidos, onCambio, 
     }
     setTrabajando(''); setAvisos(resultados); onCambio()
   }
+  // Administración puede dar por completo un documento que no tiene (queda registrado quién y cuándo): no activa "antecedentes
+  // incompletos" y los factores que dependen de él no cuentan en el puntaje.
+  const marcarCompleto = async tipo => {
+    setErr('')
+    const { error } = await supabase.from('credito_documentos').insert({ cliente_id: cliente.id, tipo, archivo_path: null, nombre_archivo: 'Marcado como completo (sin documento)', datos_extraidos: { exento: true } })
+    if (error) { setErr('No se pudo marcar: ' + mensajeErrorSubida(error)); return }
+    onCambio()
+  }
+  const quitarCompleto = async d => { await supabase.from('credito_documentos').delete().eq('id', d.id); onCambio() }
   const ver = async d => {
     const { data, error } = await supabase.storage.from('credito').createSignedUrl(d.archivo_path, 60)
     if (error) { setErr('No se pudo abrir el archivo: ' + error.message); return }
@@ -271,7 +284,7 @@ function Documentos({ cliente, docs, params, extraidos, setExtraidos, onCambio, 
   }
   const eliminar = async d => {
     if (!window.confirm('¿Eliminar "' + (d.nombre_archivo || 'este documento') + '"?')) return
-    await supabase.storage.from('credito').remove([d.archivo_path])
+    if (d.archivo_path) await supabase.storage.from('credito').remove([d.archivo_path])
     await supabase.from('credito_documentos').delete().eq('id', d.id)
     if (d.tipo !== 'otro') setExtraidos(prev => { const n = { ...prev }; delete n[d.tipo]; return n })
     onCambio()
@@ -337,18 +350,22 @@ function Documentos({ cliente, docs, params, extraidos, setExtraidos, onCambio, 
       </div>
 
       {TIPOS_DOC.map(t => {
-        const lista = docs.filter(d => d.tipo === t.id)
+        const todos = docs.filter(d => d.tipo === t.id)
+        const lista = todos.filter(d => !esExento(d))
+        const exento = todos.find(esExento)
         return (
           <div key={t.id} style={{ borderTop: '1px solid #EEF1F4', padding: '10px 0' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <span style={{ fontWeight: 600, fontSize: 13 }}>{t.label}</span>
-              <span style={{ fontSize: 11.5, color: lista.length ? C.verde : C.gris, fontWeight: 600 }}>{lista.length ? '✓ recibido' : 'pendiente'}</span>
+              <span style={{ fontSize: 11.5, color: (lista.length || exento) ? C.verde : C.gris, fontWeight: 600 }}>{lista.length ? '✓ recibido' : exento ? '✓ completo (sin documento)' : 'pendiente'}</span>
               <span style={{ fontSize: 11.5, color: C.gris }}>{t.ayuda}</span>
               <label style={{ ...btn(C.azul, true), marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 11px', fontSize: 12, cursor: trabajando ? 'wait' : 'pointer' }}>
                 <Upload size={13} /> {trabajando === 'sube-' + t.id ? 'Subiendo…' : 'Subir archivo'}
                 <input type="file" accept="application/pdf,image/*" style={{ display: 'none' }} disabled={!!trabajando} onChange={e => subirTipado(t.id, e)} />
               </label>
+              {EXENTABLES.includes(t.id) && !lista.length && !exento && <button onClick={() => marcarCompleto(t.id)} style={{ ...btn(C.gris, true), padding: '4px 11px', fontSize: 12 }} title="Da por completo este antecedente aunque no se tenga el documento: no baja el puntaje">Marcar como completo sin documento</button>}
             </div>
+            {exento && <div style={{ margin: '6px 0 0 12px', padding: '6px 10px', background: '#EEF3FB', border: '1px solid #C9D8F0', fontSize: 12 }}>Marcado como completo sin documento. Los factores que dependen de este antecedente no cuentan en el puntaje (queda registrado quién y cuándo lo marcó). <button onClick={() => quitarCompleto(exento)} style={{ ...btn(C.rojo, true), padding: '2px 9px', fontSize: 11, marginLeft: 6 }}>Quitar</button></div>}
             {lista.map(filaDoc)}
             {extraidos[t.id] && (
               <div style={{ margin: '8px 0 0 12px', padding: '8px 10px', background: '#FFF6F1', border: '1px solid #FAD9C4', fontSize: 12, lineHeight: 1.6 }}>
@@ -545,7 +562,7 @@ function FichaCliente({ cliente, params, esGerencia, onVolver, onCambio }) {
     setDocs(data || [])
     // Lo que ya leyó la IA queda guardado en cada documento: se recupera al abrir la ficha.
     const mapa = {}
-    ;(data || []).slice().reverse().forEach(d => { if (d.datos_extraidos && d.tipo !== 'otro') mapa[d.tipo] = d.datos_extraidos })
+    ;(data || []).slice().reverse().forEach(d => { if (d.datos_extraidos && !esExento(d) && d.tipo !== 'otro') mapa[d.tipo] = d.datos_extraidos })
     setExtraidos(prev => ({ ...prev, ...mapa }))
   }
   // Deuda vigente, estado y trabajos pagados los mueven las facturas/OC: se reflejan sin pisar lo que se esté editando.
@@ -601,7 +618,7 @@ function FichaCliente({ cliente, params, esGerencia, onVolver, onCambio }) {
       if (fallos.length) setMsg('No se pudieron leer: ' + fallos.join(' | ') + '. Esos datos quedan como "sin dato".')
     }
     const otrosDatos = docsAct.filter(d => d.tipo === 'otro' && d.datos_extraidos).map(d => d.datos_extraidos)
-    const base = datosDesdeExtraccion(ex, [...new Set(docsAct.map(d => d.tipo))], otrosDatos)
+    const base = datosDesdeExtraccion(ex, [...new Set(docsAct.map(d => d.tipo))], otrosDatos, docsAct.filter(esExento).map(d => d.tipo))
     const carpeta = docsAct.find(d => d.tipo === 'carpeta_tributaria' && d.fecha_emision)
     const diasVenc = facturas.filter(x => !x.fecha_pago && x.fecha_vencimiento).reduce((m, x) => Math.max(m, diasEntre(x.fecha_vencimiento, hoy()) || 0), 0)
     setEvaluando({ iniciales: { ...(carpeta ? { fechaCarpeta: carpeta.fecha_emision } : {}), ...(facturas.length ? { diasFacturaVencida: diasVenc } : {}), ...base }, extraidos: (Object.keys(ex).length || otrosDatos.length) ? { ...ex, ...(otrosDatos.length ? { otros: otrosDatos } : {}) } : null, hallazgos: hallazgosDe(otrosDatos) })
