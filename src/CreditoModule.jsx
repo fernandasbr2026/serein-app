@@ -48,6 +48,11 @@ function Resultado({ res }) {
         <div style={{ fontSize: 12, fontWeight: 400, color: C.gris, marginTop: 3 }}>Garantía: {res.garantia} · Próxima revisión en {res.revisionMeses} meses.</div>
       </div>
       {res.parcial && <div style={{ padding: '8px 12px', background: '#FFF6F1', border: '1px solid #FAD9C4', fontSize: 12.5, marginBottom: 10 }}><b style={{ color: C.naranja }}>Puntaje parcial.</b> Faltan datos que valen hasta {res.puntosPendientes} puntos: {res.factoresPendientes.join(', ')}. Mientras no se tengan, el puntaje y la categoría están incompletos.</div>}
+      {res.potencial && (res.parcial || res.hayRechazo) && res.potencial.categoria !== res.categoria && (
+        <div style={{ padding: '8px 12px', background: '#EEF7F1', border: '1px solid #BFE3CC', fontSize: 12.5, marginBottom: 10 }}>
+          <b style={{ color: C.verde }}>Mejor escenario (no es una aprobación).</b> Si {res.hayRechazo ? 'se resuelven los filtros en rojo' : ''}{res.hayRechazo && res.parcial ? ' y ' : ''}{res.parcial ? 'los datos pendientes salen con el mejor resultado' : ''}: puntaje de hasta {res.potencial.puntaje}, categoría <b>{res.potencial.categoria}</b>{res.potencial.linea > 0 ? ' y línea de hasta ' + clp(res.potencial.linea) : ''}.
+        </div>
+      )}
       <div style={{ ...titulo, fontSize: 12, marginBottom: 6 }}>Filtros de rechazo</div>
       <div style={{ marginBottom: 10 }}>
         {res.filtros.map(f => (
@@ -56,6 +61,8 @@ function Resultado({ res }) {
           </div>
         ))}
       </div>
+      {res.filtros.some(f => f.id === 'sin_trabajos' && f.activo) && <div style={{ fontSize: 12, color: C.gris, margin: '-4px 0 6px' }}>Si el cliente ya tiene trabajos pagados con Serein, anótalos en "Trabajos ya pagados con Serein" del formulario (hoy figura 0): el crédito aplica desde el segundo trabajo.</div>}
+      {res.filtros.some(f => f.id === 'incompletos' && f.activo) && <div style={{ fontSize: 12, color: C.gris, margin: '-4px 0 6px' }}>Para levantar este filtro faltan documentos requeridos (carpeta, DICOM, certificado bancario y solicitud firmada) o una carpeta tributaria vigente; si los tienes por otra vía, marca "Antecedentes completos" en el formulario.</div>}
       <div style={{ ...titulo, fontSize: 12, marginBottom: 6 }}>Detalle del puntaje</div>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
         <thead><tr style={{ borderBottom: '2px solid ' + C.carbon }}>{['Factor', 'Dato observado', 'Puntos', 'Máx.'].map((h, i) => <th key={h} style={{ textAlign: i > 1 ? 'right' : 'left', padding: '4px 6px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
@@ -87,7 +94,7 @@ function FormEvaluacion({ cliente, ultima, iniciales, extraidos, hallazgos, para
   const guardar = async () => {
     setTrabajando(true); setErr('')
     const { data, error } = await supabase.from('credito_evaluaciones').insert({
-      cliente_id: cliente.id, datos_extraidos: extraidos || null, datos_confirmados: d, resultado: { filtros: res.filtros, detalle: res.detalle, notas: res.notas, resumen: res.resumen, condicionTexto: res.condicionTexto, califica30: res.califica30, revisionMeses: res.revisionMeses, parcial: res.parcial, puntosPendientes: res.puntosPendientes, factoresPendientes: res.factoresPendientes },
+      cliente_id: cliente.id, datos_extraidos: extraidos || null, datos_confirmados: d, resultado: { filtros: res.filtros, detalle: res.detalle, notas: res.notas, resumen: res.resumen, condicionTexto: res.condicionTexto, califica30: res.califica30, revisionMeses: res.revisionMeses, parcial: res.parcial, puntosPendientes: res.puntosPendientes, factoresPendientes: res.factoresPendientes, potencial: res.potencial, hayRechazo: res.hayRechazo },
       puntaje: res.puntaje, categoria: res.categoria, linea_sugerida: res.lineaSugerida, anticipo_minimo: res.anticipoMinimo, garantia: res.garantia, estado: 'evaluada', observaciones: obs,
     }).select('id').single()
     setTrabajando(false)

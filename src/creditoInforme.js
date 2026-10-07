@@ -109,6 +109,7 @@ export function generarInformeCredito({ cliente, evaluacion, docs = [], params, 
   celda('Estado', ESTADO_EV[ev.estado] || ev.estado || '-', bx + 4 + colw * 3, y + 19, { size: 8, c: ev.estado === 'aprobada' ? VERDE : ev.estado === 'rechazada' ? ROJO : CARBON })
   y += bh + 7
   if (res.condicionTexto) parrafo(res.condicionTexto, M, W, { size: 9, bold: true })
+  if (res.potencial && (res.parcial || res.hayRechazo) && res.potencial.categoria !== ev.categoria) parrafo('Mejor escenario (no es una aprobación): si se resuelven los filtros en rojo y los datos pendientes salen con el mejor resultado, el puntaje llegaría a ' + res.potencial.puntaje + ', categoría ' + res.potencial.categoria + (res.potencial.linea > 0 ? ' y línea de hasta ' + clp(res.potencial.linea) : '') + '.', M, W, { size: 8.5, c: NARANJA })
 
   // ---------- 4. Detalle del puntaje ----------
   titulo(4, 'Detalle del puntaje')
