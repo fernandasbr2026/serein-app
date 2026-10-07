@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Plus, Search, ArrowLeft, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react'
+import { Plus, Search, ArrowLeft, CheckCircle2, XCircle, AlertTriangle, Upload, Trash2, Sparkles } from 'lucide-react'
 import { supabase } from './supabase.js'
 import { SEREIN } from './theme-serein.js'
-import { evaluarCredito, condicionesOC, mezclarParams, PARAMS_CREDITO_DEFAULT, diasEntre } from './creditoCalculo.js'
+import { evaluarCredito, condicionesOC, mezclarParams, PARAMS_CREDITO_DEFAULT, diasEntre, datosDesdeExtraccion, resumenExtraccion } from './creditoCalculo.js'
+import { fileToBase64 } from './protocolo-pdf.js'
 
 // ============================================================
 // MÓDULO DE CRÉDITO — factibilidad de crédito a 30 días y condiciones
@@ -69,8 +70,8 @@ function Resultado({ res }) {
 // ---------- Formulario de evaluación (datos a mano) ----------
 const DATOS_VACIOS = { registros: 'limpio', chequesProtestados: false, observacionesTributarias: false, referenciaMala: false, antecedentesCompletos: true, fechaCarpeta: '', mesesIvaAlDia: 12, ventas12m: '', ventasPrevias12m: '', resultadoUltimoAnio: 'utilidad', antiguedadCtaCteAnios: 2, referenciasBuenas: 0, bienesRaices: false, contribucionesVencidas: false, diasFacturaVencida: 0, lineaSolicitada: '' }
 
-function FormEvaluacion({ cliente, ultima, params, esGerencia, onCerrar, onGuardada }) {
-  const [d, setD] = useState({ ...DATOS_VACIOS, ...(ultima || {}), fechaCarpeta: '', trabajosPagados: cliente.trabajos_pagados || 0, fechaInicioActividades: cliente.fecha_inicio_actividades || '' })
+function FormEvaluacion({ cliente, ultima, iniciales, extraidos, params, esGerencia, onCerrar, onGuardada }) {
+  const [d, setD] = useState({ ...DATOS_VACIOS, ...(ultima || {}), fechaCarpeta: '', trabajosPagados: cliente.trabajos_pagados || 0, fechaInicioActividades: cliente.fecha_inicio_actividades || '', ...(iniciales || {}) })
   const [obs, setObs] = useState('')
   const [guardada, setGuardada] = useState(null) // { id, res }
   const [linea, setLinea] = useState('')
@@ -83,7 +84,7 @@ function FormEvaluacion({ cliente, ultima, params, esGerencia, onCerrar, onGuard
   const guardar = async () => {
     setTrabajando(true); setErr('')
     const { data, error } = await supabase.from('credito_evaluaciones').insert({
-      cliente_id: cliente.id, datos_confirmados: d, resultado: { filtros: res.filtros, detalle: res.detalle, notas: res.notas, resumen: res.resumen, condicionTexto: res.condicionTexto, califica30: res.califica30, revisionMeses: res.revisionMeses },
+      cliente_id: cliente.id, datos_extraidos: extraidos || null, datos_confirmados: d, resultado: { filtros: res.filtros, detalle: res.detalle, notas: res.notas, resumen: res.resumen, condicionTexto: res.condicionTexto, califica30: res.califica30, revisionMeses: res.revisionMeses },
       puntaje: res.puntaje, categoria: res.categoria, linea_sugerida: res.lineaSugerida, anticipo_minimo: res.anticipoMinimo, garantia: res.garantia, estado: 'evaluada', observaciones: obs,
     }).select('id').single()
     setTrabajando(false)
@@ -108,6 +109,7 @@ function FormEvaluacion({ cliente, ultima, params, esGerencia, onCerrar, onGuard
     <div>
       <div style={card}>
         <div style={titulo}>Datos de la evaluación · {cliente.razon_social}</div>
+        {extraidos && <div style={{ padding: '8px 12px', background: '#FFF6F1', border: '1px solid #FAD9C4', fontSize: 12.5, marginBottom: 12 }}><b style={{ color: C.naranja }}>Datos precargados con lo que leyó la IA.</b> Revisa cada campo contra el documento antes de guardar. Las referencias comerciales, los trabajos pagados y los días de factura vencida se anotan a mano.</div>}
         <div style={{ fontSize: 12, color: C.gris, marginBottom: 12 }}>Completa lo que sale de la carpeta tributaria, el informe DICOM y el certificado bancario. El resultado se calcula en vivo abajo.</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
           <Campo label="Registros comerciales (DICOM)"><select style={inp} value={d.registros} onChange={e => set('registros', e.target.value)}><option value="limpio">Limpio</option><option value="aclaradas">Deudas antiguas aclaradas</option><option value="vigentes">Morosidades / protestos vigentes</option></select></Campo>
@@ -163,6 +165,112 @@ function FormEvaluacion({ cliente, ultima, params, esGerencia, onCerrar, onGuard
   )
 }
 
+// ---------- Documentos del cliente (carga + lectura con IA) ----------
+const TIPOS_DOC = [
+  { id: 'carpeta_tributaria', label: 'Carpeta tributaria (SII)', ayuda: 'Debe tener menos de 90 días.' },
+  { id: 'dicom', label: 'Informe DICOM', ayuda: 'De la empresa y de su representante legal.' },
+  { id: 'certificado_bancario', label: 'Certificado bancario', ayuda: 'Antigüedad de la cuenta y protestos.' },
+  { id: 'solicitud', label: 'Solicitud de crédito firmada', ayuda: 'Con las referencias comerciales.' },
+  { id: 'tgr', label: 'Certificado TGR (contribuciones)', ayuda: 'Opcional: solo si tiene bienes raíces.' },
+]
+const mensajeErrorIA = e => /failed to send|non-2xx|not found|404/i.test((e && e.message) || '') ? 'La función de lectura (extraer-credito) todavía no está desplegada en Supabase.' : ((e && e.message) || String(e))
+
+function Documentos({ cliente, docs, params, extraidos, setExtraidos, onCambio, onEvaluar }) {
+  const [trabajando, setTrabajando] = useState('')
+  const [err, setErr] = useState('')
+
+  const subir = async (tipo, e) => {
+    const fl = e.target.files && e.target.files[0]
+    e.target.value = ''
+    if (!fl) return
+    setTrabajando('sube-' + tipo); setErr('')
+    const ext = ((fl.name.match(/\.([a-zA-Z0-9]{2,5})$/) || [])[1] || 'pdf').toLowerCase()
+    const path = cliente.id + '/' + tipo + '-' + Date.now() + '.' + ext
+    const up = await supabase.storage.from('credito').upload(path, fl, { contentType: fl.type || 'application/pdf' })
+    if (up.error) { setErr('No se pudo subir el archivo: ' + up.error.message); setTrabajando(''); return }
+    const ins = await supabase.from('credito_documentos').insert({ cliente_id: cliente.id, tipo, archivo_path: path, nombre_archivo: fl.name })
+    if (ins.error) { await supabase.storage.from('credito').remove([path]); setErr('No se pudo registrar el documento: ' + ins.error.message); setTrabajando(''); return }
+    setTrabajando(''); onCambio()
+  }
+  const ver = async d => {
+    const { data, error } = await supabase.storage.from('credito').createSignedUrl(d.archivo_path, 60)
+    if (error) { setErr('No se pudo abrir el archivo: ' + error.message); return }
+    window.open(data.signedUrl, '_blank')
+  }
+  const eliminar = async d => {
+    if (!window.confirm('¿Eliminar "' + (d.nombre_archivo || 'este documento') + '"?')) return
+    await supabase.storage.from('credito').remove([d.archivo_path])
+    await supabase.from('credito_documentos').delete().eq('id', d.id)
+    setExtraidos(prev => { const n = { ...prev }; delete n[d.tipo]; return n })
+    onCambio()
+  }
+  const cambiarFecha = async (d, valor) => {
+    await supabase.from('credito_documentos').update({ fecha_emision: valor || null }).eq('id', d.id)
+    onCambio()
+  }
+  const leer = async d => {
+    setTrabajando('lee-' + d.id); setErr('')
+    try {
+      const dl = await supabase.storage.from('credito').download(d.archivo_path)
+      if (dl.error) throw dl.error
+      const file = new File([dl.data], d.nombre_archivo || 'documento.pdf', { type: dl.data.type || 'application/pdf' })
+      const base64 = await fileToBase64(file)
+      const { data, error } = await supabase.functions.invoke('extraer-credito', { body: { tipo: d.tipo, archivos: [{ base64, mimeType: file.type || 'application/pdf', filename: file.name }] } })
+      if (error) throw error
+      if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo leer el documento.')
+      setExtraidos(prev => ({ ...prev, [d.tipo]: data.datos }))
+      const f = data.datos && (data.datos.fechaGeneracion || data.datos.fechaEmision)
+      if (f && !d.fecha_emision) { await supabase.from('credito_documentos').update({ fecha_emision: f }).eq('id', d.id); onCambio() }
+    } catch (e) { setErr('No se pudo leer "' + (d.nombre_archivo || 'el documento') + '": ' + mensajeErrorIA(e)) }
+    setTrabajando('')
+  }
+
+  const hayLeidos = Object.keys(extraidos).length > 0
+  return (
+    <div style={card}>
+      <div style={titulo}>Documentos del cliente</div>
+      <div style={{ fontSize: 12, color: C.gris, marginBottom: 12 }}>Sube los PDF y pulsa <b>Leer con IA</b>: el formulario de evaluación se llena solo. Tú revisas cada dato antes de calcular; nada queda como definitivo hasta que lo confirmas. Los archivos se guardan en una carpeta privada (solo Gerencia y Administración).</div>
+      {TIPOS_DOC.map(t => {
+        const lista = docs.filter(d => d.tipo === t.id)
+        return (
+          <div key={t.id} style={{ borderTop: '1px solid #EEF1F4', padding: '10px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 600, fontSize: 13 }}>{t.label}</span>
+              <span style={{ fontSize: 11.5, color: lista.length ? C.verde : C.gris, fontWeight: 600 }}>{lista.length ? '✓ recibido' : 'pendiente'}</span>
+              <span style={{ fontSize: 11.5, color: C.gris }}>{t.ayuda}</span>
+              <label style={{ ...btn(C.azul, true), marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 11px', fontSize: 12, cursor: trabajando ? 'wait' : 'pointer' }}>
+                <Upload size={13} /> {trabajando === 'sube-' + t.id ? 'Subiendo…' : 'Subir archivo'}
+                <input type="file" accept="application/pdf,image/*" style={{ display: 'none' }} disabled={!!trabajando} onChange={e => subir(t.id, e)} />
+              </label>
+            </div>
+            {lista.map(d => {
+              const dias = d.fecha_emision ? diasEntre(d.fecha_emision, hoy()) : null
+              const vencida = t.id === 'carpeta_tributaria' && dias != null && dias > params.carpeta_max_dias
+              return (
+                <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 6, paddingLeft: 12, fontSize: 12.5 }}>
+                  <span style={{ minWidth: 180 }}>{d.nombre_archivo || 'documento'}</span>
+                  <label style={{ fontSize: 11.5, color: C.gris }}>Emitido <input type="date" value={d.fecha_emision || ''} onChange={e => cambiarFecha(d, e.target.value)} style={{ ...inp, width: 140, padding: '3px 6px' }} /></label>
+                  {vencida && <span style={{ color: C.rojo, fontWeight: 700, fontSize: 12 }}>{dias} días: vencida (máx. {params.carpeta_max_dias}), pide una nueva</span>}
+                  <button onClick={() => ver(d)} style={{ ...btn(C.gris, true), padding: '3px 10px', fontSize: 12 }}>Ver</button>
+                  <button onClick={() => leer(d)} disabled={!!trabajando} style={{ ...btn(C.naranja), padding: '3px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4, cursor: trabajando ? 'wait' : 'pointer' }}><Sparkles size={12} /> {trabajando === 'lee-' + d.id ? 'Leyendo…' : 'Leer con IA'}</button>
+                  <button onClick={() => eliminar(d)} title="Eliminar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
+                </div>
+              )
+            })}
+            {extraidos[t.id] && (
+              <div style={{ margin: '8px 0 0 12px', padding: '8px 10px', background: '#FFF6F1', border: '1px solid #FAD9C4', fontSize: 12, lineHeight: 1.6 }}>
+                <b style={{ color: C.naranja }}>Leído por la IA:</b> {resumenExtraccion(t.id, extraidos[t.id]).join(' · ')}
+              </div>
+            )}
+          </div>
+        )
+      })}
+      {err && <div style={{ color: C.rojo, fontSize: 12.5, marginTop: 8 }}>{err}</div>}
+      {hayLeidos && <div style={{ marginTop: 12 }}><button onClick={onEvaluar} style={btn(C.verde)}>Evaluar con lo leído por la IA</button></div>}
+    </div>
+  )
+}
+
 // ---------- Ficha del cliente ----------
 const CAMPOS_FICHA = [['razon_social', 'Razón social'], ['rut', 'RUT'], ['giro', 'Giro'], ['direccion', 'Dirección'], ['representante_legal', 'Representante legal'], ['contacto_compras', 'Contacto de compras'], ['contacto_pagos', 'Contacto de pagos'], ['email_facturas', 'Correo para facturas'], ['portal_proveedores', 'Portal de proveedores']]
 
@@ -170,13 +278,25 @@ function FichaCliente({ cliente, params, esGerencia, onVolver, onCambio }) {
   const [f, setF] = useState(cliente)
   const [evals, setEvals] = useState([])
   const [evaluando, setEvaluando] = useState(false)
+  const [docs, setDocs] = useState([])
+  const [extraidos, setExtraidos] = useState({})
   const [msg, setMsg] = useState('')
   const [abierta, setAbierta] = useState(null)
   const cargarEvals = async () => {
     const { data } = await supabase.from('credito_evaluaciones').select('*').eq('cliente_id', cliente.id).order('created_at', { ascending: false })
     setEvals(data || [])
   }
-  useEffect(() => { setF(cliente); cargarEvals() }, [cliente.id])
+  const cargarDocs = async () => {
+    const { data } = await supabase.from('credito_documentos').select('*').eq('cliente_id', cliente.id).order('created_at', { ascending: false })
+    setDocs(data || [])
+  }
+  useEffect(() => { setF(cliente); setExtraidos({}); cargarEvals(); cargarDocs() }, [cliente.id])
+  // Datos que se precargan al evaluar: lo leído por la IA + la fecha de emisión de la carpeta + si están los 4 documentos requeridos.
+  const abrirEvaluacion = () => {
+    const base = datosDesdeExtraccion(extraidos, [...new Set(docs.map(d => d.tipo))])
+    const carpeta = docs.find(d => d.tipo === 'carpeta_tributaria' && d.fecha_emision)
+    setEvaluando({ iniciales: { ...(carpeta ? { fechaCarpeta: carpeta.fecha_emision } : {}), ...base }, extraidos: Object.keys(extraidos).length ? extraidos : null })
+  }
   const guardar = async () => {
     setMsg('')
     const { error } = await supabase.from('credito_clientes').update({
@@ -189,7 +309,7 @@ function FichaCliente({ cliente, params, esGerencia, onVolver, onCambio }) {
   }
   const ultimaDatos = evals[0] && evals[0].datos_confirmados
   if (evaluando) return <div><button onClick={() => setEvaluando(false)} style={{ ...btn(C.gris, true), marginBottom: 12 }}><ArrowLeft size={13} style={{ verticalAlign: -2 }} /> Volver a la ficha</button>
-    <FormEvaluacion cliente={f} ultima={ultimaDatos} params={params} esGerencia={esGerencia} onCerrar={() => setEvaluando(false)} onGuardada={() => { setEvaluando(false); cargarEvals(); onCambio() }} /></div>
+    <FormEvaluacion cliente={f} ultima={ultimaDatos} iniciales={evaluando.iniciales} extraidos={evaluando.extraidos} params={params} esGerencia={esGerencia} onCerrar={() => setEvaluando(false)} onGuardada={() => { setEvaluando(false); cargarEvals(); onCambio() }} /></div>
   const cupo = Math.max(num(cliente.linea_aprobada) - num(cliente.deuda_vigente), 0)
   const revVencida = cliente.fecha_revision && cliente.fecha_revision < hoy()
   return (
@@ -202,7 +322,7 @@ function FichaCliente({ cliente, params, esGerencia, onVolver, onCambio }) {
         <div><div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>Deuda vigente</div><b>{clp(cliente.deuda_vigente)}</b></div>
         <div><div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>Cupo disponible</div><b style={{ color: cupo > 0 ? C.verde : C.rojo }}>{clp(cupo)}</b></div>
         <div><div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>Próxima revisión</div><b style={{ color: revVencida ? C.rojo : C.carbon }}>{cliente.fecha_revision || '—'}{revVencida ? ' (vencida)' : ''}</b></div>
-        <button onClick={() => setEvaluando(true)} style={{ ...btn(C.naranja), marginLeft: 'auto' }}>Nueva evaluación</button>
+        <button onClick={abrirEvaluacion} style={{ ...btn(C.naranja), marginLeft: 'auto' }}>Nueva evaluación</button>
       </div>
 
       <div style={card}>
@@ -216,6 +336,8 @@ function FichaCliente({ cliente, params, esGerencia, onVolver, onCambio }) {
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12 }}><button onClick={guardar} style={btn(C.verde)}>Guardar datos</button>{msg && <span style={{ fontSize: 12.5, color: msg === 'Guardado' ? C.verde : C.rojo }}>{msg}</span>}</div>
       </div>
+
+      <Documentos cliente={cliente} docs={docs} params={params} extraidos={extraidos} setExtraidos={setExtraidos} onCambio={cargarDocs} onEvaluar={abrirEvaluacion} />
 
       <div style={card}>
         <div style={titulo}>Historial de evaluaciones ({evals.length})</div>
