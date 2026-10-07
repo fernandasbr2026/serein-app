@@ -90,6 +90,7 @@ function estilosDoc() { return '@page{size:A4;margin:18mm 14mm 14mm}body{font-fa
 // cotización puede traer su propia lista en cot.condiciones ([{t, x}]); si
 // no la trae, se usan estas — así las cotizaciones antiguas se ven igual.
 import { CONDICIONES_DEF, BANCO_DEF } from './cotizacionDefaults.js'
+import { LOGO_SEREIN_DATA } from './logoSereinData.js'
 const escH = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 // Orden de prioridad: condiciones propias de la cotización → las estándar
 // configuradas en Parámetros → las de fábrica (CONDICIONES_DEF).
@@ -170,41 +171,105 @@ export function estadosDePago(cot) {
     return { ...x, pct: numDec(x.pct), neto, total }
   })
 }
-function estilosOferta() { return '@page{size:A4;margin:14mm 13mm 12mm}*{box-sizing:border-box}body{font-family:Inter,Arial,Helvetica,sans-serif;color:#101828;font-size:11.5px;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.oh{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}.oh img{height:50px;display:block;margin-bottom:6px}.oh .emp{font-size:10px;color:#5a6b85;line-height:1.5}.oh .emp b{color:#061A40;font-size:11px}.oh .doc{text-align:right}.oh .t{font-size:26px;font-weight:800;color:#061A40;letter-spacing:.5px}.pill{display:inline-block;background:#FF6B00;color:#fff;font-weight:700;font-size:11px;padding:3px 12px;border-radius:14px;margin-top:4px}.sub{font-size:10px;color:#5a6b85;margin-top:5px}.banner{background:#061A40;color:#fff;border-radius:8px;padding:10px 14px;margin-top:12px;font-size:10.5px;line-height:1.5}.banner b{color:#FF6B00;letter-spacing:.5px}.cli{display:grid;grid-template-columns:2fr 1fr 1fr 1.2fr 1.3fr;gap:10px;border:1px solid #D8DCE5;border-radius:8px;padding:10px 12px;margin-top:12px}.cli .l{font-size:8.5px;color:#8a97ab;text-transform:uppercase;letter-spacing:.6px}.cli .v{font-weight:700;font-size:11px;margin-top:2px}.carta{margin-top:12px;font-size:11px;line-height:1.55;color:#344054;white-space:pre-line}.box{border:2px solid #FF6B00;border-radius:12px;padding:12px 14px;margin-top:14px}.box h3{margin:0 0 8px;font-size:13px;color:#061A40;text-transform:uppercase;letter-spacing:.3px}table.it{width:100%;border-collapse:collapse}table.it th{background:#061A40;color:#fff;padding:6px 8px;font-size:9.5px;text-align:left;text-transform:uppercase}table.it td{border-bottom:1px solid #E2E7EC;padding:6px 8px;font-size:10.5px;vertical-align:top}table.it .r{text-align:right;white-space:nowrap}.tots{display:flex;justify-content:flex-end;margin-top:10px}.tots table{border-collapse:collapse}.tots td{padding:3px 12px;font-size:11px}.tots .lbl{color:#5a6b85;text-align:right}.tots .r{text-align:right}.tots .big td{font-size:20px;font-weight:800;color:#061A40;padding-top:6px}.words{margin-top:8px;font-size:10px;color:#5a6b85;font-style:italic}.sec{font-size:15px;font-weight:800;color:#061A40;margin:16px 0 8px}.bar{display:flex;height:5px;border-radius:3px;overflow:hidden;margin-bottom:10px}.bar i{flex:1}.eps{display:flex;gap:8px}.ep{flex:1;border:1px solid #D8DCE5;border-radius:8px;padding:9px 10px;break-inside:avoid}.ep .h{display:flex;justify-content:space-between;align-items:baseline;font-size:9px;color:#5a6b85;text-transform:uppercase;letter-spacing:.5px}.ep .h b{font-size:15px;color:#FF6B00}.ep .d{font-size:10px;line-height:1.45;margin:6px 0;min-height:34px}.ep .m{font-size:9.5px;color:#5a6b85;border-top:1px solid #EEE;padding-top:5px}.ep .m b{display:block;font-size:12px;color:#061A40}.nota{font-size:9.5px;color:#5a6b85;margin-top:8px;line-height:1.5}.pb{page-break-before:always;padding-top:4px}.cond h2{font-size:15px;color:#061A40;margin:0 0 8px}.cond ol{padding-left:18px;margin:0;font-size:10.5px;line-height:1.5}.cond li{margin-bottom:4px}.datos{margin-top:12px;border:1px solid #D8DCE5;background:#F5F7FA;padding:10px 12px;font-size:10.5px;line-height:1.6}.next{margin-top:12px;background:#FFF3EA;border:1px solid #FFD2B0;border-radius:8px;padding:10px 12px;font-size:10.5px;line-height:1.5}.firma{margin-top:14px;text-align:right;font-size:10.5px}.firma b{display:block}.foot{display:flex;margin-top:16px;border-radius:6px;overflow:hidden}.foot .n{background:#061A40;color:#fff;flex:1;padding:9px 12px;font-size:9.5px;font-weight:600;text-align:center}.foot .w{background:#FF6B00;color:#fff;padding:9px 14px;font-weight:700;font-size:10.5px}' }
+// Estilos del formato "oferta": réplica del documento de cotización de referencia
+// (Cotización 942, 2 páginas carta). Paleta muestreada del PDF: azul #1B294A,
+// naranja #F16521, fondos durazno #FFF6F1 y gris #F2F4F5.
+function estilosOferta() {
+  return [
+    '@page{size:Letter;margin:11mm 13mm 10mm}*{box-sizing:border-box}',
+    'body{font-family:Arial,Helvetica,sans-serif;color:#363F4F;font-size:12px;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}',
+    '.oh{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding-bottom:10px;border-bottom:3px solid #1B294A}',
+    '.oh img{height:46px;display:block;margin-bottom:6px}.oh .emp{font-size:11px;color:#69717F;line-height:1.55}',
+    '.oh .doc{text-align:right}.oh .t{font-size:28px;font-weight:800;color:#1B294A;letter-spacing:.6px;line-height:1.1}',
+    '.pill{display:inline-block;background:#F16521;color:#fff;font-weight:700;font-size:13px;padding:3px 13px;border-radius:14px;margin-top:6px}',
+    '.sub{font-size:11px;color:#69717F;margin-top:6px}',
+    '.banner{display:flex;gap:26px;background:#1B294A;color:#fff;border-radius:10px;padding:11px 15px;margin-top:14px;font-size:12px;line-height:1.5}',
+    '.banner .c1{flex:1.15}.banner .c2{flex:1}.banner b{color:#F16521;letter-spacing:.8px;margin-right:6px}',
+    '.cli{display:grid;grid-template-columns:2.1fr 1.05fr 1fr 1.45fr 1.35fr;gap:12px;background:#F9FAFA;border:1px solid #E6E9ED;border-radius:9px;padding:12px 16px;margin-top:11px}',
+    '.cli .l{font-size:9px;color:#69717F;text-transform:uppercase;letter-spacing:1.2px}.cli .v{font-weight:700;font-size:13px;color:#1B294A;margin-top:4px}',
+    '.carta{margin-top:12px;font-size:13px;line-height:1.5;color:#363F4F;white-space:pre-line}.carta b{color:#1B294A}',
+    '.hero{margin-top:10px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.hero .n{font-size:30px;font-weight:800;color:#1B294A}.hero .d{font-size:13px;color:#69717F}',
+    '.pnote{background:#FFF6F1;border:1px solid #FAD9C4;border-radius:10px;padding:10px 14px;margin-top:10px;font-size:12px;line-height:1.5;color:#363F4F}.pnote b{color:#1B294A}',
+    '.box{border:2px solid #F16521;border-radius:14px;padding:14px 16px;margin-top:11px}',
+    '.bh{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.bh h3{margin:0;font-size:19px;color:#1B294A;text-transform:uppercase;letter-spacing:.2px}.bh .s{font-size:12px;color:#69717F;margin-top:3px}',
+    '.ptag{background:#FDE7DB;color:#F16521;font-weight:700;font-size:11px;letter-spacing:1.5px;padding:7px 15px;border-radius:16px;text-transform:uppercase;white-space:nowrap}',
+    'table.it{width:100%;border-collapse:collapse;margin-top:9px}table.it th{background:#1B294A;color:#fff;padding:7px 8px;font-size:10px;text-align:left;text-transform:uppercase;letter-spacing:1.1px}',
+    'table.it td{border-bottom:1px solid #E6E9EC;padding:4px 8px;font-size:11.5px;vertical-align:top}table.it .r{text-align:right;white-space:nowrap}table.it th.r{text-align:right}',
+    'table.it tr.tt td{background:#FFF6F1;font-weight:700;color:#1B294A;border-bottom:none}',
+    '.fn{font-size:10.5px;color:#69717F;margin-top:7px;line-height:1.45}',
+    '.bf{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin-top:10px}',
+    '.bf .pu{font-size:11.5px;color:#69717F}.bf .pu b{display:block;font-size:26px;color:#1B294A;margin-top:2px}',
+    '.bf .tt{text-align:right;font-size:13px;color:#69717F;line-height:1.7;margin-left:auto}.bf .tt b{color:#1B294A}.bf .tt .nt{font-size:13px;color:#69717F;line-height:1.4}.bf .tt .nt b{font-size:21px}.bf .tt .g{font-size:25px;font-weight:800;color:#1B294A;line-height:1.15;margin-top:3px}',
+    '.words{margin:7px 3px 0;font-size:11.5px;color:#69717F;font-style:italic;line-height:1.45}',
+    '.sec{font-size:17px;font-weight:800;color:#1B294A;margin:16px 0 8px}.nota{font-size:10.5px;color:#69717F;margin-top:7px;line-height:1.5}',
+    '.bar{display:flex;height:5px;border-radius:3px;overflow:hidden;margin-bottom:10px}.bar i{flex:1}',
+    '.eps{display:flex;gap:8px}.ep{flex:1;border:1px solid #E6E9ED;border-radius:8px;padding:9px 10px;break-inside:avoid}',
+    '.ep .h{display:flex;justify-content:space-between;align-items:baseline;font-size:9px;color:#69717F;text-transform:uppercase;letter-spacing:.5px}.ep .h b{font-size:15px;color:#F16521}',
+    '.ep .d{font-size:10.5px;line-height:1.45;margin:6px 0;min-height:34px}.ep .m{font-size:10px;color:#69717F;border-top:1px solid #EEE;padding-top:5px}.ep .m b{display:block;font-size:12.5px;color:#1B294A}',
+    '.pb{page-break-before:always;padding-top:2px}',
+    '.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.two.uno{grid-template-columns:1fr}',
+    '.imp{background:#FFF6F1;border:1px solid #FAD9C4;border-radius:10px;padding:12px 14px}.imp h4{margin:0 0 6px;font-size:13.5px;color:#F16521;text-transform:uppercase;letter-spacing:1.2px}.imp p{margin:0;font-size:12px;line-height:1.45}',
+    '.qc{background:#F2F4F5;border:1px solid #E6E9ED;border-radius:10px;padding:12px 14px}.qc h4{margin:0 0 6px;font-size:13.5px;color:#1B294A;text-transform:uppercase;letter-spacing:1.2px}',
+    '.qc ul{list-style:none;margin:0;padding:0}.qc li{font-size:12px;line-height:1.45;padding-left:16px;position:relative;margin-bottom:3px}.qc li:before{content:"\\25C6";color:#F16521;position:absolute;left:0;font-size:9px;top:2px}.qc li b{color:#1B294A}',
+    '.cond h2{font-size:20px;color:#1B294A;margin:16px 0 8px}.cond ol{padding-left:20px;margin:0;font-size:11.5px;line-height:1.5}.cond li{margin-bottom:3px}.cond li b{color:#1B294A}',
+    '.datos{margin-top:12px;border:1px solid #E6E9ED;background:#F2F4F5;border-radius:10px;padding:11px 15px;font-size:12px;line-height:1.55}.datos h4{margin:0 0 5px;font-size:13px;color:#1B294A;text-transform:uppercase;letter-spacing:1.5px}',
+    '.next{margin-top:12px;background:#FFF6F1;border:1px solid #FAD9C4;border-radius:10px;padding:11px 14px;font-size:13px;line-height:1.5}.next b{color:#1B294A}',
+    '.foot{display:flex;margin-top:12px;border-radius:8px;overflow:hidden}.foot .n{background:#1B294A;color:#fff;flex:1;padding:10px 15px;font-size:11.5px}.foot .w{background:#F16521;color:#fff;padding:10px 16px;font-weight:700;font-size:11.5px}',
+  ].join('')
+}
+// **texto** -> negrita (después de escapar), para destacar frases en cartas y notas.
+const mdNegrita = s => escH(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+const telDoc = t => { const d = String(t || '').replace(/\D/g, ''); return d.length === 11 && d.startsWith('56') ? '+56 ' + d[2] + ' ' + d.slice(3, 7) + ' ' + d.slice(7) : String(t || '') }
+const nombreDoc = n => /^servicios\s+revestimientos\s+industriales\s+spa$/i.test(String(n || '').trim()) ? 'Servicios de Revestimientos Industriales SpA' : String(n || '')
+const PLANTA_POR_AREA = { 'Santa Rosa': 'Planta Lampa', 'Istria': 'Planta Istria' }
+const sonPalabras = n => enPalabras(n).toLowerCase().replace(/\buno pesos\b/, 'un pesos').replace(/\bveintiuno pesos\b/, 'veintiún pesos').replace(/\buno mil\b/g, 'un mil')
 function htmlOferta(cot) {
   const t = totales(cot)
   const rev = parseInt(cot.rev, 10) || 0
   const dv = diasValidez(cot)
   const eps = estadosDePago(cot)
-  const logo = (function () { let l = ''; try { l = localStorage.getItem('serein_logo') || '' } catch (e) {} return l ? '<img src="' + l + '"/>' : '<div style="font-size:20px;font-weight:800;color:#061A40;margin-bottom:6px">SEREIN <span style="color:#FF6B00">GROUP</span></div>' })()
-  const subLinea = [cot.asunto ? escH(cot.asunto) : '', 'Emitida el ' + fechaCorta(cot.fecha), dv ? 'Válida por ' + dv + ' días' : ''].filter(Boolean).join(' · ')
-  const filas = (cot.items || []).map((it, i) => `<tr><td>${i + 1}</td><td>${escH(it.codigo)}</td><td><b>${escH(it.detalle)}</b>${it.descDetallada ? '<br><span style="color:#777">' + escH(it.descDetallada) + '</span>' : ''}${it.comentario ? '<br><span style="color:#777">' + escH(it.comentario) + '</span>' : ''}</td><td class="r">${fmtCant(it.cant)} ${escH(it.unidad || 'UN')}</td><td class="r">${clp(it.pUnitario)}</td><td class="r">${numDec(it.descuento) ? clp(it.descuento) : ''}</td><td class="r"><b>${clp(itemTotal(it))}</b></td></tr>`).join('')
+  const logo = (function () { let l = ''; try { l = localStorage.getItem('serein_logo') || '' } catch (e) {} return '<img src="' + (l || LOGO_SEREIN_DATA) + '"/>' })()
+  const items = cot.items || []
+  const filas = items.map((it, i) => `<tr><td>${i + 1}</td><td>${escH(it.codigo)}</td><td><b>${escH(it.detalle)}</b>${it.descDetallada ? '<br><span style="color:#69717F">' + escH(it.descDetallada) + '</span>' : ''}${it.comentario ? '<br><span style="color:#69717F">' + escH(it.comentario) + '</span>' : ''}</td><td class="r">${fmtCant(it.cant)} ${escH(it.unidad || 'UN')}</td><td class="r">${clp(it.pUnitario)}</td><td class="r">${numDec(it.descuento) ? clp(it.descuento) : ''}</td><td class="r"><b>${clp(itemTotal(it))}</b></td></tr>`).join('')
   // Cubicación y sistema de pintura (opcionales). Los números salen de
   // ofertaCalc.js — nunca se tipean a mano en el documento.
-  const precioCub = cot.cubPrecio || ((cot.items || [])[0] || {}).pUnitario
+  const precioCub = cot.cubPrecio || (items[0] || {}).pUnitario
   const cub = calcCubicacion(cot.cubicacion, precioCub)
-  const it0 = (cot.items || [])[0] || {}
+  const it0 = items[0] || {}
+  const hayCub = cub.rows.some(r => r.m2 > 0)
   const m2Total = cub.m2 || (/m\s*2|m²/i.test(it0.unidad || '') ? numDec(it0.cant) : 0)
+  const baseM2 = hayCub || (items.length === 1 && m2Total > 0)
   const capasOk = (cot.capas || []).filter(c => numDec(c.dft) > 0)
-  const capasHtml = capasOk.length ? `<div class="box"><h3 style="text-transform:none">Sistema de pintura · ${dftTotal(capasOk)} µm DFT total</h3>
-      <table class="it"><thead><tr><th>Capa</th><th>Producto</th><th>Color</th><th style="text-align:right">DFT</th><th style="text-align:right">EPH control*</th><th style="text-align:right">Rend. teórico**</th>${m2Total > 0 ? '<th style="text-align:right">Consumo teórico · ' + fmtDec(m2Total, 2) + ' m²</th>' : ''}</tr></thead><tbody>
+  const capasHtml = capasOk.length ? `<div class="box"><h3 style="margin:0;font-size:15px;color:#1B294A">Sistema de pintura · ${dftTotal(capasOk)} µm DFT total</h3>
+      <table class="it"><thead><tr><th>Capa</th><th>Producto</th><th>Color</th><th class="r">DFT</th><th class="r">EPH control*</th><th class="r">Rend. teórico**</th>${m2Total > 0 ? '<th class="r">Consumo teórico · ' + fmtDec(m2Total, 2) + ' m²</th>' : ''}</tr></thead><tbody>
       ${capasOk.map((c, i) => { const r = calcCapa(c, m2Total); return `<tr><td>${i + 1}ª</td><td><b>${escH(c.producto)}</b></td><td>${escH(c.color)}</td><td class="r">${r.dft} µm</td><td class="r">${r.eph ? '≈ ' + r.eph + ' µm' : ''}</td><td class="r">${r.rendL ? fmtDec(r.rendL, 1) + ' m²/L · <b>' + fmtDec(r.rendGal, 1) + ' m²/gal</b>' : ''}</td>${m2Total > 0 ? '<td class="r">' + (r.litros ? fmtDec(r.litros, 1) + ' L · ' + fmtDec(r.galones, 1) + ' gal' : '') + '</td>' : ''}</tr>` }).join('')}
-      <tr><td colspan="3"><b>Sistema completo</b></td><td class="r"><b>${dftTotal(capasOk)} µm</b></td><td></td><td></td>${m2Total > 0 ? '<td></td>' : ''}</tr></tbody></table>
-      <div class="nota">* EPH: espesor húmedo de control, según sólidos en volumen. ** Al DFT indicado, según sólidos en volumen de las fichas técnicas del fabricante. Valores teóricos, sin pérdidas de aplicación.${cot.notaTecnica ? ' ' + escH(cot.notaTecnica) : ''}</div></div>` : (cot.notaTecnica ? `<div class="carta">${escH(cot.notaTecnica)}</div>` : '')
-  const cubHtml = cub.rows.some(r => r.m2 > 0) ? `<div class="sec" style="margin-top:14px">Cubicación detallada</div>
-      <table class="it"><thead><tr><th>Elemento</th><th>Dato informado</th><th>Criterio</th><th style="text-align:right">M² a pintar</th><th>Color</th><th style="text-align:right">Subtotal neto</th></tr></thead><tbody>
-      ${cub.rows.map(r => `<tr><td>${escH(r.elemento)}</td><td>${escH(r.dato)}</td><td>${escH(r.criterio)}</td><td class="r">${fmtDec(r.m2, 2)}</td><td>${escH(r.color)}</td><td class="r">${clp(r.subtotal)}</td></tr>`).join('')}
-      <tr><td colspan="3"><b>Total cubicado · precio unitario ${clp(precioCub)}/m²</b></td><td class="r"><b>${fmtDec(cub.m2, 2)}</b></td><td></td><td class="r"><b>${clp(cub.neto)}</b></td></tr></tbody></table>` : ''
+      <tr class="tt"><td colspan="3">Sistema completo</td><td class="r">${dftTotal(capasOk)} µm</td><td></td><td></td>${m2Total > 0 ? '<td></td>' : ''}</tr></tbody></table>
+      <div class="fn">* EPH: espesor húmedo de control, según sólidos en volumen. ** Al DFT indicado, según sólidos en volumen de las fichas técnicas del fabricante. Valores teóricos, sin pérdidas de aplicación.${cot.notaTecnica ? ' ' + escH(cot.notaTecnica) : ''}</div></div>` : (cot.notaTecnica ? `<div class="carta">${mdNegrita(cot.notaTecnica)}</div>` : '')
+  // Tabla de materiales (listado del cliente): MATERIAL · CANTIDAD INFORMADA · DESARROLLO · M²
+  const conColor = hayCub && cub.rows.some(r => String(r.color || '').trim())
+  const tablaCub = hayCub ? `<table class="it"><thead><tr><th>Material</th><th>Cantidad informada</th><th class="r">Desarrollo</th>${conColor ? '<th>Color</th>' : ''}<th class="r">M²</th></tr></thead><tbody>
+      ${cub.rows.map(r => `<tr><td>${escH(r.elemento)}</td><td>${escH(r.dato)}</td><td class="r">${escH(r.criterio)}</td>${conColor ? '<td>' + escH(r.color) + '</td>' : ''}<td class="r">${fmtDec(r.m2, 2)}</td></tr>`).join('')}
+      <tr class="tt"><td>Total estimado</td><td></td><td></td>${conColor ? '<td></td>' : ''}<td class="r">${fmtDec(cub.m2, 2)}</td></tr></tbody></table>${cot.notaCubicacion ? '<div class="fn">' + mdNegrita(cot.notaCubicacion) + '</div>' : ''}` : ''
+  const tablaItems = `<table class="it"><thead><tr><th>#</th><th>Código</th><th>Detalle</th><th class="r">Cant</th><th class="r">P. unitario</th><th class="r">Desc.</th><th class="r">Total</th></tr></thead><tbody>${filas}</tbody></table>`
   const epsHtml = eps.length ? `<div style="break-inside:avoid;page-break-inside:avoid"><div class="sec">Estados de pago propuestos</div>
-    <div class="bar">${['#FF6B00', '#F79A5C', '#061A40', '#6B7A99'].map(c => '<i style="background:' + c + '"></i>').join('')}</div>
-    <div class="eps">${eps.map((x, i) => `<div class="ep"><div class="h"><span>EP ${i + 1}${x.t ? ' · ' + escH(x.t) : ''}</span><b>${x.pct}%</b></div><div class="d">${escH(x.d || '')}</div><div class="m">Neto ${clp(x.neto)}<b>${clp(x.total)} <span style="font-size:9px;font-weight:400;color:#5a6b85">c/IVA</span></b></div></div>`).join('')}</div>
+    <div class="bar">${['#F16521', '#F79A5C', '#1B294A', '#6B7A99'].map(c => '<i style="background:' + c + '"></i>').join('')}</div>
+    <div class="eps">${eps.map((x, i) => `<div class="ep"><div class="h"><span>EP ${i + 1}${x.t ? ' · ' + escH(x.t) : ''}</span><b>${x.pct}%</b></div><div class="d">${escH(x.d || '')}</div><div class="m">Neto ${clp(x.neto)}<b>${clp(x.total)} <span style="font-size:9px;font-weight:400;color:#69717F">c/IVA</span></b></div></div>`).join('')}</div>
     <div class="nota">Montos calculados sobre el total de esta cotización. Cada estado de pago se factura al cumplirse su hito.</div></div>` : ''
+  const planta = cot.planta != null && String(cot.planta).trim() ? cot.planta : (PLANTA_POR_AREA[cot.area] || '')
+  const tituloBox = cot.tituloServicio || (baseM2 && it0.detalle ? it0.detalle : 'Detalle y valorización')
+  const notaSup = cot.notaSuperficie || (hayCub ? '**Superficie según listado del cliente.** Los m² se calcularon a partir del listado de materiales informado por el cliente (cantidades, largos y kilos). La superficie será **verificada y rectificada una vez recibido el material en nuestra planta**, manteniendo el precio unitario.' : '')
+  const precioDesc = cot.precioDescripcion ? ' · ' + escH(cot.precioDescripcion) : ''
+  // Precio unitario (abajo a la izquierda): por m² cuando hay base de m²; en cotizaciones de un solo ítem, por la unidad del ítem (un, gl, ml…).
+  const puValor = baseM2 ? num(precioCub) : (items.length === 1 ? num(it0.pUnitario) : 0)
+  const puUnidad = baseM2 ? 'm²' : (/^m\s*2$|^m²$/i.test(String(it0.unidad || '').trim()) ? 'm²' : String(it0.unidad || 'UN').trim().toLowerCase())
+  const valorFinal = hayCub ? ' El valor final se ajusta según los m² verificados al ingreso a planta, manteniendo el precio unitario.' : ''
+  const calidad = '<ul><li><b>Protocolo por lote:</b> preparación, perfil de rugosidad, condiciones ambientales y espesores.</li><li><b>Instrumentos</b> Elcometer con calibración externa vigente.</li><li><b>Registro fotográfico</b> del proceso.</li></ul>'
   return `<!doctype html><html><head><meta charset="utf-8"><title>Cotización ${escH(cot.folio)}${rev ? ' Rev. ' + rev : ''}</title><style>${estilosOferta()}</style></head><body>
     <div class="oh">
-      <div>${logo}<div class="emp"><b>${escH(EMPRESA.nombre)}</b> · RUT ${escH(EMPRESA.rut)}<br>${escH(EMPRESA.direccion)} · ${escH(EMPRESA.email)} · ${escH(EMPRESA.telefono)}</div></div>
-      <div class="doc"><div class="t">COTIZACIÓN</div><span class="pill">Folio N° ${escH(cot.folio)}${rev ? ' · Rev. ' + rev : ''}</span><div class="sub">${subLinea}</div></div>
+      <div>${logo}<div class="emp">${escH(nombreDoc(EMPRESA.nombre))} · RUT ${escH(EMPRESA.rut)}<br>${escH(EMPRESA.direccion)} · ${escH(EMPRESA.email)} · ${escH(telDoc(EMPRESA.telefono))}</div></div>
+      <div class="doc"><div class="t">COTIZACIÓN</div><span class="pill">Folio N° ${escH(cot.folio)}${rev ? ' · Rev. ' + rev : ''}</span><div class="sub">Emitida el ${fechaCorta(cot.fecha)}${dv ? ' · Válida por ' + dv + ' días' : ''}</div></div>
     </div>
-    ${cot.sistemaResumen ? `<div class="banner"><b>SISTEMA</b> &nbsp; ${escH(cot.sistemaResumen)}</div>` : ''}
+    ${(cot.sistemaResumen || cot.material) ? `<div class="banner">${cot.sistemaResumen ? `<div class="c1"><b>SERVICIO</b>${escH(cot.sistemaResumen)}</div>` : ''}${cot.material ? `<div class="c2"><b>MATERIAL</b>${escH(cot.material)}</div>` : ''}</div>` : ''}
     <div class="cli">
       <div><div class="l">Cliente</div><div class="v">${escH(cot.cliente)}</div></div>
       <div><div class="l">RUT</div><div class="v">${escH(cot.rut)}</div></div>
@@ -212,28 +277,34 @@ function htmlOferta(cot) {
       <div><div class="l">Lugar de ejecución</div><div class="v">${escH(cot.lugarEjecucion)}</div></div>
       <div><div class="l">Condición de pago</div><div class="v">${escH(cot.condicionPago)}</div></div>
     </div>
-    ${cot.carta ? `<div class="carta">${escH(cot.carta)}</div>` : ''}
-    ${capasHtml}${cubHtml}
+    ${cot.carta ? `<div class="carta">${mdNegrita(cot.carta)}</div>` : ''}
+    ${m2Total > 0 ? `<div class="hero"><span class="n">${hayCub ? '≈ ' : ''}${fmtDec(m2Total, 2)} m²</span>${cot.asunto ? '<span class="d">· ' + escH(cot.asunto) + '</span>' : ''}</div>` : (cot.asunto ? `<div class="hero"><span class="d" style="font-size:14px">${escH(cot.asunto)}</span></div>` : '')}
+    ${notaSup ? `<div class="pnote">${mdNegrita(notaSup)}</div>` : ''}
     <div class="box">
-      <h3>Detalle y valorización</h3>
-      <table class="it"><thead><tr><th>#</th><th>Código</th><th>Detalle</th><th style="text-align:right">Cant</th><th style="text-align:right">P. unitario</th><th style="text-align:right">Desc.</th><th style="text-align:right">Total</th></tr></thead><tbody>${filas}</tbody></table>
-      <div class="tots"><table>
-        <tr><td class="lbl">Neto</td><td class="r">${clp(t.afecto)}</td></tr>
-        <tr><td class="lbl">IVA 19 %</td><td class="r">${clp(t.iva)}</td></tr>
-        <tr class="big"><td class="lbl">Total</td><td class="r">${clp(t.total)}</td></tr>
-      </table></div>
-      <div class="words">Son: ${escH(enPalabras(t.total).toLowerCase())}.</div>
+      <div class="bh"><div><h3>${escH(tituloBox)}</h3>${cot.subtituloServicio ? '<div class="s">' + escH(cot.subtituloServicio) + '</div>' : ''}</div>${planta ? '<span class="ptag">' + escH(planta) + '</span>' : ''}</div>
+      ${hayCub ? tablaCub : tablaItems}
+      <div class="bf">
+        ${puValor > 0 ? `<div class="pu">Precio unitario${precioDesc}<b>${clp(puValor)} / ${escH(puUnidad)}</b></div>` : ''}
+        <div class="tt"><div class="nt">Neto <b>${clp(t.afecto)}</b></div>IVA 19 % <b>${clp(t.iva)}</b><div class="g">${clp(t.total)}</div></div>
+      </div>
     </div>
-    ${cot.comentario ? `<div class="nota" style="font-size:10.5px;color:#344054"><b>Comentario:</b> ${escH(cot.comentario)}</div>` : ''}
+    <div class="words">Son: ${escH(sonPalabras(t.total))}.${escH(valorFinal)}</div>
+    ${cot.comentario ? `<div class="nota" style="font-size:11px;color:#363F4F"><b>Comentario:</b> ${escH(cot.comentario)}</div>` : ''}
+    ${capasHtml}
     ${epsHtml}
-    <div class="${(capasOk.length || cub.rows.some(r => r.m2 > 0)) ? 'cond' : 'pb cond'}" style="margin-top:18px">
-      <h2>Condiciones comerciales y operativas — SEREIN</h2>
-      <ol>${condicionesDe(cot).map(c => `<li><b>${escH(c.t)}:</b> ${escH(c.x)}</li>`).join('')}</ol>
-      <div class="datos">${datosTransferenciaHtml()}</div>
+    <div class="pb">
+      <div class="two${cot.importante ? '' : ' uno'}">
+        ${cot.importante ? `<div class="imp"><h4>Importante</h4><p>${mdNegrita(cot.importante)}</p></div>` : ''}
+        <div class="qc"><h4>Control de calidad incluido</h4>${calidad}</div>
+      </div>
+      <div class="cond">
+        <h2>Condiciones comerciales y operativas — SEREIN</h2>
+        <ol>${condicionesDe(cot).map(c => `<li><b>${escH(c.t)}:</b> ${escH(c.x)}</li>`).join('')}</ol>
+      </div>
+      <div class="datos"><h4>Datos de transferencia</h4>SERVICIOS REVESTIMIENTOS INDUSTRIALES SpA · RUT ${escH(EMPRESA.rut)} · ${escH(EMPRESA.banco)} · Cta. Cte. N° ${escH(EMPRESA.cuenta)} · ${escH(EMPRESA.email)} · ${escH(EMPRESA.direccion)} · sereingroup.cl</div>
       ${cot.anexosMuestra ? '<div class="nota">Anexos: A · Protocolo de preparación de superficie (muestra) · B · Protocolo de pintura RC-PG-6 (muestra)</div>' : ''}
-      <div class="next"><b>¿Siguiente paso?</b> Con su Orden de Compra activamos la programación de su trabajo. Coordinamos con gusto una visita a nuestras instalaciones para que su equipo conozca el proceso.</div>
-      <div class="firma"><b>SEREIN Group</b>${escH(cot.vendedor || 'Gerencia Comercial')}</div>
-      <div class="foot"><div class="n">Compromiso con la calidad · Seguridad en cada proceso · Excelencia en resultados</div><div class="w">www.sereingroup.cl</div></div>
+      <div class="next"><b>¿Siguiente paso?</b> Con su Orden de Compra programamos el ingreso del material a planta y le informamos la fecha de entrega.</div>
+      <div class="foot"><div class="n">Compromiso con la calidad &nbsp;·&nbsp; Seguridad en cada proceso &nbsp;·&nbsp; Excelencia en resultados</div><div class="w">www.sereingroup.cl</div></div>
     </div>
   </body></html>`
 }
@@ -670,7 +741,7 @@ function FormCotizacion({ esEdicion = false, inicial, onGuardar, onCancelar, cli
         {redaccion && redaccion.valores && (
           <div style={{ marginTop: 10, background: '#fff', border: '1px solid #DFE4EA', padding: 10 }}>
             <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>Propuesta de redacción — edita lo que quieras antes de aplicar</div>
-            {[['asunto', 'Asunto', 1], ['sistemaResumen', 'Sistema (franja azul)', 2], ['carta', 'Carta introductoria', 6], ['notaTecnica', 'Nota técnica', 3]].map(([k, lbl, rows]) => {
+            {[['asunto', 'Asunto', 1], ['sistemaResumen', 'Servicio (franja azul)', 2], ['carta', 'Carta introductoria', 6], ['notaTecnica', 'Nota técnica', 3]].map(([k, lbl, rows]) => {
               const raros = redaccion.aplicar[k] ? cifrasNoRespaldadas(redaccion.valores[k], redaccion.datos) : []
               return (
                 <div key={k} style={{ marginBottom: 8 }}>
@@ -689,13 +760,21 @@ function FormCotizacion({ esEdicion = false, inicial, onGuardar, onCancelar, cli
         )}
       </div>
 
-      <details style={{ marginTop: 12, border: '1px solid #DFE4EA', padding: '8px 12px', background: '#FAFBFC' }} open={!!(f.asunto || f.sistemaResumen || f.carta || f.atencion || f.lugarEjecucion || (f.pagos || []).length || f.condiciones || (parseInt(f.rev, 10) || 0) > 0)}>
-        <summary style={{ cursor: 'pointer', fontSize: 12, fontWeight: 700, color: C.carbon, textTransform: 'uppercase' }}>Formato oferta (opcional): atención, sistema, carta, estados de pago, condiciones, revisión</summary>
+      <details style={{ marginTop: 12, border: '1px solid #DFE4EA', padding: '8px 12px', background: '#FAFBFC' }} open={!!(f.asunto || f.sistemaResumen || f.material || f.importante || f.carta || f.atencion || f.lugarEjecucion || (f.pagos || []).length || f.condiciones || (parseInt(f.rev, 10) || 0) > 0)}>
+        <summary style={{ cursor: 'pointer', fontSize: 12, fontWeight: 700, color: C.carbon, textTransform: 'uppercase' }}>Formato del documento (opcional): servicio, material, carta, recuadros, estados de pago, condiciones, revisión</summary>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 8, marginTop: 10 }}>
           <label style={lab}>Atención (nombre del contacto)<input style={inp} value={f.atencion || ''} onChange={e => set('atencion', e.target.value)} /></label>
           <label style={lab}>Lugar de ejecución<input style={inp} value={f.lugarEjecucion || ''} onChange={e => set('lugarEjecucion', e.target.value)} placeholder="ej. Planta SEREIN, Lampa" /></label>
-          <label style={{ ...lab, gridColumn: '1 / -1' }}>Asunto (subtítulo bajo el folio)<input style={inp} value={f.asunto || ''} onChange={e => set('asunto', e.target.value)} placeholder="ej. Alternativa sistema Jotun" /></label>
-          <label style={{ ...lab, gridColumn: '1 / -1' }}>Sistema (franja azul: esquema, espesor total, colores)<textarea rows={2} style={{ ...inp, fontFamily: 'inherit', resize: 'vertical' }} value={f.sistemaResumen || ''} onChange={e => set('sistemaResumen', e.target.value)} /></label>
+          <label style={{ ...lab, gridColumn: '1 / -1' }}>Descripción corta (junto a los m² grandes)<input style={inp} value={f.asunto || ''} onChange={e => set('asunto', e.target.value)} placeholder="ej. granallado SSPC-SP10 + epóxico rico en zinc 3 mils" /></label>
+          <label style={{ ...lab, gridColumn: '1 / -1' }}>Servicio (franja azul: esquema, espesor total, dónde se hace)<textarea rows={2} style={{ ...inp, fontFamily: 'inherit', resize: 'vertical' }} value={f.sistemaResumen || ''} onChange={e => set('sistemaResumen', e.target.value)} placeholder="ej. Granallado SSPC-SP10 (metal casi blanco) + epóxico rico en zinc · 3 mils (75 µm) DFT · en planta SEREIN" /></label>
+          <label style={{ ...lab, gridColumn: '1 / -1' }}>Material (franja azul)<input style={inp} value={f.material || ''} onChange={e => set('material', e.target.value)} placeholder="ej. Perfiles y planchas · 6.807 kg" /></label>
+          <label style={lab}>Etiqueta de planta (recuadro principal)<input style={inp} value={f.planta || ''} onChange={e => set('planta', e.target.value)} placeholder="ej. Planta Lampa (si se deja vacío usa la del área)" /></label>
+          <label style={lab}>Precio unitario: a qué corresponde<input style={inp} value={f.precioDescripcion || ''} onChange={e => set('precioDescripcion', e.target.value)} placeholder="ej. granallado + primera capa" /></label>
+          <label style={{ ...lab, gridColumn: '1 / -1' }}>Título del recuadro principal<input style={inp} value={f.tituloServicio || ''} onChange={e => set('tituloServicio', e.target.value)} placeholder="ej. Granallado SP10 + epóxico rico en zinc" /></label>
+          <label style={{ ...lab, gridColumn: '1 / -1' }}>Subtítulo del recuadro principal<input style={inp} value={f.subtituloServicio || ''} onChange={e => set('subtituloServicio', e.target.value)} placeholder="ej. Perfiles UPN, canales, tubulares, pletinas y planchas · total informado 6.807 kg" /></label>
+          <label style={{ ...lab, gridColumn: '1 / -1' }}>Nota de superficie (recuadro durazno; si hay listado de materiales sale una estándar)<textarea rows={2} style={{ ...inp, fontFamily: 'inherit', resize: 'vertical' }} value={f.notaSuperficie || ''} onChange={e => set('notaSuperficie', e.target.value)} placeholder="Usa **doble asterisco** para destacar en negrita" /></label>
+          <label style={{ ...lab, gridColumn: '1 / -1' }}>Nota bajo la tabla de materiales<textarea rows={2} style={{ ...inp, fontFamily: 'inherit', resize: 'vertical' }} value={f.notaCubicacion || ''} onChange={e => set('notaCubicacion', e.target.value)} placeholder="ej. Perfiles abiertos y planchas por ambas caras; tubulares por su cara exterior." /></label>
+          <label style={{ ...lab, gridColumn: '1 / -1' }}>Recuadro "Importante" (segunda página; vacío = no se muestra)<textarea rows={2} style={{ ...inp, fontFamily: 'inherit', resize: 'vertical' }} value={f.importante || ''} onChange={e => set('importante', e.target.value)} placeholder="ej. La superficie granallada y protegida con zinc debe recibir las capas siguientes dentro del intervalo de repintado." /></label>
           <label style={{ ...lab, gridColumn: '1 / -1' }}>Carta / texto introductorio<textarea rows={4} style={{ ...inp, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.4 }} value={f.carta || ''} onChange={e => set('carta', e.target.value)} placeholder="Saludo y explicación breve de la propuesta (opcional)" /></label>
         </div>
         <div style={{ fontSize: 11.5, fontWeight: 700, color: C.gris, textTransform: 'uppercase', margin: '12px 0 6px' }}>Estados de pago</div>

@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Plus, Search, ArrowLeft, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react'
+import { Plus, Search, ArrowLeft, CheckCircle2, XCircle, AlertTriangle, Upload, Trash2, Sparkles, FileText } from 'lucide-react'
 import { supabase } from './supabase.js'
 import { SEREIN } from './theme-serein.js'
-import { evaluarCredito, condicionesOC, mezclarParams, PARAMS_CREDITO_DEFAULT, diasEntre } from './creditoCalculo.js'
+import { evaluarCredito, condicionesOC, mezclarParams, PARAMS_CREDITO_DEFAULT, diasEntre, datosDesdeExtraccion, resumenExtraccion } from './creditoCalculo.js'
+import { fileToBase64 } from './protocolo-pdf.js'
+import { generarInformeCredito } from './creditoInforme.js'
 
 // ============================================================
 // MÓDULO DE CRÉDITO — factibilidad de crédito a 30 días y condiciones
@@ -69,8 +71,8 @@ function Resultado({ res }) {
 // ---------- Formulario de evaluación (datos a mano) ----------
 const DATOS_VACIOS = { registros: 'limpio', chequesProtestados: false, observacionesTributarias: false, referenciaMala: false, antecedentesCompletos: true, fechaCarpeta: '', mesesIvaAlDia: 12, ventas12m: '', ventasPrevias12m: '', resultadoUltimoAnio: 'utilidad', antiguedadCtaCteAnios: 2, referenciasBuenas: 0, bienesRaices: false, contribucionesVencidas: false, diasFacturaVencida: 0, lineaSolicitada: '' }
 
-function FormEvaluacion({ cliente, ultima, params, esGerencia, onCerrar, onGuardada }) {
-  const [d, setD] = useState({ ...DATOS_VACIOS, ...(ultima || {}), fechaCarpeta: '', trabajosPagados: cliente.trabajos_pagados || 0, fechaInicioActividades: cliente.fecha_inicio_actividades || '' })
+function FormEvaluacion({ cliente, ultima, iniciales, extraidos, params, esGerencia, onCerrar, onGuardada }) {
+  const [d, setD] = useState({ ...DATOS_VACIOS, ...(ultima || {}), fechaCarpeta: '', trabajosPagados: cliente.trabajos_pagados || 0, fechaInicioActividades: cliente.fecha_inicio_actividades || '', ...(iniciales || {}) })
   const [obs, setObs] = useState('')
   const [guardada, setGuardada] = useState(null) // { id, res }
   const [linea, setLinea] = useState('')
@@ -83,7 +85,7 @@ function FormEvaluacion({ cliente, ultima, params, esGerencia, onCerrar, onGuard
   const guardar = async () => {
     setTrabajando(true); setErr('')
     const { data, error } = await supabase.from('credito_evaluaciones').insert({
-      cliente_id: cliente.id, datos_confirmados: d, resultado: { filtros: res.filtros, detalle: res.detalle, notas: res.notas, resumen: res.resumen, condicionTexto: res.condicionTexto, califica30: res.califica30, revisionMeses: res.revisionMeses },
+      cliente_id: cliente.id, datos_extraidos: extraidos || null, datos_confirmados: d, resultado: { filtros: res.filtros, detalle: res.detalle, notas: res.notas, resumen: res.resumen, condicionTexto: res.condicionTexto, califica30: res.califica30, revisionMeses: res.revisionMeses },
       puntaje: res.puntaje, categoria: res.categoria, linea_sugerida: res.lineaSugerida, anticipo_minimo: res.anticipoMinimo, garantia: res.garantia, estado: 'evaluada', observaciones: obs,
     }).select('id').single()
     setTrabajando(false)
@@ -108,6 +110,7 @@ function FormEvaluacion({ cliente, ultima, params, esGerencia, onCerrar, onGuard
     <div>
       <div style={card}>
         <div style={titulo}>Datos de la evaluación · {cliente.razon_social}</div>
+        {extraidos && <div style={{ padding: '8px 12px', background: '#FFF6F1', border: '1px solid #FAD9C4', fontSize: 12.5, marginBottom: 12 }}><b style={{ color: C.naranja }}>Datos precargados con lo que leyó la IA.</b> Revisa cada campo contra el documento antes de guardar. Las referencias comerciales, los trabajos pagados y los días de factura vencida se anotan a mano.</div>}
         <div style={{ fontSize: 12, color: C.gris, marginBottom: 12 }}>Completa lo que sale de la carpeta tributaria, el informe DICOM y el certificado bancario. El resultado se calcula en vivo abajo.</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
           <Campo label="Registros comerciales (DICOM)"><select style={inp} value={d.registros} onChange={e => set('registros', e.target.value)}><option value="limpio">Limpio</option><option value="aclaradas">Deudas antiguas aclaradas</option><option value="vigentes">Morosidades / protestos vigentes</option></select></Campo>
@@ -163,6 +166,267 @@ function FormEvaluacion({ cliente, ultima, params, esGerencia, onCerrar, onGuard
   )
 }
 
+// ---------- Documentos del cliente (carga + lectura con IA) ----------
+const TIPOS_DOC = [
+  { id: 'carpeta_tributaria', label: 'Carpeta tributaria (SII)', ayuda: 'Debe tener menos de 90 días.' },
+  { id: 'dicom', label: 'Informe DICOM', ayuda: 'De la empresa y de su representante legal.' },
+  { id: 'certificado_bancario', label: 'Certificado bancario', ayuda: 'Antigüedad de la cuenta y protestos.' },
+  { id: 'solicitud', label: 'Solicitud de crédito firmada', ayuda: 'Con las referencias comerciales.' },
+  { id: 'tgr', label: 'Certificado TGR (contribuciones)', ayuda: 'Opcional: solo si tiene bienes raíces.' },
+]
+const mensajeErrorIA = e => /failed to send|non-2xx|not found|404/i.test((e && e.message) || '') ? 'La función de lectura (extraer-credito) todavía no está desplegada en Supabase.' : ((e && e.message) || String(e))
+
+function Documentos({ cliente, docs, params, extraidos, setExtraidos, onCambio, onEvaluar }) {
+  const [trabajando, setTrabajando] = useState('')
+  const [err, setErr] = useState('')
+
+  const subir = async (tipo, e) => {
+    const fl = e.target.files && e.target.files[0]
+    e.target.value = ''
+    if (!fl) return
+    setTrabajando('sube-' + tipo); setErr('')
+    const ext = ((fl.name.match(/\.([a-zA-Z0-9]{2,5})$/) || [])[1] || 'pdf').toLowerCase()
+    const path = cliente.id + '/' + tipo + '-' + Date.now() + '.' + ext
+    const up = await supabase.storage.from('credito').upload(path, fl, { contentType: fl.type || 'application/pdf' })
+    if (up.error) { setErr('No se pudo subir el archivo: ' + up.error.message); setTrabajando(''); return }
+    const ins = await supabase.from('credito_documentos').insert({ cliente_id: cliente.id, tipo, archivo_path: path, nombre_archivo: fl.name })
+    if (ins.error) { await supabase.storage.from('credito').remove([path]); setErr('No se pudo registrar el documento: ' + ins.error.message); setTrabajando(''); return }
+    setTrabajando(''); onCambio()
+  }
+  const ver = async d => {
+    const { data, error } = await supabase.storage.from('credito').createSignedUrl(d.archivo_path, 60)
+    if (error) { setErr('No se pudo abrir el archivo: ' + error.message); return }
+    window.open(data.signedUrl, '_blank')
+  }
+  const eliminar = async d => {
+    if (!window.confirm('¿Eliminar "' + (d.nombre_archivo || 'este documento') + '"?')) return
+    await supabase.storage.from('credito').remove([d.archivo_path])
+    await supabase.from('credito_documentos').delete().eq('id', d.id)
+    setExtraidos(prev => { const n = { ...prev }; delete n[d.tipo]; return n })
+    onCambio()
+  }
+  const cambiarFecha = async (d, valor) => {
+    await supabase.from('credito_documentos').update({ fecha_emision: valor || null }).eq('id', d.id)
+    onCambio()
+  }
+  const leer = async d => {
+    setTrabajando('lee-' + d.id); setErr('')
+    try {
+      const dl = await supabase.storage.from('credito').download(d.archivo_path)
+      if (dl.error) throw dl.error
+      const file = new File([dl.data], d.nombre_archivo || 'documento.pdf', { type: dl.data.type || 'application/pdf' })
+      const base64 = await fileToBase64(file)
+      const { data, error } = await supabase.functions.invoke('extraer-credito', { body: { tipo: d.tipo, archivos: [{ base64, mimeType: file.type || 'application/pdf', filename: file.name }] } })
+      if (error) throw error
+      if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo leer el documento.')
+      setExtraidos(prev => ({ ...prev, [d.tipo]: data.datos }))
+      const f = data.datos && (data.datos.fechaGeneracion || data.datos.fechaEmision)
+      if (f && !d.fecha_emision) { await supabase.from('credito_documentos').update({ fecha_emision: f }).eq('id', d.id); onCambio() }
+    } catch (e) { setErr('No se pudo leer "' + (d.nombre_archivo || 'el documento') + '": ' + mensajeErrorIA(e)) }
+    setTrabajando('')
+  }
+
+  const hayLeidos = Object.keys(extraidos).length > 0
+  return (
+    <div style={card}>
+      <div style={titulo}>Documentos del cliente</div>
+      <div style={{ fontSize: 12, color: C.gris, marginBottom: 12 }}>Sube los PDF y pulsa <b>Leer con IA</b>: el formulario de evaluación se llena solo. Tú revisas cada dato antes de calcular; nada queda como definitivo hasta que lo confirmas. Los archivos se guardan en una carpeta privada (solo Gerencia y Administración).</div>
+      {TIPOS_DOC.map(t => {
+        const lista = docs.filter(d => d.tipo === t.id)
+        return (
+          <div key={t.id} style={{ borderTop: '1px solid #EEF1F4', padding: '10px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 600, fontSize: 13 }}>{t.label}</span>
+              <span style={{ fontSize: 11.5, color: lista.length ? C.verde : C.gris, fontWeight: 600 }}>{lista.length ? '✓ recibido' : 'pendiente'}</span>
+              <span style={{ fontSize: 11.5, color: C.gris }}>{t.ayuda}</span>
+              <label style={{ ...btn(C.azul, true), marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 11px', fontSize: 12, cursor: trabajando ? 'wait' : 'pointer' }}>
+                <Upload size={13} /> {trabajando === 'sube-' + t.id ? 'Subiendo…' : 'Subir archivo'}
+                <input type="file" accept="application/pdf,image/*" style={{ display: 'none' }} disabled={!!trabajando} onChange={e => subir(t.id, e)} />
+              </label>
+            </div>
+            {lista.map(d => {
+              const dias = d.fecha_emision ? diasEntre(d.fecha_emision, hoy()) : null
+              const vencida = t.id === 'carpeta_tributaria' && dias != null && dias > params.carpeta_max_dias
+              return (
+                <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 6, paddingLeft: 12, fontSize: 12.5 }}>
+                  <span style={{ minWidth: 180 }}>{d.nombre_archivo || 'documento'}</span>
+                  <label style={{ fontSize: 11.5, color: C.gris }}>Emitido <input type="date" value={d.fecha_emision || ''} onChange={e => cambiarFecha(d, e.target.value)} style={{ ...inp, width: 140, padding: '3px 6px' }} /></label>
+                  {vencida && <span style={{ color: C.rojo, fontWeight: 700, fontSize: 12 }}>{dias} días: vencida (máx. {params.carpeta_max_dias}), pide una nueva</span>}
+                  <button onClick={() => ver(d)} style={{ ...btn(C.gris, true), padding: '3px 10px', fontSize: 12 }}>Ver</button>
+                  <button onClick={() => leer(d)} disabled={!!trabajando} style={{ ...btn(C.naranja), padding: '3px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4, cursor: trabajando ? 'wait' : 'pointer' }}><Sparkles size={12} /> {trabajando === 'lee-' + d.id ? 'Leyendo…' : 'Leer con IA'}</button>
+                  <button onClick={() => eliminar(d)} title="Eliminar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
+                </div>
+              )
+            })}
+            {extraidos[t.id] && (
+              <div style={{ margin: '8px 0 0 12px', padding: '8px 10px', background: '#FFF6F1', border: '1px solid #FAD9C4', fontSize: 12, lineHeight: 1.6 }}>
+                <b style={{ color: C.naranja }}>Leído por la IA:</b> {resumenExtraccion(t.id, extraidos[t.id]).join(' · ')}
+              </div>
+            )}
+          </div>
+        )
+      })}
+      {err && <div style={{ color: C.rojo, fontSize: 12.5, marginTop: 8 }}>{err}</div>}
+      {hayLeidos && <div style={{ marginTop: 12 }}><button onClick={onEvaluar} style={btn(C.verde)}>Evaluar con lo leído por la IA</button></div>}
+    </div>
+  )
+}
+
+// ---------- Órdenes de compra y facturas (control de cupo en tiempo real) ----------
+const estadoFactura = (fa, params) => {
+  if (fa.fecha_pago) return { txt: 'Pagada ' + fa.fecha_pago, color: C.verde, dias: 0 }
+  const d = fa.fecha_vencimiento ? diasEntre(fa.fecha_vencimiento, hoy()) : null
+  if (d != null && d > 0) return { txt: 'Vencida hace ' + d + ' días', color: d > params.factura_vencida_max_dias ? C.rojo : C.ambar, dias: d }
+  return { txt: 'Pendiente' + (fa.fecha_vencimiento ? ' · vence ' + fa.fecha_vencimiento : ''), color: C.gris, dias: 0 }
+}
+
+function OrdenesFacturas({ cliente, params, ordenes, facturas, errorTablas, recargar, onTrabajosPagados }) {
+  const [nuevaOC, setNuevaOC] = useState(null)
+  const [nuevaFac, setNuevaFac] = useState(null)
+  const [err, setErr] = useState('')
+  const tieneCredito = cliente.estado_credito === 'activa' && num(cliente.linea_aprobada) > 0
+  const cupo = Math.max(num(cliente.linea_aprobada) - num(cliente.deuda_vigente), 0)
+  const pend = facturas.filter(x => !x.fecha_pago)
+  const vencidas = pend.filter(x => estadoFactura(x, params).dias > 0)
+  const diasMax = vencidas.reduce((m, x) => Math.max(m, estadoFactura(x, params).dias), 0)
+
+  const condiciones = nuevaOC && num(nuevaOC.monto) > 0
+    ? condicionesOC({ montoNeto: num(nuevaOC.monto), categoria: tieneCredito ? (cliente.categoria || 'D') : 'D', lineaAprobada: tieneCredito ? cliente.linea_aprobada : 0, deudaVigente: cliente.deuda_vigente }, params) : null
+
+  const crearOC = async () => {
+    if (!condiciones) { setErr('Ingresa el monto neto de la OC.'); return }
+    setErr('')
+    let estados = []
+    if (condiciones.aCredito > 0) { let resto = condiciones.aCredito; const tope = condiciones.nEstadosPago > 1 ? condiciones.cupo : resto; while (resto > 0) { const m = Math.min(tope, resto); estados.push({ n: estados.length + 1, monto: m }); resto -= m } }
+    const { error } = await supabase.from('credito_ordenes_compra').insert({
+      cliente_id: cliente.id, numero_oc: nuevaOC.numero.trim() || null, descripcion: nuevaOC.descripcion.trim() || null, fecha: nuevaOC.fecha || hoy(), monto_neto: num(nuevaOC.monto),
+      condicion_pago: condiciones.texto, anticipo: condiciones.anticipo, a_credito: condiciones.aCredito, estados_pago: estados,
+    })
+    if (error) { setErr('No se pudo guardar la OC: ' + error.message); return }
+    setNuevaOC(null); recargar()
+  }
+  const cambiarEstadoOC = async (oc, estado) => {
+    if (estado === oc.estado) return
+    const { error } = await supabase.from('credito_ordenes_compra').update({ estado }).eq('id', oc.id)
+    if (error) { setErr('No se pudo actualizar la OC: ' + error.message); return }
+    // "Pagada" cuenta como trabajo pagado del cliente (y se descuenta si se revierte).
+    if (estado === 'pagada') onTrabajosPagados(1)
+    else if (oc.estado === 'pagada') onTrabajosPagados(-1)
+    recargar()
+  }
+  const eliminarOC = async oc => {
+    if (!window.confirm('¿Eliminar la OC ' + (oc.numero_oc || '') + '? Sus facturas quedan sin OC asociada.')) return
+    await supabase.from('credito_ordenes_compra').delete().eq('id', oc.id)
+    if (oc.estado === 'pagada') onTrabajosPagados(-1)
+    recargar()
+  }
+  const abrirFactura = oc => setNuevaFac({ oc_id: oc ? oc.id : '', numero: '', monto: oc && num(oc.a_credito) > 0 ? String(Math.round(oc.a_credito)) : '', emision: hoy(), vencimiento: addMeses(hoy(), 0), tocado: false })
+  const venceDefault = emision => { const d = new Date(emision + 'T12:00:00'); d.setDate(d.getDate() + params.plazo_credito_dias); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
+  const crearFactura = async () => {
+    if (num(nuevaFac.monto) <= 0) { setErr('Ingresa el monto de la factura (total con IVA).'); return }
+    setErr('')
+    const venc = nuevaFac.tocado ? nuevaFac.vencimiento : venceDefault(nuevaFac.emision)
+    const { error } = await supabase.from('credito_facturas').insert({ cliente_id: cliente.id, oc_id: nuevaFac.oc_id || null, numero: nuevaFac.numero.trim() || null, monto_bruto: num(nuevaFac.monto), fecha_emision: nuevaFac.emision || hoy(), fecha_vencimiento: venc, estado: 'pendiente' })
+    if (error) { setErr('No se pudo guardar la factura: ' + error.message); return }
+    setNuevaFac(null); recargar()
+  }
+  const pagarFactura = async fa => {
+    const { error } = await supabase.from('credito_facturas').update({ fecha_pago: hoy(), estado: 'pagada' }).eq('id', fa.id)
+    if (error) { setErr('No se pudo marcar como pagada: ' + error.message); return }
+    recargar()
+  }
+  const deshacerPago = async fa => { await supabase.from('credito_facturas').update({ fecha_pago: null, estado: 'pendiente' }).eq('id', fa.id); recargar() }
+  const eliminarFactura = async fa => { if (!window.confirm('¿Eliminar la factura ' + (fa.numero || '') + '?')) return; await supabase.from('credito_facturas').delete().eq('id', fa.id); recargar() }
+  const nombreOC = id => { const oc = ordenes.find(o => o.id === id); return oc ? (oc.numero_oc ? 'OC ' + oc.numero_oc : 'OC sin número') : '-' }
+
+  if (errorTablas) return <div style={card}><div style={titulo}>Órdenes de compra y facturas</div><div style={{ fontSize: 13 }}>Falta activar esta parte: hay que correr la migración <code>2026-10-07-credito-ordenes-facturas.sql</code> en el SQL Editor de Supabase.</div></div>
+
+  return (
+    <div style={card}>
+      <div style={titulo}>Órdenes de compra y facturas · control de cupo</div>
+      <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', marginBottom: 12 }}>
+        {[['Línea aprobada', clp(cliente.linea_aprobada), C.carbon], ['Deuda vigente', clp(cliente.deuda_vigente), C.carbon], ['Cupo disponible', clp(cupo), cupo > 0 ? C.verde : C.rojo], ['Facturas vencidas', vencidas.length ? vencidas.length + ' (máx. ' + diasMax + ' días)' : 'ninguna', vencidas.length ? C.rojo : C.verde], ['Estado del crédito', cliente.estado_credito.replace('_', ' '), cliente.estado_credito === 'activa' ? C.verde : cliente.estado_credito === 'bloqueada' ? C.rojo : C.gris]].map(([l, v, c]) => (
+          <div key={l}><div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{l}</div><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 16, color: c, textTransform: 'capitalize' }}>{v}</div></div>
+        ))}
+      </div>
+      {cliente.estado_credito === 'bloqueada' && <div style={{ padding: '8px 12px', background: '#FDECEC', color: C.rojo, fontSize: 12.5, fontWeight: 600, marginBottom: 12 }}>Línea bloqueada: las nuevas OC se tratan sin crédito (anticipo 50% y saldo contra entrega). Gerencia puede reactivarla desde "Estado del crédito" en los datos de la empresa.</div>}
+      {err && <div style={{ color: C.rojo, fontSize: 12.5, marginBottom: 8 }}>{err}</div>}
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+        <span style={{ fontWeight: 700, fontSize: 13 }}>Órdenes de compra ({ordenes.length})</span>
+        {!nuevaOC && <button onClick={() => setNuevaOC({ numero: '', descripcion: '', monto: '', fecha: hoy() })} style={{ ...btn(C.naranja), padding: '4px 12px', fontSize: 12 }}>+ Nueva OC</button>}
+      </div>
+      {nuevaOC && (
+        <div style={{ background: '#F2F4F7', padding: 12, margin: '8px 0', display: 'grid', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
+            <Campo label="N° de OC del cliente"><input style={inp} value={nuevaOC.numero} onChange={e => setNuevaOC({ ...nuevaOC, numero: e.target.value })} /></Campo>
+            <Campo label="Descripción"><input style={inp} value={nuevaOC.descripcion} onChange={e => setNuevaOC({ ...nuevaOC, descripcion: e.target.value })} /></Campo>
+            <Campo label="Monto neto (CLP)"><input style={inp} value={nuevaOC.monto} onChange={e => setNuevaOC({ ...nuevaOC, monto: e.target.value })} /></Campo>
+            <Campo label="Fecha"><input type="date" style={inp} value={nuevaOC.fecha} onChange={e => setNuevaOC({ ...nuevaOC, fecha: e.target.value })} /></Campo>
+          </div>
+          {condiciones && <div style={{ padding: '8px 10px', background: '#fff', border: '1px solid #DFE4EA', fontSize: 13 }}>
+            <b>{condiciones.texto}</b>
+            <div style={{ fontSize: 12, color: C.gris, marginTop: 3 }}>Total con IVA {clp(condiciones.total)} · anticipo {clp(condiciones.anticipo)} ({condiciones.pctAnticipo}%) · a crédito {clp(condiciones.aCredito)} · cupo disponible {clp(condiciones.cupo)}{condiciones.esGrande ? ' · OC grande' : ''}</div>
+            {!tieneCredito && <div style={{ fontSize: 12, color: C.rojo, marginTop: 3 }}>El cliente no tiene una línea activa: se aplica la condición sin crédito.</div>}
+          </div>}
+          <div style={{ display: 'flex', gap: 8 }}><button onClick={crearOC} style={btn(C.verde)}>Guardar OC</button><button onClick={() => { setNuevaOC(null); setErr('') }} style={btn(C.gris, true)}>Cancelar</button></div>
+        </div>
+      )}
+      {ordenes.length === 0 && !nuevaOC && <div style={{ fontSize: 13, color: C.gris, margin: '6px 0 10px' }}>Sin órdenes de compra registradas.</div>}
+      {ordenes.map(oc => (
+        <div key={oc.id} style={{ borderBottom: '1px solid #EEF1F4', padding: '8px 0', fontSize: 12.5 }}>
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+            <b style={{ minWidth: 90 }}>{oc.numero_oc ? 'OC ' + oc.numero_oc : 'OC sin número'}</b><span style={{ color: C.gris }}>{oc.fecha}</span><span>Neto {clp(oc.monto_neto)}</span><span>Anticipo {clp(oc.anticipo)}</span><span>A crédito {clp(oc.a_credito)}</span>
+            <select value={oc.estado} onChange={e => cambiarEstadoOC(oc, e.target.value)} style={{ ...inp, width: 110, padding: '3px 6px' }}><option value="vigente">Vigente</option><option value="pagada">Pagada</option><option value="anulada">Anulada</option></select>
+            <button onClick={() => abrirFactura(oc)} style={{ ...btn(C.azul, true), padding: '3px 10px', fontSize: 12 }}>+ Factura</button>
+            <button onClick={() => eliminarOC(oc)} title="Eliminar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
+          </div>
+          {(oc.condicion_pago || oc.descripcion) && <div style={{ color: C.gris, marginTop: 3 }}>{[oc.descripcion, oc.condicion_pago].filter(Boolean).join(' · ')}</div>}
+          {Array.isArray(oc.estados_pago) && oc.estados_pago.length > 1 && <div style={{ color: C.gris, marginTop: 2 }}>Estados de pago: {oc.estados_pago.map(e => clp(e.monto)).join(' + ')}</div>}
+        </div>
+      ))}
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
+        <span style={{ fontWeight: 700, fontSize: 13 }}>Facturas ({facturas.length})</span>
+        {!nuevaFac && <button onClick={() => abrirFactura(null)} style={{ ...btn(C.naranja), padding: '4px 12px', fontSize: 12 }}>+ Nueva factura</button>}
+      </div>
+      {nuevaFac && (
+        <div style={{ background: '#F2F4F7', padding: 12, margin: '8px 0', display: 'grid', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
+            <Campo label="Orden de compra"><select style={inp} value={nuevaFac.oc_id} onChange={e => setNuevaFac({ ...nuevaFac, oc_id: e.target.value })}><option value="">— sin OC —</option>{ordenes.filter(o => o.estado !== 'anulada').map(o => <option key={o.id} value={o.id}>{o.numero_oc ? 'OC ' + o.numero_oc : 'OC sin número'} · {clp(o.monto_neto)}</option>)}</select></Campo>
+            <Campo label="N° de factura"><input style={inp} value={nuevaFac.numero} onChange={e => setNuevaFac({ ...nuevaFac, numero: e.target.value })} /></Campo>
+            <Campo label="Monto total con IVA (CLP)"><input style={inp} value={nuevaFac.monto} onChange={e => setNuevaFac({ ...nuevaFac, monto: e.target.value })} /></Campo>
+            <Campo label="Fecha de emisión"><input type="date" style={inp} value={nuevaFac.emision} onChange={e => setNuevaFac({ ...nuevaFac, emision: e.target.value })} /></Campo>
+            <Campo label={'Vencimiento (por defecto +' + params.plazo_credito_dias + ' días)'}><input type="date" style={inp} value={nuevaFac.tocado ? nuevaFac.vencimiento : venceDefault(nuevaFac.emision)} onChange={e => setNuevaFac({ ...nuevaFac, vencimiento: e.target.value, tocado: true })} /></Campo>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}><button onClick={crearFactura} style={btn(C.verde)}>Guardar factura</button><button onClick={() => { setNuevaFac(null); setErr('') }} style={btn(C.gris, true)}>Cancelar</button></div>
+        </div>
+      )}
+      {facturas.length === 0 && !nuevaFac && <div style={{ fontSize: 13, color: C.gris, margin: '6px 0' }}>Sin facturas registradas. Al registrar facturas, la deuda vigente y el cupo se calculan solos y la línea se bloquea si una pasa de {params.factura_vencida_max_dias} días vencida.</div>}
+      {facturas.length > 0 && (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginTop: 6 }}>
+            <thead><tr style={{ borderBottom: '2px solid ' + C.carbon }}>{['N° factura', 'OC', 'Emisión', 'Vencimiento', 'Monto', 'Estado', ''].map((h, i) => <th key={h + i} style={{ textAlign: i === 4 ? 'right' : 'left', padding: '4px 6px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+            <tbody>
+              {facturas.map(fa => { const st = estadoFactura(fa, params); return (
+                <tr key={fa.id} style={{ borderBottom: '1px solid #EEF1F4' }}>
+                  <td style={{ padding: '5px 6px', fontWeight: 600 }}>{fa.numero || 's/n'}</td><td style={{ padding: '5px 6px', color: C.gris }}>{fa.oc_id ? nombreOC(fa.oc_id) : '-'}</td>
+                  <td style={{ padding: '5px 6px' }}>{fa.fecha_emision}</td><td style={{ padding: '5px 6px' }}>{fa.fecha_vencimiento || '-'}</td>
+                  <td style={{ padding: '5px 6px', textAlign: 'right', fontWeight: 600 }}>{clp(fa.monto_bruto)}</td>
+                  <td style={{ padding: '5px 6px', color: st.color, fontWeight: 600 }}>{st.txt}</td>
+                  <td style={{ padding: '5px 6px', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                    {fa.fecha_pago ? <button onClick={() => deshacerPago(fa)} style={{ ...btn(C.gris, true), padding: '2px 8px', fontSize: 11 }}>Deshacer pago</button> : <button onClick={() => pagarFactura(fa)} style={{ ...btn(C.verde, true), padding: '2px 8px', fontSize: 11 }}>Marcar pagada</button>}
+                    <button onClick={() => eliminarFactura(fa)} title="Eliminar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo, marginLeft: 4 }}><Trash2 size={13} /></button>
+                  </td>
+                </tr>) })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ---------- Ficha del cliente ----------
 const CAMPOS_FICHA = [['razon_social', 'Razón social'], ['rut', 'RUT'], ['giro', 'Giro'], ['direccion', 'Dirección'], ['representante_legal', 'Representante legal'], ['contacto_compras', 'Contacto de compras'], ['contacto_pagos', 'Contacto de pagos'], ['email_facturas', 'Correo para facturas'], ['portal_proveedores', 'Portal de proveedores']]
 
@@ -170,13 +434,68 @@ function FichaCliente({ cliente, params, esGerencia, onVolver, onCambio }) {
   const [f, setF] = useState(cliente)
   const [evals, setEvals] = useState([])
   const [evaluando, setEvaluando] = useState(false)
+  const [docs, setDocs] = useState([])
+  const [extraidos, setExtraidos] = useState({})
+  const [ordenes, setOrdenes] = useState([])
+  const [facturas, setFacturas] = useState([])
+  const [errorOF, setErrorOF] = useState(false)
   const [msg, setMsg] = useState('')
   const [abierta, setAbierta] = useState(null)
   const cargarEvals = async () => {
     const { data } = await supabase.from('credito_evaluaciones').select('*').eq('cliente_id', cliente.id).order('created_at', { ascending: false })
     setEvals(data || [])
   }
-  useEffect(() => { setF(cliente); cargarEvals() }, [cliente.id])
+  const cargarDocs = async () => {
+    const { data } = await supabase.from('credito_documentos').select('*').eq('cliente_id', cliente.id).order('created_at', { ascending: false })
+    setDocs(data || [])
+  }
+  // Deuda vigente, estado y trabajos pagados los mueven las facturas/OC: se reflejan sin pisar lo que se esté editando.
+  useEffect(() => { setF(s => ({ ...s, trabajos_pagados: cliente.trabajos_pagados, deuda_vigente: cliente.deuda_vigente, estado_credito: cliente.estado_credito })) }, [cliente.trabajos_pagados, cliente.deuda_vigente, cliente.estado_credito])
+  // Control de cupo: con facturas registradas la deuda vigente se calcula sola (facturas sin pagar) y, si una pasa del plazo
+  // permitido, la línea activa se bloquea automáticamente.
+  const cargarOF = async () => {
+    const [o, fa] = await Promise.all([
+      supabase.from('credito_ordenes_compra').select('*').eq('cliente_id', cliente.id).order('created_at', { ascending: false }),
+      supabase.from('credito_facturas').select('*').eq('cliente_id', cliente.id).order('fecha_emision', { ascending: false }),
+    ])
+    if ((o.error && esErrorTablas(o.error)) || (fa.error && esErrorTablas(fa.error))) { setErrorOF(true); return }
+    setErrorOF(false)
+    const ocs = o.data || [], facs = fa.data || []
+    setOrdenes(ocs); setFacturas(facs)
+    const pend = facs.filter(x => !x.fecha_pago)
+    const deuda = pend.reduce((a, x) => a + num(x.monto_bruto), 0)
+    const diasMax = pend.reduce((m, x) => { const d = x.fecha_vencimiento ? diasEntre(x.fecha_vencimiento, hoy()) : null; return d != null && d > m ? d : m }, 0)
+    const cambios = {}
+    if (facs.length > 0 && Math.round(num(cliente.deuda_vigente)) !== Math.round(deuda)) cambios.deuda_vigente = deuda
+    if (diasMax > params.factura_vencida_max_dias && cliente.estado_credito === 'activa') cambios.estado_credito = 'bloqueada'
+    if (Object.keys(cambios).length) {
+      await supabase.from('credito_clientes').update(cambios).eq('id', cliente.id)
+      if (cambios.estado_credito) setMsg('Línea bloqueada automáticamente: hay una factura vencida hace ' + diasMax + ' días.')
+      onCambio()
+    }
+  }
+  const sumarTrabajosPagados = async delta => {
+    await supabase.from('credito_clientes').update({ trabajos_pagados: Math.max(0, (parseInt(cliente.trabajos_pagados, 10) || 0) + delta) }).eq('id', cliente.id)
+    onCambio()
+  }
+  useEffect(() => { setF(cliente); setExtraidos({}); cargarEvals(); cargarDocs(); cargarOF() }, [cliente.id])
+  // Datos que se precargan al evaluar: lo leído por la IA + la fecha de emisión de la carpeta + si están los 4 documentos requeridos.
+  const abrirEvaluacion = () => {
+    const base = datosDesdeExtraccion(extraidos, [...new Set(docs.map(d => d.tipo))])
+    const carpeta = docs.find(d => d.tipo === 'carpeta_tributaria' && d.fecha_emision)
+    const diasVenc = facturas.filter(x => !x.fecha_pago && x.fecha_vencimiento).reduce((m, x) => Math.max(m, diasEntre(x.fecha_vencimiento, hoy()) || 0), 0)
+    setEvaluando({ iniciales: { ...(carpeta ? { fechaCarpeta: carpeta.fecha_emision } : {}), ...(facturas.length ? { diasFacturaVencida: diasVenc } : {}), ...base }, extraidos: Object.keys(extraidos).length ? extraidos : null })
+  }
+  // Informe en PDF (ADM-CR-02): se descarga y además se archiva en la carpeta privada junto a la evaluación.
+  const descargarInforme = async (ev, idx) => {
+    setMsg('')
+    try {
+      const { doc, filename } = generarInformeCredito({ cliente, evaluacion: ev, docs, params, numero: evals.length - idx })
+      doc.save(filename)
+      const up = await supabase.storage.from('credito').upload(cliente.id + '/informes/' + ev.id + '.pdf', doc.output('blob'), { upsert: true, contentType: 'application/pdf' })
+      setMsg(up.error ? 'Informe descargado (no se pudo archivar en la carpeta privada: ' + up.error.message + ')' : 'Informe descargado y archivado')
+    } catch (e) { setMsg('No se pudo generar el informe: ' + ((e && e.message) || e)) }
+  }
   const guardar = async () => {
     setMsg('')
     const { error } = await supabase.from('credito_clientes').update({
@@ -189,7 +508,7 @@ function FichaCliente({ cliente, params, esGerencia, onVolver, onCambio }) {
   }
   const ultimaDatos = evals[0] && evals[0].datos_confirmados
   if (evaluando) return <div><button onClick={() => setEvaluando(false)} style={{ ...btn(C.gris, true), marginBottom: 12 }}><ArrowLeft size={13} style={{ verticalAlign: -2 }} /> Volver a la ficha</button>
-    <FormEvaluacion cliente={f} ultima={ultimaDatos} params={params} esGerencia={esGerencia} onCerrar={() => setEvaluando(false)} onGuardada={() => { setEvaluando(false); cargarEvals(); onCambio() }} /></div>
+    <FormEvaluacion cliente={f} ultima={ultimaDatos} iniciales={evaluando.iniciales} extraidos={evaluando.extraidos} params={params} esGerencia={esGerencia} onCerrar={() => setEvaluando(false)} onGuardada={() => { setEvaluando(false); cargarEvals(); onCambio() }} /></div>
   const cupo = Math.max(num(cliente.linea_aprobada) - num(cliente.deuda_vigente), 0)
   const revVencida = cliente.fecha_revision && cliente.fecha_revision < hoy()
   return (
@@ -202,7 +521,7 @@ function FichaCliente({ cliente, params, esGerencia, onVolver, onCambio }) {
         <div><div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>Deuda vigente</div><b>{clp(cliente.deuda_vigente)}</b></div>
         <div><div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>Cupo disponible</div><b style={{ color: cupo > 0 ? C.verde : C.rojo }}>{clp(cupo)}</b></div>
         <div><div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>Próxima revisión</div><b style={{ color: revVencida ? C.rojo : C.carbon }}>{cliente.fecha_revision || '—'}{revVencida ? ' (vencida)' : ''}</b></div>
-        <button onClick={() => setEvaluando(true)} style={{ ...btn(C.naranja), marginLeft: 'auto' }}>Nueva evaluación</button>
+        <button onClick={abrirEvaluacion} style={{ ...btn(C.naranja), marginLeft: 'auto' }}>Nueva evaluación</button>
       </div>
 
       <div style={card}>
@@ -211,21 +530,25 @@ function FichaCliente({ cliente, params, esGerencia, onVolver, onCambio }) {
           {CAMPOS_FICHA.map(([k, l]) => <Campo key={k} label={l}><input style={inp} value={f[k] || ''} onChange={e => setF({ ...f, [k]: e.target.value })} /></Campo>)}
           <Campo label="Inicio de actividades"><input type="date" style={inp} value={f.fecha_inicio_actividades || ''} onChange={e => setF({ ...f, fecha_inicio_actividades: e.target.value })} /></Campo>
           <Campo label="Trabajos pagados con Serein"><input type="number" min="0" style={inp} value={f.trabajos_pagados ?? 0} onChange={e => setF({ ...f, trabajos_pagados: e.target.value })} /></Campo>
-          <Campo label="Deuda vigente con Serein (CLP)"><input style={inp} value={f.deuda_vigente ?? 0} onChange={e => setF({ ...f, deuda_vigente: e.target.value })} /></Campo>
+          <Campo label={facturas.length ? 'Deuda vigente (calculada desde las facturas)' : 'Deuda vigente con Serein (CLP)'}><input style={{ ...inp, background: facturas.length ? '#F2F4F7' : '#fff' }} readOnly={facturas.length > 0} value={f.deuda_vigente ?? 0} onChange={e => setF({ ...f, deuda_vigente: e.target.value })} /></Campo>
           {esGerencia && <Campo label="Estado del crédito"><select style={inp} value={f.estado_credito} onChange={e => setF({ ...f, estado_credito: e.target.value })}><option value="sin_evaluar">Sin evaluar</option><option value="activa">Activa</option><option value="bloqueada">Bloqueada</option></select></Campo>}
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12 }}><button onClick={guardar} style={btn(C.verde)}>Guardar datos</button>{msg && <span style={{ fontSize: 12.5, color: msg === 'Guardado' ? C.verde : C.rojo }}>{msg}</span>}</div>
       </div>
 
+      <OrdenesFacturas cliente={cliente} params={params} ordenes={ordenes} facturas={facturas} errorTablas={errorOF} recargar={cargarOF} onTrabajosPagados={sumarTrabajosPagados} />
+
+      <Documentos cliente={cliente} docs={docs} params={params} extraidos={extraidos} setExtraidos={setExtraidos} onCambio={cargarDocs} onEvaluar={abrirEvaluacion} />
+
       <div style={card}>
         <div style={titulo}>Historial de evaluaciones ({evals.length})</div>
         {evals.length === 0 && <div style={{ fontSize: 13, color: C.gris }}>Sin evaluaciones todavía. Usa "Nueva evaluación".</div>}
-        {evals.map(e => (
+        {evals.map((e, idx) => (
           <div key={e.id} style={{ borderBottom: '1px solid #EEF1F4', padding: '8px 0' }}>
             <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>
               <span style={{ minWidth: 90 }}>{e.fecha}</span><ChipCat cat={e.categoria} /><span>Puntaje <b>{e.puntaje}</b></span><span>Sugerida {clp(e.linea_sugerida)}</span><span>Aprobada <b>{clp(e.linea_aprobada)}</b></span>
               <span style={{ color: e.estado === 'aprobada' ? C.verde : e.estado === 'rechazada' ? C.rojo : C.gris, fontWeight: 600, textTransform: 'capitalize' }}>{e.estado}</span>
-              {e.resultado && <button onClick={() => setAbierta(abierta === e.id ? null : e.id)} style={{ ...btn(C.azul, true), padding: '3px 10px', fontSize: 12, marginLeft: 'auto' }}>{abierta === e.id ? 'Ocultar' : 'Ver detalle'}</button>}
+              <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6 }}>{e.resultado && <button onClick={() => setAbierta(abierta === e.id ? null : e.id)} style={{ ...btn(C.azul, true), padding: '3px 10px', fontSize: 12 }}>{abierta === e.id ? 'Ocultar' : 'Ver detalle'}</button>}<button onClick={() => descargarInforme(e, idx)} style={{ ...btn(C.naranja), padding: '3px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}><FileText size={12} /> Informe PDF</button></span>
             </div>
             {abierta === e.id && e.resultado && <div style={{ marginTop: 8 }}><Resultado res={{ ...e.resultado, categoria: e.categoria, puntaje: e.puntaje, lineaSugerida: e.linea_sugerida, anticipoMinimo: e.anticipo_minimo, garantia: e.garantia }} />{e.observaciones && <div style={{ fontSize: 12.5, color: C.gris }}>Observaciones: {e.observaciones}</div>}</div>}
           </div>
@@ -343,11 +666,17 @@ export default function CreditoModule({ esGerencia }) {
   const [busca, setBusca] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('')
   const [nuevo, setNuevo] = useState(null)
+  const [vencidasPorCliente, setVencidasPorCliente] = useState({})
 
   const cargar = async () => {
     const { data, error: e } = await supabase.from('credito_clientes').select('*').order('razon_social')
     if (e) { if (esErrorTablas(e)) setSinTablas(true); else setError(e.message); setCargando(false); return }
     setClientes(data || [])
+    // Facturas sin pagar de todos los clientes -> máximo de días vencida por cliente (para las alertas).
+    const fp = await supabase.from('credito_facturas').select('cliente_id, fecha_vencimiento').is('fecha_pago', null)
+    const mapa = {}
+    ;(fp.data || []).forEach(x => { const d = x.fecha_vencimiento ? diasEntre(x.fecha_vencimiento, hoy()) : null; if (d != null && d > 0) mapa[x.cliente_id] = Math.max(mapa[x.cliente_id] || 0, d) })
+    setVencidasPorCliente(mapa)
     const { data: pr } = await supabase.from('credito_parametros').select('valores').eq('id', 1).maybeSingle()
     if (pr && pr.valores) setParams(mezclarParams(pr.valores))
     setCargando(false)
@@ -364,6 +693,14 @@ export default function CreditoModule({ esGerencia }) {
   if (cargando) return <div style={{ padding: 20, color: C.gris }}>Cargando…</div>
   if (sinTablas) return <div style={{ ...card, marginTop: 16 }}><div style={titulo}>Falta activar el módulo</div><div style={{ fontSize: 13 }}>Las tablas del módulo de crédito todavía no existen en la base. Hay que correr la migración <code>2026-10-07-modulo-credito.sql</code> en el SQL Editor de Supabase.</div></div>
 
+  const alertasDe = c => {
+    const a = []
+    if (c.estado_credito === 'bloqueada') a.push('Línea bloqueada')
+    if (c.fecha_revision && c.fecha_revision < hoy() && c.estado_credito !== 'sin_evaluar') a.push('Revisión vencida (' + c.fecha_revision + ')')
+    if (vencidasPorCliente[c.id]) a.push('Factura vencida hace ' + vencidasPorCliente[c.id] + ' días')
+    return a
+  }
+  const conAlertas = clientes.map(c => ({ c, a: alertasDe(c) })).filter(x => x.a.length)
   const sel = clientes.find(c => c.id === selId)
   const lista = clientes.filter(c => (!busca || (c.razon_social + ' ' + c.rut).toLowerCase().includes(busca.toLowerCase())) && (!filtroEstado || c.estado_credito === filtroEstado))
   const tabBtn = (id, lbl) => <button key={id} onClick={() => { setVista(id); setSelId(null) }} style={{ background: vista === id ? C.carbon : '#fff', color: vista === id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '8px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>{lbl}</button>
@@ -383,6 +720,12 @@ export default function CreditoModule({ esGerencia }) {
             <select style={{ ...inp, width: 160 }} value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}><option value="">Todos los estados</option><option value="sin_evaluar">Sin evaluar</option><option value="activa">Activa</option><option value="bloqueada">Bloqueada</option></select>
             <button onClick={() => setNuevo({ razon_social: '', rut: '', giro: '' })} style={{ ...btn(C.naranja), marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5 }}><Plus size={14} /> Nuevo cliente</button>
           </div>
+          {conAlertas.length > 0 && (
+            <div style={{ borderLeft: '4px solid ' + C.rojo, background: '#FDF3F2', padding: '10px 14px', marginBottom: 12 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: C.rojo, marginBottom: 4 }}>Alertas ({conAlertas.length})</div>
+              {conAlertas.map(({ c, a }) => <div key={c.id} onClick={() => setSelId(c.id)} style={{ cursor: 'pointer', fontSize: 12.5, padding: '2px 0' }}><b>{c.razon_social}</b> — {a.join(' · ')}</div>)}
+            </div>
+          )}
           {nuevo && (
             <div style={{ background: '#F2F4F7', padding: 12, marginBottom: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
               <Campo label="Razón social *"><input style={{ ...inp, width: 240 }} value={nuevo.razon_social} onChange={e => setNuevo({ ...nuevo, razon_social: e.target.value })} /></Campo>
@@ -394,7 +737,7 @@ export default function CreditoModule({ esGerencia }) {
           {lista.length === 0 ? <div style={{ fontSize: 13, color: C.gris }}>{clientes.length === 0 ? 'Aún no hay clientes. Crea el primero con "Nuevo cliente".' : 'Ningún cliente coincide.'}</div> : (
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead><tr style={{ borderBottom: '2px solid ' + C.carbon }}>{['Cliente', 'RUT', 'Categoría', 'Línea aprobada', 'Deuda vigente', 'Estado', 'Próxima revisión'].map((h, i) => <th key={h} style={{ textAlign: [3, 4].includes(i) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+                <thead><tr style={{ borderBottom: '2px solid ' + C.carbon }}>{['Cliente', 'RUT', 'Categoría', 'Línea aprobada', 'Deuda vigente', 'Estado', 'Próxima revisión', 'Alertas'].map((h, i) => <th key={h} style={{ textAlign: [3, 4].includes(i) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
                 <tbody>
                   {lista.map(c => { const vencida = c.fecha_revision && c.fecha_revision < hoy(); return (
                     <tr key={c.id} onClick={() => setSelId(c.id)} style={{ borderBottom: '1px solid #EEF1F4', cursor: 'pointer' }}>
@@ -405,6 +748,7 @@ export default function CreditoModule({ esGerencia }) {
                       <td style={{ padding: '8px', textAlign: 'right' }}>{clp(c.deuda_vigente)}</td>
                       <td style={{ padding: '8px', textTransform: 'capitalize', color: c.estado_credito === 'activa' ? C.verde : c.estado_credito === 'bloqueada' ? C.rojo : C.gris, fontWeight: 600 }}>{c.estado_credito.replace('_', ' ')}</td>
                       <td style={{ padding: '8px', color: vencida ? C.rojo : C.carbon }}>{c.fecha_revision || '—'}{vencida ? ' ⚠' : ''}</td>
+                      <td style={{ padding: '8px', color: C.rojo, fontSize: 12 }}>{alertasDe(c).join(' · ') || <span style={{ color: C.gris }}>—</span>}</td>
                     </tr>) })}
                 </tbody>
               </table>

@@ -162,3 +162,86 @@ export function condicionesOC({ montoNeto, categoria, lineaAprobada, deudaVigent
   if (nEstadosPago > 1) texto += ' El crédito se parte en ' + nEstadosPago + ' estados de pago (uno por cada cupo de ' + Math.round(cupo).toLocaleString('es-CL') + ').'
   return { total, cupo, esGrande, anticipo, pctAnticipo, aCredito, pctCredito, nEstadosPago, saldoContraEntrega, texto, plazo: p.plazo_credito_dias }
 }
+
+// ---------- Etapa 2: de lo que lee la IA a los datos de la evaluación ----------
+// La IA solo transcribe (extraer-credito); estos cálculos los hace el sistema.
+
+const isoLocal = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+
+// Ventas netas y puntualidad del IVA a partir de los Formularios 29 (código 538).
+// "Últimos 12" y "12 anteriores" se cuentan desde el período más reciente de la
+// carpeta (no desde hoy). Un F29 está a tiempo si se presentó hasta el día 20 del
+// mes siguiente (plazo de los contribuyentes que declaran en línea).
+export function resumenVentasF29(ventas) {
+  const v = (ventas || []).filter(x => x && /^\d{4}-\d{2}$/.test(String(x.periodo || '')) && x.debitos != null && Number.isFinite(Number(x.debitos)))
+    .sort((a, b) => String(b.periodo).localeCompare(String(a.periodo)))
+  const ult = v.slice(0, 12), prev = v.slice(12, 24)
+  const neto = arr => arr.reduce((a, x) => a + ventasNetasDeDebitos(x.debitos), 0)
+  const aTiempo = x => {
+    if (!x.fechaPresentacion) return false
+    const [y, m] = String(x.periodo).split('-').map(Number)
+    return String(x.fechaPresentacion) <= isoLocal(new Date(y, m, 20))
+  }
+  // Si el período anterior trae menos de 12 meses, se escala a 12 para que sea comparable.
+  const prevEscalado = prev.length >= 6 ? Math.round(neto(prev) * (ult.length / prev.length)) : 0
+  return { meses: ult.length, mesesPrevios: prev.length, ventas12m: neto(ult), ventasPrevias12m: prevEscalado, mesesIvaAlDia: ult.filter(aTiempo).length }
+}
+
+export const TIPOS_DOC_REQUERIDOS = ['carpeta_tributaria', 'dicom', 'certificado_bancario', 'solicitud']
+
+// extraidos = { carpeta_tributaria, dicom, certificado_bancario, solicitud, tgr } (lo que devolvió la IA).
+// tiposSubidos = tipos de documento ya cargados al cliente (para "antecedentes completos").
+export function datosDesdeExtraccion(extraidos, tiposSubidos) {
+  const ex = extraidos || {}
+  const out = {}
+  const c = ex.carpeta_tributaria
+  if (c) {
+    const r = resumenVentasF29(c.ventasMensuales)
+    if (r.meses > 0) { out.ventas12m = String(r.ventas12m); out.ventasPrevias12m = r.ventasPrevias12m ? String(r.ventasPrevias12m) : ''; out.mesesIvaAlDia = r.mesesIvaAlDia }
+    if (c.fechaGeneracion) out.fechaCarpeta = c.fechaGeneracion
+    if (c.fechaInicioActividades) out.fechaInicioActividades = c.fechaInicioActividades
+    if (typeof c.observacionesTributarias === 'boolean') out.observacionesTributarias = c.observacionesTributarias
+    if (typeof c.bienesRaices === 'boolean') out.bienesRaices = c.bienesRaices
+    const f22 = (c.resultadoTributario || []).filter(x => x && Number.isFinite(Number(x.anio))).sort((a, b) => Number(b.anio) - Number(a.anio))[0]
+    if (f22) out.resultadoUltimoAnio = f22.tipo || (Number(f22.valor) > 0 ? 'utilidad' : 'perdida')
+  }
+  const d = ex.dicom
+  if (d && ['limpio', 'aclaradas', 'vigentes'].includes(d.registros)) out.registros = d.registros
+  const b = ex.certificado_bancario
+  if (b) {
+    if (typeof b.chequesProtestados === 'boolean') out.chequesProtestados = b.chequesProtestados
+    const dias = b.fechaAperturaCuenta ? diasEntre(b.fechaAperturaCuenta, hoyISO()) : null
+    if (dias != null && dias >= 0) out.antiguedadCtaCteAnios = Math.round(dias / 365.25 * 10) / 10
+  }
+  const s = ex.solicitud
+  if (s && num(s.lineaSolicitada) > 0) out.lineaSolicitada = String(Math.round(num(s.lineaSolicitada)))
+  const t = ex.tgr
+  if (t && typeof t.contribucionesVencidas === 'boolean') out.contribucionesVencidas = t.contribucionesVencidas
+  if (tiposSubidos) out.antecedentesCompletos = TIPOS_DOC_REQUERIDOS.every(k => tiposSubidos.includes(k))
+  return out
+}
+
+// Líneas cortas para mostrar qué leyó la IA de cada documento.
+export function resumenExtraccion(tipo, d) {
+  if (!d) return []
+  const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
+  const sn = v => v === true ? 'sí' : v === false ? 'no' : 'sin dato'
+  if (tipo === 'carpeta_tributaria') {
+    const r = resumenVentasF29(d.ventasMensuales)
+    const f22 = (d.resultadoTributario || []).slice().sort((a, b) => Number(b.anio) - Number(a.anio))[0]
+    return [
+      r.meses ? 'Ventas netas ' + r.meses + ' meses: ' + clp(r.ventas12m) : 'Sin formularios 29 legibles',
+      r.mesesPrevios >= 6 ? 'Período anterior: ' + clp(r.ventasPrevias12m) + (r.mesesPrevios < 12 ? ' (escalado, ' + r.mesesPrevios + ' meses)' : '') : 'Sin período anterior para comparar',
+      'IVA a tiempo: ' + r.mesesIvaAlDia + ' de ' + r.meses + ' meses',
+      'Observaciones tributarias: ' + sn(d.observacionesTributarias),
+      f22 ? 'F22 ' + f22.anio + ': ' + (f22.tipo || (Number(f22.valor) > 0 ? 'utilidad' : 'pérdida')) : 'F22: sin dato',
+      'Bienes raíces: ' + sn(d.bienesRaices),
+      'Inicio de actividades: ' + (d.fechaInicioActividades || 'sin dato'),
+    ]
+  }
+  if (tipo === 'dicom') return ['Registros comerciales: ' + ({ limpio: 'limpio', aclaradas: 'deudas antiguas aclaradas', vigentes: 'morosidades / protestos vigentes' }[d.registros] || 'sin dato')].concat(d.detalle ? [d.detalle] : [])
+  if (tipo === 'certificado_bancario') return ['Banco: ' + (d.banco || 'sin dato'), 'Cuenta abierta: ' + (d.fechaAperturaCuenta || d.antiguedadTexto || 'sin dato'), 'Cheques protestados: ' + sn(d.chequesProtestados)]
+  if (tipo === 'solicitud') return ['Línea solicitada: ' + (num(d.lineaSolicitada) > 0 ? clp(num(d.lineaSolicitada)) : 'sin dato'), 'Referencias informadas: ' + ((d.referencias || []).length || 0)]
+  if (tipo === 'tgr') return ['Contribuciones vencidas: ' + sn(d.contribucionesVencidas)]
+  return []
+}
