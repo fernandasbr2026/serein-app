@@ -60,7 +60,7 @@ export function generarResumenCredito({ cliente, evaluacion, docs = [], params, 
   const res = ev.resultado || {}
   const cat = ev.categoria || 'D'
   const colorCat = CAT_COLOR[cat] || CARBON
-  const { parrafos, prox } = comentariosCredito({ cliente, evaluacion, params })
+  const { prox } = comentariosCredito({ cliente, evaluacion, params })
   const doc = new jsPDF({ unit: 'mm', format: 'letter' })
   let y = 0
 
@@ -152,11 +152,6 @@ export function generarResumenCredito({ cliente, evaluacion, docs = [], params, 
     y += 17
   }
 
-  // ---------- Comentario (como la retroalimentación del informe del Preu) ----------
-  titulo('Lo que dice la evaluación', 'En palabras simples, con los datos del cliente')
-  parrafos.forEach(t => parrafo(t))
-  y += 1
-
   // ---------- Condiciones de pago aprobadas ----------
   titulo('Condiciones de pago aprobadas')
   const filas = [
@@ -165,6 +160,7 @@ export function generarResumenCredito({ cliente, evaluacion, docs = [], params, 
     ...(aprobado ? [['Tope por orden de compra', clp(ev.linea_aprobada) + ' (línea aprobada; el saldo que exceda el cupo se paga como anticipo)']] : []),
     ['OC grandes', 'Desde ' + clp(p.oc_grande_desde) + ' con IVA: anticipo mínimo ' + Math.round(p.anticipo_oc_grande * 100) + ' % y el saldo a crédito se parte en estados de pago por el cupo disponible.'],
     ...(aprobado ? [['Garantía', ev.garantia || '-']] : []),
+    ['Próxima revisión', fechaDMA(prox)],
   ]
   filas.forEach(([k, v]) => {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(10)
