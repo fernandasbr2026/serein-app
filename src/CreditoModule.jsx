@@ -5,6 +5,7 @@ import { SEREIN } from './theme-serein.js'
 import { evaluarCredito, condicionesOC, mezclarParams, PARAMS_CREDITO_DEFAULT, diasEntre, datosDesdeExtraccion, resumenExtraccion, datosFichaDesdeExtraccion, hallazgosDe } from './creditoCalculo.js'
 import { fileToBase64 } from './protocolo-pdf.js'
 import { generarInformeCredito } from './creditoInforme.js'
+import { generarResumenCredito } from './creditoResumen.js'
 
 // ============================================================
 // MÓDULO DE CRÉDITO — factibilidad de crédito a 30 días y condiciones
@@ -641,6 +642,16 @@ function FichaCliente({ cliente, params, esGerencia, onVolver, onCambio }) {
       setMsg(up.error ? 'Informe descargado (no se pudo archivar en la carpeta privada: ' + up.error.message + ')' : 'Informe descargado y archivado')
     } catch (e) { setMsg('No se pudo generar el informe: ' + ((e && e.message) || e)) }
   }
+  // Resumen en PDF: la versión corta y amable (formato del informe del Preu, colores Serein); también se archiva.
+  const descargarResumen = async (ev, idx) => {
+    setMsg('')
+    try {
+      const { doc, filename } = generarResumenCredito({ cliente, evaluacion: ev, docs, params, numero: evals.length - idx })
+      doc.save(filename)
+      const up = await supabase.storage.from('credito').upload(cliente.id + '/informes/' + ev.id + '-resumen.pdf', doc.output('blob'), { upsert: true, contentType: 'application/pdf' })
+      setMsg(up.error ? 'Resumen descargado (no se pudo archivar en la carpeta privada: ' + up.error.message + ')' : 'Resumen descargado y archivado')
+    } catch (e) { setMsg('No se pudo generar el resumen: ' + ((e && e.message) || e)) }
+  }
   const guardar = async () => {
     setMsg('')
     const { error } = await supabase.from('credito_clientes').update({
@@ -693,7 +704,7 @@ function FichaCliente({ cliente, params, esGerencia, onVolver, onCambio }) {
             <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>
               <span style={{ minWidth: 90 }}>{e.fecha}</span><ChipCat cat={e.categoria} /><span>Puntaje <b>{e.puntaje}</b></span><span>Sugerida {clp(e.linea_sugerida)}</span><span>Aprobada <b>{clp(e.linea_aprobada)}</b></span>
               <span style={{ color: e.estado === 'aprobada' ? C.verde : e.estado === 'rechazada' ? C.rojo : C.gris, fontWeight: 600, textTransform: 'capitalize' }}>{e.estado}</span>
-              <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6 }}>{e.resultado && <button onClick={() => setAbierta(abierta === e.id ? null : e.id)} style={{ ...btn(C.azul, true), padding: '3px 10px', fontSize: 12 }}>{abierta === e.id ? 'Ocultar' : 'Ver detalle'}</button>}<button onClick={() => descargarInforme(e, idx)} style={{ ...btn(C.naranja), padding: '3px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}><FileText size={12} /> Informe PDF</button></span>
+              <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6 }}>{e.resultado && <button onClick={() => setAbierta(abierta === e.id ? null : e.id)} style={{ ...btn(C.azul, true), padding: '3px 10px', fontSize: 12 }}>{abierta === e.id ? 'Ocultar' : 'Ver detalle'}</button>}<button onClick={() => descargarResumen(e, idx)} style={{ ...btn(C.naranja), padding: '3px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}><FileText size={12} /> Resumen PDF</button><button onClick={() => descargarInforme(e, idx)} style={{ ...btn(C.carbon), padding: '3px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}><FileText size={12} /> Informe detallado</button></span>
             </div>
             {abierta === e.id && e.resultado && <div style={{ marginTop: 8 }}><Resultado res={{ ...e.resultado, categoria: e.categoria, puntaje: e.puntaje, lineaSugerida: e.linea_sugerida, anticipoMinimo: e.anticipo_minimo, garantia: e.garantia }} />{e.observaciones && <div style={{ fontSize: 12.5, color: C.gris }}>Observaciones: {e.observaciones}</div>}</div>}
           </div>
