@@ -68,43 +68,49 @@ export function evaluarCredito(datos, paramsIn) {
 
   // 5.2 Puntaje (100 puntos)
   const detalle = []
-  const add = (factor, dato, puntos, max) => detalle.push({ factor, dato, puntos, max })
+  // pendiente = el dato no se entregó ni se leyó: suma 0 puntos y se avisa (nunca se inventa un valor por defecto).
+  const add = (factor, dato, puntos, max, pendiente = false) => detalle.push({ factor, dato, puntos, max, pendiente })
 
   add('Registros comerciales',
-    d.registros === 'limpio' ? 'Limpio' : d.registros === 'aclaradas' ? 'Deudas antiguas aclaradas' : d.registros === 'vigentes' ? 'Vigentes (rechazo)' : 'Sin dato',
-    d.registros === 'limpio' ? 25 : d.registros === 'aclaradas' ? 12 : 0, 25)
+    d.registros === 'limpio' ? 'Limpio' : d.registros === 'aclaradas' ? 'Deudas antiguas aclaradas' : d.registros === 'vigentes' ? 'Vigentes (rechazo)' : 'Sin dato (falta el informe DICOM)',
+    d.registros === 'limpio' ? 25 : d.registros === 'aclaradas' ? 12 : 0, 25, !['limpio', 'aclaradas', 'vigentes'].includes(d.registros))
 
+  const ivaSinDato = d.mesesIvaAlDia === '' || d.mesesIvaAlDia == null
   const m = num(d.mesesIvaAlDia)
-  add('IVA declarado a tiempo', m + ' de 12 meses', m >= 12 ? 20 : m >= 10 ? 10 : 0, 20)
+  add('IVA declarado a tiempo', ivaSinDato ? 'Sin dato (falta la carpeta tributaria)' : m + ' de 12 meses', ivaSinDato ? 0 : (m >= 12 ? 20 : m >= 10 ? 10 : 0), 20, ivaSinDato)
 
   const v12 = num(d.ventas12m), vPrev = num(d.ventasPrevias12m)
   let variacion = null
   if (v12 > 0 && vPrev > 0) variacion = (v12 - vPrev) / vPrev
-  let ptsTend = 9, datoTend = 'Sin período anterior para comparar (se asume estable)'
+  let ptsTend = v12 > 0 ? 9 : 0, datoTend = v12 > 0 ? 'Sin período anterior para comparar (se asume estable)' : 'Sin dato (faltan las ventas de la carpeta tributaria)'
   if (variacion != null) {
     const pct = Math.round(variacion * 1000) / 10
     if (variacion >= 0.05) { ptsTend = 15; datoTend = 'Crece ' + pct + '%' }
     else if (variacion >= -0.10) { ptsTend = 9; datoTend = 'Estable (' + pct + '%)' }
     else { ptsTend = 0; datoTend = 'Cae ' + pct + '%' }
-  } else notas.push('No hay ventas del período anterior: la tendencia se asumió estable.')
-  add('Tendencia de ventas', datoTend, ptsTend, 15)
+  } else if (v12 > 0) notas.push('No hay ventas del período anterior: la tendencia se asumió estable.')
+  add('Tendencia de ventas', datoTend, ptsTend, 15, v12 <= 0)
 
-  add('Resultado tributario (F22)', d.resultadoUltimoAnio === 'utilidad' ? 'Utilidad el último año' : d.resultadoUltimoAnio === 'perdida' ? 'Pérdida' : 'Sin dato', d.resultadoUltimoAnio === 'utilidad' ? 10 : 0, 10)
+  add('Resultado tributario (F22)', d.resultadoUltimoAnio === 'utilidad' ? 'Utilidad el último año' : d.resultadoUltimoAnio === 'perdida' ? 'Pérdida' : 'Sin dato (falta el F22)', d.resultadoUltimoAnio === 'utilidad' ? 10 : 0, 10, !['utilidad', 'perdida'].includes(d.resultadoUltimoAnio))
 
   const anios = d.fechaInicioActividades ? (diasEntre(d.fechaInicioActividades, hoy) || 0) / 365.25 : 0
-  const aniosTxt = (Math.round(anios * 10) / 10) + ' años'
-  add('Antigüedad de la empresa', aniosTxt, anios >= 5 ? 10 : anios >= 3 ? 7 : anios >= 1 ? 4 : 0, 10)
+  const aniosTxt = d.fechaInicioActividades ? (Math.round(anios * 10) / 10) + ' años' : 'Sin dato (falta el inicio de actividades)'
+  add('Antigüedad de la empresa', aniosTxt, anios >= 5 ? 10 : anios >= 3 ? 7 : anios >= 1 ? 4 : 0, 10, !d.fechaInicioActividades)
 
+  const refsSinDato = d.referenciasBuenas === '' || d.referenciasBuenas == null
   const refs = num(d.referenciasBuenas)
-  add('Referencias comerciales', refs + ' buena(s)', refs >= 3 ? 10 : refs >= 1 ? 5 : 0, 10)
+  add('Referencias comerciales', refsSinDato ? 'Sin dato (sin referencias verificadas)' : refs + ' buena(s)', refsSinDato ? 0 : (refs >= 3 ? 10 : refs >= 1 ? 5 : 0), 10, refsSinDato)
 
   const brOk = !!d.bienesRaices && !d.contribucionesVencidas
   add('Bienes raíces sin contribuciones vencidas', d.bienesRaices ? (d.contribucionesVencidas ? 'Tiene, con contribuciones vencidas' : 'Tiene') : 'No tiene', brOk ? 5 : 0, 5)
 
+  const ccSinDato = d.antiguedadCtaCteAnios === '' || d.antiguedadCtaCteAnios == null
   const cc = num(d.antiguedadCtaCteAnios)
-  add('Antigüedad cuenta corriente', cc + ' años', cc >= 2 ? 5 : 2, 5)
+  add('Antigüedad cuenta corriente', ccSinDato ? 'Sin dato (falta el certificado bancario)' : cc + ' años', ccSinDato ? 0 : (cc >= 2 ? 5 : 2), 5, ccSinDato)
 
   const puntaje = detalle.reduce((a, x) => a + x.puntos, 0)
+  const pendientes = detalle.filter(x => x.pendiente)
+  const puntosPendientes = pendientes.reduce((a, x) => a + x.max, 0)
 
   // 5.3 Categoría
   let categoria
@@ -129,6 +135,7 @@ export function evaluarCredito(datos, paramsIn) {
 
   return {
     filtros, hayRechazo, detalle, puntaje, categoria,
+    parcial: puntosPendientes > 0, puntosPendientes, factoresPendientes: pendientes.map(x => x.factor),
     lineaSugerida, anticipoMinimo: cat.anticipo_minimo, garantia: cat.garantia, revisionMeses: cat.meses_revision,
     califica30, condicionTexto, notas,
     resumen: { ventas12m: v12, ventasPrevias12m: vPrev, variacion, ventasMes: Math.round(ventasMes), mesesIvaAlDia: m, diasCarpeta, carpetaVencida },
@@ -180,7 +187,9 @@ export function resumenVentasF29(ventas) {
   const aTiempo = x => {
     if (!x.fechaPresentacion) return false
     const [y, m] = String(x.periodo).split('-').map(Number)
-    return String(x.fechaPresentacion) <= isoLocal(new Date(y, m, 20))
+    const limite = new Date(y, m, 20)
+    while (limite.getDay() === 0 || limite.getDay() === 6) limite.setDate(limite.getDate() + 1)
+    return String(x.fechaPresentacion) <= isoLocal(limite)
   }
   // Si el período anterior trae menos de 12 meses, se escala a 12 para que sea comparable.
   const prevEscalado = prev.length >= 6 ? Math.round(neto(prev) * (ult.length / prev.length)) : 0
@@ -203,7 +212,7 @@ export function datosDesdeExtraccion(extraidos, tiposSubidos, otros) {
     if (typeof c.observacionesTributarias === 'boolean') out.observacionesTributarias = c.observacionesTributarias
     if (typeof c.bienesRaices === 'boolean') out.bienesRaices = c.bienesRaices
     const f22 = (c.resultadoTributario || []).filter(x => x && Number.isFinite(Number(x.anio))).sort((a, b) => Number(b.anio) - Number(a.anio))[0]
-    if (f22) out.resultadoUltimoAnio = f22.tipo || (Number(f22.valor) > 0 ? 'utilidad' : 'perdida')
+    if (f22) out.resultadoUltimoAnio = (f22.valor != null && Number.isFinite(Number(f22.valor))) ? (Number(f22.valor) > 0 ? 'utilidad' : 'perdida') : (f22.tipo || undefined)
   }
   const d = ex.dicom
   if (d && ['limpio', 'aclaradas', 'vigentes'].includes(d.registros)) out.registros = d.registros
@@ -255,12 +264,14 @@ export function resumenExtraccion(tipo, d) {
   if (tipo === 'carpeta_tributaria') {
     const r = resumenVentasF29(d.ventasMensuales)
     const f22 = (d.resultadoTributario || []).slice().sort((a, b) => Number(b.anio) - Number(a.anio))[0]
+    const per = (d.ventasMensuales || []).map(x => x && x.periodo).filter(Boolean).sort()
     return [
+      per.length ? 'F29 leídos: ' + per.length + ' (' + per[0] + ' a ' + per[per.length - 1] + ')' + (per.length < 24 ? ' - ATENCIÓN: se esperan 24; la tendencia puede quedar incompleta, vuelve a leer' : '') : 'No se leyó ningún F29: revisa a mano',
       r.meses ? 'Ventas netas ' + r.meses + ' meses: ' + clp(r.ventas12m) : 'Sin formularios 29 legibles',
       r.mesesPrevios >= 6 ? 'Período anterior: ' + clp(r.ventasPrevias12m) + (r.mesesPrevios < 12 ? ' (escalado, ' + r.mesesPrevios + ' meses)' : '') : 'Sin período anterior para comparar',
       'IVA a tiempo: ' + r.mesesIvaAlDia + ' de ' + r.meses + ' meses',
       'Observaciones tributarias: ' + sn(d.observacionesTributarias),
-      f22 ? 'F22 ' + f22.anio + ': ' + (f22.tipo || (Number(f22.valor) > 0 ? 'utilidad' : 'pérdida')) : 'F22: sin dato',
+      f22 ? 'F22 ' + f22.anio + ': ' + ((f22.valor != null && Number.isFinite(Number(f22.valor))) ? (Number(f22.valor) > 0 ? 'utilidad ' : 'pérdida ') + clp(Math.abs(Number(f22.valor))) : (f22.tipo || 'sin dato')) : 'F22: no se leyó, complétalo a mano',
       'Bienes raíces: ' + sn(d.bienesRaices),
       'Inicio de actividades: ' + (d.fechaInicioActividades || 'sin dato'),
     ]
