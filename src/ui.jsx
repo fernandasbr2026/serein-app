@@ -33,13 +33,13 @@ export function EstadoGuardado({ colapsado }) {
   if (colapsado) {
     return (
       <button onClick={forzar} title={cfg.texto + ' · Click para forzar guardado'} disabled={forzando}
-        style={{ margin: '10px auto', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 8, background: '#F4F6F8', border: 'none', cursor: 'pointer' }}>
+        style={{ margin: '10px auto', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,.94)', border: 'none', cursor: 'pointer' }}>
         <Icon size={17} color={cfg.color} style={estado.fase === 'guardando' || forzando ? { animation: 'girar 1s linear infinite' } : undefined} />
       </button>
     )
   }
   return (
-    <div style={{ margin: '0 18px 12px', padding: '9px 12px', borderRadius: 10, background: '#F7F8FA', border: '1px solid ' + SEREIN.line, display: 'flex', alignItems: 'center', gap: 9 }}>
+    <div style={{ margin: '0 18px 12px', padding: '9px 12px', borderRadius: 12, background: 'rgba(255,255,255,.94)', boxShadow: '0 6px 16px -8px rgba(120,45,0,.45)', display: 'flex', alignItems: 'center', gap: 9 }}>
       <Icon size={16} color={cfg.color} style={estado.fase === 'guardando' || forzando ? { animation: 'girar 1s linear infinite', flexShrink: 0 } : { flexShrink: 0 }} />
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: SEREIN.text }}>{forzando ? 'Guardando…' : cfg.texto}</div>
@@ -121,24 +121,24 @@ export function Sidebar({ tabs, areaSel, setAreaSel, nombreTab, perfil, email, o
   const rol = (perfil && perfil.rol) || ''
   const [abiertos, setAbiertos] = useState(() => new Set([areaSel]))
   const toggleAbierto = t => setAbiertos(prev => { const n = new Set(prev); n.has(t) ? n.delete(t) : n.add(t); return n })
-  return (<aside style={{ width: W, minWidth: W, maxWidth: W, overflowX: 'hidden', flexShrink: 0, background: '#FFFFFF', color: SEREIN.text, borderRight: '1px solid ' + SEREIN.line, display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh', transition: 'width .18s ease', fontFamily: THEME.font }}>
+  return (<aside style={{ width: W, minWidth: W, maxWidth: W, overflowX: 'hidden', flexShrink: 0, background: 'radial-gradient(520px 360px at 105% -6%, rgba(255,214,170,.55), transparent 62%), radial-gradient(460px 420px at -20% 108%, rgba(168,62,0,.55), transparent 60%), linear-gradient(168deg, #FF8A2E 0%, #F77716 46%, #E0630C 100%)', color: '#fff', borderRight: 'none', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh', transition: 'width .18s ease', fontFamily: THEME.font }}>
     <div style={{ padding: colapsado ? '18px 0' : '18px 18px 14px', display: 'flex', alignItems: 'center', justifyContent: colapsado ? 'center' : 'space-between' }}>
-      {!colapsado && <div><LogoSerein alto={24} /><div style={{ color: SEREIN.textFaint, fontSize: 10, letterSpacing: 1.8, marginTop: 6, fontWeight: 600, textTransform: 'uppercase' }}>Panel de Gestión</div></div>}
-      <button onClick={() => setColapsado(!colapsado)} title="Colapsar menú" style={{ background: '#F4F6F8', border: '1px solid ' + SEREIN.line, cursor: 'pointer', color: SEREIN.textSoft, display: 'flex', padding: 6, borderRadius: 8 }}>
+      {!colapsado && <div><LogoSerein alto={24} sobreNaranja /><div style={{ color: 'rgba(255,255,255,.78)', fontSize: 10, letterSpacing: 1.8, marginTop: 6, fontWeight: 600, textTransform: 'uppercase' }}>Panel de Gestión</div></div>}
+      <button onClick={() => setColapsado(!colapsado)} title="Colapsar menú" style={{ background: 'rgba(255,255,255,.18)', border: '1px solid rgba(255,255,255,.35)', cursor: 'pointer', color: '#fff', display: 'flex', padding: 6, borderRadius: 8 }}>
         {colapsado ? <Menu size={16} /> : <ChevronsLeft size={16} />}
       </button>
     </div>
-    <div style={{ margin: colapsado ? '14px 0' : '16px 18px 10px', padding: colapsado ? 0 : '12px 14px', display: 'flex', alignItems: 'center', gap: 12, justifyContent: colapsado ? 'center' : 'flex-start', background: colapsado ? 'transparent' : '#F7F8FA', border: colapsado ? 'none' : '1px solid ' + SEREIN.line, borderRadius: 10 }}>
-      <div style={{ width: 34, height: 34, borderRadius: '50%', background: SEREIN.orange, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, fontFamily: THEME.fontDisplay, flexShrink: 0 }}>{iniciales(nom)}</div>
+    <div style={{ margin: colapsado ? '14px 0' : '16px 18px 10px', padding: colapsado ? 0 : '12px 14px', display: 'flex', alignItems: 'center', gap: 12, justifyContent: colapsado ? 'center' : 'flex-start', background: colapsado ? 'transparent' : 'rgba(255,255,255,.16)', border: colapsado ? 'none' : '1px solid rgba(255,255,255,.34)', backdropFilter: 'blur(6px)', borderRadius: 12 }}>
+      <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#fff', color: SEREIN.orangeDark, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, fontFamily: THEME.fontDisplay, flexShrink: 0 }}>{iniciales(nom)}</div>
       {!colapsado && <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: SEREIN.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nom}</div>
-        <div style={{ fontSize: 11, color: SEREIN.textSoft }}>{rol}</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nom}</div>
+        <div style={{ fontSize: 11, color: 'rgba(255,255,255,.8)' }}>{rol}</div>
       </div>}
     </div>
     <EstadoGuardado colapsado={colapsado} />
-    <nav style={{ flex: 1, overflowY: 'auto', padding: '4px 12px 16px' }}>
+    <nav style={{ flex: 1, overflowY: 'auto', padding: '4px 12px 16px', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,.45) transparent' }}>
       {grupos.map(g => (<div key={g.nombre} style={{ marginBottom: 2 }}>
-        {!colapsado && <div style={{ fontFamily: THEME.fontDisplay, fontSize: 10.5, fontWeight: 700, letterSpacing: 1.8, color: SEREIN.textFaint, textTransform: 'uppercase', margin: '20px 6px 8px' }}>{g.nombre}</div>}
+        {!colapsado && <div style={{ fontFamily: THEME.fontDisplay, fontSize: 10.5, fontWeight: 700, letterSpacing: 1.8, color: 'rgba(255,255,255,.66)', textTransform: 'uppercase', margin: '20px 6px 8px' }}>{g.nombre}</div>}
         {g.items.map(t => {
           const act = areaSel === t
           const Ico = iconoTab(t)
@@ -147,21 +147,21 @@ export function Sidebar({ tabs, areaSel, setAreaSel, nombreTab, perfil, email, o
           const abierto = abiertos.has(t)
           return (<div key={t}>
             <button onClick={() => { setAreaSel(t); if (hijos) toggleAbierto(t) }} title={label}
-              style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', cursor: 'pointer', border: 'none', marginBottom: 1, padding: colapsado ? '10px 0' : '10px 12px', justifyContent: colapsado ? 'center' : 'flex-start', borderRadius: 8, position: 'relative', background: act ? SEREIN.orangeSoft : 'transparent', color: act ? SEREIN.ink : '#3C444D', fontWeight: act ? 600 : 500, fontSize: 13.5, fontFamily: THEME.font, transition: 'background .12s' }}
-              onMouseEnter={e => { if (!act) e.currentTarget.style.background = '#F4F6F8' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', cursor: 'pointer', border: 'none', marginBottom: 1, padding: colapsado ? '10px 0' : '10px 12px', justifyContent: colapsado ? 'center' : 'flex-start', borderRadius: 8, position: 'relative', background: act ? '#fff' : 'transparent', boxShadow: act ? '0 6px 14px -6px rgba(120,45,0,.5)' : 'none', color: act ? SEREIN.ink : 'rgba(255,255,255,.95)', fontWeight: act ? 600 : 500, fontSize: 13.5, fontFamily: THEME.font, transition: 'background .12s' }}
+              onMouseEnter={e => { if (!act) e.currentTarget.style.background = 'rgba(255,255,255,.16)' }}
               onMouseLeave={e => { if (!act) e.currentTarget.style.background = 'transparent' }}>
-              <Ico size={17} strokeWidth={1.75} color={act ? SEREIN.orangeDark : '#8A939D'} style={{ flexShrink: 0 }} />
+              <Ico size={17} strokeWidth={1.75} color={act ? SEREIN.orange : 'rgba(255,255,255,.88)'} style={{ flexShrink: 0 }} />
               {!colapsado && <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>}
-              {!colapsado && hijos && <ChevronDown size={14} color={SEREIN.textFaint} style={{ flexShrink: 0, transition: 'transform .2s ease', transform: abierto ? 'rotate(180deg)' : 'none' }} />}
+              {!colapsado && hijos && <ChevronDown size={14} color={act ? SEREIN.textFaint : 'rgba(255,255,255,.7)'} style={{ flexShrink: 0, transition: 'transform .2s ease', transform: abierto ? 'rotate(180deg)' : 'none' }} />}
             </button>
             {!colapsado && hijos && (
               <ul style={{ maxHeight: abierto ? 900 : 0, overflow: 'hidden', transition: 'max-height .25s ease', listStyle: 'none', margin: 0, padding: 0 }}>
                 {hijos.map(h => (
                   <li key={h}>
                     <a onClick={() => setAreaSel(t)} title={label + ' · ' + h}
-                      style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 12px 7px 22px', fontSize: 12.5, color: SEREIN.textSoft, borderLeft: '1px solid ' + SEREIN.line, marginLeft: 17, cursor: 'pointer' }}
-                      onMouseEnter={e => { e.currentTarget.style.color = SEREIN.ink }}
-                      onMouseLeave={e => { e.currentTarget.style.color = SEREIN.textSoft }}>
+                      style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 12px 7px 22px', fontSize: 12.5, color: 'rgba(255,255,255,.82)', borderLeft: '1px solid rgba(255,255,255,.34)', marginLeft: 17, cursor: 'pointer' }}
+                      onMouseEnter={e => { e.currentTarget.style.color = '#fff' }}
+                      onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,.82)' }}>
                       <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'currentColor', flexShrink: 0 }} />
                       {h}
                     </a>
@@ -173,15 +173,15 @@ export function Sidebar({ tabs, areaSel, setAreaSel, nombreTab, perfil, email, o
         })}
       </div>))}
     </nav>
-    <div style={{ borderTop: '1px solid ' + SEREIN.line, padding: colapsado ? '12px 0' : '12px 16px 16px' }}>
-      <button onClick={onLogout} title="Salir" style={{ display: 'flex', alignItems: 'center', gap: 9, justifyContent: colapsado ? 'center' : 'flex-start', width: '100%', background: 'transparent', border: 'none', color: SEREIN.textSoft, padding: '8px 4px', cursor: 'pointer', fontSize: 13 }}
-        onMouseEnter={e => { e.currentTarget.style.color = SEREIN.orange }}
-        onMouseLeave={e => { e.currentTarget.style.color = SEREIN.textSoft }}>
+    <div style={{ borderTop: '1px solid rgba(255,255,255,.28)', padding: colapsado ? '12px 0' : '12px 16px 16px' }}>
+      <button onClick={onLogout} title="Salir" style={{ display: 'flex', alignItems: 'center', gap: 9, justifyContent: colapsado ? 'center' : 'flex-start', width: '100%', background: 'transparent', border: 'none', color: '#fff', padding: '8px 4px', cursor: 'pointer', fontSize: 13 }}
+        onMouseEnter={e => { e.currentTarget.style.opacity = .75 }}
+        onMouseLeave={e => { e.currentTarget.style.opacity = 1 }}>
         <LogOut size={15} />{!colapsado && 'Salir'}
       </button>
-      {!colapsado && <div style={{ marginTop: 8, fontSize: 10.5, color: SEREIN.textFaint, lineHeight: 1.7 }}>
+      {!colapsado && <div style={{ marginTop: 8, fontSize: 10.5, color: 'rgba(255,255,255,.75)', lineHeight: 1.7 }}>
         SEREIN GROUP · Panel de Gestión
-        {onReset && <div><span onClick={() => { if (window.confirm('¿Borrar los datos guardados y volver a los valores base? Esta acción no se puede deshacer.')) onReset() }} style={{ color: SEREIN.textSoft, textDecoration: 'underline', cursor: 'pointer' }}>Restablecer datos</span></div>}
+        {onReset && <div><span onClick={() => { if (window.confirm('¿Borrar los datos guardados y volver a los valores base? Esta acción no se puede deshacer.')) onReset() }} style={{ color: '#fff', textDecoration: 'underline', cursor: 'pointer' }}>Restablecer datos</span></div>}
       </div>}
     </div>
   </aside>)
