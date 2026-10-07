@@ -1819,7 +1819,7 @@ function TrazabilidadPiezasOT({ ot, onUpdateMarcasEsperadas }) {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
-              <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+              <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
                 {['Marca/TAG', 'ID', 'Referencia', 'm²', 'Recibida', 'Granallado', ...Array.from({ length: maxCapas }, (_, i) => 'Capa ' + (i + 1)), 'Estado', 'Vence', 'Lote', 'Despacho'].map((h, i) => (
                   <th key={i} style={{ textAlign: 'left', padding: '5px 6px', fontSize: 10.5, color: '#9AA3AD', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
@@ -2412,7 +2412,7 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateProtocolo, onUpda
                 </div>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
-                    <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                    <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
                       {cols.map((h, i) => (
                         <th key={i} style={{ textAlign: i >= 1 ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>{h}</th>
                       ))}
@@ -2471,7 +2471,7 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateProtocolo, onUpda
               ) : (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
-                    <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                    <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
                       {['Folio', 'Fecha', 'Neta', 'IVA', 'Total', 'm² fact.', 'Piezas', 'Pago', ''].map((h, i) => (
                         <th key={i} style={{ textAlign: ['Neta', 'IVA', 'Total'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>{h}</th>
                       ))}
@@ -2552,7 +2552,7 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateProtocolo, onUpda
               ) : (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
-                    <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                    <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
                       {['Fecha', 'Monto', 'Medio de pago', 'Observación', ''].map((h, i) => (
                         <th key={i} style={{ textAlign: h === 'Monto' ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>{h}</th>
                       ))}
@@ -2594,7 +2594,7 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateProtocolo, onUpda
               ) : (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
-                    <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                    <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
                       {['Categoría', 'Detalle', 'Monto', ''].map((h, i) => (
                         <th key={i} style={{ textAlign: h === 'Monto' ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>{h}</th>
                       ))}

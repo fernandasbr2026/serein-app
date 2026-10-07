@@ -485,7 +485,7 @@ function ListaGastos({ tipo, fin, setFin, otsDisponibles }) {
       <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18, overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
-            <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+            <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
                 <th style={{ padding: '5px 8px' }}><input type="checkbox" checked={gastosReales.length > 0 && seleccion.size === gastosReales.length} onChange={seleccionarTodos} style={{ cursor: 'pointer' }} /></th>
               {['Gasto', 'Categoría', 'Proveedor', 'Neto', 'Total', 'Vence', 'Frec.', 'Estado', 'Distribución', ''].map(h => (
                 <th key={h} style={{ textAlign: ['Neto', 'Total'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
@@ -732,7 +732,7 @@ function CreditosLeasing({ fin, setFin }) {
               <div style={{ borderTop: '1px solid #DFE4EA', padding: 18, overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
-                    <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                    <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
                       {['Nº', 'Vencimiento', 'Capital', 'Interés', 'Total cuota', 'Estado', 'Fecha pago'].map(h => (
                         <th key={h} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
                       ))}
@@ -1157,7 +1157,7 @@ function ModalDetallePago({ titulo, color, filas, sub, onClose, acciones, onCrea
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,26,46,.55)', zIndex: 70, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '28px 16px', overflowY: 'auto' }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#F7F6F3', width: '100%', maxWidth: 1080, boxShadow: '0 20px 60px -12px rgba(0,0,0,.4)', borderRadius: 6, overflow: 'hidden' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', borderBottom: `3px solid ${color}`, background: '#fff' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', borderBottom: `2px solid ${color}`, background: '#fff' }}>
           <div>
             <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 15, textTransform: 'uppercase', color }}>{titulo}</div>
             {sub && <div style={{ fontSize: 12, color: C.gris, marginTop: 2 }}>{sub}</div>}

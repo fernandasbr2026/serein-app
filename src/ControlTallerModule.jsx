@@ -143,7 +143,7 @@ function ImportadorListadoPartes({ ot, nombreProyecto, partes, onAplicado }) {
               <div style={{ overflowX: 'auto', maxHeight: 360, overflowY: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead>
-                    <tr style={{ borderBottom: `2px solid ${C.carbon}`, position: 'sticky', top: 0, background: '#FAFAF8' }}>
+                    <tr style={{ borderBottom: '1px solid #E4E8ED', position: 'sticky', top: 0, background: '#FAFAF8' }}>
                       {['', 'Marca', 'Perfil', 'Cant.', 'Material', 'Largo', 'Peso/ud'].map((h, i) => (
                         <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 10.5, color: '#9AA3AD', textTransform: 'uppercase' }}>{h}</th>
                       ))}
@@ -298,7 +298,7 @@ function LecturaHojaAvance({ ot, nombreProyecto, partes, onAplicado }) {
               <div style={{ overflowX: 'auto', maxHeight: 320, overflowY: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead>
-                    <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                    <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
                       {['Marca', ...ETAPAS_TALLER.map(e => ETAPA_LABEL[e])].map((h, i) => (
                         <th key={i} style={{ textAlign: 'left', padding: '4px 8px', fontSize: 10.5, color: '#9AA3AD', textTransform: 'uppercase' }}>{h}</th>
                       ))}
@@ -398,7 +398,7 @@ export function TableroControlTaller({ ot, nombreProyecto }) {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
-                <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
                   {['Marca', 'Perfil', 'Cant.', 'Material', 'Peso/ud', 'Estado'].map((h, i) => (
                     <th key={i} style={{ textAlign: 'left', padding: '5px 6px', fontSize: 10.5, color: '#9AA3AD', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}

@@ -146,7 +146,7 @@ function SeccionFactoring({ params, setParams }) {
       <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18, overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
-            <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+            <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
               {['Empresa', 'Tasa (%/mes)', 'Tasa mora (%/mes)', 'Costo op. neto', ''].map(h => (
                 <th key={h} style={{ textAlign: h === 'Empresa' ? 'left' : 'right', padding: '6px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
               ))}

@@ -870,7 +870,7 @@ function BloqueOCProveedor({ p, onUpdate, params, onAddCompraEtapa, contactos, s
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, background: '#fff' }}>
-            <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['N° OC', 'Proveedor', 'CC', 'Fecha', 'Monto total', 'Pagado', 'Pendiente', ''].map((h, i) => <th key={i} style={{ textAlign: ['Monto total', 'Pagado', 'Pendiente'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap', ...(h === '' ? { position: 'sticky', right: 0, background: '#fff', zIndex: 3 } : {}) }}>{h || 'Acciones'}</th>)}</tr></thead>
+            <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['N° OC', 'Proveedor', 'CC', 'Fecha', 'Monto total', 'Pagado', 'Pendiente', ''].map((h, i) => <th key={i} style={{ textAlign: ['Monto total', 'Pagado', 'Pendiente'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap', ...(h === '' ? { position: 'sticky', right: 0, background: '#fff', zIndex: 3 } : {}) }}>{h || 'Acciones'}</th>)}</tr></thead>
             <tbody>
               {ocs.map(oc => <FilaOCProveedor key={oc.id} oc={oc} p={p} upd={actualizar} onDelete={eliminar} onAddCompraEtapa={onAddCompraEtapa} contactos={contactos} setContactos={setContactos} />)}
             </tbody>
@@ -1089,7 +1089,7 @@ function SeccionOCAvance({ p, onUpdate }) {
       {estados.length > 0 && (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Estado de avance', '%', 'Monto fijo', 'CC', 'Facturable', 'Estado', 'Factura', ''].map((h, i) => <th key={i} style={{ textAlign: i === 4 ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+            <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['Estado de avance', '%', 'Monto fijo', 'CC', 'Facturable', 'Estado', 'Factura', ''].map((h, i) => <th key={i} style={{ textAlign: i === 4 ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
             <tbody>
               {estados.map(estado => {
                 const monto = montoEstadoAvance(estado, montoTotalOC)
@@ -1223,7 +1223,7 @@ function AbonosOT({ p, facturasOT, onUpdate, params }) {
       {facturasOT.length === 0 ? (<div style={{ fontSize: 12, color: C.gris }}>Esta OT aun no tiene facturas para abonar.</div>) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Factura', 'Total c/IVA', 'Abonado', 'Saldo', 'Estado'].map((h, i) => <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+            <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['Factura', 'Total c/IVA', 'Abonado', 'Saldo', 'Estado'].map((h, i) => <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
             <tbody>
               {facturasOrd.map((fac, i) => {
                 const tot = totalDe(fac); const ab = alloc[fac.numero] || 0; const saldo = tot - ab; const pagada = saldo <= 0
@@ -1601,7 +1601,7 @@ function TarjetaProyecto({ p, onUpdate, onDelete, onAddCompra, onAddCompraEtapa,
             {comprasFilt.length === 0 && <div style={{ fontSize: 13, color: C.gris, padding: '8px 0' }}>Ninguna compra coincide con los filtros.</div>}
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['CC', 'Proveedor', 'N° doc', 'Detalle', 'Fecha', 'Pago', 'Monto neto', 'Abonado', 'Estado pago', ''].map((h, i) => <th key={i} style={{ textAlign: ['Monto neto', 'Abonado'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+                <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['CC', 'Proveedor', 'N° doc', 'Detalle', 'Fecha', 'Pago', 'Monto neto', 'Abonado', 'Estado pago', ''].map((h, i) => <th key={i} style={{ textAlign: ['Monto neto', 'Abonado'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
                 <tbody>
                   {comprasFilt.map(({ c, i }) => { const estadoPago = estadoPagoCompra(c); const bruto = montoBrutoCompra(c); return (
                     <tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>
@@ -1777,7 +1777,7 @@ function Consolidado({ proyectos, facturasProy = [], params = { factoring: [] } 
         </div>
       </div>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-        <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+        <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>
           {['OT', 'Cliente', 'Venta', 'Facturado', 'Por facturar', 'Costo est.', 'Costo real', 'Pérdida fact.', 'UT est.', '%', ...CC_DEFS.map(c => c.id)].map((h, i) => (
             <th key={i} style={{ textAlign: i < 2 ? 'left' : 'right', padding: '6px 8px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
           ))}
@@ -1810,7 +1810,7 @@ function Consolidado({ proyectos, facturasProy = [], params = { factoring: [] } 
               <React.Fragment key={per}>
                 <tr style={{ background: '#F2F4F7' }}><td colSpan={10 + CC_DEFS.length} style={{ padding: '5px 8px', fontWeight: 600, fontFamily: SEREIN.fontDisplay, textTransform: 'uppercase', fontSize: 12 }}>{per}</td></tr>
                 {filas}
-                <tr style={{ borderTop: `2px solid ${C.carbon}`, borderBottom: `2px solid ${C.carbon}` }}>
+                <tr style={{ borderTop: '1px solid #CBD2D8', borderBottom: '1px solid #E4E8ED' }}>
                   {celda('COT', false, true)}{celda('', false)}
                   {celda(clp(sub.venta), true, true)}{celda(clp(sub.fact), true, true)}{celda(clp(sub.porFac), true, true, C.ambar)}
                   {celda(clp(sub.costoEst), true, true)}{celda(clp(sub.costoReal), true, true)}{celda(clp(sub.perdFact), true, true, sub.perdFact > 0 ? C.rojo : undefined)}
@@ -1882,7 +1882,7 @@ function ProyCotizacionesList({ setProyectos }) {
         <div style={{ fontSize: 13, color: C.gris }}>Aún no hay cotizaciones. Se agregan solas al guardar un borrador en la pestaña "Cotización Proyecto".</div>
       ) : (
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['N°', 'Cliente', 'Proyecto', 'Fecha', 'Costo neto', 'Venta neta', 'Margen s/venta', 'Estado', 'OT', ''].map((h, i) => <th key={i} style={{ textAlign: ['Costo neto', 'Venta neta', 'Margen s/venta'].includes(h) ? 'right' : 'left', padding: '6px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
+          <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['N°', 'Cliente', 'Proyecto', 'Fecha', 'Costo neto', 'Venta neta', 'Margen s/venta', 'Estado', 'OT', ''].map((h, i) => <th key={i} style={{ textAlign: ['Costo neto', 'Venta neta', 'Margen s/venta'].includes(h) ? 'right' : 'left', padding: '6px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
           <tbody>
             {cots.map(c => { const est = normEstado(c.estado); const col = colorEstado(est); return (
               <tr key={c.id} style={{ borderBottom: '1px solid #DFE4EA' }}>

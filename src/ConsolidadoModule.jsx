@@ -396,10 +396,10 @@ function AreaCostPanel({ rows, tot }) {
       <div style={{ fontSize: 12, color: SEREIN.textFaint, marginBottom: 12 }}>Costos fijos por area + compras asignadas (Libro de compras) y venta acumulada por area. Toma los mismos datos de cada modulo.</div>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead><tr style={{ borderBottom: '2px solid ' + SEREIN.ink }}><th style={{ ...th, textAlign: 'left' }}>Area</th><th style={th}>Costos fijos</th><th style={th}>Compras asignadas</th><th style={th}>Venta acumulada</th><th style={th}>Utilidad</th></tr></thead>
+          <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}><th style={{ ...th, textAlign: 'left' }}>Area</th><th style={th}>Costos fijos</th><th style={th}>Compras asignadas</th><th style={th}>Venta acumulada</th><th style={th}>Utilidad</th></tr></thead>
           <tbody>
             {rows.map(r => (<tr key={r.a} style={{ borderBottom: '1px solid ' + SEREIN.fog2 }}><td style={{ padding: '8px 10px', fontWeight: 600 }}>{r.a}</td><td style={td}>{clp(r.fj)}</td><td style={td}>{clp(r.cp)}</td><td style={td}>{clp(r.vt)}</td><td style={{ ...td, fontWeight: 600, color: r.ut >= 0 ? SEREIN.green : SEREIN.red }}>{clp(r.ut)}</td></tr>))}
-            <tr style={{ borderTop: '2px solid ' + SEREIN.ink, fontWeight: 700 }}><td style={{ padding: '8px 10px' }}>Total</td><td style={td}>{clp(tot.fj)}</td><td style={td}>{clp(tot.cp)}</td><td style={td}>{clp(tot.vt)}</td><td style={{ ...td, color: tot.ut >= 0 ? SEREIN.green : SEREIN.red }}>{clp(tot.ut)}</td></tr>
+            <tr style={{ borderTop: '1px solid #CBD2D8', fontWeight: 700 }}><td style={{ padding: '8px 10px' }}>Total</td><td style={td}>{clp(tot.fj)}</td><td style={td}>{clp(tot.cp)}</td><td style={td}>{clp(tot.vt)}</td><td style={{ ...td, color: tot.ut >= 0 ? SEREIN.green : SEREIN.red }}>{clp(tot.ut)}</td></tr>
           </tbody>
         </table>
       </div>
@@ -448,10 +448,10 @@ function OTPorAreaPanel({ ots, proyectos }) {
       <div style={{ fontSize: 12, color: SEREIN.textFaint, marginBottom: 12 }}>Abiertas (cotizada + en ejecución), terminadas sin facturar, y facturado aún por cobrar — por área.</div>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead><tr style={{ borderBottom: '2px solid ' + SEREIN.ink }}><th style={{ ...th, textAlign: 'left' }}>Área</th><th style={th}>Abiertas</th><th style={th}>Monto abiertas</th><th style={th}>Terminadas por facturar</th><th style={th}>Facturado por cobrar</th></tr></thead>
+          <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}><th style={{ ...th, textAlign: 'left' }}>Área</th><th style={th}>Abiertas</th><th style={th}>Monto abiertas</th><th style={th}>Terminadas por facturar</th><th style={th}>Facturado por cobrar</th></tr></thead>
           <tbody>
             {rows.map(r => (<tr key={r.area} style={{ borderBottom: '1px solid ' + SEREIN.fog2 }}><td style={{ padding: '8px 10px', fontWeight: 600 }}>{r.area}</td><td style={td}>{r.abiertasN}</td><td style={td}>{clp(r.abiertasMonto)}</td><td style={{ ...td, color: r.porFacturar > 0 ? SEREIN.orange : SEREIN.text }}>{clp(r.porFacturar)}</td><td style={{ ...td, color: r.facturadoPorCobrar > 0 ? SEREIN.red : SEREIN.text }}>{clp(r.facturadoPorCobrar)}</td></tr>))}
-            <tr style={{ borderTop: '2px solid ' + SEREIN.ink, fontWeight: 700 }}><td style={{ padding: '8px 10px' }}>Total</td><td style={td}>{tot.abiertasN}</td><td style={td}>{clp(tot.abiertasMonto)}</td><td style={td}>{clp(tot.porFacturar)}</td><td style={td}>{clp(tot.facturadoPorCobrar)}</td></tr>
+            <tr style={{ borderTop: '1px solid #CBD2D8', fontWeight: 700 }}><td style={{ padding: '8px 10px' }}>Total</td><td style={td}>{tot.abiertasN}</td><td style={td}>{clp(tot.abiertasMonto)}</td><td style={td}>{clp(tot.porFacturar)}</td><td style={td}>{clp(tot.facturadoPorCobrar)}</td></tr>
           </tbody>
         </table>
       </div>
@@ -530,7 +530,7 @@ export default function ConsolidadoModule(props) {
       const sub = { fontSize: 10.5, color: C.gray, marginTop: 2 }
       const res = libroCons.vNeta - libroCons.cNeto
       return (
-        <div style={{ border: '2px solid ' + C.navy, borderRadius: 12, padding: 16, marginBottom: 18, background: C.soft }}>
+        <div style={{ border: '1px solid #DFE4EA', borderRadius: 14, boxShadow: '0 1px 2px rgba(16,19,21,.04), 0 8px 20px -14px rgba(16,19,21,.18)', padding: 16, marginBottom: 18, background: C.soft }}>
           <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 800, color: C.navy, fontSize: 15, textTransform: 'uppercase', letterSpacing: 0.5 }}>Consolidado segun libros</div>
           <div style={{ fontSize: 12, color: C.gray, marginBottom: 12 }}>Cifras reales del Libro de Ventas ({libroCons.nV} facturas) y del Libro de Compras ({libroCons.nC} documentos).</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
@@ -556,7 +556,7 @@ export default function ConsolidadoModule(props) {
                   {linea('Sueldos y gastos operativos', num(libroCons.gastosOp), true)}
                   {linea('Cuotas de creditos/leasing (mes)', num(libroCons.cuotasMes), true)}
                   {linea('IVA a pagar', ivaPagar, true)}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid ' + C.navy, marginTop: 6, paddingTop: 6 }}><span style={{ fontWeight: 700, color: C.navy }}>Caja que deberias tener</span><span style={{ fontWeight: 800, fontSize: 18, color: caja < 0 ? C.rojo : C.verde }}>{clp(caja)}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #CBD2D8', marginTop: 6, paddingTop: 6 }}><span style={{ fontWeight: 700, color: C.navy }}>Caja que deberias tener</span><span style={{ fontWeight: 800, fontSize: 18, color: caja < 0 ? C.rojo : C.verde }}>{clp(caja)}</span></div>
                 </div>
                 <div style={{ fontSize: 11, color: C.gray, marginTop: 8 }}>Base: lo efectivamente cobrado. Descuenta compras, compras sin documento, sueldos y gastos operativos, cuotas de deuda del mes e IVA a pagar.</div>
               </div>)

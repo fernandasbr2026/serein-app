@@ -64,7 +64,7 @@ export default function ProyParametros() {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+              <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
                 {['Codigo', 'Nombre', 'Condicion IVA por defecto', ''].map((t, i) => <th key={i} style={{ textAlign: 'left', padding: '6px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{t}</th>)}
               </tr>
             </thead>

@@ -77,7 +77,7 @@ function MisOTs({ ots, proyectos, mo, comprasOp, planta }) {
         <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>OT/OC de {planta} · vista operativa</div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
-            <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+            <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
               {['OT/OC', 'Cliente', 'Descripción', 'Estado', 'Días c/asistencia', 'Compras'].map(h => (
                 <th key={h} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
               ))}
@@ -264,7 +264,7 @@ function MisCompras({ comprasOp, usuario, config }) {
     <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18, overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
-          <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+          <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
             {['Fecha', 'Proveedor', 'Categoría', 'Asignación', 'Doc.', config.supervisorVeMontoDespues ? 'Monto' : null, 'Estado', 'Obs. Gerencia'].filter(Boolean).map(h => (
               <th key={h} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
             ))}
@@ -338,7 +338,7 @@ function RevisionGerencia({ comprasOp, setComprasOp }) {
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
-            <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+            <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
               {['Fecha', 'Supervisor', 'Proveedor / Descripción', 'Categoría', 'Asignación', 'Neto / IVA / Total', 'Estado', 'Obs. Gerencia', ''].map(h => (
                 <th key={h} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
               ))}

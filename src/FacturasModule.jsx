@@ -648,7 +648,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
         </div>
         <div style={{ overflowX: 'auto', padding: '12px 12px 12px 0' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-            <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+            <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>
               <th style={{ ...FIJA_TH, textAlign: 'left', padding: '5px 6px 5px 18px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><input type="checkbox" checked={mostradas.length > 0 && sel.size === mostradas.length} onChange={toggleTodas} aria-label="Seleccionar todas" />N° factura</span>
               </th>
@@ -883,7 +883,7 @@ export function CobranzaAtrasadaModule({ area, facturas, setFacturas, usuarioEma
             <div style={{ color: C.verde, fontSize: 14, padding: '14px 4px 14px 16px' }}>✓ Sin facturas atrasadas{hayFiltro ? ' para este filtro' : ''} en {area}.</div>
           ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-            <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+            <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>
               {['N° factura', 'Cliente', 'Emisión', 'Vencimiento', 'Neto original', 'Bruto original', 'Pagado', 'Saldo neto', 'Saldo bruto', 'Días mora', 'Estado cobranza', 'Publicación', ''].map(h => (
                 <th key={h} style={{ textAlign: ['Neto original', 'Bruto original', 'Pagado', 'Saldo neto', 'Saldo bruto', 'Días mora'].includes(h) ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap', ...(h === 'N° factura' ? { ...FIJA_TH, paddingLeft: 18 } : {}) }}>{h}</th>
               ))}

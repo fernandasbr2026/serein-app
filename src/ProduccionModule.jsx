@@ -229,7 +229,7 @@ function ListaAvances({ avances, setAvances, ots, esGerencia, usuario, mo }) {
     <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18, overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
-          <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+          <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
             {['Fecha', 'Planta', 'OT', 'Proceso', 'Estado día', 'm² del día', esGerencia ? 'Presentes' : null, 'Validación', ''].filter(Boolean).map((h, i) => (
               <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
             ))}
@@ -405,7 +405,7 @@ function Reportes({ avances, ots, mo }) {
         <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Comparativa por planta</div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
-            <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+            <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
               {['Planta', 'm² Granallado', 'm² Pintura', 'Otros m²', 'Total m²-proceso', 'Trabajadores (período)'].map(h => (
                 <th key={h} style={{ textAlign: h === 'Planta' ? 'left' : 'right', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
               ))}
@@ -427,7 +427,7 @@ function Reportes({ avances, ots, mo }) {
                 </tr>
               )
             })}
-            <tr style={{ borderTop: `2px solid ${C.carbon}` }}>
+            <tr style={{ borderTop: '1px solid #CBD2D8' }}>
               <td style={{ padding: '8px', fontWeight: 700 }}>CONSOLIDADO</td>
               <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700 }}>{fm2(porProceso['Granallado'] || 0)}</td>
               <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700 }}>{fm2(porProceso['Pintura'] || 0)}</td>

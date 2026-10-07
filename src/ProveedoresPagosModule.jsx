@@ -174,7 +174,7 @@ function SeccionProveedores({ pp, setPp }) {
       )}
       <Caja>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+          <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>
             {['Proveedor', 'Tipo', 'Condición', 'Contacto', 'Teléfono', 'Estado', ''].map(h => <th key={h} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}
           </tr></thead>
           <tbody>
@@ -282,7 +282,7 @@ function SeccionOC({ pp, setPp }) {
       </div>
       <Caja>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-          <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+          <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>
             {['Nº OC', 'Proveedor', 'RUT', 'Fecha', 'Monto', 'Plazo (días)', 'Vencimiento', 'Estado de pago', ''].map(h => <th key={h} style={{ textAlign: h === 'Monto' ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>)}
           </tr></thead>
           <tbody>
@@ -374,7 +374,7 @@ function SeccionPorPagar({ pp, setPp }) {
       )}
       <Caja>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+          <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>
             {['Documento', 'Proveedor', 'Vence', 'Total', 'Pagado', 'Saldo', 'Estado', ''].map(h => <th key={h} style={{ textAlign: ['Total', 'Pagado', 'Saldo'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}
           </tr></thead>
           <tbody>
@@ -594,7 +594,7 @@ function SeccionCobros({ pp, setPp }) {
       )}
       <Caja>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+          <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>
             {['Cliente', 'Factura', 'Emisión', 'Esperada', 'Total', 'Estado', ''].map(h => <th key={h} style={{ textAlign: ['Total'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}
           </tr></thead>
           <tbody>
@@ -719,7 +719,7 @@ function ListaCheques({ tipo, titulo, colorTitulo, pp, f, setF, nuevo, creando, 
       )}
       <Caja>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+          <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>
             {[tipo === 'por_pagar' ? 'A quién' : 'De quién', 'Banco', 'Fecha cobro', 'Monto', 'Estado', ''].map(h => <th key={h} style={{ textAlign: h === 'Monto' ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}
           </tr></thead>
           <tbody>
@@ -798,7 +798,7 @@ function SeccionFlujo({ pp, setPp }) {
       </div>
       <Caja>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+          <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>
             {['Fecha', 'Entradas', 'Salidas', 'Flujo del día', 'Saldo acumulado'].map(h => <th key={h} style={{ textAlign: h === 'Fecha' ? 'left' : 'right', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}
           </tr></thead>
           <tbody>
@@ -925,8 +925,8 @@ function SeccionResumen({ pp }) {
         <Kpi label="Vencidos" valor={clp(r.cobrosVencidos)} color={C.rojo} />
         <Kpi label="Total por cobrar este mes" valor={clp(r.cobrosMes)} color={C.carbon} />
       </div>
-      <div style={{ background: '#101315', color: '#fff', padding: '16px 20px', marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-        <span style={{ fontFamily: SEREIN.fontDisplay, textTransform: 'uppercase', letterSpacing: 0.5 }}>Flujo proyectado del mes (cobros − pagos)</span>
+      <div style={{ background: '#fff', color: '#101315', border: '1px solid #DFE4EA', borderRadius: 14, boxShadow: '0 1px 2px rgba(16,19,21,.04), 0 8px 20px -14px rgba(16,19,21,.18)', padding: '16px 20px', marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <span style={{ fontFamily: SEREIN.fontBody, fontWeight: 600 }}>Flujo proyectado del mes (cobros − pagos)</span>
         <span style={{ fontFamily: SEREIN.fontDisplay, fontSize: 26, fontWeight: 600, color: r.flujoMes >= 0 ? '#1B9E5D' : '#C5453D' }}>{clp(r.flujoMes)} {r.flujoMes >= 0 ? '▲' : '▼'}</span>
       </div>
     </div>

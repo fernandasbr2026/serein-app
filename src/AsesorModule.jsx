@@ -542,7 +542,7 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <div style={{ flex: '1 1 150px', background: '#fff', border: '1px solid ' + C.line, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, color: C.gray }}>Flujo de caja (esperado)</div><div style={{ fontSize: 18, fontWeight: 700, color: C.navy }}>{clp(cajaInfo.flujo)}</div></div>
               <div style={{ flex: '1 1 150px', background: '#fff', border: '1px solid ' + C.line, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, color: C.gray }}>Gastos sin documento</div><div style={{ fontSize: 18, fontWeight: 700, color: C.red }}>- {clp(cajaInfo.sinDoc)}</div></div>
-              <div style={{ flex: '1 1 150px', background: '#fff', border: '2px solid ' + C.navy, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, color: C.gray }}>Caja real</div><div style={{ fontSize: 18, fontWeight: 700, color: cajaInfo.cajaReal < 0 ? C.red : C.green }}>{clp(cajaInfo.cajaReal)}</div></div>
+              <div style={{ flex: '1 1 150px', background: '#fff', border: '1px solid ' + C.line, boxShadow: '0 1px 2px rgba(16,19,21,.04), 0 8px 20px -14px rgba(16,19,21,.18)', borderRadius: 10, padding: 10 }}><div style={{ fontSize: 11, color: C.gray }}>Caja real</div><div style={{ fontSize: 18, fontWeight: 700, color: cajaInfo.cajaReal < 0 ? C.red : C.green }}>{clp(cajaInfo.cajaReal)}</div></div>
             </div>
             <div style={{ fontSize: 11, color: C.gray, marginTop: 8 }}>Caja real = flujo de caja del periodo menos los gastos sin documentacion registrados.</div>
           </div>
@@ -634,7 +634,7 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
         )}
       </div>) : (<div>
       {ceoView && (
-        <div style={{ border: '2px solid ' + C.navy, borderRadius: 12, padding: 18, marginBottom: 18, background: '#F2F4F7' }}>
+        <div style={{ border: '1px solid #DFE4EA', borderRadius: 14, boxShadow: '0 1px 2px rgba(16,19,21,.04), 0 8px 20px -14px rgba(16,19,21,.18)', padding: 18, marginBottom: 18, background: '#fff' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4, flexWrap: 'wrap' }}>
             <div style={{ background: C.navy, color: '#fff', fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 13, letterSpacing: 1, padding: '4px 10px', borderRadius: 6 }}>CEO IA</div>
             <div style={{ fontSize: 12, color: C.gray }}>Coordina Finanzas, Comercial, Produccion, Cobranza, Compras y RRHH · se actualiza al ingresar</div>
