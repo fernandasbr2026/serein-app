@@ -141,7 +141,7 @@ function TarjetaCot({ cot, onUpdate, onDelete, onConvertir, yaEsOT }) {
 
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+              <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
                 {['Partida', 'Cant.', 'Unidad', 'Precio unit.', 'Subtotal', 'Costo est. unit.', ''].map((h, i) => (
                   <th key={i} style={{ textAlign: ['Cant.', 'Precio unit.', 'Subtotal', 'Costo est. unit.'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
                 ))}

@@ -139,7 +139,7 @@ function GraficoVentaConEquilibrio({ af, area, color, clp }) {
       {verTabla && (
         <div style={{ overflowX: 'auto', marginTop: 10 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-            <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+            <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>
               {['Mes', 'Venta neta', 'Venta bruta', 'Equilibrio neto', 'Diferencia', '% Cumplimiento', 'Estado'].map(h => (
                 <th key={h} style={{ textAlign: ['Mes', 'Estado'].includes(h) ? 'left' : 'right', padding: '5px 8px', fontSize: 10.5, color: '#9AA3AD', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
@@ -738,7 +738,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     return (
       <div>
         <PeriodoSelector />
-        <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: `3px solid ${AREA_COLOR[a] || C.teal}`, marginBottom: 16 }}>
+        <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: `2px solid ${AREA_COLOR[a] || C.teal}`, marginBottom: 16 }}>
           <div style={{ padding: '14px 18px 6px', fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Resumen financiero · {a}</div>
           <div style={{ padding: '4px 18px 18px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
             <MontoNetoBruto label="Venta total" neto={clp(af.ventaNetaTot)} bruto={clp(af.ventaBrutaTot)} icon={TrendingUp} iconColor={C.azul} iconBg="#E7EFFB" />
@@ -1011,7 +1011,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
                   <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                       <thead>
-                        <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                        <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
                           <th style={{ textAlign: 'left', padding: '6px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>Cliente</th>
                           <th style={{ textAlign: 'right', padding: '6px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>Pendiente</th>
                           <th style={{ textAlign: 'right', padding: '6px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>Días</th>

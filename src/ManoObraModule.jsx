@@ -810,7 +810,7 @@ function ListaRegistros({ mo, setMo, esGerencia, puedeEditarTodo = false, usuari
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
-          <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+          <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
             {['Fecha', 'Tipo', 'Trabajador', 'Horas', 'OT/OC', esGerencia ? 'Costo' : null, esGerencia ? 'Colación' : null, ''].filter(x => x !== null).map((h, i) => (
               <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
             ))}
@@ -846,7 +846,7 @@ function ListaRegistros({ mo, setMo, esGerencia, puedeEditarTodo = false, usuari
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
-          <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+          <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
             {['Fecha', 'Trabajador', 'Estado', 'Hora / Atraso', 'OT/OC', esGerencia ? 'Costo' : null, ''].filter(x => x !== null).map((h, i) => (
               <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
             ))}
@@ -964,7 +964,7 @@ function TrabajadoresView({ mo }) {
             <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 12.5, color: C.naranja, textTransform: 'uppercase', marginBottom: 6 }}>{g}</div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
-                <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
                   {['Nombre', 'Cargo', 'Nacionalidad'].map(h => (
                     <th key={h} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
                   ))}
@@ -1018,7 +1018,7 @@ function CostosPorOT({ mo }) {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+              <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
                 {['OT / OC', 'MO normal', 'Extras', 'Total MO', 'Días con registro', 'Trabajadores'].map(h => (
                   <th key={h} style={{ textAlign: h.includes('MO') || h === 'Extras' || h === 'Total MO' ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
                 ))}
@@ -1134,7 +1134,7 @@ function NominaMO({ mo, setMo }) {
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                 <thead>
-                  <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                  <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
                     {th('Nombre')}{th('Cargo')}{th('Nacionalidad')}{th('Sueldo')}{th('Imposiciones')}{th('Día bruto')}{th('Día s/imp')}{th('Hora')}{th('Hora extra')}{th('Sábado')}{th('Domingo')}{th('Turno noche')}{th('Vacaciones (días)')}<th></th>
                   </tr>
                 </thead>
@@ -1303,7 +1303,7 @@ function ResumenMensual({ mo, setMo, otsDisponibles = [] }) {
                 {r.filasMes.length > 0 && (
                   <div style={{ overflowX: 'auto', marginBottom: r.extrasMes.length > 0 ? 14 : 0 }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                      <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Fecha', 'Estado', 'Hora / Atraso', 'OT/OC', 'Pago', ''].map(h => <th key={h} style={{ textAlign: 'left', padding: '4px 8px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+                      <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['Fecha', 'Estado', 'Hora / Atraso', 'OT/OC', 'Pago', ''].map(h => <th key={h} style={{ textAlign: 'left', padding: '4px 8px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
                       <tbody>
                         {r.filasMes.map(a => (<React.Fragment key={a.regId}>
                           <tr style={{ borderBottom: '1px solid #F2F0EB' }}>
@@ -1330,7 +1330,7 @@ function ResumenMensual({ mo, setMo, otsDisponibles = [] }) {
                 {r.extrasMes.length > 0 && (
                   <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                      <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Fecha', 'Tipo', 'Horas', 'OT/OC', 'Pago', ''].map(h => <th key={h} style={{ textAlign: 'left', padding: '4px 8px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+                      <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['Fecha', 'Tipo', 'Horas', 'OT/OC', 'Pago', ''].map(h => <th key={h} style={{ textAlign: 'left', padding: '4px 8px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
                       <tbody>
                         {r.extrasMes.map(h => (<React.Fragment key={h.id}>
                           <tr style={{ borderBottom: '1px solid #F2F0EB' }}>

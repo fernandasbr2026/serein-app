@@ -140,7 +140,7 @@ function ImportadorHistorico({ ots, setOts, cliente }) {
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead>
-                    <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                    <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
                       {['', 'OC', 'OT encontrada', 'Lotes', 'Piezas nuevas', 'Piezas a completar'].map((h, i) => (
                         <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 10.5, color: '#9AA3AD', textTransform: 'uppercase' }}>{h}</th>
                       ))}
@@ -245,7 +245,7 @@ function VistaPorCliente({ ots, setOts }) {
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                   <thead>
-                    <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                    <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
                       {['OT', 'OC', 'Guía', 'Piezas', 'Vencimiento', 'Estado'].map((h, i) => (
                         <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
                       ))}
@@ -285,7 +285,7 @@ function VistaPorCliente({ ots, setOts }) {
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead>
-                    <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                    <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
                       {['TAG', 'OT', 'OC', 'NV', 'Diámetro', 'm²', 'Estado', 'Despacho', 'Embalaje', 'Factura'].map((h, i) => (
                         <th key={i} style={{ textAlign: 'left', padding: '5px 6px', fontSize: 10.5, color: '#9AA3AD', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
@@ -422,7 +422,7 @@ export default function TrazabilidadModule({ cotizaciones = [], ots = [], ordene
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
               <thead>
-                <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
                   {['OT', 'Cliente', 'OC', 'Guía', 'Piezas', 'Vencimiento', 'Estado'].map((h, i) => (
                     <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>
                   ))}

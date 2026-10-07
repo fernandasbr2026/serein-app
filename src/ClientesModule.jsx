@@ -107,7 +107,7 @@ function TarjetaCliente({ cli, proyectos, ots, onUpdate, onDelete }) {
           <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: C.gris, margin: '16px 0 8px' }}>Órdenes de Trabajo de este cliente</div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['OT', 'Origen', 'Detalle', 'Área', 'Venta'].map((h, i) => <th key={i} style={{ textAlign: h === 'Venta' ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+              <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['OT', 'Origen', 'Detalle', 'Área', 'Venta'].map((h, i) => <th key={i} style={{ textAlign: h === 'Venta' ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
               <tbody>
                 {otList.map((o, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>

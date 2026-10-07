@@ -47,7 +47,7 @@ export default function PipelineProyectos({ proyectos }) {
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+              <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
                 {['Proyecto', 'Cliente', 'Avance', 'Facturado', 'Por facturar'].map(h => (
                   <th key={h} style={{ textAlign: ['Facturado', 'Por facturar'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: '#7A8288', textTransform: 'uppercase' }}>{h}</th>
                 ))}

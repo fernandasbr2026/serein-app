@@ -141,7 +141,7 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Codigo', 'Nombre', 'Neto', 'Condicion', 'Bruto', ''].map((t, i) => <th key={i} style={{ textAlign: ['Neto', 'Bruto'].includes(t) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{t}</th>)}</tr></thead>
+            <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['Codigo', 'Nombre', 'Neto', 'Condicion', 'Bruto', ''].map((t, i) => <th key={i} style={{ textAlign: ['Neto', 'Bruto'].includes(t) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{t}</th>)}</tr></thead>
             <tbody>
               {centros.map((c, i) => (
                 <tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>
@@ -215,7 +215,7 @@ export default function ProyCotizador({ clientes = [], proyectos = [], setProyec
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['N°', 'Cliente', 'Proyecto', 'Costo neto', 'Venta neta', 'Margen s/venta', 'Estado', ''].map((t, i) => <th key={i} style={{ textAlign: ['Costo neto', 'Venta neta', 'Margen s/venta'].includes(t) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{t}</th>)}</tr></thead>
+              <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['N°', 'Cliente', 'Proyecto', 'Costo neto', 'Venta neta', 'Margen s/venta', 'Estado', ''].map((t, i) => <th key={i} style={{ textAlign: ['Costo neto', 'Venta neta', 'Margen s/venta'].includes(t) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{t}</th>)}</tr></thead>
               <tbody>
                 {cots.map(c => (
                   <tr key={c.id} style={{ borderBottom: '1px solid #DFE4EA' }}>

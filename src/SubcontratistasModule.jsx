@@ -166,7 +166,7 @@ function PanelAsignar({ proyectos = [] }) {
       {msg && <div style={{ fontSize: 12, color: C.verde, marginBottom: 8 }}>{msg}</div>}
       {asignaciones.length > 0 && (
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-          <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Subcontratista', 'OT', 'Centro de costo', ''].map((h, i) => <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+          <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['Subcontratista', 'OT', 'Centro de costo', ''].map((h, i) => <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
           <tbody>
             {asignaciones.map(a => (
               <tr key={a.id} style={{ borderBottom: '1px solid #DFE4EA' }}>
@@ -240,7 +240,7 @@ function PanelAsignarTaller({ proyectos = [] }) {
       {msg && <div style={{ fontSize: 12, color: C.verde, marginBottom: 8 }}>{msg}</div>}
       {asignaciones.length > 0 && (
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-          <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Persona', 'OT', ''].map((h, i) => <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+          <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['Persona', 'OT', ''].map((h, i) => <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
           <tbody>
             {asignaciones.map(a => (
               <tr key={a.id} style={{ borderBottom: '1px solid #DFE4EA' }}>

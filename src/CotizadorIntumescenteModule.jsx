@@ -442,7 +442,7 @@ export default function CotizadorIntumescenteModule({ proyectoInicial = null, cl
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Folio', 'Cliente', 'Obra', 'Fecha', 'Vencimiento', 'Total', 'Estado', ''].map(h2 => <th key={h2} style={{ textAlign: h2 === 'Total' ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h2}</th>)}</tr></thead>
+              <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['Folio', 'Cliente', 'Obra', 'Fecha', 'Vencimiento', 'Total', 'Estado', ''].map(h2 => <th key={h2} style={{ textAlign: h2 === 'Total' ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h2}</th>)}</tr></thead>
               <tbody>
                 {listado.map(cot => { const [cf, ct] = colorEstado(cot.estado); return (
                   <tr key={cot.id} style={{ borderBottom: '1px solid #DFE4EA' }}>

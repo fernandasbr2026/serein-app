@@ -412,7 +412,7 @@ export default function CRMModule() {
         ) : (
           <div style={{ overflowX: 'auto', border: '1px solid #DFE4EA' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Vendedor', 'Leads asignados', 'Convertidos', 'Tasa conv.', 'Revenue cerrado', 'Interacciones'].map(h => <th key={h} style={{ textAlign: 'left', padding: '7px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+              <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['Vendedor', 'Leads asignados', 'Convertidos', 'Tasa conv.', 'Revenue cerrado', 'Interacciones'].map(h => <th key={h} style={{ textAlign: 'left', padding: '7px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
               <tbody>
                 {vendedorStats.map(v => (
                   <tr key={v.vendedor_id} style={{ borderBottom: '1px solid #DFE4EA' }}>
@@ -434,7 +434,7 @@ export default function CRMModule() {
         ) : (
           <div style={{ overflowX: 'auto', border: '1px solid #DFE4EA' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Cliente', 'Etapa', 'Vendedor', 'Próxima acción', 'Fecha', 'Días vencido'].map(h => <th key={h} style={{ textAlign: 'left', padding: '7px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+              <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['Cliente', 'Etapa', 'Vendedor', 'Próxima acción', 'Fecha', 'Días vencido'].map(h => <th key={h} style={{ textAlign: 'left', padding: '7px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
               <tbody>
                 {seguimientos.map(s => (
                   <tr key={s.cliente_id} onClick={() => { const c = clientesConFactura.find(x => x.id === s.cliente_id); if (c) setSeleccionado(c) }} style={{ borderBottom: '1px solid #DFE4EA', cursor: 'pointer', background: s.dias_vencido > 0 ? '#FDECDD' : 'transparent' }}>
@@ -456,7 +456,7 @@ export default function CRMModule() {
         ) : (
           <div style={{ overflowX: 'auto', border: '1px solid #DFE4EA' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Campaña', 'Canal', 'Estado', 'Leads', 'Convertidos', 'Tasa conv.', 'Gasto', 'Costo/lead', ''].map(h => <th key={h} style={{ textAlign: 'left', padding: '7px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+              <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['Campaña', 'Canal', 'Estado', 'Leads', 'Convertidos', 'Tasa conv.', 'Gasto', 'Costo/lead', ''].map(h => <th key={h} style={{ textAlign: 'left', padding: '7px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
               <tbody>
                 {statsCampanas.map(c => { const [cf, ct] = colorEstadoCampana(c.estado); return (
                   <tr key={c.id} style={{ borderBottom: '1px solid #DFE4EA' }}>
@@ -504,7 +504,7 @@ export default function CRMModule() {
       ) : (
         <div style={{ overflowX: 'auto', border: '1px solid #DFE4EA' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>{['Nombre', 'RUT', 'Teléfono', 'Origen', 'Vendedor', 'Etapa', 'Última factura'].map(h => <th key={h} style={{ textAlign: 'left', padding: '7px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+            <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['Nombre', 'RUT', 'Teléfono', 'Origen', 'Vendedor', 'Etapa', 'Última factura'].map(h => <th key={h} style={{ textAlign: 'left', padding: '7px 10px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
             <tbody>
               {filtrados.map(c => { const [cf, ct] = colorEtapa(c.etapa); return (
                 <tr key={c.id} onClick={() => setSeleccionado(c)} style={{ borderBottom: '1px solid #DFE4EA', cursor: 'pointer' }}>

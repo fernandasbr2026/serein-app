@@ -126,7 +126,7 @@ export default function ProyComprasLibro({ proyectos = [], setProyectos = null }
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 900 }}>
                     <thead>
-                      <tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+                      <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
                         {['Emision', 'Proveedor', 'Folio', 'Neto', 'Pago', 'Imputar a CC', ''].map((t, i) => <th key={i} style={{ textAlign: t === 'Neto' ? 'right' : 'left', padding: '6px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{t}</th>)}
                       </tr>
                     </thead>

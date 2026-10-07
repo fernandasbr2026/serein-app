@@ -79,7 +79,7 @@ function Tabla({ titulo, icono, items, setItems, color, cols }) {
       </div>
       <div style={{ overflowX: 'auto', padding: 12 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-          <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+          <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>
             {cols.map(c => <th key={c.key} style={{ textAlign: 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{c.label}</th>)}
             <th></th>
           </tr></thead>

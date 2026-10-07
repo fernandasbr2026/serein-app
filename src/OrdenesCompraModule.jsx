@@ -335,7 +335,7 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
       </div>
       <div style={{ background: '#fff', border: '1px solid #DFE4EA', overflowX: 'auto', padding: 8 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-          <thead><tr style={{ borderBottom: `2px solid ${C.carbon}` }}>
+          <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>
             {['Nº OC', 'Proveedor', 'RUT', 'Categoría', 'Fecha', 'Neto', 'IVA', 'Total', 'Plazo', 'Vencimiento', 'Estado de pago', ''].map((h, hi) => <th key={hi} style={{ textAlign: ['Neto', 'IVA', 'Total'].includes(h) ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap', ...(h === '' ? { position: 'sticky', right: 0, background: '#fff', zIndex: 3 } : {}) }}>{h || 'Acciones'}</th>)}
           </tr></thead>
           <tbody>
