@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Plus, Search, ArrowLeft, CheckCircle2, XCircle, AlertTriangle, Upload, Trash2, Sparkles } from 'lucide-react'
+import { Plus, Search, ArrowLeft, CheckCircle2, XCircle, AlertTriangle, Upload, Trash2, Sparkles, FileText } from 'lucide-react'
 import { supabase } from './supabase.js'
 import { SEREIN } from './theme-serein.js'
 import { evaluarCredito, condicionesOC, mezclarParams, PARAMS_CREDITO_DEFAULT, diasEntre, datosDesdeExtraccion, resumenExtraccion } from './creditoCalculo.js'
 import { fileToBase64 } from './protocolo-pdf.js'
+import { generarInformeCredito } from './creditoInforme.js'
 
 // ============================================================
 // MÓDULO DE CRÉDITO — factibilidad de crédito a 30 días y condiciones
@@ -297,6 +298,16 @@ function FichaCliente({ cliente, params, esGerencia, onVolver, onCambio }) {
     const carpeta = docs.find(d => d.tipo === 'carpeta_tributaria' && d.fecha_emision)
     setEvaluando({ iniciales: { ...(carpeta ? { fechaCarpeta: carpeta.fecha_emision } : {}), ...base }, extraidos: Object.keys(extraidos).length ? extraidos : null })
   }
+  // Informe en PDF (ADM-CR-02): se descarga y además se archiva en la carpeta privada junto a la evaluación.
+  const descargarInforme = async (ev, idx) => {
+    setMsg('')
+    try {
+      const { doc, filename } = generarInformeCredito({ cliente, evaluacion: ev, docs, params, numero: evals.length - idx })
+      doc.save(filename)
+      const up = await supabase.storage.from('credito').upload(cliente.id + '/informes/' + ev.id + '.pdf', doc.output('blob'), { upsert: true, contentType: 'application/pdf' })
+      setMsg(up.error ? 'Informe descargado (no se pudo archivar en la carpeta privada: ' + up.error.message + ')' : 'Informe descargado y archivado')
+    } catch (e) { setMsg('No se pudo generar el informe: ' + ((e && e.message) || e)) }
+  }
   const guardar = async () => {
     setMsg('')
     const { error } = await supabase.from('credito_clientes').update({
@@ -342,12 +353,12 @@ function FichaCliente({ cliente, params, esGerencia, onVolver, onCambio }) {
       <div style={card}>
         <div style={titulo}>Historial de evaluaciones ({evals.length})</div>
         {evals.length === 0 && <div style={{ fontSize: 13, color: C.gris }}>Sin evaluaciones todavía. Usa "Nueva evaluación".</div>}
-        {evals.map(e => (
+        {evals.map((e, idx) => (
           <div key={e.id} style={{ borderBottom: '1px solid #EEF1F4', padding: '8px 0' }}>
             <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>
               <span style={{ minWidth: 90 }}>{e.fecha}</span><ChipCat cat={e.categoria} /><span>Puntaje <b>{e.puntaje}</b></span><span>Sugerida {clp(e.linea_sugerida)}</span><span>Aprobada <b>{clp(e.linea_aprobada)}</b></span>
               <span style={{ color: e.estado === 'aprobada' ? C.verde : e.estado === 'rechazada' ? C.rojo : C.gris, fontWeight: 600, textTransform: 'capitalize' }}>{e.estado}</span>
-              {e.resultado && <button onClick={() => setAbierta(abierta === e.id ? null : e.id)} style={{ ...btn(C.azul, true), padding: '3px 10px', fontSize: 12, marginLeft: 'auto' }}>{abierta === e.id ? 'Ocultar' : 'Ver detalle'}</button>}
+              <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6 }}>{e.resultado && <button onClick={() => setAbierta(abierta === e.id ? null : e.id)} style={{ ...btn(C.azul, true), padding: '3px 10px', fontSize: 12 }}>{abierta === e.id ? 'Ocultar' : 'Ver detalle'}</button>}<button onClick={() => descargarInforme(e, idx)} style={{ ...btn(C.naranja), padding: '3px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}><FileText size={12} /> Informe PDF</button></span>
             </div>
             {abierta === e.id && e.resultado && <div style={{ marginTop: 8 }}><Resultado res={{ ...e.resultado, categoria: e.categoria, puntaje: e.puntaje, lineaSugerida: e.linea_sugerida, anticipoMinimo: e.anticipo_minimo, garantia: e.garantia }} />{e.observaciones && <div style={{ fontSize: 12.5, color: C.gris }}>Observaciones: {e.observaciones}</div>}</div>}
           </div>
