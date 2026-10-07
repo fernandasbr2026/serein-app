@@ -5,6 +5,7 @@ import { pushState } from './sync.js'
 import { calcularPerdidaFactoring } from './ParametrosModule.jsx'
 import { descargarInformeFacturas } from './informeFacturas.js'
 import { leerFacturasOcultasLibro } from './facturasOcultas.js'
+import { PLAZOS_SUGERIDOS, PLAZO_POR_DEFECTO, PLAZO_MAX, plazoValido, sumarDias, plazoDe, conFechasCoherentes, diasParaVencer, textoDiasParaVencer, hoyISO } from './vencimientos.js'
 
 import { SEREIN } from './theme-serein.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
@@ -22,6 +23,10 @@ const MEDIOS_PAGO = ['', 'Transferencia', 'Cheque', 'Efectivo', 'Tarjeta', 'Otro
 const LS_KEY = 'serein_libroVentasXlsx'
 const norm = s => (s || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 const colorPago = e => e === 'Pagado' ? C.green : e === 'Factoring' ? C.orange : e === 'Vencida' ? C.red : C.mut
+// Columna fija (casilla + folio): se queda a la vista cuando la tabla se desplaza hacia la derecha.
+// Sombra en vez de borde: en una tabla con bordes colapsados el borde no acompaña a la celda.
+const FIJA_TD = { position: 'sticky', left: 0, zIndex: 2, background: '#fff', boxShadow: '4px 0 6px -4px rgba(15, 23, 42, 0.28)' }
+const FIJA_TH = { ...FIJA_TD, zIndex: 3, background: C.navy }
 
 export default function LibroVentasModule({ ots = [], proyectos = [], facturas = {}, setFacturas = () => {}, params = { factoring: [] } }) {
   const [rows, setRows] = useState([])
@@ -158,21 +163,25 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
   const fichaDe = r => ({ id: 'lv' + r.id, libroId: 'LV' + r.id, origen: 'libroVentas', numero: String(r.document_number || ''), cliente: r.client_name || '', ot: String(r.ot_id || ''), oc: r.oc || '', nv: r.nv || '', cc: r.cc_ot || '', fecha_emision: r.emission_date || '', vencimiento: r.vencimiento || '', neto: sgn(r) * Math.round(Number(r.neto) || 0), monto: sgn(r) * Math.round(Number(r.total) || 0), estado: r.estado_pago || 'Pendiente', fecha_pago: r.fecha_pago || '', banco: r.banco || '', medioPago: r.medio_pago || '', numeroCheque: r.numero_cheque || '', factoringId: r.factoring_id || '', dias: r.dias || 30, diasMora: r.dias_mora || 0, comentarios: 'Importada del Libro de Ventas', vendedor: 'General' })
   const vaAFacturas = r => !!r.area && !r.oculto && r.estado_pago !== 'Anulada'
 
-  const sincronizarFicha = r => {
-    const libroId = 'LV' + r.id
+  // Copia una o varias filas del libro hacia Facturas de una sola vez (cada llamada reescribe
+  // `facturas` completo desde la misma copia, así que varias filas no pueden ir en llamadas sueltas).
+  // `forzar` son campos que el libro manda aunque vengan vacíos (ej. quitar el vencimiento).
+  const sincronizarFichas = (filas, forzar = []) => {
+    const ids = new Set(filas.map(r => 'LV' + r.id))
     const base = {}
-    let previa = null
+    const previas = {}
     Object.keys(facturas || {}).forEach(a => {
-      (facturas[a] || []).forEach(f => { if (f.libroId === libroId) previa = f })
-      base[a] = (facturas[a] || []).filter(f => f.libroId !== libroId)
+      (facturas[a] || []).forEach(f => { if (ids.has(f.libroId)) previas[f.libroId] = f })
+      base[a] = (facturas[a] || []).filter(f => !ids.has(f.libroId))
     })
-    if (vaAFacturas(r)) {
+    filas.forEach(r => {
+      if (!vaAFacturas(r)) return
       // Se conserva lo editado en Facturas (OC, centro de costo, etc.); el libro solo pisa lo que trae con valor
       const f = fichaDe(r)
-      const merge = { ...(previa || {}) }
-      Object.keys(f).forEach(k => { if (f[k] !== '' && f[k] !== null && f[k] !== undefined) merge[k] = f[k] })
+      const merge = { ...(previas[f.libroId] || {}) }
+      Object.keys(f).forEach(k => { if (forzar.includes(k) || (f[k] !== '' && f[k] !== null && f[k] !== undefined)) merge[k] = f[k] })
       base[r.area] = [merge, ...(base[r.area] || [])]
-    }
+    })
     // Escribe en facturas (prop del padre, no el estado propio de este
     // modulo) — persiste sincrónicamente en localStorage y sube a la nube
     // de inmediato, mismo patrón ya probado en OTModule.jsx/
@@ -182,17 +191,47 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
     setFacturas(base)
     pushState()
   }
+  const sincronizarFicha = (r, forzar) => sincronizarFichas([r], forzar)
 
-  const setCampo = async (r, campo, valor) => {
-    const nueva = { ...r, [campo]: valor }
-    if (r.origen === 'xlsx') { guardarExtra((extra || []).map(x => x.id === r.id ? nueva : x)) }
-    else {
-      setRows(rs => rs.map(x => x.id === r.id ? nueva : x))
-      try { await supabase.from('libro_ventas').update({ [campo]: valor }).eq('id', r.id) }
-      catch (e) { setErrMsg('Error al guardar "' + campo + '": ' + (e.message || e) + ' — el cambio no quedó guardado, refresca la página.') }
-    }
-    sincronizarFicha(nueva)
+  // Los guardados de una misma fila van en cola: si se teclea rápido (plazo 4 → 40), lo último que llega a la base es lo último escrito.
+  const colaGuardado = useRef({})
+  // Un solo guardado para uno o varios campos de la fila (el plazo cambia el vencimiento, y solo ese).
+  const setCampos = async (r, cambios) => {
+    const nueva = { ...r, ...cambios }
+    // La ficha de Facturas se actualiza al tiro, sin esperar a la base: así dos ediciones seguidas no se pisan.
+    // El vencimiento lo manda el libro, incluso cuando se borra.
+    sincronizarFicha(nueva, 'vencimiento' in cambios ? ['vencimiento'] : [])
+    if (r.origen === 'xlsx') { guardarExtra((extra || []).map(x => x.id === r.id ? nueva : x)); return }
+    setRows(rs => rs.map(x => x.id === r.id ? nueva : x))
+    const guardado = (colaGuardado.current[r.id] || Promise.resolve()).then(async () => {
+      try {
+        const { error } = await supabase.from('libro_ventas').update(cambios).eq('id', r.id)
+        if (error) throw error
+      } catch (e) { setSyncMsg('Error al guardar "' + Object.keys(cambios).join(', ') + '": ' + (e.message || e) + ' — el cambio no quedó guardado, refresca la página.') }
+    })
+    colaGuardado.current[r.id] = guardado
+    await guardado
   }
+  const setCampo = (r, campo, valor) => setCampos(r, { [campo]: valor })
+
+  // ---------- Plazo de pago → vencimiento ----------
+  // Facturas que se editaron antes solo en Facturas por área tienen el vencimiento en la ficha y no en el libro:
+  // se muestra igual aquí, para que ambos módulos cuenten lo mismo.
+  const vencDeFicha = useMemo(() => {
+    const m = {}
+    Object.keys(facturas || {}).forEach(a => (facturas[a] || []).forEach(f => { if (f.libroId && f.vencimiento) m[f.libroId] = f.vencimiento }))
+    return m
+  }, [facturas])
+  const vencDe = r => r.vencimiento || vencDeFicha['LV' + r.id] || ''
+  // Se escribe el plazo → el sistema calcula la fecha (desde la emisión, en días corridos).
+  // El plazo no se guarda: se deduce de emisión y vencimiento (ver vencimientos.js).
+  const cambiarPlazo = (r, texto) => {
+    const n = plazoValido(texto)
+    if (n === null) { if (String(texto).trim() === '') setCampos(r, { vencimiento: null }); return }
+    const fecha = sumarDias(r.emission_date, n)
+    if (fecha) setCampos(r, { vencimiento: fecha })   // sin fecha de emisión no hay desde dónde contar: se deja como está
+  }
+  const cambiarVencimiento = (r, fecha) => setCampos(r, { vencimiento: fecha || null })
 
   const todas = useMemo(() => {
     const k = r => (r.document_number || '') + '|' + (r.client_rut || '')
@@ -239,7 +278,8 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
 
   const [sel, setSel] = useState(() => new Set())
   const [verOcultas, setVerOcultas] = useState(false)
-  const headersLV = ['Emision', 'Cliente', 'Folio', 'Tipo', 'Neto', 'IVA', 'Total', 'Area', 'OT', 'OC', 'Centro de costo', 'NV', 'Estado pago', 'Medio pago', 'Fecha pago']
+  // El Folio va aparte, como primera columna fija junto a la casilla (ver FIJA_TD): por eso no está en esta lista.
+  const headersLV = ['Emision', 'Cliente', 'Tipo', 'Neto', 'IVA', 'Total', 'Area', 'OT', 'OC', 'Centro de costo', 'NV', 'Plazo (días)', 'Vence', 'Estado pago', 'Medio pago', 'Fecha pago']
   const filtradas = useMemo(() => todas.filter(r => {
     if (verOcultas) { if (!r.oculto) return false } else { if (r.oculto) return false }
     if (mes && (r.emission_date || '').slice(0, 7) !== mes) return false
@@ -282,7 +322,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
       ventaNeta: sgn(r) * (Number(r.neto) || 0),
       iva: sgn(r) * (Number(r.iva) || 0),
       total: sgn(r) * (Number(r.total) || 0),
-      fechaVencimiento: r.vencimiento,
+      fechaVencimiento: vencDe(r),
       estado: r.estado_pago,
       banco: r.banco,
       factoringEntidad: r.estado_pago === 'Factoring' ? (facs.find(ff => ff.id === r.factoring_id) || {}).nombre : '',
@@ -290,11 +330,44 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
     })))
   }
 
-  const facturaVacia = { emission_date: new Date().toISOString().slice(0, 10), document_number: '', client_name: '', client_rut: '', document_type: 'Factura', neto: '', iva: '', area: '', oc: '', nv: '', medio_pago: '', numero_cheque: '' }
+  // Aplica un mismo plazo a todas las filas elegidas: sirve para ponerle fecha de vencimiento de una vez a las
+  // que vienen sin ella (las de Defontana). Cada una se calcula desde su propia emisión.
+  const [plazoLote, setPlazoLote] = useState(String(PLAZO_POR_DEFECTO))
+  const aplicarPlazoSel = async () => {
+    const n = plazoValido(plazoLote)
+    const elegidas = filtradas.filter(r => sel.has(r.id))
+    if (n === null || !elegidas.length) return
+    const aplicables = elegidas.filter(r => !esNC(r) && sumarDias(r.emission_date, n))
+    const omitidas = elegidas.length - aplicables.length
+    if (!aplicables.length) { window.alert('Ninguno de los documentos elegidos admite plazo (son notas de crédito o no tienen fecha de emisión).'); return }
+    const reemplazan = aplicables.filter(r => vencDe(r)).length
+    if (!window.confirm('Se pondrá un plazo de ' + n + ' días a ' + aplicables.length + ' documento(s): el vencimiento queda como la fecha de emisión + ' + n + ' días.' + (reemplazan ? '\n' + reemplazan + ' de ellos ya tenían vencimiento y será reemplazado.' : '') + (omitidas ? '\n' + omitidas + ' se omiten (notas de crédito o sin fecha de emisión).' : '') + '\n¿Continuar?')) return
+    const nuevas = aplicables.map(r => ({ ...r, vencimiento: sumarDias(r.emission_date, n) }))
+    const porId = new Map(nuevas.map(r => [r.id, r]))
+    const deExcel = nuevas.filter(r => r.origen === 'xlsx')
+    const deBase = nuevas.filter(r => r.origen !== 'xlsx')
+    if (deExcel.length) guardarExtra((extra || []).map(x => porId.get(x.id) || x))
+    if (deBase.length) setRows(rs => rs.map(x => porId.get(x.id) || x))
+    sincronizarFichas(nuevas, ['vencimiento'])
+    // Un guardado por cada fecha distinta (muchas facturas comparten día de emisión), en tandas de 40
+    const porFecha = {}
+    deBase.forEach(r => { (porFecha[r.vencimiento] = porFecha[r.vencimiento] || []).push(r.id) })
+    let fallos = 0
+    for (const [fecha, ids] of Object.entries(porFecha)) {
+      for (let i = 0; i < ids.length; i += 40) {
+        try { const { error } = await supabase.from('libro_ventas').update({ vencimiento: fecha }).in('id', ids.slice(i, i + 40)); if (error) fallos++ } catch (e) { fallos++ }
+      }
+    }
+    setSyncMsg(fallos ? 'Error al guardar parte de los vencimientos en la base — refresca la página y revisa cuáles quedaron.' : 'Plazo de ' + n + ' días aplicado a ' + nuevas.length + ' documento(s).')
+    setSel(new Set())
+  }
+
+  const facturaVacia = { emission_date: hoyISO(), document_number: '', client_name: '', client_rut: '', document_type: 'Factura', neto: '', iva: '', area: '', oc: '', nv: '', medio_pago: '', numero_cheque: '', plazo: String(PLAZO_POR_DEFECTO), vencimiento: sumarDias(hoyISO(), PLAZO_POR_DEFECTO) }
   const [mostrarAgregar, setMostrarAgregar] = useState(false)
   const [nuevaFC, setNuevaFC] = useState(facturaVacia)
   const setNuevaFCCampo = (campo, valor) => setNuevaFC(f => {
-    const nf = { ...f, [campo]: valor }
+    // Emisión, plazo y vencimiento se acompañan entre sí (ver vencimientos.js)
+    const nf = conFechasCoherentes(f, campo, valor)
     if (campo === 'neto') nf.iva = Math.round((Number(valor) || 0) * 0.19)
     return nf
   })
@@ -303,7 +376,8 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
     if (!nuevaFC.client_name.trim() || neto <= 0) { window.alert('Ingresa al menos el cliente y un neto mayor a 0.'); return }
     const iva = Math.round(neto * 0.19)
     const reg = {
-      emission_date: nuevaFC.emission_date || new Date().toISOString().slice(0, 10),
+      emission_date: nuevaFC.emission_date || hoyISO(),
+      vencimiento: nuevaFC.vencimiento || null,
       document_number: nuevaFC.document_number.trim(),
       client_name: nuevaFC.client_name.trim(),
       client_rut: nuevaFC.client_rut.trim(),
@@ -348,6 +422,8 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
       {mostrarAgregar && (
         <div style={{ border: '1px solid ' + C.border, borderRadius: 8, padding: 14, marginBottom: 14, background: C.gray, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
           <label style={{ fontSize: 11, color: C.mut }}>Fecha emisión<input type="date" value={nuevaFC.emission_date} onChange={e => setNuevaFCCampo('emission_date', e.target.value)} style={ip} /></label>
+          <label style={{ fontSize: 11, color: C.mut }}>Plazo de pago (días)<input type="number" min="0" max={PLAZO_MAX} list="plazos-dias" value={nuevaFC.plazo} onChange={e => setNuevaFCCampo('plazo', e.target.value)} placeholder="30" style={ip} /></label>
+          <label style={{ fontSize: 11, color: C.mut }}>Vencimiento<input type="date" value={nuevaFC.vencimiento || ''} onChange={e => setNuevaFCCampo('vencimiento', e.target.value)} style={ip} /></label>
           <label style={{ fontSize: 11, color: C.mut }}>Cliente<input value={nuevaFC.client_name} onChange={e => setNuevaFCCampo('client_name', e.target.value)} placeholder="Razón social" style={ip} /></label>
           <label style={{ fontSize: 11, color: C.mut }}>RUT cliente<input value={nuevaFC.client_rut} onChange={e => setNuevaFCCampo('client_rut', e.target.value)} placeholder="12.345.678-9" style={ip} /></label>
           <label style={{ fontSize: 11, color: C.mut }}>N° folio<input value={nuevaFC.document_number} onChange={e => setNuevaFCCampo('document_number', e.target.value)} style={ip} /></label>
@@ -385,6 +461,12 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
           <span style={{ fontSize: 12.5, color: C.mut }}>{sel.size} seleccionado(s)</span>
           <button onClick={descargarInforme} disabled={!sel.size} style={{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5, background: sel.size ? C.navy : '#DFE4EA', color: sel.size ? '#fff' : C.mut, cursor: sel.size ? 'pointer' : 'default' }}>Descargar informe PDF</button>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid ' + C.border, borderRadius: 6, padding: '3px 3px 3px 10px', background: '#fff' }}>
+            <span style={{ fontSize: 12.5, color: C.mut }}>Plazo de pago</span>
+            <input type="number" min="0" max={PLAZO_MAX} list="plazos-dias" value={plazoLote} onChange={e => setPlazoLote(e.target.value)} title="Días desde la emisión" aria-label="Plazo de pago en días para los seleccionados" style={{ ...ip, width: 66, padding: '4px 6px' }} />
+            <span style={{ fontSize: 12.5, color: C.mut }}>días</span>
+            <button onClick={aplicarPlazoSel} disabled={!sel.size || plazoValido(plazoLote) === null} style={{ border: 'none', padding: '5px 10px', borderRadius: 4, fontWeight: 700, fontSize: 12.5, background: sel.size && plazoValido(plazoLote) !== null ? C.orange : '#DFE4EA', color: sel.size && plazoValido(plazoLote) !== null ? '#fff' : C.mut, cursor: sel.size && plazoValido(plazoLote) !== null ? 'pointer' : 'default' }}>Aplicar a seleccionados</button>
+          </span>
           {!verOcultas && <button onClick={eliminarSel} disabled={!sel.size} style={{ ...{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5 }, background: sel.size ? C.red : '#DFE4EA', color: sel.size ? '#fff' : C.mut, cursor: sel.size ? 'pointer' : 'default' }}>Eliminar seleccionados</button>}
           {verOcultas && <button onClick={restaurarSel} disabled={!sel.size} style={{ ...{ border: 'none', padding: '7px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12.5 }, background: sel.size ? C.green : '#DFE4EA', color: sel.size ? '#fff' : C.mut, cursor: sel.size ? 'pointer' : 'default' }}>Restaurar seleccionados</button>}
           <button onClick={() => { setVerOcultas(v => !v); setSel(new Set()) }} style={{ background: 'transparent', border: '1px solid ' + C.border, padding: '7px 12px', borderRadius: 6, fontSize: 12.5, cursor: 'pointer', color: C.navy }}>{verOcultas ? 'Volver al libro' : 'Ver ocultos'}</button>
@@ -393,11 +475,13 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
       {loading ? <div style={{ color: C.mut, padding: 20 }}>Cargando...</div> : errMsg ? <div style={{ background: '#FCEBEA', border: '1px solid ' + C.red, color: C.red, padding: '10px 14px', borderRadius: 6, fontSize: 13 }}>{errMsg}</div> : filtradas.length === 0 ? (
         <div style={{ color: C.mut, padding: 20, textAlign: 'center', border: '1px dashed ' + C.border, borderRadius: 8 }}>Sin documentos. Usa <b>Importar Excel</b> o <b>Sincronizar con Defontana</b>.</div>
       ) : (
-        <div style={{ overflowX: 'auto', border: '1px solid ' + C.border, borderRadius: 8 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 1500 }}>
+        <div style={{ overflowX: 'auto', border: '1px solid ' + C.border, borderRadius: 8, background: '#fff' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 1700 }}>
             <thead>
               <tr style={{ background: C.navy, color: '#fff' }}>
-                <th style={{ padding: '9px 10px', width: 34 }}><input type="checkbox" checked={filtradas.length > 0 && sel.size === filtradas.length} onChange={toggleTodas} /></th>
+                <th style={{ ...FIJA_TH, textAlign: 'left', padding: '9px 10px', fontSize: 11, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={filtradas.length > 0 && sel.size === filtradas.length} onChange={toggleTodas} aria-label="Seleccionar todos" />Folio</span>
+                </th>
                 {headersLV.map(h => (
                   <th key={h} style={{ textAlign: ['Neto', 'IVA', 'Total'].includes(h) ? 'right' : 'left', padding: '9px 10px', fontSize: 11, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
@@ -406,13 +490,19 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
             <tbody>
               {filtradas.map(r => {
                 const perd = perdidaDe(r)
+                const venc = vencDe(r)
+                const plazoFila = plazoDe(r.emission_date, venc)
+                // Solo las facturas aún sin pagar muestran cuánto falta o cuánto llevan de atraso
+                const dias = !esNC(r) && ['Pendiente', 'Vencida'].includes(r.estado_pago || 'Pendiente') ? diasParaVencer(venc) : null
+                const atrasada = dias !== null && dias < 0
                 return (
                 <React.Fragment key={r.id}>
                 <tr style={{ borderBottom: perd ? 'none' : '1px solid #E2E7EC' }}>
-                  <td style={{ padding: '7px 10px' }}><input type="checkbox" checked={sel.has(r.id)} onChange={() => toggleSel(r.id)} /></td>
+                  <td style={{ ...FIJA_TD, padding: '7px 10px', whiteSpace: 'nowrap' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={sel.has(r.id)} onChange={() => toggleSel(r.id)} aria-label={'Seleccionar folio ' + (r.document_number || '')} /><b>{r.document_number || '-'}</b></span>
+                  </td>
                   <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{fmtF(r.emission_date)}</td>
                   <td style={{ padding: '7px 10px' }}><div style={{ fontWeight: 600 }}>{r.client_name || r.client_rut || '-'}</div><div style={{ color: C.mut, fontSize: 11 }}>{r.client_rut}{r.origen === 'xlsx' ? ' - Excel' : ''}</div></td>
-                  <td style={{ padding: '7px 10px' }}>{r.document_number}</td>
                   <td style={{ padding: '7px 10px', fontSize: 11.5 }}>{r.document_type}{esNC(r) ? <span style={{ marginLeft: 5, background: C.red, color: '#fff', padding: '1px 5px', borderRadius: 3, fontSize: 10, fontWeight: 700 }}>NC</span> : null}</td>
                   <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', color: esNC(r) ? C.red : undefined }}>{clp(sgn(r) * (+r.neto || 0))}</td>
                   <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', color: esNC(r) ? C.red : C.orange }}>{clp(sgn(r) * (+r.iva || 0))}</td>
@@ -437,6 +527,19 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
                     </select>
                   </td>
                   <td style={{ padding: '7px 10px' }}><input style={{ ...sel, minWidth: 90 }} value={r.nv || ''} onChange={e => setCampo(r, 'nv', e.target.value)} placeholder="NV" /></td>
+                  <td style={{ padding: '7px 10px' }}>
+                    {esNC(r) ? <span style={{ color: C.mut }}>-</span> : (
+                      <input type="number" min="0" max={PLAZO_MAX} list="plazos-dias" style={{ width: 64 }} value={plazoFila === null ? '' : plazoFila} onChange={e => cambiarPlazo(r, e.target.value)} placeholder="días" aria-label={'Plazo de pago en días del folio ' + (r.document_number || '')} title="Días de plazo desde la emisión: el vencimiento se calcula solo" />
+                    )}
+                  </td>
+                  <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>
+                    {esNC(r) ? <span style={{ color: C.mut }}>-</span> : (
+                      <div>
+                        <input type="date" style={atrasada ? { color: C.red, fontWeight: 600 } : undefined} value={venc} onChange={e => cambiarVencimiento(r, e.target.value)} aria-label={'Vencimiento del folio ' + (r.document_number || '')} title="Se calcula con el plazo; también puedes elegir la fecha directamente" />
+                        {dias !== null && <div style={{ fontSize: 10.5, marginTop: 2, color: atrasada ? C.red : C.mut, fontWeight: atrasada ? 600 : 400 }}>{textoDiasParaVencer(dias)}</div>}
+                      </div>
+                    )}
+                  </td>
                   <td style={{ padding: '7px 10px' }}>
                     <select style={{ ...sel, minWidth: 110, color: colorPago(r.estado_pago), fontWeight: 600 }} value={r.estado_pago || 'Pendiente'} onChange={e => setCampo(r, 'estado_pago', e.target.value)}>
                       {ESTADOS_PAGO.map(e => <option key={e} value={e}>{e}</option>)}
@@ -495,6 +598,10 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
       <div style={{ fontSize: 11.5, color: C.mut, marginTop: 8 }}>
         Al asignar <b>area</b> y <b>OT</b>, la venta se carga automaticamente en la ficha de esa OT y en el consolidado. Todo queda guardado en la nube.
       </div>
+      <div style={{ fontSize: 11.5, color: C.mut, marginTop: 4 }}>
+        <b>Plazo de pago:</b> escribe los días (30, 40, 60…) y el vencimiento se calcula solo desde la fecha de emisión; también se refleja en Facturas por área, cobranza atrasada y consolidado.
+      </div>
+      <datalist id="plazos-dias">{PLAZOS_SUGERIDOS.map(d => <option key={d} value={d}>{d === 0 ? 'Contado' : d + ' días'}</option>)}</datalist>
     </div>
   )
 }
