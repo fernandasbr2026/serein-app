@@ -9,7 +9,7 @@ const C = { azul: SEREIN.ink, ambar: SEREIN.orange, rojo: SEREIN.red, verde: SER
 
 const inputBase = {
   width: '100%', boxSizing: 'border-box', padding: '11px 12px', margin: '6px 0 16px',
-  border: '1px solid #DFE4EA', borderRadius: 6, fontSize: 14, background: '#fff',
+  border: '1px solid #DFE4EA', borderRadius: 10, fontSize: 14, background: '#fff',
   outline: 'none', fontFamily: "'Inter',sans-serif",
 }
 
@@ -40,23 +40,23 @@ export default function Login() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #F2F4F7 0%, #F2F4F7 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Inter',sans-serif", padding: 20 }}>
+    <div style={{ minHeight: '100vh', background: 'radial-gradient(760px 460px at 88% -8%, rgba(247,119,22,.18), transparent 66%), radial-gradient(640px 420px at -8% 112%, rgba(247,119,22,.11), transparent 62%), #F5F6F8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Inter',sans-serif", padding: 20 }}>
       <div style={{ width: '100%', maxWidth: 400 }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 24 }}>
           <LogoSerein alto={54} />
           <p style={{ color: '#9AA3AD', fontSize: 11.5, margin: '14px 0 0', letterSpacing: 1.5, fontWeight: 600 }}>REVESTIMIENTOS INDUSTRIALES · PANEL 2026</p>
         </div>
-        <div style={{ background: '#fff', border: '1px solid ' + C.borde, borderTop: '4px solid ' + C.ambar, borderRadius: 4, padding: 30, boxShadow: '0 12px 40px -12px rgba(29,29,27,0.18)' }}>
-          <label style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.5, color: C.carbon }}>CORREO</label>
+        <div style={{ background: '#fff', border: '1px solid ' + C.borde, borderRadius: 18, padding: 32, boxShadow: '0 1px 2px rgba(16,19,21,.04), 0 24px 48px -24px rgba(120,45,0,.28)' }}>
+          <label style={{ fontSize: 12.5, fontWeight: 600, color: SEREIN.textSoft }}>Correo</label>
           <input value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && entrar()}
             type="email" placeholder="tu@correo.com" autoComplete="username" style={inputBase} />
-          <label style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.5, color: C.carbon }}>CONTRASEÑA</label>
+          <label style={{ fontSize: 12.5, fontWeight: 600, color: SEREIN.textSoft }}>Contraseña</label>
           <input value={pass} onChange={e => setPass(e.target.value)} onKeyDown={e => e.key === 'Enter' && entrar()}
             type="password" placeholder="••••••••" autoComplete="current-password" style={inputBase} />
           {err && <div style={{ color: C.rojo, fontSize: 13, marginBottom: 12, lineHeight: 1.4 }}>{err}</div>}
           {info && <div style={{ color: C.verde, fontSize: 13, marginBottom: 12, lineHeight: 1.5, background: '#E6F7EE', border: '1px solid #E6F7EE', padding: '9px 11px', borderRadius: 6 }}>{info}</div>}
           <button onClick={entrar} disabled={cargando}
-            style={{ width: '100%', padding: 12, background: C.azul, color: '#fff', border: 'none', borderRadius: 6, fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, letterSpacing: 1, cursor: 'pointer', textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: cargando ? 0.7 : 1 }}>
+            style={{ width: '100%', padding: 13, background: SEREIN.orange, color: '#fff', border: 'none', borderRadius: 10, fontFamily: SEREIN.fontBody, fontWeight: 600, fontSize: 15, cursor: 'pointer', boxShadow: '0 10px 22px -12px rgba(247,119,22,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: cargando ? 0.7 : 1 }}>
             <Lock size={16} /> {cargando ? 'Verificando…' : 'Ingresar'}
           </button>
           <button onClick={recuperar} disabled={enviando}
