@@ -50,6 +50,9 @@ export function evaluarCredito(datos, paramsIn) {
   const d = datos || {}
   const hoy = hoyISO()
   const notas = []
+  // Documentos que Administración marcó como completos sin tenerlos: los factores que dependen de ellos "no aplican" (no cuentan ni suman ni restan).
+  const exentos = Array.isArray(d.exentos) ? d.exentos : []
+  const exentoDe = t => exentos.includes(t)
 
   const diasCarpeta = d.fechaCarpeta ? diasEntre(d.fechaCarpeta, hoy) : null
   const carpetaVencida = diasCarpeta == null || diasCarpeta > p.carpeta_max_dias
@@ -69,11 +72,11 @@ export function evaluarCredito(datos, paramsIn) {
   // 5.2 Puntaje (100 puntos)
   const detalle = []
   // pendiente = el dato no se entregó ni se leyó: suma 0 puntos y se avisa (nunca se inventa un valor por defecto).
-  const add = (factor, dato, puntos, max, pendiente = false) => detalle.push({ factor, dato, puntos, max, pendiente })
+  const add = (factor, dato, puntos, max, pendiente = false, noAplica = false) => detalle.push({ factor, dato: noAplica ? 'No aplica (documento marcado como completo, sin documento)' : dato, puntos: noAplica ? 0 : puntos, max, pendiente: pendiente && !noAplica, noAplica })
 
   add('Registros comerciales',
     d.registros === 'limpio' ? 'Limpio' : d.registros === 'aclaradas' ? 'Deudas antiguas aclaradas' : d.registros === 'vigentes' ? 'Vigentes (rechazo)' : 'Sin dato (falta el informe DICOM)',
-    d.registros === 'limpio' ? 25 : d.registros === 'aclaradas' ? 12 : 0, 25, !['limpio', 'aclaradas', 'vigentes'].includes(d.registros))
+    d.registros === 'limpio' ? 25 : d.registros === 'aclaradas' ? 12 : 0, 25, !['limpio', 'aclaradas', 'vigentes'].includes(d.registros), !['limpio', 'aclaradas', 'vigentes'].includes(d.registros) && exentoDe('dicom'))
 
   const ivaSinDato = d.mesesIvaAlDia === '' || d.mesesIvaAlDia == null
   const m = num(d.mesesIvaAlDia)
@@ -99,18 +102,23 @@ export function evaluarCredito(datos, paramsIn) {
 
   const refsSinDato = d.referenciasBuenas === '' || d.referenciasBuenas == null
   const refs = num(d.referenciasBuenas)
-  add('Referencias comerciales', refsSinDato ? 'Sin dato (sin referencias verificadas)' : refs + ' buena(s)', refsSinDato ? 0 : (refs >= 3 ? 10 : refs >= 1 ? 5 : 0), 10, refsSinDato)
+  add('Referencias comerciales', refsSinDato ? 'Sin dato (sin referencias verificadas)' : refs + ' buena(s)', refsSinDato ? 0 : (refs >= 3 ? 10 : refs >= 1 ? 5 : 0), 10, refsSinDato, refsSinDato && exentoDe('solicitud'))
 
   const brOk = !!d.bienesRaices && !d.contribucionesVencidas
   add('Bienes raíces sin contribuciones vencidas', d.bienesRaices ? (d.contribucionesVencidas ? 'Tiene, con contribuciones vencidas' : 'Tiene') : 'No tiene', brOk ? 5 : 0, 5)
 
   const ccSinDato = d.antiguedadCtaCteAnios === '' || d.antiguedadCtaCteAnios == null
   const cc = num(d.antiguedadCtaCteAnios)
-  add('Antigüedad cuenta corriente', ccSinDato ? 'Sin dato (falta el certificado bancario)' : cc + ' años', ccSinDato ? 0 : (cc >= 2 ? 5 : 2), 5, ccSinDato)
+  add('Antigüedad cuenta corriente', ccSinDato ? 'Sin dato (falta el certificado bancario)' : cc + ' años', ccSinDato ? 0 : (cc >= 2 ? 5 : 2), 5, ccSinDato, ccSinDato && exentoDe('certificado_bancario'))
 
-  const puntaje = detalle.reduce((a, x) => a + x.puntos, 0)
+  // Si hay factores que no aplican, el puntaje se normaliza a 100 sobre los que sí aplican (ej. 35 de 60 -> 58 / 100); sin exentos no cambia nada.
+  const maxAplicable = detalle.reduce((a, x) => a + (x.noAplica ? 0 : x.max), 0)
+  const puntajeBruto = detalle.reduce((a, x) => a + (x.noAplica ? 0 : x.puntos), 0)
+  const escala = maxAplicable > 0 && maxAplicable < 100 ? 100 / maxAplicable : 1
+  const puntaje = Math.round(puntajeBruto * escala)
   const pendientes = detalle.filter(x => x.pendiente)
   const puntosPendientes = pendientes.reduce((a, x) => a + x.max, 0)
+  const puntajeTope = Math.round((maxAplicable - puntosPendientes) * escala)
 
   // 5.3 Categoría
   let categoria
@@ -128,7 +136,7 @@ export function evaluarCredito(datos, paramsIn) {
 
   // Mejor escenario: categoría y línea que saldrían si se resuelven los filtros en rojo y los datos pendientes salen con el mejor
   // resultado posible. Sirve para ver qué falta para llegar a una categoría mejor; NO es una aprobación.
-  const puntajeMax = Math.min(100, puntaje + puntosPendientes)
+  const puntajeMax = Math.min(100, Math.round((puntajeBruto + puntosPendientes) * escala))
   const catPot = puntajeMax >= p.categorias.A.puntaje_minimo ? 'A' : puntajeMax >= p.categorias.B.puntaje_minimo ? 'B' : puntajeMax >= p.categorias.C.puntaje_minimo ? 'C' : 'D'
   let lineaPot = Math.min(ventasMes * p.categorias[catPot].pct_ventas, p.tope_cliente, num(d.lineaSolicitada) > 0 ? num(d.lineaSolicitada) : Infinity)
   lineaPot = (catPot === 'D' || ventasMes <= 0) ? 0 : Math.floor(lineaPot / 100000) * 100000
@@ -144,6 +152,7 @@ export function evaluarCredito(datos, paramsIn) {
   return {
     filtros, hayRechazo, detalle, puntaje, categoria,
     parcial: puntosPendientes > 0, puntosPendientes, factoresPendientes: pendientes.map(x => x.factor), potencial,
+    normalizado: escala !== 1, puntajeBruto, maxAplicable, puntajeTope,
     lineaSugerida, anticipoMinimo: cat.anticipo_minimo, garantia: cat.garantia, revisionMeses: cat.meses_revision,
     califica30, condicionTexto, notas,
     resumen: { ventas12m: v12, ventasPrevias12m: vPrev, variacion, ventasMes: Math.round(ventasMes), mesesIvaAlDia: m, diasCarpeta, carpetaVencida },
@@ -208,7 +217,7 @@ export const TIPOS_DOC_REQUERIDOS = ['carpeta_tributaria', 'dicom', 'certificado
 
 // extraidos = { carpeta_tributaria, dicom, certificado_bancario, solicitud, tgr } (lo que devolvió la IA).
 // tiposSubidos = tipos de documento ya cargados al cliente (para "antecedentes completos").
-export function datosDesdeExtraccion(extraidos, tiposSubidos, otros) {
+export function datosDesdeExtraccion(extraidos, tiposSubidos, otros, exentos) {
   const ex = extraidos || {}
   const out = {}
   const c = ex.carpeta_tributaria
@@ -237,6 +246,7 @@ export function datosDesdeExtraccion(extraidos, tiposSubidos, otros) {
   // Documentos libres (E-RUT, certificados, etc.): solo completan lo que la carpeta tributaria no trajo.
   const ini = !out.fechaInicioActividades && (otros || []).map(o => o && o.fechaInicioActividades).find(Boolean)
   if (ini) out.fechaInicioActividades = ini
+  if (exentos && exentos.length) out.exentos = exentos
   if (tiposSubidos) out.antecedentesCompletos = TIPOS_DOC_REQUERIDOS.every(k => tiposSubidos.includes(k))
   return out
 }

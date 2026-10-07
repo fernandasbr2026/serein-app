@@ -86,6 +86,7 @@ export function generarInformeCredito({ cliente, evaluacion, docs = [], params, 
   tabla([{ t: 'Documento', w: 78 }, { t: 'Fecha de emisión', w: 36 }, { t: 'Estado', w: W - 114 }], DOCS.map(([tipo, label]) => {
     const d = docs.filter(x => x.tipo === tipo).sort((a, b) => String(b.fecha_emision || '').localeCompare(String(a.fecha_emision || '')))[0]
     let estado = d ? 'Recibido' : (tipo === 'tgr' ? 'No aplica / opcional' : 'Pendiente')
+    if (d && d.datos_extraidos && d.datos_extraidos.exento) estado = 'Completo - sin documento (marcado por Administración)'
     if (d && tipo === 'carpeta_tributaria' && d.fecha_emision) { const dias = diasEntre(d.fecha_emision, hoyISO()); estado += dias > p.carpeta_max_dias ? ' - VENCIDA (' + dias + ' días)' : ' - vigente (' + dias + ' días)' }
     return [label, d ? fechaDMA(d.fecha_emision) : '-', estado]
   }).concat(docs.filter(x => x.tipo === 'otro').map(d => { const x = d.datos_extraidos || {}; return [x.descripcion || d.nombre_archivo || 'Documento adicional', fechaDMA(d.fecha_emision), 'Recibido' + (x.vigente === false ? ' - NO VIGENTE' : x.vigente === true ? ' - vigente' : '')] })))
@@ -99,14 +100,14 @@ export function generarInformeCredito({ cliente, evaluacion, docs = [], params, 
   doc.setFillColor(255, 246, 241); doc.setDrawColor(NARANJA[0], NARANJA[1], NARANJA[2]); doc.setLineWidth(0.6); doc.roundedRect(bx, y, bw, bh, 2, 2, 'FD')
   const celda = (k, v, x, yy, { c = CARBON, size = 12, ancho = 0 } = {}) => { txt(k.toUpperCase(), x, yy, { size: 7, c: GRIS }); if (ancho) { doc.setFont('helvetica', 'bold'); doc.setFontSize(size); doc.splitTextToSize(String(v), ancho).slice(0, 2).forEach((l, i) => txt(l, x, yy + 6 + i * 3.6, { size, bold: true, c })) } else txt(v, x, yy + 6, { size, bold: true, c }) }
   const colw = bw / 4
-  celda('Puntaje', (ev.puntaje != null ? ev.puntaje : '-') + (res.parcial ? ' / ' + (100 - (res.puntosPendientes || 0)) + ' (parcial)' : ' / 100'), bx + 4, y + 7)
+  celda('Puntaje', (ev.puntaje != null ? ev.puntaje : '-') + (res.parcial ? ' / ' + (res.puntajeTope != null ? res.puntajeTope : 100 - (res.puntosPendientes || 0)) + ' (parcial)' : ' / 100'), bx + 4, y + 7)
   celda('Categoría', ev.categoria || '-', bx + 4 + colw, y + 7, { c: ev.categoria === 'D' ? ROJO : NARANJA, size: 16 })
   celda('Línea sugerida', clp(ev.linea_sugerida), bx + 4 + colw * 2, y + 7)
   celda('Línea aprobada', clp(ev.linea_aprobada), bx + 4 + colw * 3, y + 7)
   celda('Anticipo mínimo', Math.round((Number(ev.anticipo_minimo) || 0) * 100) + ' %', bx + 4, y + 19)
   celda('Garantía exigida', ev.garantia || '-', bx + 4 + colw, y + 19, { size: 8.5, ancho: colw - 8 })
   celda('Próxima revisión', fechaDMA(proxRev), bx + 4 + colw * 2, y + 19)
-  celda('Estado', ESTADO_EV[ev.estado] || ev.estado || '-', bx + 4 + colw * 3, y + 19, { size: 8, c: ev.estado === 'aprobada' ? VERDE : ev.estado === 'rechazada' ? ROJO : CARBON })
+  celda('Estado', ESTADO_EV[ev.estado] || ev.estado || '-', bx + 4 + colw * 3, y + 19, { size: 8, ancho: colw - 8, c: ev.estado === 'aprobada' ? VERDE : ev.estado === 'rechazada' ? ROJO : CARBON })
   y += bh + 7
   if (res.condicionTexto) parrafo(res.condicionTexto, M, W, { size: 9, bold: true })
   if (res.potencial && (res.parcial || res.hayRechazo) && res.potencial.categoria !== ev.categoria) parrafo('Mejor escenario (no es una aprobación): si se resuelven los filtros en rojo y los datos pendientes salen con el mejor resultado, el puntaje llegaría a ' + res.potencial.puntaje + ', categoría ' + res.potencial.categoria + (res.potencial.linea > 0 ? ' y línea de hasta ' + clp(res.potencial.linea) : '') + '.', M, W, { size: 8.5, c: NARANJA })
@@ -114,7 +115,8 @@ export function generarInformeCredito({ cliente, evaluacion, docs = [], params, 
   // ---------- 4. Detalle del puntaje ----------
   titulo(4, 'Detalle del puntaje')
   tabla([{ t: 'Factor', w: 62 }, { t: 'Dato observado', w: W - 62 - 36 }, { t: 'Puntos', w: 18, align: 'right' }, { t: 'Máximo', w: 18, align: 'right' }],
-    detalle.map(d => [d.factor, d.dato, d.pendiente ? '-' : d.puntos, d.max]), { total: ['Total', '', ev.puntaje != null ? ev.puntaje : '-', res.parcial ? 100 - (res.puntosPendientes || 0) : 100] })
+    detalle.map(d => [d.factor, d.dato, (d.pendiente || d.noAplica) ? '-' : d.puntos, d.noAplica ? 'n/a' : d.max]), { total: ['Total', '', ev.puntaje != null ? ev.puntaje : '-', res.parcial ? (res.puntajeTope != null ? res.puntajeTope : 100 - (res.puntosPendientes || 0)) : 100] })
+  if (res.normalizado) parrafo('Puntaje normalizado: ' + res.puntajeBruto + ' de ' + res.maxAplicable + ' puntos aplicables = ' + ev.puntaje + ' / 100. Los factores de los antecedentes marcados como completos sin documento no cuentan (ni suman ni restan).', M, W, { size: 8.5, c: GRIS })
   if (res.parcial) parrafo('Puntaje parcial: faltan datos que valen hasta ' + res.puntosPendientes + ' puntos (' + (res.factoresPendientes || []).join(', ') + '). Mientras no se tengan, el puntaje y la categoría están incompletos.', M, W, { size: 8.5, c: NARANJA })
 
   // ---------- 5. Filtros de rechazo ----------
