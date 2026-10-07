@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf'
 import { LOGO_SEREIN_DATA } from './logoSereinData.js'
-import { mezclarParams, diasEntre } from './creditoCalculo.js'
+import { mezclarParams, diasEntre, hallazgosDe } from './creditoCalculo.js'
 
 // Informe de Evaluación de Crédito (ADM-CR-02) — spec Modulo_Credito_serein-app.pdf, sección 6.
 // Se genera en el navegador con jsPDF (sin backend): tamaño carta, márgenes de 15 mm, Helvetica,
@@ -88,7 +88,9 @@ export function generarInformeCredito({ cliente, evaluacion, docs = [], params, 
     let estado = d ? 'Recibido' : (tipo === 'tgr' ? 'No aplica / opcional' : 'Pendiente')
     if (d && tipo === 'carpeta_tributaria' && d.fecha_emision) { const dias = diasEntre(d.fecha_emision, hoyISO()); estado += dias > p.carpeta_max_dias ? ' - VENCIDA (' + dias + ' días)' : ' - vigente (' + dias + ' días)' }
     return [label, d ? fechaDMA(d.fecha_emision) : '-', estado]
-  }))
+  }).concat(docs.filter(x => x.tipo === 'otro').map(d => { const x = d.datos_extraidos || {}; return [x.descripcion || d.nombre_archivo || 'Documento adicional', fechaDMA(d.fecha_emision), 'Recibido' + (x.vigente === false ? ' - NO VIGENTE' : x.vigente === true ? ' - vigente' : '')] })))
+  const hallazgos = hallazgosDe(docs.filter(x => x.tipo === 'otro').map(d => d.datos_extraidos))
+  if (hallazgos.length) { ensure(10); txt('Alertas detectadas en documentos adicionales:', M, y, { size: 9, bold: true, c: ROJO }); y += 5; hallazgos.forEach(h => parrafo('- ' + h, M, W, { size: 8.5, c: ROJO })) }
 
   // ---------- 3. Resultado ----------
   titulo(3, 'Resultado')
