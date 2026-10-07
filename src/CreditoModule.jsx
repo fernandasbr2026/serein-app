@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { Plus, Search, ArrowLeft, CheckCircle2, XCircle, AlertTriangle, Upload, Trash2, Sparkles, FileText } from 'lucide-react'
 import { supabase } from './supabase.js'
 import { SEREIN } from './theme-serein.js'
-import { evaluarCredito, condicionesOC, mezclarParams, PARAMS_CREDITO_DEFAULT, diasEntre, datosDesdeExtraccion, resumenExtraccion } from './creditoCalculo.js'
+import { evaluarCredito, condicionesOC, mezclarParams, PARAMS_CREDITO_DEFAULT, diasEntre, datosDesdeExtraccion, resumenExtraccion, datosFichaDesdeExtraccion, hallazgosDe } from './creditoCalculo.js'
 import { fileToBase64 } from './protocolo-pdf.js'
 import { generarInformeCredito } from './creditoInforme.js'
 
@@ -71,7 +71,7 @@ function Resultado({ res }) {
 // ---------- Formulario de evaluación (datos a mano) ----------
 const DATOS_VACIOS = { registros: 'limpio', chequesProtestados: false, observacionesTributarias: false, referenciaMala: false, antecedentesCompletos: true, fechaCarpeta: '', mesesIvaAlDia: 12, ventas12m: '', ventasPrevias12m: '', resultadoUltimoAnio: 'utilidad', antiguedadCtaCteAnios: 2, referenciasBuenas: 0, bienesRaices: false, contribucionesVencidas: false, diasFacturaVencida: 0, lineaSolicitada: '' }
 
-function FormEvaluacion({ cliente, ultima, iniciales, extraidos, params, esGerencia, onCerrar, onGuardada }) {
+function FormEvaluacion({ cliente, ultima, iniciales, extraidos, hallazgos, params, esGerencia, onCerrar, onGuardada }) {
   const [d, setD] = useState({ ...DATOS_VACIOS, ...(ultima || {}), fechaCarpeta: '', trabajosPagados: cliente.trabajos_pagados || 0, fechaInicioActividades: cliente.fecha_inicio_actividades || '', ...(iniciales || {}) })
   const [obs, setObs] = useState('')
   const [guardada, setGuardada] = useState(null) // { id, res }
@@ -110,6 +110,7 @@ function FormEvaluacion({ cliente, ultima, iniciales, extraidos, params, esGeren
     <div>
       <div style={card}>
         <div style={titulo}>Datos de la evaluación · {cliente.razon_social}</div>
+        {hallazgos && hallazgos.length > 0 && <div style={{ padding: '8px 12px', background: '#FDECEC', border: '1px solid #F3C4C0', fontSize: 12.5, marginBottom: 12, color: C.rojo }}><b>Alertas detectadas en los documentos — revísalas antes de decidir:</b>{hallazgos.map((h, i) => <div key={i}>⚠ {h}</div>)}</div>}
         {extraidos && <div style={{ padding: '8px 12px', background: '#FFF6F1', border: '1px solid #FAD9C4', fontSize: 12.5, marginBottom: 12 }}><b style={{ color: C.naranja }}>Datos precargados con lo que leyó la IA.</b> Revisa cada campo contra el documento antes de guardar. Las referencias comerciales, los trabajos pagados y los días de factura vencida se anotan a mano.</div>}
         <div style={{ fontSize: 12, color: C.gris, marginBottom: 12 }}>Completa lo que sale de la carpeta tributaria, el informe DICOM y el certificado bancario. El resultado se calcula en vivo abajo.</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
@@ -174,24 +175,80 @@ const TIPOS_DOC = [
   { id: 'solicitud', label: 'Solicitud de crédito firmada', ayuda: 'Con las referencias comerciales.' },
   { id: 'tgr', label: 'Certificado TGR (contribuciones)', ayuda: 'Opcional: solo si tiene bienes raíces.' },
 ]
+const TIPOS_CONOCIDOS = TIPOS_DOC.map(t => t.id)
+const ETIQUETA_TIPO = { ...Object.fromEntries(TIPOS_DOC.map(t => [t.id, t.label])), certificado_vigencia: 'Certificado de vigencia', rut_sii: 'E-RUT / cédula RUT (SII)', poder_representante: 'Poder de representación', sitio_web: 'Sitio web', otro: 'Otro documento' }
 const mensajeErrorIA = e => /failed to send|non-2xx|not found|404/i.test((e && e.message) || '') ? 'La función de lectura (extraer-credito) todavía no está desplegada en Supabase.' : ((e && e.message) || String(e))
+const mensajeErrorSubida = e => /check constraint|credito_documentos_tipo_check/i.test((e && e.message) || '') ? 'Falta correr la migración 2026-10-07-credito-documentos-otros.sql en Supabase para aceptar documentos de cualquier tipo.' : ((e && e.message) || String(e))
+const esLegible = f => /pdf|^image\//i.test(f.type || '') || /\.(pdf|png|jpe?g|webp|gif)$/i.test(f.name || '')
+const mimeDe = f => /^image\//i.test(f.type || '') ? f.type : 'application/pdf'
 
-function Documentos({ cliente, docs, params, extraidos, setExtraidos, onCambio, onEvaluar }) {
+function Documentos({ cliente, docs, params, extraidos, setExtraidos, onCambio, onEvaluar, onCompletarFicha }) {
   const [trabajando, setTrabajando] = useState('')
   const [err, setErr] = useState('')
+  const [avisos, setAvisos] = useState([])
 
-  const subir = async (tipo, e) => {
+  const subirArchivo = async (fl, tipo) => {
+    const ext = ((fl.name.match(/\.([a-zA-Z0-9]{2,5})$/) || [])[1] || 'pdf').toLowerCase()
+    const path = cliente.id + '/' + tipo + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6) + '.' + ext
+    const up = await supabase.storage.from('credito').upload(path, fl, { contentType: fl.type || 'application/pdf' })
+    if (up.error) throw up.error
+    const ins = await supabase.from('credito_documentos').insert({ cliente_id: cliente.id, tipo, archivo_path: path, nombre_archivo: fl.name }).select('*').single()
+    if (ins.error) { await supabase.storage.from('credito').remove([path]); throw ins.error }
+    return ins.data
+  }
+  const invocar = async (tipo, file) => {
+    const base64 = await fileToBase64(file)
+    const { data, error } = await supabase.functions.invoke('extraer-credito', { body: { tipo, archivos: [{ base64, mimeType: mimeDe(file), filename: file.name }] } })
+    if (error) throw error
+    if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo leer el documento.')
+    return data.datos || {}
+  }
+  // Lee un documento ya subido. Los de tipo "otro" se identifican solos (modo auto); si resultan ser de un tipo
+  // conocido se reclasifican y se vuelven a leer con el esquema preciso de ese tipo.
+  const leerDoc = async (d, file) => {
+    let tipoFinal = d.tipo
+    let datos = await invocar(d.tipo === 'otro' ? 'auto' : d.tipo, file)
+    if (d.tipo === 'otro' && TIPOS_CONOCIDOS.includes(datos.tipoDocumento)) { tipoFinal = datos.tipoDocumento; datos = await invocar(tipoFinal, file) }
+    const fecha = datos.fechaGeneracion || datos.fechaEmision
+    await supabase.from('credito_documentos').update({ datos_extraidos: datos, ...(tipoFinal !== d.tipo ? { tipo: tipoFinal } : {}), ...(fecha && !d.fecha_emision ? { fecha_emision: fecha } : {}) }).eq('id', d.id)
+    if (tipoFinal !== 'otro') setExtraidos(prev => ({ ...prev, [tipoFinal]: datos }))
+    return { tipoFinal, datos }
+  }
+  const archivoDe = async d => {
+    const dl = await supabase.storage.from('credito').download(d.archivo_path)
+    if (dl.error) throw dl.error
+    const nombre = d.nombre_archivo || 'documento.pdf'
+    return new File([dl.data], nombre, { type: dl.data.type && dl.data.type !== 'application/octet-stream' ? dl.data.type : (/\.(png|jpe?g|webp|gif)$/i.test(nombre) ? 'image/' + nombre.split('.').pop().toLowerCase().replace('jpg', 'jpeg') : 'application/pdf') })
+  }
+
+  const subirTipado = async (tipo, e) => {
     const fl = e.target.files && e.target.files[0]
     e.target.value = ''
     if (!fl) return
-    setTrabajando('sube-' + tipo); setErr('')
-    const ext = ((fl.name.match(/\.([a-zA-Z0-9]{2,5})$/) || [])[1] || 'pdf').toLowerCase()
-    const path = cliente.id + '/' + tipo + '-' + Date.now() + '.' + ext
-    const up = await supabase.storage.from('credito').upload(path, fl, { contentType: fl.type || 'application/pdf' })
-    if (up.error) { setErr('No se pudo subir el archivo: ' + up.error.message); setTrabajando(''); return }
-    const ins = await supabase.from('credito_documentos').insert({ cliente_id: cliente.id, tipo, archivo_path: path, nombre_archivo: fl.name })
-    if (ins.error) { await supabase.storage.from('credito').remove([path]); setErr('No se pudo registrar el documento: ' + ins.error.message); setTrabajando(''); return }
-    setTrabajando(''); onCambio()
+    setTrabajando('sube-' + tipo); setErr(''); setAvisos([])
+    try { await subirArchivo(fl, tipo); onCambio() } catch (x) { setErr('No se pudo subir el archivo: ' + mensajeErrorSubida(x)) }
+    setTrabajando('')
+  }
+  // Carga libre: varios archivos de cualquier tipo; la IA identifica y lee cada uno sola.
+  const subirLibres = async e => {
+    const files = [...(e.target.files || [])]
+    e.target.value = ''
+    if (!files.length) return
+    setErr(''); setAvisos([])
+    const resultados = []
+    for (let i = 0; i < files.length; i++) {
+      const fl = files[i]
+      setTrabajando('libre-' + (i + 1) + '/' + files.length)
+      try {
+        const row = await subirArchivo(fl, 'otro')
+        if (!esLegible(fl)) { resultados.push({ ok: false, txt: fl.name + ': guardado, pero la IA solo lee PDF e imágenes.' }); continue }
+        try {
+          const r = await leerDoc(row, fl)
+          resultados.push({ ok: true, txt: fl.name + ' → ' + (ETIQUETA_TIPO[r.datos.tipoDocumento] || ETIQUETA_TIPO[r.tipoFinal] || 'leído') + (r.tipoFinal !== 'otro' ? ' (clasificado solo)' : '') })
+        } catch (x) { resultados.push({ ok: false, txt: fl.name + ': guardado, pero no se pudo leer (' + mensajeErrorIA(x) + ').' }) }
+      } catch (x) { resultados.push({ ok: false, txt: fl.name + ': ' + mensajeErrorSubida(x) }) }
+    }
+    setTrabajando(''); setAvisos(resultados); onCambio()
   }
   const ver = async d => {
     const { data, error } = await supabase.storage.from('credito').createSignedUrl(d.archivo_path, 60)
@@ -202,35 +259,69 @@ function Documentos({ cliente, docs, params, extraidos, setExtraidos, onCambio, 
     if (!window.confirm('¿Eliminar "' + (d.nombre_archivo || 'este documento') + '"?')) return
     await supabase.storage.from('credito').remove([d.archivo_path])
     await supabase.from('credito_documentos').delete().eq('id', d.id)
-    setExtraidos(prev => { const n = { ...prev }; delete n[d.tipo]; return n })
+    if (d.tipo !== 'otro') setExtraidos(prev => { const n = { ...prev }; delete n[d.tipo]; return n })
     onCambio()
   }
-  const cambiarFecha = async (d, valor) => {
-    await supabase.from('credito_documentos').update({ fecha_emision: valor || null }).eq('id', d.id)
-    onCambio()
-  }
+  const cambiarFecha = async (d, valor) => { await supabase.from('credito_documentos').update({ fecha_emision: valor || null }).eq('id', d.id); onCambio() }
   const leer = async d => {
-    setTrabajando('lee-' + d.id); setErr('')
-    try {
-      const dl = await supabase.storage.from('credito').download(d.archivo_path)
-      if (dl.error) throw dl.error
-      const file = new File([dl.data], d.nombre_archivo || 'documento.pdf', { type: dl.data.type || 'application/pdf' })
-      const base64 = await fileToBase64(file)
-      const { data, error } = await supabase.functions.invoke('extraer-credito', { body: { tipo: d.tipo, archivos: [{ base64, mimeType: file.type || 'application/pdf', filename: file.name }] } })
-      if (error) throw error
-      if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo leer el documento.')
-      setExtraidos(prev => ({ ...prev, [d.tipo]: data.datos }))
-      const f = data.datos && (data.datos.fechaGeneracion || data.datos.fechaEmision)
-      if (f && !d.fecha_emision) { await supabase.from('credito_documentos').update({ fecha_emision: f }).eq('id', d.id); onCambio() }
-    } catch (e) { setErr('No se pudo leer "' + (d.nombre_archivo || 'el documento') + '": ' + mensajeErrorIA(e)) }
+    setTrabajando('lee-' + d.id); setErr(''); setAvisos([])
+    try { await leerDoc(d, await archivoDe(d)); onCambio() } catch (x) { setErr('No se pudo leer "' + (d.nombre_archivo || 'el documento') + '": ' + mensajeErrorIA(x)) }
     setTrabajando('')
   }
 
-  const hayLeidos = Object.keys(extraidos).length > 0
+  const otros = docs.filter(d => d.tipo === 'otro')
+  const hayLeidos = Object.keys(extraidos).length > 0 || otros.some(d => d.datos_extraidos)
+  const filaDoc = d => {
+    const dias = d.fecha_emision ? diasEntre(d.fecha_emision, hoy()) : null
+    const vencida = d.tipo === 'carpeta_tributaria' && dias != null && dias > params.carpeta_max_dias
+    return (
+      <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 6, paddingLeft: 12, fontSize: 12.5 }}>
+        <span style={{ minWidth: 180 }}>{d.nombre_archivo || 'documento'}</span>
+        <label style={{ fontSize: 11.5, color: C.gris }}>Emitido <input type="date" value={d.fecha_emision || ''} onChange={e => cambiarFecha(d, e.target.value)} style={{ ...inp, width: 140, padding: '3px 6px' }} /></label>
+        {vencida && <span style={{ color: C.rojo, fontWeight: 700, fontSize: 12 }}>{dias} días: vencida (máx. {params.carpeta_max_dias}), pide una nueva</span>}
+        <button onClick={() => ver(d)} style={{ ...btn(C.gris, true), padding: '3px 10px', fontSize: 12 }}>Ver</button>
+        <button onClick={() => leer(d)} disabled={!!trabajando} style={{ ...btn(C.naranja), padding: '3px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4, cursor: trabajando ? 'wait' : 'pointer' }}><Sparkles size={12} /> {trabajando === 'lee-' + d.id ? 'Leyendo…' : (d.datos_extraidos ? 'Volver a leer' : 'Leer con IA')}</button>
+        <button onClick={() => eliminar(d)} title="Eliminar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
+      </div>
+    )
+  }
   return (
     <div style={card}>
       <div style={titulo}>Documentos del cliente</div>
-      <div style={{ fontSize: 12, color: C.gris, marginBottom: 12 }}>Sube los PDF y pulsa <b>Leer con IA</b>: el formulario de evaluación se llena solo. Tú revisas cada dato antes de calcular; nada queda como definitivo hasta que lo confirmas. Los archivos se guardan en una carpeta privada (solo Gerencia y Administración).</div>
+      <div style={{ fontSize: 12, color: C.gris, marginBottom: 12 }}>Sube los PDF y la IA los lee: el formulario de evaluación se llena solo. Tú revisas cada dato antes de calcular; nada queda como definitivo hasta que lo confirmas. Los archivos se guardan en una carpeta privada (solo Gerencia y Administración).</div>
+
+      <div style={{ background: '#FFF6F1', border: '1px solid #FAD9C4', padding: 12, marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 700, fontSize: 13 }}>Carga libre · cualquier documento</span>
+          <label style={{ ...btn(C.naranja), marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 14px', fontSize: 12.5, cursor: trabajando ? 'wait' : 'pointer', opacity: trabajando ? 0.7 : 1 }}>
+            <Upload size={13} /> {trabajando.startsWith('libre-') ? 'Leyendo ' + trabajando.slice(6) + '…' : 'Subir documentos'}
+            <input type="file" multiple accept="application/pdf,image/*" style={{ display: 'none' }} disabled={!!trabajando} onChange={subirLibres} />
+          </label>
+        </div>
+        <div style={{ fontSize: 12, color: C.gris, marginTop: 4 }}>Sube todo lo que mande el cliente (carpeta, DICOM, certificado de vigencia, E-RUT, poderes, solicitud, capturas del sitio web…), varios a la vez y sin elegir el tipo: la IA identifica qué es cada uno y lee lo que sirve para evaluar. Si es uno de los documentos de la lista de abajo, lo ubica ahí solo.</div>
+        {avisos.length > 0 && <div style={{ marginTop: 8, fontSize: 12.5, lineHeight: 1.6 }}>{avisos.map((a, i) => <div key={i} style={{ color: a.ok ? C.verde : C.ambar }}>{a.ok ? '✓ ' : '! '}{a.txt}</div>)}</div>}
+        {otros.length > 0 && <div style={{ marginTop: 10, borderTop: '1px solid #FAD9C4', paddingTop: 6 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: C.gris, textTransform: 'uppercase' }}>Otros documentos ({otros.length})</div>
+          {otros.map(d => {
+            const x = d.datos_extraidos
+            return (
+              <div key={d.id} style={{ borderBottom: '1px dashed #FAD9C4', paddingBottom: 8 }}>
+                {filaDoc(d)}
+                {x && (
+                  <div style={{ margin: '6px 0 0 12px', fontSize: 12, lineHeight: 1.6 }}>
+                    <b style={{ color: C.naranja }}>{ETIQUETA_TIPO[x.tipoDocumento] || 'Documento'}:</b> {x.descripcion}
+                    {(x.datosRelevantes || []).length > 0 && <div style={{ color: C.carbon }}>{x.datosRelevantes.map((r, i) => <span key={i} style={{ display: 'inline-block', background: '#fff', border: '1px solid #FAD9C4', padding: '1px 8px', margin: '2px 6px 2px 0' }}>{r.etiqueta}: <b>{r.valor}</b></span>)}</div>}
+                    {x.vigente === true && <div style={{ color: C.verde, fontWeight: 600 }}>✓ Vigente</div>}
+                    {x.vigente === false && <div style={{ color: C.rojo, fontWeight: 700 }}>No figura vigente</div>}
+                    {(x.alertas || []).map((a, i) => <div key={i} style={{ color: C.rojo, fontWeight: 600 }}>⚠ {a}</div>)}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>}
+      </div>
+
       {TIPOS_DOC.map(t => {
         const lista = docs.filter(d => d.tipo === t.id)
         return (
@@ -241,23 +332,10 @@ function Documentos({ cliente, docs, params, extraidos, setExtraidos, onCambio, 
               <span style={{ fontSize: 11.5, color: C.gris }}>{t.ayuda}</span>
               <label style={{ ...btn(C.azul, true), marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 11px', fontSize: 12, cursor: trabajando ? 'wait' : 'pointer' }}>
                 <Upload size={13} /> {trabajando === 'sube-' + t.id ? 'Subiendo…' : 'Subir archivo'}
-                <input type="file" accept="application/pdf,image/*" style={{ display: 'none' }} disabled={!!trabajando} onChange={e => subir(t.id, e)} />
+                <input type="file" accept="application/pdf,image/*" style={{ display: 'none' }} disabled={!!trabajando} onChange={e => subirTipado(t.id, e)} />
               </label>
             </div>
-            {lista.map(d => {
-              const dias = d.fecha_emision ? diasEntre(d.fecha_emision, hoy()) : null
-              const vencida = t.id === 'carpeta_tributaria' && dias != null && dias > params.carpeta_max_dias
-              return (
-                <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 6, paddingLeft: 12, fontSize: 12.5 }}>
-                  <span style={{ minWidth: 180 }}>{d.nombre_archivo || 'documento'}</span>
-                  <label style={{ fontSize: 11.5, color: C.gris }}>Emitido <input type="date" value={d.fecha_emision || ''} onChange={e => cambiarFecha(d, e.target.value)} style={{ ...inp, width: 140, padding: '3px 6px' }} /></label>
-                  {vencida && <span style={{ color: C.rojo, fontWeight: 700, fontSize: 12 }}>{dias} días: vencida (máx. {params.carpeta_max_dias}), pide una nueva</span>}
-                  <button onClick={() => ver(d)} style={{ ...btn(C.gris, true), padding: '3px 10px', fontSize: 12 }}>Ver</button>
-                  <button onClick={() => leer(d)} disabled={!!trabajando} style={{ ...btn(C.naranja), padding: '3px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4, cursor: trabajando ? 'wait' : 'pointer' }}><Sparkles size={12} /> {trabajando === 'lee-' + d.id ? 'Leyendo…' : 'Leer con IA'}</button>
-                  <button onClick={() => eliminar(d)} title="Eliminar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={14} /></button>
-                </div>
-              )
-            })}
+            {lista.map(filaDoc)}
             {extraidos[t.id] && (
               <div style={{ margin: '8px 0 0 12px', padding: '8px 10px', background: '#FFF6F1', border: '1px solid #FAD9C4', fontSize: 12, lineHeight: 1.6 }}>
                 <b style={{ color: C.naranja }}>Leído por la IA:</b> {resumenExtraccion(t.id, extraidos[t.id]).join(' · ')}
@@ -267,7 +345,10 @@ function Documentos({ cliente, docs, params, extraidos, setExtraidos, onCambio, 
         )
       })}
       {err && <div style={{ color: C.rojo, fontSize: 12.5, marginTop: 8 }}>{err}</div>}
-      {hayLeidos && <div style={{ marginTop: 12 }}><button onClick={onEvaluar} style={btn(C.verde)}>Evaluar con lo leído por la IA</button></div>}
+      {hayLeidos && <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button onClick={onEvaluar} style={btn(C.verde)}>Evaluar con lo leído por la IA</button>
+        {onCompletarFicha && <button onClick={onCompletarFicha} style={btn(C.azul, true)}>Completar la ficha con lo leído</button>}
+      </div>}
     </div>
   )
 }
@@ -448,6 +529,10 @@ function FichaCliente({ cliente, params, esGerencia, onVolver, onCambio }) {
   const cargarDocs = async () => {
     const { data } = await supabase.from('credito_documentos').select('*').eq('cliente_id', cliente.id).order('created_at', { ascending: false })
     setDocs(data || [])
+    // Lo que ya leyó la IA queda guardado en cada documento: se recupera al abrir la ficha.
+    const mapa = {}
+    ;(data || []).slice().reverse().forEach(d => { if (d.datos_extraidos && d.tipo !== 'otro') mapa[d.tipo] = d.datos_extraidos })
+    setExtraidos(prev => ({ ...prev, ...mapa }))
   }
   // Deuda vigente, estado y trabajos pagados los mueven las facturas/OC: se reflejan sin pisar lo que se esté editando.
   useEffect(() => { setF(s => ({ ...s, trabajos_pagados: cliente.trabajos_pagados, deuda_vigente: cliente.deuda_vigente, estado_credito: cliente.estado_credito })) }, [cliente.trabajos_pagados, cliente.deuda_vigente, cliente.estado_credito])
@@ -481,10 +566,19 @@ function FichaCliente({ cliente, params, esGerencia, onVolver, onCambio }) {
   useEffect(() => { setF(cliente); setExtraidos({}); cargarEvals(); cargarDocs(); cargarOF() }, [cliente.id])
   // Datos que se precargan al evaluar: lo leído por la IA + la fecha de emisión de la carpeta + si están los 4 documentos requeridos.
   const abrirEvaluacion = () => {
-    const base = datosDesdeExtraccion(extraidos, [...new Set(docs.map(d => d.tipo))])
+    const otrosDatos = docs.filter(d => d.tipo === 'otro' && d.datos_extraidos).map(d => d.datos_extraidos)
+    const base = datosDesdeExtraccion(extraidos, [...new Set(docs.map(d => d.tipo))], otrosDatos)
     const carpeta = docs.find(d => d.tipo === 'carpeta_tributaria' && d.fecha_emision)
     const diasVenc = facturas.filter(x => !x.fecha_pago && x.fecha_vencimiento).reduce((m, x) => Math.max(m, diasEntre(x.fecha_vencimiento, hoy()) || 0), 0)
-    setEvaluando({ iniciales: { ...(carpeta ? { fechaCarpeta: carpeta.fecha_emision } : {}), ...(facturas.length ? { diasFacturaVencida: diasVenc } : {}), ...base }, extraidos: Object.keys(extraidos).length ? extraidos : null })
+    setEvaluando({ iniciales: { ...(carpeta ? { fechaCarpeta: carpeta.fecha_emision } : {}), ...(facturas.length ? { diasFacturaVencida: diasVenc } : {}), ...base }, extraidos: (Object.keys(extraidos).length || otrosDatos.length) ? { ...extraidos, ...(otrosDatos.length ? { otros: otrosDatos } : {}) } : null, hallazgos: hallazgosDe(otrosDatos) })
+  }
+  // Completa los campos vacíos de la ficha con lo leído (solicitud, carpeta y documentos libres); no guarda hasta que se pulse "Guardar datos".
+  const completarFicha = () => {
+    const otrosDatos = docs.filter(d => d.tipo === 'otro' && d.datos_extraidos).map(d => d.datos_extraidos)
+    const nuevos = {}
+    Object.entries(datosFichaDesdeExtraccion(extraidos, otrosDatos)).forEach(([k, v]) => { if (!f[k]) nuevos[k] = v })
+    setF(s => ({ ...s, ...nuevos }))
+    setMsg(Object.keys(nuevos).length ? 'Ficha completada con lo leído (' + Object.keys(nuevos).length + ' campo(s) que estaban vacíos). Revisa y pulsa "Guardar datos".' : 'La ficha ya tiene completos los datos que se pueden leer.')
   }
   // Informe en PDF (ADM-CR-02): se descarga y además se archiva en la carpeta privada junto a la evaluación.
   const descargarInforme = async (ev, idx) => {
@@ -508,7 +602,7 @@ function FichaCliente({ cliente, params, esGerencia, onVolver, onCambio }) {
   }
   const ultimaDatos = evals[0] && evals[0].datos_confirmados
   if (evaluando) return <div><button onClick={() => setEvaluando(false)} style={{ ...btn(C.gris, true), marginBottom: 12 }}><ArrowLeft size={13} style={{ verticalAlign: -2 }} /> Volver a la ficha</button>
-    <FormEvaluacion cliente={f} ultima={ultimaDatos} iniciales={evaluando.iniciales} extraidos={evaluando.extraidos} params={params} esGerencia={esGerencia} onCerrar={() => setEvaluando(false)} onGuardada={() => { setEvaluando(false); cargarEvals(); onCambio() }} /></div>
+    <FormEvaluacion cliente={f} ultima={ultimaDatos} iniciales={evaluando.iniciales} extraidos={evaluando.extraidos} hallazgos={evaluando.hallazgos} params={params} esGerencia={esGerencia} onCerrar={() => setEvaluando(false)} onGuardada={() => { setEvaluando(false); cargarEvals(); onCambio() }} /></div>
   const cupo = Math.max(num(cliente.linea_aprobada) - num(cliente.deuda_vigente), 0)
   const revVencida = cliente.fecha_revision && cliente.fecha_revision < hoy()
   return (
@@ -538,7 +632,7 @@ function FichaCliente({ cliente, params, esGerencia, onVolver, onCambio }) {
 
       <OrdenesFacturas cliente={cliente} params={params} ordenes={ordenes} facturas={facturas} errorTablas={errorOF} recargar={cargarOF} onTrabajosPagados={sumarTrabajosPagados} />
 
-      <Documentos cliente={cliente} docs={docs} params={params} extraidos={extraidos} setExtraidos={setExtraidos} onCambio={cargarDocs} onEvaluar={abrirEvaluacion} />
+      <Documentos cliente={cliente} docs={docs} params={params} extraidos={extraidos} setExtraidos={setExtraidos} onCambio={cargarDocs} onEvaluar={abrirEvaluacion} onCompletarFicha={completarFicha} />
 
       <div style={card}>
         <div style={titulo}>Historial de evaluaciones ({evals.length})</div>

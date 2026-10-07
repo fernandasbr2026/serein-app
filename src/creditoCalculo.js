@@ -191,7 +191,7 @@ export const TIPOS_DOC_REQUERIDOS = ['carpeta_tributaria', 'dicom', 'certificado
 
 // extraidos = { carpeta_tributaria, dicom, certificado_bancario, solicitud, tgr } (lo que devolvió la IA).
 // tiposSubidos = tipos de documento ya cargados al cliente (para "antecedentes completos").
-export function datosDesdeExtraccion(extraidos, tiposSubidos) {
+export function datosDesdeExtraccion(extraidos, tiposSubidos, otros) {
   const ex = extraidos || {}
   const out = {}
   const c = ex.carpeta_tributaria
@@ -217,7 +217,33 @@ export function datosDesdeExtraccion(extraidos, tiposSubidos) {
   if (s && num(s.lineaSolicitada) > 0) out.lineaSolicitada = String(Math.round(num(s.lineaSolicitada)))
   const t = ex.tgr
   if (t && typeof t.contribucionesVencidas === 'boolean') out.contribucionesVencidas = t.contribucionesVencidas
+  // Documentos libres (E-RUT, certificados, etc.): solo completan lo que la carpeta tributaria no trajo.
+  const ini = !out.fechaInicioActividades && (otros || []).map(o => o && o.fechaInicioActividades).find(Boolean)
+  if (ini) out.fechaInicioActividades = ini
   if (tiposSubidos) out.antecedentesCompletos = TIPOS_DOC_REQUERIDOS.every(k => tiposSubidos.includes(k))
+  return out
+}
+
+// Datos de la ficha de la empresa que se pueden completar con lo leído (solicitud, carpeta y documentos libres).
+export function datosFichaDesdeExtraccion(extraidos, otros) {
+  const ex = extraidos || {}
+  const fuentes = [ex.solicitud, ex.carpeta_tributaria].concat((otros || []))
+  const primero = campo => { for (const f of fuentes) { if (f && f[campo]) return String(f[campo]) } return '' }
+  const out = {}
+  const pares = [['razon_social', 'razonSocial'], ['rut', 'rut'], ['giro', 'giro'], ['direccion', 'direccion'], ['representante_legal', 'representanteLegal'], ['contacto_compras', 'contactoCompras'], ['contacto_pagos', 'contactoPagos'], ['email_facturas', 'emailFacturas'], ['fecha_inicio_actividades', 'fechaInicioActividades']]
+  pares.forEach(([col, k]) => { const v = primero(k); if (v) out[col] = v })
+  return out
+}
+
+// Alertas que traen los documentos libres (poder revocado, sociedad no vigente, etc.) para que las revise una persona.
+export function hallazgosDe(otros) {
+  const out = []
+  ;(otros || []).forEach(o => {
+    if (!o) return
+    const nombre = o.descripcion || 'Documento'
+    if (o.vigente === false) out.push(nombre + ': no figura vigente.')
+    ;(o.alertas || []).forEach(a => out.push(nombre + ': ' + a))
+  })
   return out
 }
 
@@ -243,5 +269,6 @@ export function resumenExtraccion(tipo, d) {
   if (tipo === 'certificado_bancario') return ['Banco: ' + (d.banco || 'sin dato'), 'Cuenta abierta: ' + (d.fechaAperturaCuenta || d.antiguedadTexto || 'sin dato'), 'Cheques protestados: ' + sn(d.chequesProtestados)]
   if (tipo === 'solicitud') return ['Línea solicitada: ' + (num(d.lineaSolicitada) > 0 ? clp(num(d.lineaSolicitada)) : 'sin dato'), 'Referencias informadas: ' + ((d.referencias || []).length || 0)]
   if (tipo === 'tgr') return ['Contribuciones vencidas: ' + sn(d.contribucionesVencidas)]
+  if (tipo === 'otro') return [d.descripcion || 'Documento'].concat((d.datosRelevantes || []).map(x => x.etiqueta + ': ' + x.valor)).concat(d.vigente === true ? ['Vigente'] : d.vigente === false ? ['NO vigente'] : [])
   return []
 }

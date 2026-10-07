@@ -86,6 +86,30 @@ const ESQUEMAS: Record<string, { esquema: string; instrucciones: string }> = {
 }`,
     instrucciones: `Es la solicitud de crédito firmada por el cliente. "lineaSolicitada" es el monto de crédito que pide (si lo indica). "referencias" son las referencias comerciales que informa.`,
   },
+  auto: {
+    esquema: `{
+  "tipoDocumento": "carpeta_tributaria" | "dicom" | "certificado_bancario" | "solicitud" | "tgr" | "certificado_vigencia" | "rut_sii" | "poder_representante" | "sitio_web" | "otro",
+  "descripcion": string,
+  "fechaEmision": string | null,
+  "razonSocial": string | null,
+  "rut": string | null,
+  "representanteLegal": string | null,
+  "giro": string | null,
+  "direccion": string | null,
+  "fechaInicioActividades": string | null,
+  "vigente": boolean | null,
+  "datosRelevantes": [{ "etiqueta": string, "valor": string }],
+  "alertas": [string]
+}`,
+    instrucciones: `No sabes qué documento es: IDENTIFÍCALO tú y extrae lo que sirva para evaluar el riesgo de crédito de la empresa cliente (una empresa chilena que le pide crédito a SEREIN).
+- "tipoDocumento": "carpeta_tributaria" (Carpeta Tributaria Electrónica del SII), "dicom" (informe comercial DICOM/Equifax), "certificado_bancario" (certificado o referencia bancaria), "solicitud" (solicitud de apertura de crédito o similar, con datos de la empresa y referencias), "tgr" (certificado de deuda de la Tesorería), "certificado_vigencia" (certificado de vigencia de la sociedad, del Conservador de Bienes Raíces / Registro de Comercio), "rut_sii" (cédula o tarjeta RUT / E-RUT del SII), "poder_representante" (poder, mandato o escritura de representación legal), "sitio_web" (captura o página de un sitio web de la empresa) u "otro".
+- "descripcion": UNA frase que diga qué es el documento (ej. "Certificado de vigencia de la sociedad emitido por el CBR de Santiago").
+- "fechaEmision": fecha de emisión del documento si aparece.
+- "razonSocial", "rut", "representanteLegal", "giro", "direccion", "fechaInicioActividades": solo si aparecen en el documento.
+- "vigente": true/false SOLO si el documento declara explícitamente la vigencia de la sociedad, del poder o del registro (por ejemplo "se encuentra vigente" o "no se encuentra vigente"); si no habla de vigencia, null.
+- "datosRelevantes": hechos concretos del documento que ayudan a evaluar al cliente (ej. {"etiqueta":"Años de trayectoria","valor":"Fundada en 1985"}, {"etiqueta":"Capital","valor":"$50.000.000"}, {"etiqueta":"Directorio","valor":"..."}). Máximo 8, sin inventar.
+- "alertas": SOLO cosas que el documento evidencia y que un analista de crédito querría revisar (ej. "Poder revocado a nombre de ...", "La sociedad no figura vigente", "Documento con más de 90 días", "Los datos del representante no coinciden"). Si no hay nada preocupante, deja el arreglo vacío.`,
+  },
   tgr: {
     esquema: `{
   "fechaEmision": string | null,
