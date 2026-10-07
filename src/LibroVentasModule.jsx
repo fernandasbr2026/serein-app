@@ -553,7 +553,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
                       {r.medio_pago === 'Cheque' && <input style={{ ...sel, minWidth: 100 }} placeholder="N° cheque" value={r.numero_cheque || ''} onChange={e => setCampo(r, 'numero_cheque', e.target.value)} />}
                     </div>
                   </td>
-                  <td style={{ padding: '7px 10px' }}><input type="date" style={{ ...sel }} value={r.fecha_pago || ''} onChange={e => setCampo(r, 'fecha_pago', e.target.value)} /></td>
+                  <td style={{ padding: '7px 10px' }}><input type="date" style={{ ...sel }} value={r.fecha_pago || ''} onChange={e => setCampo(r, 'fecha_pago', e.target.value || null)} /></td>
                 </tr>
                 {esNC(r) && (
                   <tr style={{ background: '#FCEBEA', borderBottom: '1px solid #E2E7EC' }}>
