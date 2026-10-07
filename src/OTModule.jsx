@@ -2015,7 +2015,7 @@ function TileOT({ ot, onOpen, onDragStart, onDropOn, verValores }) {
   const cerrada = ot.estado === 'Cerrada'
   return (
     <div onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); onDropOn() }} onClick={onOpen}
-      style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: '3px solid ' + (ot.area === 'Istria' ? '#1B1F23' : '#D9600A'), padding: 14, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, borderRadius: SEREIN.radius }}>
+      style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: '2px solid ' + (ot.area === 'Istria' ? '#1B1F23' : '#D9600A'), padding: 14, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, borderRadius: SEREIN.radius }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flexWrap: 'wrap' }}>
           <span title={ot.numero} style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 12, background: '#101315', color: '#fff', padding: '2px 7px', whiteSpace: 'nowrap', flexShrink: 0 }}>{ot.numero}</span>
@@ -2270,7 +2270,7 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateProtocolo, onUpda
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16, borderBottom: '1px solid #DFE4EA', paddingBottom: 12 }}>
             {TABS_OT.map(t => (
               <button key={t.id} onClick={() => setTab(t.id)}
-                style={{ background: tab === t.id ? '#F77716' : '#fff', color: tab === t.id ? '#fff' : C.carbon, border: '1px solid ' + (tab === t.id ? '#F77716' : '#DFE4EA'), padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, borderRadius: 4 }}>
+                style={{ background: tab === t.id ? '#FDECDD' : '#fff', color: tab === t.id ? '#C2570B' : '#5A636E', border: '1px solid ' + (tab === t.id ? '#F7C89E' : '#DFE4EA'), padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontBody, fontWeight: 600, borderRadius: 4 }}>
                 {t.label}
               </button>
             ))}
@@ -3800,7 +3800,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
         <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
           {areasPermitidas.map(a => (
             <button key={a} onClick={() => setAreaSel(a)}
-              style={{ background: areaSel === a ? C.carbon : '#fff', color: areaSel === a ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '8px 16px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              style={{ background: areaSel === a ? '#FDECDD' : '#fff', color: areaSel === a ? '#C2570B' : '#5A636E', border: '1px solid ' + (areaSel === a ? '#F7C89E' : '#DFE4EA'), borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontBody, fontWeight: 600, letterSpacing: 0.5 }}>
               {a}
             </button>
           ))}

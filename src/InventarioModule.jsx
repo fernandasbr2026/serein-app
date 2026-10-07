@@ -197,7 +197,7 @@ export default function InventarioModule({ inventario = [], setInventario = () =
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         {['Santa Rosa', 'Istria', 'Todas'].map(s => (
-          <button key={s} onClick={() => setSede(s)} style={{ background: sede === s ? C.carbon : '#fff', color: sede === s ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase' }}>{s}</button>
+          <button key={s} onClick={() => setSede(s)} style={{ background: sede === s ? '#FDECDD' : '#fff', color: sede === s ? '#C2570B' : '#5A636E', border: '1px solid ' + (sede === s ? '#F7C89E' : '#DFE4EA'), borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontBody, fontWeight: 600 }}>{s}</button>
         ))}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <button onClick={() => setCreando(true)} style={{ background: C.navy, color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Plus size={14} /> Nuevo producto</button>

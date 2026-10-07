@@ -467,7 +467,7 @@ export default function ProduccionModule({ esGerencia, plantaFija = null, planta
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            style={{ background: tab === t.id ? C.carbon : '#fff', color: tab === t.id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
+            style={{ background: tab === t.id ? '#FDECDD' : '#fff', color: tab === t.id ? '#C2570B' : '#5A636E', border: '1px solid ' + (tab === t.id ? '#F7C89E' : '#DFE4EA'), borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontBody, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
             {t.icono}{t.label}
           </button>
         ))}

@@ -322,8 +322,8 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
   return (
     <div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-        <button onClick={() => setSub('doc')} style={{ padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, border: '1px solid ' + C.border, background: sub === 'doc' ? C.navy : '#fff', color: sub === 'doc' ? '#fff' : C.text }}>Documentos</button>
-        <button onClick={() => setSub('sindoc')} style={{ padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, border: '1px solid ' + C.border, background: sub === 'sindoc' ? C.navy : '#fff', color: sub === 'sindoc' ? '#fff' : C.text }}>Compras sin documentos{totalSinDoc ? ' (' + clp(totalSinDoc) + ')' : ''}</button>
+        <button onClick={() => setSub('doc')} style={{ padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, border: '1px solid ' + C.border, background: sub === 'doc' ? '#FDECDD' : '#fff', color: sub === 'doc' ? '#C2570B' : '#5A636E' }}>Documentos</button>
+        <button onClick={() => setSub('sindoc')} style={{ padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, border: '1px solid ' + C.border, background: sub === 'sindoc' ? '#FDECDD' : '#fff', color: sub === 'sindoc' ? '#C2570B' : '#5A636E' }}>Compras sin documentos{totalSinDoc ? ' (' + clp(totalSinDoc) + ')' : ''}</button>
       </div>
       {sub === 'sindoc' && (
         <div>
@@ -462,7 +462,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
         const dims = { cat: ent(cat), fv: ent(fv), mes: Object.entries(mesG).sort((a, b) => a[0] < b[0] ? 1 : -1), ot: ent(otG), cc: ent(ccG) }
         const rowsDim = dims[dimConsol] || []
         const maxV = Math.max(1, ...rowsDim.map(x => Math.abs(x[1])))
-        const tb = (id, txt) => <button onClick={() => setDimConsol(id)} style={{ padding: '4px 10px', fontSize: 12, borderRadius: 6, cursor: 'pointer', border: '1px solid ' + C.border, background: dimConsol === id ? C.navy : '#fff', color: dimConsol === id ? '#fff' : C.text }}>{txt}</button>
+        const tb = (id, txt) => <button onClick={() => setDimConsol(id)} style={{ padding: '4px 10px', fontSize: 12, borderRadius: 6, cursor: 'pointer', border: '1px solid ' + C.border, background: dimConsol === id ? '#FDECDD' : '#fff', color: dimConsol === id ? '#C2570B' : '#5A636E' }}>{txt}</button>
         const card = (lbl, val, col) => <div style={{ flex: '1 1 150px', background: '#fff', border: '1px solid ' + C.border, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, color: C.mut }}>{lbl}</div><div style={{ fontSize: 18, fontWeight: 700, color: col }}>{clp(val)}</div></div>
         return (
           <div style={{ border: '1px solid ' + C.border, borderRadius: 8, padding: 14, marginBottom: 12, background: C.gray }}>

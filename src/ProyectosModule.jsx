@@ -1678,7 +1678,7 @@ function TileProyecto({ p, facturasProy = [], onOpen, onDragStart, onDropOn }) {
   const activa = !p.cerrado
   return (
     <div onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); onDropOn() }} onClick={onOpen}
-      style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: '3px solid ' + C.azul, padding: 14, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+      style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: '2px solid ' + C.azul, padding: 14, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
         <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 12, background: C.carbon, color: '#fff', padding: '2px 7px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '60%' }}>{p.ot || 'OT'}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -2071,7 +2071,7 @@ export default function ProyectosModule({ proyectos: proyExt, setProyectos: setP
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
         {[['tarjetas', 'Tarjetas', LayoutGrid], ...(verCotizadorProy ? [['cotizarProy', 'Cotización Proyecto', Receipt], ['cotizacionesProy', 'Cotizaciones', Receipt], ['cotizarIntumescente', 'Cotización Intumescente', Flame], ['comprasSII', 'Compras SII', ShoppingCart]] : []), ['controlTaller', 'Control de Taller', Hammer], ['subcontratistas', 'Subcontratistas', UserCheck], ['consolidado', 'Consolidado', Table2], ['cerrados', 'Proyectos cerrados', LayoutGrid], ['facturas', 'Facturas', Receipt], ...(verCotizadorProy ? [['parametros', 'Parámetros Proyectos', Target]] : [])].map(([id, lbl, Icon]) => (
-          <button key={id} onClick={() => setVista(id)} style={{ background: vista === id ? C.carbon : '#fff', color: vista === id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Icon size={14} />{lbl}</button>
+          <button key={id} onClick={() => setVista(id)} style={{ background: vista === id ? '#FDECDD' : '#fff', color: vista === id ? '#C2570B' : '#5A636E', border: '1px solid ' + (vista === id ? '#F7C89E' : '#DFE4EA'), borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontBody, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}><Icon size={14} />{lbl}</button>
         ))}
         {!creando && vista === 'tarjetas' && (
           <button onClick={() => setCreando(true)} style={{ background: C.azul, color: '#fff', border: 'none', padding: '7px 16px', cursor: 'pointer', fontSize: 12.5, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}><Plus size={15} /> Nueva OT</button>

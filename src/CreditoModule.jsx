@@ -859,7 +859,7 @@ export default function CreditoModule({ esGerencia }) {
   const conAlertas = clientes.map(c => ({ c, a: alertasDe(c) })).filter(x => x.a.length)
   const sel = clientes.find(c => c.id === selId)
   const lista = clientes.filter(c => (!busca || (c.razon_social + ' ' + c.rut).toLowerCase().includes(busca.toLowerCase())) && (!filtroEstado || c.estado_credito === filtroEstado))
-  const tabBtn = (id, lbl) => <button key={id} onClick={() => { setVista(id); setSelId(null) }} style={{ background: vista === id ? C.carbon : '#fff', color: vista === id ? '#fff' : C.carbon, border: '1px solid #DFE4EA', padding: '8px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>{lbl}</button>
+  const tabBtn = (id, lbl) => <button key={id} onClick={() => { setVista(id); setSelId(null) }} style={{ background: vista === id ? '#FDECDD' : '#fff', color: vista === id ? '#C2570B' : '#5A636E', border: '1px solid ' + (vista === id ? '#F7C89E' : '#DFE4EA'), borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>{lbl}</button>
 
   return (
     <div style={{ marginTop: 16 }}>

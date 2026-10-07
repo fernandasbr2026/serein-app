@@ -177,7 +177,7 @@ function TarjetaCot({ cot, onUpdate, onDelete, onConvertir, yaEsOT }) {
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
                 {PARTIDAS_TIPICAS.map(p => (
                   <button key={p.desc} onClick={() => setFi({ ...fi, desc: p.desc, unidad: p.unidad })}
-                    style={{ background: fi.desc === p.desc ? C.carbon : '#fff', color: fi.desc === p.desc ? '#fff' : C.carbon, border: '1px solid #CBD2D6', padding: '5px 10px', cursor: 'pointer', fontSize: 12 }}>
+                    style={{ background: fi.desc === p.desc ? '#FDECDD' : '#fff', color: fi.desc === p.desc ? '#C2570B' : '#5A636E', border: '1px solid #CBD2D6', padding: '5px 10px', cursor: 'pointer', fontSize: 12 }}>
                     {p.desc}
                   </button>
                 ))}
