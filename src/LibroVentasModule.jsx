@@ -4,12 +4,14 @@ import { supabase } from './supabase.js'
 import { pushState } from './sync.js'
 import { calcularPerdidaFactoring } from './ParametrosModule.jsx'
 import { descargarInformeFacturas } from './informeFacturas.js'
+import { fileToBase64 } from './protocolo-pdf.js'
 import { leerFacturasOcultasLibro } from './facturasOcultas.js'
 import { PLAZOS_SUGERIDOS, PLAZO_POR_DEFECTO, PLAZO_MAX, plazoValido, sumarDias, plazoDe, conFechasCoherentes, diasParaVencer, textoDiasParaVencer, hoyISO } from './vencimientos.js'
 
 import { SEREIN } from './theme-serein.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
 const C = { navy: SEREIN.ink, orange: SEREIN.orange, gray: SEREIN.fog, border: SEREIN.line, green: SEREIN.green, red: SEREIN.red, mut: SEREIN.textFaint }
+const esExenta = t => /exent/i.test(String(t || ''))
 const clp = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-CL')
 const ip = { padding: '6px 8px', border: '1px solid ' + C.border, fontSize: 12.5, boxSizing: 'border-box', borderRadius: 4 }
 const sel = { padding: '4px 6px', border: '1px solid ' + C.border, fontSize: 12, borderRadius: 4, background: '#fff' }
@@ -364,17 +366,54 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
 
   const facturaVacia = { emission_date: hoyISO(), document_number: '', client_name: '', client_rut: '', document_type: 'Factura', neto: '', iva: '', area: '', oc: '', nv: '', medio_pago: '', numero_cheque: '', plazo: String(PLAZO_POR_DEFECTO), vencimiento: sumarDias(hoyISO(), PLAZO_POR_DEFECTO) }
   const [mostrarAgregar, setMostrarAgregar] = useState(false)
+  const [leyendoIA, setLeyendoIA] = useState(false)
+  const [msgIA, setMsgIA] = useState('')
+  const archivoIARef = useRef(null)
   const [nuevaFC, setNuevaFC] = useState(facturaVacia)
   const setNuevaFCCampo = (campo, valor) => setNuevaFC(f => {
     // Emisión, plazo y vencimiento se acompañan entre sí (ver vencimientos.js)
     const nf = conFechasCoherentes(f, campo, valor)
-    if (campo === 'neto') nf.iva = Math.round((Number(valor) || 0) * 0.19)
+    if (campo === 'neto') nf.iva = esExenta(f.document_type) ? 0 : Math.round((Number(valor) || 0) * 0.19)
+    if (campo === 'document_type') nf.iva = esExenta(valor) ? 0 : Math.round((Number(f.neto) || 0) * 0.19)
     return nf
   })
+  // Lee una factura emitida (PDF o fotos) con IA y precarga el formulario para que la persona
+  // revise y guarde; la IA nunca escribe en el libro por su cuenta.
+  const leerFacturaIA = async e => {
+    const fls = Array.from((e.target.files) || [])
+    e.target.value = ''
+    if (!fls.length) return
+    setLeyendoIA(true); setMsgIA('')
+    try {
+      const archivos = await Promise.all(fls.map(async fl => ({ base64: await fileToBase64(fl), mimeType: fl.type || 'application/pdf', filename: fl.name })))
+      const { data, error } = await supabase.functions.invoke('extraer-factura', { body: { archivos, filename: fls[0].name } })
+      if (error) throw error
+      if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo leer la factura.')
+      const d = data.datos || {}
+      const exenta = /exent/i.test(String(d.tipoDocumento || '')) || (d.iva === 0 && d.total != null && d.neto != null && Math.round(d.total) === Math.round(d.neto))
+      const emision = /^\d{4}-\d{2}-\d{2}$/.test(String(d.fecha || '')) ? d.fecha : hoyISO()
+      const neto = d.neto != null ? Math.round(d.neto) : ''
+      const base = { ...facturaVacia, emission_date: emision, vencimiento: sumarDias(emision, PLAZO_POR_DEFECTO) }
+      setNuevaFC({
+        ...base,
+        document_number: d.folio != null ? String(d.folio) : '',
+        client_name: d.cliente || '',
+        client_rut: d.rutCliente || '',
+        document_type: d.tipoDocumento || (exenta ? 'Factura exenta' : 'Factura'),
+        neto: neto === '' ? '' : String(neto),
+        iva: exenta ? 0 : Math.round((Number(neto) || 0) * 0.19),
+        oc: d.ordenCompra || '',
+        nv: d.notaVenta || '',
+      })
+      setMostrarAgregar(true)
+      setMsgIA('Factura leída: revisa los datos, elige el área y guarda.')
+    } catch (err) { setMsgIA('Error: No se pudo leer la factura: ' + ((err && err.message) || String(err))) }
+    setLeyendoIA(false)
+  }
   const agregarFactura = async () => {
     const neto = Number(nuevaFC.neto) || 0
     if (!nuevaFC.client_name.trim() || neto <= 0) { window.alert('Ingresa al menos el cliente y un neto mayor a 0.'); return }
-    const iva = Math.round(neto * 0.19)
+    const iva = esExenta(nuevaFC.document_type) ? 0 : Math.round(neto * 0.19)
     const reg = {
       emission_date: nuevaFC.emission_date || hoyISO(),
       vencimiento: nuevaFC.vencimiento || null,
@@ -413,6 +452,8 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.xls,.csv" style={{ display: 'none' }} onChange={e => { const f = e.target.files[0]; if (f) importarExcel(f); e.target.value = '' }} />
+          <input ref={archivoIARef} type="file" accept=".pdf,image/*" multiple style={{ display: 'none' }} onChange={leerFacturaIA} />
+          <button onClick={() => archivoIARef.current && archivoIARef.current.click()} disabled={leyendoIA} style={{ background: C.orange, color: '#fff', border: 'none', padding: '9px 16px', borderRadius: 6, cursor: leyendoIA ? 'wait' : 'pointer', fontWeight: 600, fontSize: 13 }}>{leyendoIA ? 'Leyendo factura...' : 'Leer factura con IA'}</button>
           <button onClick={() => setMostrarAgregar(v => !v)} style={{ background: '#fff', color: C.navy, border: '1px solid ' + C.navy, padding: '9px 16px', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>{mostrarAgregar ? 'Cancelar' : '+ Agregar factura'}</button>
           <button onClick={() => fileRef.current && fileRef.current.click()} style={{ background: C.orange, color: '#fff', border: 'none', padding: '9px 16px', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Importar Excel</button>
           <button onClick={sincronizar} disabled={syncing} style={{ background: C.navy, color: '#fff', border: 'none', padding: '9px 16px', borderRadius: 6, cursor: syncing ? 'wait' : 'pointer', fontWeight: 600, fontSize: 13 }}>{syncing ? 'Sincronizando...' : 'Sincronizar con Defontana'}</button>
@@ -439,6 +480,8 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
           <button onClick={agregarFactura} style={{ padding: '9px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, border: 'none', background: C.navy, color: '#fff' }}>Guardar factura</button>
         </div>
       )}
+
+      {msgIA ? <div style={{ background: msgIA.startsWith('Error') ? '#FCEBEA' : '#E6F7EE', border: '1px solid ' + (msgIA.startsWith('Error') ? C.red : C.green), color: msgIA.startsWith('Error') ? C.red : '#1B9E5D', padding: '8px 12px', borderRadius: 6, fontSize: 12.5, marginBottom: 12 }}>{msgIA}</div> : null}
 
       {syncMsg ? <div style={{ background: syncMsg.startsWith('Error') ? '#FCEBEA' : '#E6F7EE', border: '1px solid ' + (syncMsg.startsWith('Error') ? C.red : C.green), color: syncMsg.startsWith('Error') ? C.red : '#1B9E5D', padding: '8px 12px', borderRadius: 6, fontSize: 12.5, marginBottom: 12 }}>{syncMsg}</div> : null}
 
