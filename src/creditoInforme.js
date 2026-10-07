@@ -99,7 +99,7 @@ export function generarInformeCredito({ cliente, evaluacion, docs = [], params, 
   doc.setFillColor(255, 246, 241); doc.setDrawColor(NARANJA[0], NARANJA[1], NARANJA[2]); doc.setLineWidth(0.6); doc.roundedRect(bx, y, bw, bh, 2, 2, 'FD')
   const celda = (k, v, x, yy, { c = CARBON, size = 12, ancho = 0 } = {}) => { txt(k.toUpperCase(), x, yy, { size: 7, c: GRIS }); if (ancho) { doc.setFont('helvetica', 'bold'); doc.setFontSize(size); doc.splitTextToSize(String(v), ancho).slice(0, 2).forEach((l, i) => txt(l, x, yy + 6 + i * 3.6, { size, bold: true, c })) } else txt(v, x, yy + 6, { size, bold: true, c }) }
   const colw = bw / 4
-  celda('Puntaje', (ev.puntaje != null ? ev.puntaje : '-') + ' / 100', bx + 4, y + 7)
+  celda('Puntaje', (ev.puntaje != null ? ev.puntaje : '-') + (res.parcial ? ' / ' + (100 - (res.puntosPendientes || 0)) + ' (parcial)' : ' / 100'), bx + 4, y + 7)
   celda('Categoría', ev.categoria || '-', bx + 4 + colw, y + 7, { c: ev.categoria === 'D' ? ROJO : NARANJA, size: 16 })
   celda('Línea sugerida', clp(ev.linea_sugerida), bx + 4 + colw * 2, y + 7)
   celda('Línea aprobada', clp(ev.linea_aprobada), bx + 4 + colw * 3, y + 7)
@@ -113,7 +113,8 @@ export function generarInformeCredito({ cliente, evaluacion, docs = [], params, 
   // ---------- 4. Detalle del puntaje ----------
   titulo(4, 'Detalle del puntaje')
   tabla([{ t: 'Factor', w: 62 }, { t: 'Dato observado', w: W - 62 - 36 }, { t: 'Puntos', w: 18, align: 'right' }, { t: 'Máximo', w: 18, align: 'right' }],
-    detalle.map(d => [d.factor, d.dato, d.puntos, d.max]), { total: ['Total', '', ev.puntaje != null ? ev.puntaje : '-', 100] })
+    detalle.map(d => [d.factor, d.dato, d.pendiente ? '-' : d.puntos, d.max]), { total: ['Total', '', ev.puntaje != null ? ev.puntaje : '-', res.parcial ? 100 - (res.puntosPendientes || 0) : 100] })
+  if (res.parcial) parrafo('Puntaje parcial: faltan datos que valen hasta ' + res.puntosPendientes + ' puntos (' + (res.factoresPendientes || []).join(', ') + '). Mientras no se tengan, el puntaje y la categoría están incompletos.', M, W, { size: 8.5, c: NARANJA })
 
   // ---------- 5. Filtros de rechazo ----------
   ensure(Math.max(filtros.length, 1) * 5 + 16)
