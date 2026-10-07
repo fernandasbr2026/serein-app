@@ -199,7 +199,7 @@ function estilosOferta() {
     '.fn{font-size:10.5px;color:#69717F;margin-top:7px;line-height:1.45}',
     '.bf{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin-top:10px}',
     '.bf .pu{font-size:11.5px;color:#69717F}.bf .pu b{display:block;font-size:26px;color:#1B294A;margin-top:2px}',
-    '.bf .tt{text-align:right;font-size:13px;color:#69717F;line-height:1.7;margin-left:auto}.bf .tt b{color:#1B294A}.bf .tt .nt{font-size:13px;color:#69717F;line-height:1.4}.bf .tt .nt b{font-size:21px}.bf .tt .g{font-size:30px;font-weight:800;color:#1B294A;line-height:1.15;margin-top:3px}',
+    '.bf .tt{text-align:right;font-size:13px;color:#69717F;line-height:1.7;margin-left:auto}.bf .tt b{color:#1B294A}.bf .tt .nt{font-size:13px;color:#69717F;line-height:1.4}.bf .tt .nt b{font-size:21px}.bf .tt .g{font-size:25px;font-weight:800;color:#1B294A;line-height:1.15;margin-top:3px}',
     '.words{margin:7px 3px 0;font-size:11.5px;color:#69717F;font-style:italic;line-height:1.45}',
     '.sec{font-size:17px;font-weight:800;color:#1B294A;margin:16px 0 8px}.nota{font-size:10.5px;color:#69717F;margin-top:7px;line-height:1.5}',
     '.bar{display:flex;height:5px;border-radius:3px;overflow:hidden;margin-bottom:10px}.bar i{flex:1}',
@@ -259,6 +259,9 @@ function htmlOferta(cot) {
   const tituloBox = cot.tituloServicio || (baseM2 && it0.detalle ? it0.detalle : 'Detalle y valorización')
   const notaSup = cot.notaSuperficie || (hayCub ? '**Superficie según listado del cliente.** Los m² se calcularon a partir del listado de materiales informado por el cliente (cantidades, largos y kilos). La superficie será **verificada y rectificada una vez recibido el material en nuestra planta**, manteniendo el precio unitario.' : '')
   const precioDesc = cot.precioDescripcion ? ' · ' + escH(cot.precioDescripcion) : ''
+  // Precio unitario (abajo a la izquierda): por m² cuando hay base de m²; en cotizaciones de un solo ítem, por la unidad del ítem (un, gl, ml…).
+  const puValor = baseM2 ? num(precioCub) : (items.length === 1 ? num(it0.pUnitario) : 0)
+  const puUnidad = baseM2 ? 'm²' : (/^m\s*2$|^m²$/i.test(String(it0.unidad || '').trim()) ? 'm²' : String(it0.unidad || 'UN').trim().toLowerCase())
   const valorFinal = hayCub ? ' El valor final se ajusta según los m² verificados al ingreso a planta, manteniendo el precio unitario.' : ''
   const calidad = '<ul><li><b>Protocolo por lote:</b> preparación, perfil de rugosidad, condiciones ambientales y espesores.</li><li><b>Instrumentos</b> Elcometer con calibración externa vigente.</li><li><b>Registro fotográfico</b> del proceso.</li></ul>'
   return `<!doctype html><html><head><meta charset="utf-8"><title>Cotización ${escH(cot.folio)}${rev ? ' Rev. ' + rev : ''}</title><style>${estilosOferta()}</style></head><body>
@@ -281,7 +284,7 @@ function htmlOferta(cot) {
       <div class="bh"><div><h3>${escH(tituloBox)}</h3>${cot.subtituloServicio ? '<div class="s">' + escH(cot.subtituloServicio) + '</div>' : ''}</div>${planta ? '<span class="ptag">' + escH(planta) + '</span>' : ''}</div>
       ${hayCub ? tablaCub : tablaItems}
       <div class="bf">
-        ${baseM2 && precioCub ? `<div class="pu">Precio unitario${precioDesc}<b>${clp(precioCub)} / m²</b></div>` : ''}
+        ${puValor > 0 ? `<div class="pu">Precio unitario${precioDesc}<b>${clp(puValor)} / ${escH(puUnidad)}</b></div>` : ''}
         <div class="tt"><div class="nt">Neto <b>${clp(t.afecto)}</b></div>IVA 19 % <b>${clp(t.iva)}</b><div class="g">${clp(t.total)}</div></div>
       </div>
     </div>
