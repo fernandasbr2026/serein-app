@@ -33,19 +33,19 @@ export function EstadoGuardado({ colapsado }) {
   if (colapsado) {
     return (
       <button onClick={forzar} title={cfg.texto + ' · Click para forzar guardado'} disabled={forzando}
-        style={{ margin: '10px auto', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,.06)', border: 'none', cursor: 'pointer' }}>
+        style={{ margin: '10px auto', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 8, background: '#F4F6F8', border: 'none', cursor: 'pointer' }}>
         <Icon size={17} color={cfg.color} style={estado.fase === 'guardando' || forzando ? { animation: 'girar 1s linear infinite' } : undefined} />
       </button>
     )
   }
   return (
-    <div style={{ margin: '0 18px 12px', padding: '9px 12px', borderRadius: 8, background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.08)', display: 'flex', alignItems: 'center', gap: 9 }}>
+    <div style={{ margin: '0 18px 12px', padding: '9px 12px', borderRadius: 10, background: '#F7F8FA', border: '1px solid ' + SEREIN.line, display: 'flex', alignItems: 'center', gap: 9 }}>
       <Icon size={16} color={cfg.color} style={estado.fase === 'guardando' || forzando ? { animation: 'girar 1s linear infinite', flexShrink: 0 } : { flexShrink: 0 }} />
       <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: '#EDEFF1' }}>{forzando ? 'Guardando…' : cfg.texto}</div>
-        {estado.fase === 'error' && estado.ultimoError && <div style={{ fontSize: 10, color: '#C6CBD1', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={estado.ultimoError}>{estado.ultimoError}</div>}
+        <div style={{ fontSize: 12, fontWeight: 600, color: SEREIN.text }}>{forzando ? 'Guardando…' : cfg.texto}</div>
+        {estado.fase === 'error' && estado.ultimoError && <div style={{ fontSize: 10, color: SEREIN.textSoft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={estado.ultimoError}>{estado.ultimoError}</div>}
       </div>
-      <button onClick={forzar} disabled={forzando} title="Forzar guardado y confirmar" style={{ background: 'none', border: 'none', cursor: forzando ? 'default' : 'pointer', color: '#9AA2A9', padding: 4, flexShrink: 0, display: 'flex' }}>
+      <button onClick={forzar} disabled={forzando} title="Forzar guardado y confirmar" style={{ background: 'none', border: 'none', cursor: forzando ? 'default' : 'pointer', color: SEREIN.textFaint, padding: 4, flexShrink: 0, display: 'flex' }}>
         <RotateCw size={13} style={forzando ? { animation: 'girar 1s linear infinite' } : undefined} />
       </button>
     </div>
@@ -121,24 +121,24 @@ export function Sidebar({ tabs, areaSel, setAreaSel, nombreTab, perfil, email, o
   const rol = (perfil && perfil.rol) || ''
   const [abiertos, setAbiertos] = useState(() => new Set([areaSel]))
   const toggleAbierto = t => setAbiertos(prev => { const n = new Set(prev); n.has(t) ? n.delete(t) : n.add(t); return n })
-  return (<aside style={{ width: W, minWidth: W, maxWidth: W, overflowX: 'hidden', flexShrink: 0, background: SEREIN.ink, color: '#EDEFF1', borderRight: 'none', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh', transition: 'width .18s ease', fontFamily: THEME.font }}>
-    <div style={{ padding: colapsado ? '18px 0' : '18px 18px 14px', display: 'flex', alignItems: 'center', justifyContent: colapsado ? 'center' : 'space-between', borderBottom: '1px solid rgba(255,255,255,.08)' }}>
-      {!colapsado && <div><LogoSerein alto={24} oscuro /><div style={{ color: '#8B939B', fontSize: 10, letterSpacing: 2, marginTop: 5, fontWeight: 700, textTransform: 'uppercase' }}>Panel de Gestión</div></div>}
-      <button onClick={() => setColapsado(!colapsado)} title="Colapsar menú" style={{ background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.1)', cursor: 'pointer', color: '#C6CBD1', display: 'flex', padding: 6, borderRadius: 6 }}>
+  return (<aside style={{ width: W, minWidth: W, maxWidth: W, overflowX: 'hidden', flexShrink: 0, background: '#FFFFFF', color: SEREIN.text, borderRight: '1px solid ' + SEREIN.line, display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh', transition: 'width .18s ease', fontFamily: THEME.font }}>
+    <div style={{ padding: colapsado ? '18px 0' : '18px 18px 14px', display: 'flex', alignItems: 'center', justifyContent: colapsado ? 'center' : 'space-between' }}>
+      {!colapsado && <div><LogoSerein alto={24} /><div style={{ color: SEREIN.textFaint, fontSize: 10, letterSpacing: 1.8, marginTop: 6, fontWeight: 600, textTransform: 'uppercase' }}>Panel de Gestión</div></div>}
+      <button onClick={() => setColapsado(!colapsado)} title="Colapsar menú" style={{ background: '#F4F6F8', border: '1px solid ' + SEREIN.line, cursor: 'pointer', color: SEREIN.textSoft, display: 'flex', padding: 6, borderRadius: 8 }}>
         {colapsado ? <Menu size={16} /> : <ChevronsLeft size={16} />}
       </button>
     </div>
-    <div style={{ margin: colapsado ? '14px 0' : '16px 18px 10px', padding: colapsado ? 0 : '12px 14px', display: 'flex', alignItems: 'center', gap: 12, justifyContent: colapsado ? 'center' : 'flex-start', background: colapsado ? 'transparent' : 'rgba(255,255,255,.05)', border: colapsado ? 'none' : '1px solid rgba(255,255,255,.08)', borderRadius: 8 }}>
+    <div style={{ margin: colapsado ? '14px 0' : '16px 18px 10px', padding: colapsado ? 0 : '12px 14px', display: 'flex', alignItems: 'center', gap: 12, justifyContent: colapsado ? 'center' : 'flex-start', background: colapsado ? 'transparent' : '#F7F8FA', border: colapsado ? 'none' : '1px solid ' + SEREIN.line, borderRadius: 10 }}>
       <div style={{ width: 34, height: 34, borderRadius: '50%', background: SEREIN.orange, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, fontFamily: THEME.fontDisplay, flexShrink: 0 }}>{iniciales(nom)}</div>
       {!colapsado && <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nom}</div>
-        <div style={{ fontSize: 11, color: '#9AA2A9' }}>{rol}</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: SEREIN.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nom}</div>
+        <div style={{ fontSize: 11, color: SEREIN.textSoft }}>{rol}</div>
       </div>}
     </div>
     <EstadoGuardado colapsado={colapsado} />
     <nav style={{ flex: 1, overflowY: 'auto', padding: '4px 12px 16px' }}>
       {grupos.map(g => (<div key={g.nombre} style={{ marginBottom: 2 }}>
-        {!colapsado && <div style={{ fontFamily: THEME.fontDisplay, fontSize: 11, fontWeight: 700, letterSpacing: 2, color: '#6B737B', textTransform: 'uppercase', margin: '18px 4px 8px' }}>{g.nombre}</div>}
+        {!colapsado && <div style={{ fontFamily: THEME.fontDisplay, fontSize: 10.5, fontWeight: 700, letterSpacing: 1.8, color: SEREIN.textFaint, textTransform: 'uppercase', margin: '20px 6px 8px' }}>{g.nombre}</div>}
         {g.items.map(t => {
           const act = areaSel === t
           const Ico = iconoTab(t)
@@ -147,21 +147,21 @@ export function Sidebar({ tabs, areaSel, setAreaSel, nombreTab, perfil, email, o
           const abierto = abiertos.has(t)
           return (<div key={t}>
             <button onClick={() => { setAreaSel(t); if (hijos) toggleAbierto(t) }} title={label}
-              style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', cursor: 'pointer', border: 'none', marginBottom: 1, padding: colapsado ? '10px 0' : '10px 12px', justifyContent: colapsado ? 'center' : 'flex-start', borderRadius: 6, position: 'relative', background: act ? 'rgba(247,119,22,.14)' : 'transparent', color: act ? '#fff' : '#D3D7DB', fontWeight: 500, fontSize: 13.5, fontFamily: THEME.font, transition: 'background .12s' }}
-              onMouseEnter={e => { if (!act) e.currentTarget.style.background = 'rgba(255,255,255,.06)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', cursor: 'pointer', border: 'none', marginBottom: 1, padding: colapsado ? '10px 0' : '10px 12px', justifyContent: colapsado ? 'center' : 'flex-start', borderRadius: 8, position: 'relative', background: act ? SEREIN.orangeSoft : 'transparent', color: act ? SEREIN.ink : '#3C444D', fontWeight: act ? 600 : 500, fontSize: 13.5, fontFamily: THEME.font, transition: 'background .12s' }}
+              onMouseEnter={e => { if (!act) e.currentTarget.style.background = '#F4F6F8' }}
               onMouseLeave={e => { if (!act) e.currentTarget.style.background = 'transparent' }}>
-              <Ico size={17} color={act ? SEREIN.orange : '#9AA2A9'} style={{ flexShrink: 0 }} />
+              <Ico size={17} strokeWidth={1.75} color={act ? SEREIN.orangeDark : '#8A939D'} style={{ flexShrink: 0 }} />
               {!colapsado && <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>}
-              {!colapsado && hijos && <ChevronDown size={14} color="#6B737B" style={{ flexShrink: 0, transition: 'transform .2s ease', transform: abierto ? 'rotate(180deg)' : 'none' }} />}
+              {!colapsado && hijos && <ChevronDown size={14} color={SEREIN.textFaint} style={{ flexShrink: 0, transition: 'transform .2s ease', transform: abierto ? 'rotate(180deg)' : 'none' }} />}
             </button>
             {!colapsado && hijos && (
               <ul style={{ maxHeight: abierto ? 900 : 0, overflow: 'hidden', transition: 'max-height .25s ease', listStyle: 'none', margin: 0, padding: 0 }}>
                 {hijos.map(h => (
                   <li key={h}>
                     <a onClick={() => setAreaSel(t)} title={label + ' · ' + h}
-                      style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 12px 7px 22px', fontSize: 12.5, color: '#9AA2A9', borderLeft: '2px solid rgba(255,255,255,.08)', marginLeft: 9, cursor: 'pointer' }}
-                      onMouseEnter={e => { e.currentTarget.style.color = '#fff' }}
-                      onMouseLeave={e => { e.currentTarget.style.color = '#9AA2A9' }}>
+                      style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 12px 7px 22px', fontSize: 12.5, color: SEREIN.textSoft, borderLeft: '1px solid ' + SEREIN.line, marginLeft: 17, cursor: 'pointer' }}
+                      onMouseEnter={e => { e.currentTarget.style.color = SEREIN.ink }}
+                      onMouseLeave={e => { e.currentTarget.style.color = SEREIN.textSoft }}>
                       <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'currentColor', flexShrink: 0 }} />
                       {h}
                     </a>
@@ -173,22 +173,22 @@ export function Sidebar({ tabs, areaSel, setAreaSel, nombreTab, perfil, email, o
         })}
       </div>))}
     </nav>
-    <div style={{ borderTop: '1px solid rgba(255,255,255,.08)', padding: colapsado ? '12px 0' : '12px 16px 16px' }}>
-      <button onClick={onLogout} title="Salir" style={{ display: 'flex', alignItems: 'center', gap: 9, justifyContent: colapsado ? 'center' : 'flex-start', width: '100%', background: 'transparent', border: 'none', color: '#D3D7DB', padding: '8px 4px', cursor: 'pointer', fontSize: 13 }}
+    <div style={{ borderTop: '1px solid ' + SEREIN.line, padding: colapsado ? '12px 0' : '12px 16px 16px' }}>
+      <button onClick={onLogout} title="Salir" style={{ display: 'flex', alignItems: 'center', gap: 9, justifyContent: colapsado ? 'center' : 'flex-start', width: '100%', background: 'transparent', border: 'none', color: SEREIN.textSoft, padding: '8px 4px', cursor: 'pointer', fontSize: 13 }}
         onMouseEnter={e => { e.currentTarget.style.color = SEREIN.orange }}
-        onMouseLeave={e => { e.currentTarget.style.color = '#D3D7DB' }}>
+        onMouseLeave={e => { e.currentTarget.style.color = SEREIN.textSoft }}>
         <LogOut size={15} />{!colapsado && 'Salir'}
       </button>
-      {!colapsado && <div style={{ marginTop: 8, fontSize: 10.5, color: '#5C646C', lineHeight: 1.7 }}>
+      {!colapsado && <div style={{ marginTop: 8, fontSize: 10.5, color: SEREIN.textFaint, lineHeight: 1.7 }}>
         SEREIN GROUP · Panel de Gestión
-        {onReset && <div><span onClick={() => { if (window.confirm('¿Borrar los datos guardados y volver a los valores base? Esta acción no se puede deshacer.')) onReset() }} style={{ color: '#8B939B', textDecoration: 'underline', cursor: 'pointer' }}>Restablecer datos</span></div>}
+        {onReset && <div><span onClick={() => { if (window.confirm('¿Borrar los datos guardados y volver a los valores base? Esta acción no se puede deshacer.')) onReset() }} style={{ color: SEREIN.textSoft, textDecoration: 'underline', cursor: 'pointer' }}>Restablecer datos</span></div>}
       </div>}
     </div>
   </aside>)
 }
 
 export function GlobalStyles() {
-  return (<style>{'*{box-sizing:border-box}' + 'body{margin:0}' + '::selection{background:rgba(247,119,22,.18)}' + '::-webkit-scrollbar{width:10px;height:10px}' + '::-webkit-scrollbar-thumb{background:#CBD2DC;border-radius:8px;border:2px solid transparent;background-clip:content-box}' + '::-webkit-scrollbar-thumb:hover{background:#AAB3C0;background-clip:content-box}' + '::-webkit-scrollbar-track{background:transparent}' + 'table tbody tr{transition:background .12s ease}' + 'table tbody tr:hover{background:#FAFBFB}' + 'input:focus,select:focus,textarea:focus{outline:none;box-shadow:0 0 0 3px rgba(247,119,22,.15);border-color:#F77716 !important}' + 'button{transition:filter .12s ease,transform .06s ease,background .12s ease}' + 'button:not(:disabled):active{transform:translateY(1px)}' + '@keyframes girar{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}'}</style>)
+  return (<style>{'*{box-sizing:border-box}' + 'body{margin:0}' + '::selection{background:rgba(247,119,22,.18)}' + '::-webkit-scrollbar{width:10px;height:10px}' + '::-webkit-scrollbar-thumb{background:#CBD2DC;border-radius:8px;border:2px solid transparent;background-clip:content-box}' + '::-webkit-scrollbar-thumb:hover{background:#AAB3C0;background-clip:content-box}' + '::-webkit-scrollbar-track{background:transparent}' + 'table tbody tr{transition:background .12s ease}' + 'table tbody tr:hover{background:#FAFBFB}' + 'input:focus,select:focus,textarea:focus{outline:none;box-shadow:0 0 0 3px rgba(247,119,22,.15);border-color:#F77716 !important}' + 'button{transition:filter .12s ease,transform .06s ease,background .12s ease}' + 'button:not(:disabled):active{transform:translateY(1px)}' + 'table thead th{background:#F5F6F8 !important;color:#59626C !important;font-weight:600 !important;border-bottom:1px solid #E4E8ED !important;letter-spacing:.4px}' + 'table thead tr{border-bottom-color:#E4E8ED !important}' + 'table tbody td{border-color:#EEF0F3 !important}' + 'input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{border-radius:6px !important;border-color:#DFE4EA !important}' + 'input:not([type=checkbox]):not([type=radio]):not([type=range]):hover,select:hover,textarea:hover{border-color:#C9D0D8 !important}' + 'h1,h2,h3{text-wrap:balance}' + '@keyframes girar{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}'}</style>)
 }
 
 // ---------------- Componentes de presentacion reutilizables (Serein 2026) ----------------
@@ -198,19 +198,21 @@ export function GlobalStyles() {
 // tarjeta/boton/badge con estilos sueltos.
 
 export function Panel({ children, style }) {
-  return <div style={{ background: SEREIN.paper, border: '1px solid ' + SEREIN.line, borderRadius: SEREIN.radius, overflow: 'hidden', ...style }}>{children}</div>
+  return <div style={{ background: SEREIN.paper, border: '1px solid ' + SEREIN.line, borderRadius: 14, boxShadow: SEREIN.shadow, overflow: 'hidden', ...style }}>{children}</div>
 }
 
-export function KpiCard({ icon: Icon, iconBg, iconColor, trend, trendUp, value, label }) {
-  return (<div style={{ background: SEREIN.paper, border: '1px solid ' + SEREIN.line, borderRadius: SEREIN.radius, padding: 20 }}>
+// acento: una sola tarjeta por fila lleva el color de marca (idea de lime-metrics, re-coloreada a naranja)
+export function KpiCard({ icon: Icon, iconBg, iconColor, trend, trendUp, value, label, acento }) {
+  const ac = !!acento
+  return (<div style={{ background: ac ? 'linear-gradient(135deg, #F77716 0%, #FF9D5C 100%)' : SEREIN.paper, border: '1px solid ' + (ac ? 'transparent' : SEREIN.line), borderRadius: 14, boxShadow: ac ? '0 10px 24px -12px rgba(247,119,22,.55)' : SEREIN.shadow, padding: 20 }}>
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-      {Icon && <div style={{ width: 38, height: 38, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: iconBg || SEREIN.orangeSoft, color: iconColor || SEREIN.orangeDark }}><Icon size={19} /></div>}
-      {trend != null && (<span style={{ fontSize: 12, fontWeight: 700, fontFamily: SEREIN.fontDisplay, display: 'inline-flex', alignItems: 'center', gap: 3, color: trendUp ? SEREIN.green : SEREIN.red }}>
+      {Icon && <div style={{ width: 38, height: 38, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: ac ? 'rgba(255,255,255,.22)' : (iconBg || SEREIN.orangeSoft), color: ac ? '#fff' : (iconColor || SEREIN.orangeDark) }}><Icon size={19} strokeWidth={1.75} /></div>}
+      {trend != null && (<span style={{ fontSize: 12, fontWeight: 700, fontFamily: SEREIN.fontDisplay, display: 'inline-flex', alignItems: 'center', gap: 3, color: ac ? '#fff' : (trendUp ? SEREIN.green : SEREIN.red) }}>
         {trendUp ? <ArrowUp size={12} /> : <ArrowDown size={12} />}{trend}
       </span>)}
     </div>
-    <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 800, fontSize: 30, color: SEREIN.text, lineHeight: 1 }}>{value}</div>
-    <div style={{ fontSize: 13, color: SEREIN.textSoft, marginTop: 6 }}>{label}</div>
+    <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 28, color: ac ? '#fff' : SEREIN.text, lineHeight: 1, letterSpacing: -0.5 }}>{value}</div>
+    <div style={{ fontSize: 13, color: ac ? 'rgba(255,255,255,.88)' : SEREIN.textSoft, marginTop: 8 }}>{label}</div>
   </div>)
 }
 
@@ -219,10 +221,10 @@ export function KpiCard({ icon: Icon, iconBg, iconColor, trend, trendUp, value, 
 // pantalla de Resumen financiero (Santa Rosa/Istria) para que un mismo
 // indicador siempre muestre ambos valores en el mismo orden.
 export function MontoNetoBruto({ icon: Icon, iconBg, iconColor, label, neto, bruto, brutoLabel = 'Total' }) {
-  return (<div style={{ background: SEREIN.paper, border: '1px solid ' + SEREIN.line, borderRadius: SEREIN.radius, padding: 20 }}>
-    {Icon && <div style={{ width: 38, height: 38, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: iconBg || SEREIN.orangeSoft, color: iconColor || SEREIN.orangeDark, marginBottom: 14 }}><Icon size={19} /></div>}
+  return (<div style={{ background: SEREIN.paper, border: '1px solid ' + SEREIN.line, borderRadius: 14, boxShadow: SEREIN.shadow, padding: 20 }}>
+    {Icon && <div style={{ width: 38, height: 38, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: iconBg || SEREIN.orangeSoft, color: iconColor || SEREIN.orangeDark, marginBottom: 14 }}><Icon size={19} strokeWidth={1.75} /></div>}
     <div style={{ fontSize: 13, color: SEREIN.textSoft, marginBottom: 4 }}>{label}</div>
-    <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 800, fontSize: 26, color: SEREIN.text, lineHeight: 1.15 }}>{neto}</div>
+    <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 26, color: SEREIN.text, lineHeight: 1.15, letterSpacing: -0.4 }}>{neto}</div>
     {bruto != null && <div style={{ fontSize: 12.5, color: SEREIN.textSoft, marginTop: 4 }}>{brutoLabel}: {bruto}</div>}
   </div>)
 }
@@ -235,7 +237,7 @@ export function Pill({ variant = 'gris', children }) {
 
 // variant: 'primary' | 'dark' | 'outline' | 'green'
 export function Btn({ variant = 'primary', children, onClick, type = 'button', disabled, style, icon: Icon }) {
-  const base = { display: 'inline-flex', alignItems: 'center', gap: 8, fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 13, letterSpacing: 0.2, textTransform: 'uppercase', padding: '10px 18px', borderRadius: 6, border: '1.5px solid transparent', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.6 : 1 }
+  const base = { display: 'inline-flex', alignItems: 'center', gap: 8, fontFamily: SEREIN.fontBody, fontWeight: 600, fontSize: 13.5, padding: '9px 16px', borderRadius: 8, border: '1px solid transparent', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.6 : 1 }
   const variants = {
     primary: { background: SEREIN.orange, color: '#fff' },
     dark: { background: SEREIN.ink, color: '#fff' },
@@ -246,12 +248,12 @@ export function Btn({ variant = 'primary', children, onClick, type = 'button', d
 }
 
 export function TabsBar({ tabs, active, onChange }) {
-  return (<div style={{ display: 'flex', gap: 28, borderBottom: '1px solid ' + SEREIN.line, marginBottom: 22, overflowX: 'auto' }}>
+  return (<div style={{ display: 'flex', gap: 26, borderBottom: '1px solid ' + SEREIN.line, marginBottom: 22, overflowX: 'auto' }}>
     {tabs.map(t => {
       const key = typeof t === 'string' ? t : t.key
       const label = typeof t === 'string' ? t : t.label
       const act = active === key
-      return (<button key={key} onClick={() => onChange(key)} style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 14, letterSpacing: 0.2, color: act ? SEREIN.text : SEREIN.textFaint, padding: '10px 2px 13px', border: 'none', borderBottom: '3px solid ' + (act ? SEREIN.orange : 'transparent'), background: 'none', whiteSpace: 'nowrap' }}>{label}</button>)
+      return (<button key={key} onClick={() => onChange(key)} style={{ fontFamily: SEREIN.fontBody, fontWeight: 600, fontSize: 13.5, color: act ? SEREIN.text : SEREIN.textSoft, padding: '10px 2px 12px', border: 'none', borderBottom: '2px solid ' + (act ? SEREIN.orange : 'transparent'), background: 'none', whiteSpace: 'nowrap' }}>{label}</button>)
     })}
   </div>)
 }
@@ -260,14 +262,14 @@ export function PageHeader({ titulo, perfil, email }) {
   const hoy = new Date()
   const dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
   const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
-  const fecha = dias[hoy.getDay()] + ' ' + hoy.getDate() + ' de ' + meses[hoy.getMonth()] + ', ' + hoy.getFullYear()
+  const fecha = (dias[hoy.getDay()] + ' ' + hoy.getDate() + ' de ' + meses[hoy.getMonth()] + ', ' + hoy.getFullYear()).replace(/^./, c => c.toUpperCase())
   const nom = (perfil && perfil.nombre) || email || 'Usuario'
-  return (<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid ' + THEME.border, fontFamily: THEME.font }}>
+  return (<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 22, paddingBottom: 4, fontFamily: THEME.font }}>
     <div style={{ minWidth: 0 }}>
       <div style={{ fontSize: 11.5, color: THEME.textMute, fontWeight: 500, marginBottom: 3 }}>SEREIN GROUP <span style={{ opacity: 0.5 }}>›</span> {titulo}</div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-        <h1 style={{ margin: 0, fontFamily: THEME.fontDisplay, fontSize: 22, fontWeight: 800, color: THEME.text, textTransform: 'none', letterSpacing: -0.3 }}>{titulo}</h1>
-        <span style={{ fontSize: 12, color: THEME.textMute, textTransform: 'capitalize' }}>{fecha}</span>
+        <h1 style={{ margin: 0, fontFamily: THEME.fontDisplay, fontSize: 24, fontWeight: 700, color: THEME.text, textTransform: 'none', letterSpacing: -0.5 }}>{titulo}</h1>
+        <span style={{ fontSize: 12.5, color: THEME.textMute }}>{fecha}</span>
       </div>
     </div>
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

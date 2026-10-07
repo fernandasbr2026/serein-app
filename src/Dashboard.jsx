@@ -89,12 +89,12 @@ export function borrarDatosLocales() {
 
 function Kpi({ label, valor, sub, color, icon: Icon }) {
   return (
-    <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 14, boxShadow: '0 1px 3px rgba(16,24,40,.06), 0 1px 2px rgba(16,24,40,.04)', padding: '16px 18px', flex: '1 1 180px', minWidth: 0 }}>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 14, boxShadow: '0 1px 2px rgba(16,19,21,.04), 0 6px 16px -10px rgba(16,19,21,.10)', padding: '16px 18px', flex: '1 1 180px', minWidth: 0 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>{label}</span>
-        <Icon size={16} color={color} />
+        <Icon size={16} strokeWidth={1.75} color={color} />
       </div>
-      <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 23, fontWeight: 600, color: C.carbon, marginTop: 8, whiteSpace: 'nowrap' }}>{valor}</div>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 24, fontWeight: 700, letterSpacing: -0.4, color: C.carbon, marginTop: 8, whiteSpace: 'nowrap' }}>{valor}</div>
       {sub && <div style={{ fontSize: 12, color: '#9AA3AD', marginTop: 3 }}>{sub}</div>}
     </div>
   )
@@ -804,8 +804,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
       <GlobalStyles />
       <Sidebar tabs={tabs} areaSel={areaSel} setAreaSel={setAreaSel} nombreTab={nombreTab} perfil={perfil} email={email} onLogout={onLogout} colapsado={sidebarColapsado} setColapsado={setSidebarColapsado} onReset={borrarDatosLocales} />
 
-      <main style={{ flex: 1, minWidth: 0, height: '100vh', overflowY: 'auto' }}>
-      <div style={{ padding: 20, maxWidth: 1200, margin: '0 auto' }}>
+      <main style={{ flex: 1, minWidth: 0, height: '100vh', overflowY: 'auto', backgroundImage: 'radial-gradient(820px 300px at 88% -90px, rgba(247,119,22,.075), transparent 70%)', backgroundRepeat: 'no-repeat' }}>
+      <div style={{ padding: '26px 30px', maxWidth: 1280, margin: '0 auto' }}>
               <PageHeader titulo={nombreTab(areaSel)} perfil={perfil} email={email} />
         {esModuloOrganigrama ? (<OrganigramaModule esGerencia={esGerencia} />) : esModuloCRM ? (<CRMModule />) : esModuloAsesor && puedeVer('ASESOR') ? (<AsesorModule fin={fin} pp={pp} proyectos={proyectos} ots={ots} params={params} onIr={setAreaSel} />) : esModuloLibroCompras && puedeVer('LIBRO_COMPRAS') ? (<LibroComprasModule esGerencia={esGerencia} ots={ots} factoringList={params.factoring || []} proyectos={proyectos} setProyectos={setProyectos} />) : esModuloLibroVentas && puedeVer('LIBRO_VENTAS') ? (<LibroVentasModule ots={ots} proyectos={proyectos} facturas={facturas} setFacturas={setFacturas} params={params} />) : esModuloProyectos && puedeVer('GESTION_PROYECTOS') ? (() => {
           // proyectosIdsPermitidos filtra por p.ot (el N de OT/cotizacion del
