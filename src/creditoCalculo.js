@@ -126,6 +126,14 @@ export function evaluarCredito(datos, paramsIn) {
   lineaSugerida = categoria === 'D' ? 0 : Math.floor(lineaSugerida / 100000) * 100000
   if (categoria !== 'D' && ventasMes <= 0) notas.push('Sin ventas de los últimos 12 meses: no se puede calcular la línea.')
 
+  // Mejor escenario: categoría y línea que saldrían si se resuelven los filtros en rojo y los datos pendientes salen con el mejor
+  // resultado posible. Sirve para ver qué falta para llegar a una categoría mejor; NO es una aprobación.
+  const puntajeMax = Math.min(100, puntaje + puntosPendientes)
+  const catPot = puntajeMax >= p.categorias.A.puntaje_minimo ? 'A' : puntajeMax >= p.categorias.B.puntaje_minimo ? 'B' : puntajeMax >= p.categorias.C.puntaje_minimo ? 'C' : 'D'
+  let lineaPot = Math.min(ventasMes * p.categorias[catPot].pct_ventas, p.tope_cliente, num(d.lineaSolicitada) > 0 ? num(d.lineaSolicitada) : Infinity)
+  lineaPot = (catPot === 'D' || ventasMes <= 0) ? 0 : Math.floor(lineaPot / 100000) * 100000
+  const potencial = { puntaje: puntajeMax, categoria: catPot, linea: lineaPot }
+
   const califica30 = categoria === 'A' || categoria === 'B'
   const condicionTexto = categoria === 'A' || categoria === 'B'
     ? 'Califica para crédito a ' + p.plazo_credito_dias + ' días, sin anticipo.'
@@ -135,7 +143,7 @@ export function evaluarCredito(datos, paramsIn) {
 
   return {
     filtros, hayRechazo, detalle, puntaje, categoria,
-    parcial: puntosPendientes > 0, puntosPendientes, factoresPendientes: pendientes.map(x => x.factor),
+    parcial: puntosPendientes > 0, puntosPendientes, factoresPendientes: pendientes.map(x => x.factor), potencial,
     lineaSugerida, anticipoMinimo: cat.anticipo_minimo, garantia: cat.garantia, revisionMeses: cat.meses_revision,
     califica30, condicionTexto, notas,
     resumen: { ventas12m: v12, ventasPrevias12m: vPrev, variacion, ventasMes: Math.round(ventasMes), mesesIvaAlDia: m, diasCarpeta, carpetaVencida },
