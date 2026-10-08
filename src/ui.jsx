@@ -9,6 +9,21 @@ import { suscribirEstadoGuardado, pushState } from './sync.js'
 // usuarios en todo momento, para cualquier tipo de cambio (texto, fotos,
 // documentos: todo pasa por el mismo pushState()). Incluye un botón para
 // forzar el guardado y confirmar que efectivamente llegó a la nube.
+// true en pantallas angostas (teléfono): ahí el menú lateral pasa a ser un cajón que se abre con el botón de menú.
+export function useEsMovil(ancho = 860) {
+  const consulta = '(max-width:' + ancho + 'px)'
+  const [movil, setMovil] = useState(() => typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia(consulta).matches)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    const mq = window.matchMedia(consulta)
+    const f = () => setMovil(mq.matches)
+    f()
+    if (mq.addEventListener) mq.addEventListener('change', f); else mq.addListener(f)
+    return () => { if (mq.removeEventListener) mq.removeEventListener('change', f); else mq.removeListener(f) }
+  }, [consulta])
+  return movil
+}
+
 export function EstadoGuardado({ colapsado }) {
   const [estado, setEstado] = useState(() => ({ fase: 'guardado', ultimoOk: null, ultimoError: null }))
   const [forzando, setForzando] = useState(false)
@@ -112,7 +127,9 @@ function iniciales(txt) {
   return ((p[0] || '?')[0] + (p[1] ? p[1][0] : '')).toUpperCase()
 }
 
-export function Sidebar({ tabs, areaSel, setAreaSel, nombreTab, perfil, email, onLogout, colapsado, setColapsado, onReset }) {
+export function Sidebar({ tabs, areaSel, setAreaSel, nombreTab, perfil, email, onLogout, colapsado: colapsadoProp, setColapsado, onReset, movilAbierto = false, setMovilAbierto = () => {} }) {
+  const movil = useEsMovil()
+  const colapsado = movil ? false : colapsadoProp
   const W = colapsado ? 76 : 272
   const grupos = SECCIONES_SEREIN.map(cat => ({ nombre: cat.nombre, items: cat.codes.filter(c => tabs.includes(c)) })).filter(g => g.items.length)
   const restantes = tabs.filter(t => !SECCIONES_SEREIN.some(c => c.codes.includes(t)))
@@ -121,10 +138,10 @@ export function Sidebar({ tabs, areaSel, setAreaSel, nombreTab, perfil, email, o
   const rol = (perfil && perfil.rol) || ''
   const [abiertos, setAbiertos] = useState(() => new Set([areaSel]))
   const toggleAbierto = t => setAbiertos(prev => { const n = new Set(prev); n.has(t) ? n.delete(t) : n.add(t); return n })
-  return (<aside style={{ width: W, minWidth: W, maxWidth: W, overflowX: 'hidden', flexShrink: 0, background: 'radial-gradient(520px 360px at 105% -6%, rgba(255,214,170,.55), transparent 62%), radial-gradient(460px 420px at -20% 108%, rgba(168,62,0,.55), transparent 60%), linear-gradient(168deg, #FF8A2E 0%, #F77716 46%, #E0630C 100%)', color: '#fff', borderRight: 'none', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh', transition: 'width .18s ease', fontFamily: THEME.font }}>
+  return (<>{movil && movilAbierto && <div onClick={() => setMovilAbierto(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(16,19,21,.45)', zIndex: 999 }} />}<aside style={{ width: W, minWidth: W, maxWidth: W, overflowX: 'hidden', flexShrink: 0, background: 'radial-gradient(520px 360px at 105% -6%, rgba(255,214,170,.55), transparent 62%), radial-gradient(460px 420px at -20% 108%, rgba(168,62,0,.55), transparent 60%), linear-gradient(168deg, #FF8A2E 0%, #F77716 46%, #E0630C 100%)', color: '#fff', borderRight: 'none', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh', transition: 'width .18s ease', fontFamily: THEME.font, ...(movil ? { position: 'fixed', top: 0, left: 0, zIndex: 1000, height: '100dvh', width: 288, minWidth: 288, maxWidth: 288, transform: movilAbierto ? 'translateX(0)' : 'translateX(-105%)', boxShadow: movilAbierto ? '0 0 40px rgba(0,0,0,.35)' : 'none', transition: 'transform .22s ease' } : {}) }}>
     <div style={{ padding: colapsado ? '18px 0' : '18px 18px 14px', display: 'flex', alignItems: 'center', justifyContent: colapsado ? 'center' : 'space-between' }}>
       {!colapsado && <div><LogoSerein alto={24} sobreNaranja /><div style={{ color: 'rgba(255,255,255,.78)', fontSize: 10, letterSpacing: 1.8, marginTop: 6, fontWeight: 600, textTransform: 'uppercase' }}>Panel de Gestión</div></div>}
-      <button onClick={() => setColapsado(!colapsado)} title="Colapsar menú" style={{ background: 'rgba(255,255,255,.18)', border: '1px solid rgba(255,255,255,.35)', cursor: 'pointer', color: '#fff', display: 'flex', padding: 6, borderRadius: 8 }}>
+      <button onClick={() => movil ? setMovilAbierto(false) : setColapsado(!colapsado)} title={movil ? 'Cerrar menú' : 'Colapsar menú'} style={{ background: 'rgba(255,255,255,.18)', border: '1px solid rgba(255,255,255,.35)', cursor: 'pointer', color: '#fff', display: 'flex', padding: 6, borderRadius: 8 }}>
         {colapsado ? <Menu size={16} /> : <ChevronsLeft size={16} />}
       </button>
     </div>
@@ -146,7 +163,7 @@ export function Sidebar({ tabs, areaSel, setAreaSel, nombreTab, perfil, email, o
           const hijos = SUBITEMS_SEREIN[t]
           const abierto = abiertos.has(t)
           return (<div key={t}>
-            <button onClick={() => { setAreaSel(t); if (hijos) toggleAbierto(t) }} title={label}
+            <button onClick={() => { setAreaSel(t); if (hijos) toggleAbierto(t); if (movil) setMovilAbierto(false) }} title={label}
               style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', cursor: 'pointer', border: 'none', marginBottom: 1, padding: colapsado ? '10px 0' : '10px 12px', justifyContent: colapsado ? 'center' : 'flex-start', borderRadius: 8, position: 'relative', background: act ? '#fff' : 'transparent', boxShadow: act ? '0 6px 14px -6px rgba(120,45,0,.5)' : 'none', color: act ? SEREIN.ink : 'rgba(255,255,255,.95)', fontWeight: act ? 600 : 500, fontSize: 13.5, fontFamily: THEME.font, transition: 'background .12s' }}
               onMouseEnter={e => { if (!act) e.currentTarget.style.background = 'rgba(255,255,255,.16)' }}
               onMouseLeave={e => { if (!act) e.currentTarget.style.background = 'transparent' }}>
@@ -158,7 +175,7 @@ export function Sidebar({ tabs, areaSel, setAreaSel, nombreTab, perfil, email, o
               <ul style={{ maxHeight: abierto ? 900 : 0, overflow: 'hidden', transition: 'max-height .25s ease', listStyle: 'none', margin: 0, padding: 0 }}>
                 {hijos.map(h => (
                   <li key={h}>
-                    <a onClick={() => setAreaSel(t)} title={label + ' · ' + h}
+                    <a onClick={() => { setAreaSel(t); if (movil) setMovilAbierto(false) }} title={label + ' · ' + h}
                       style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 12px 7px 22px', fontSize: 12.5, color: 'rgba(255,255,255,.82)', borderLeft: '1px solid rgba(255,255,255,.34)', marginLeft: 17, cursor: 'pointer' }}
                       onMouseEnter={e => { e.currentTarget.style.color = '#fff' }}
                       onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,.82)' }}>
@@ -184,7 +201,7 @@ export function Sidebar({ tabs, areaSel, setAreaSel, nombreTab, perfil, email, o
         {onReset && <div><span onClick={() => { if (window.confirm('¿Borrar los datos guardados y volver a los valores base? Esta acción no se puede deshacer.')) onReset() }} style={{ color: '#fff', textDecoration: 'underline', cursor: 'pointer' }}>Restablecer datos</span></div>}
       </div>}
     </div>
-  </aside>)
+  </aside></>)
 }
 
 export function GlobalStyles() {
@@ -258,7 +275,8 @@ export function TabsBar({ tabs, active, onChange }) {
   </div>)
 }
 
-export function PageHeader({ titulo, perfil, email }) {
+export function PageHeader({ titulo, perfil, email, onMenu }) {
+  const movil = useEsMovil()
   const hoy = new Date()
   const dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
   const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
@@ -267,6 +285,8 @@ export function PageHeader({ titulo, perfil, email }) {
   // Los títulos de cada módulo traen un emoji decorativo adelante; en el encabezado se muestra solo el nombre.
   titulo = String(titulo || '').replace(/^[^A-Za-z0-9ÁÉÍÓÚÑáéíóúñ]+/, '').trim()
   return (<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 22, paddingBottom: 4, fontFamily: THEME.font }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+    {movil && onMenu && <button onClick={onMenu} title="Abrir menú" aria-label="Abrir menú" style={{ width: 42, height: 42, flexShrink: 0, borderRadius: 12, background: SEREIN.orange, color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 18px -10px rgba(247,119,22,.8)' }}><Menu size={20} /></button>}
     <div style={{ minWidth: 0 }}>
       <div style={{ fontSize: 11.5, color: THEME.textMute, fontWeight: 500, marginBottom: 3 }}>SEREIN GROUP <span style={{ opacity: 0.5 }}>›</span> {titulo}</div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
@@ -274,8 +294,9 @@ export function PageHeader({ titulo, perfil, email }) {
         <span style={{ fontSize: 12.5, color: THEME.textMute }}>{fecha}</span>
       </div>
     </div>
+    </div>
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, background: THEME.surface, border: '1px solid ' + THEME.border, borderRadius: THEME.radiusPill, padding: '7px 12px', minWidth: 170 }}>
+      <div style={{ display: movil ? 'none' : 'flex', alignItems: 'center', gap: 7, background: THEME.surface, border: '1px solid ' + THEME.border, borderRadius: THEME.radiusPill, padding: '7px 12px', minWidth: 170 }}>
         <Search size={15} color={THEME.textMute} />
         <input placeholder="Buscar..." style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, width: '100%', color: THEME.text, fontFamily: THEME.font }} />
       </div>

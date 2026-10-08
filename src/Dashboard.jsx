@@ -5,7 +5,7 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { LogOut, TrendingUp, Wallet, AlertTriangle, Landmark, User } from 'lucide-react'
 import { DATA } from './data.js'
 import LogoSerein from './LogoSerein.jsx'
-import { Sidebar, PageHeader, THEME, GlobalStyles, MontoNetoBruto } from './ui.jsx'
+import { Sidebar, PageHeader, THEME, GlobalStyles, MontoNetoBruto, useEsMovil } from './ui.jsx'
 import ProyectosModule from './ProyectosModule.jsx'
 import OTModule, { OTS_INICIALES, resumenOTArea } from './OTModule.jsx'
 import PipelineOT from './PipelineOT.jsx'
@@ -242,6 +242,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
   })
   useEffect(() => { try { sessionStorage.setItem('serein_areaSel', areaSel) } catch (e) {} }, [areaSel])
   const [sidebarColapsado, setSidebarColapsado] = useState(false)
+  const [menuMovil, setMenuMovil] = useState(false)
+  const esMovil = useEsMovil()
   const [tabFinanzasInicial, setTabFinanzasInicial] = useState(null)
 
   const esModuloProyectos = areaSel === 'GESTION_PROYECTOS'
@@ -802,11 +804,11 @@ export default function Dashboard({ perfil, email, onLogout }) {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: THEME.bg, fontFamily: THEME.font }}>
       <GlobalStyles />
-      <Sidebar tabs={tabs} areaSel={areaSel} setAreaSel={setAreaSel} nombreTab={nombreTab} perfil={perfil} email={email} onLogout={onLogout} colapsado={sidebarColapsado} setColapsado={setSidebarColapsado} onReset={borrarDatosLocales} />
+      <Sidebar tabs={tabs} areaSel={areaSel} setAreaSel={setAreaSel} nombreTab={nombreTab} perfil={perfil} email={email} onLogout={onLogout} colapsado={sidebarColapsado} setColapsado={setSidebarColapsado} onReset={borrarDatosLocales} movilAbierto={menuMovil} setMovilAbierto={setMenuMovil} />
 
       <main style={{ flex: 1, minWidth: 0, height: '100vh', overflowY: 'auto', backgroundImage: 'radial-gradient(820px 300px at 88% -90px, rgba(247,119,22,.075), transparent 70%)', backgroundRepeat: 'no-repeat' }}>
-      <div style={{ padding: '26px 30px', maxWidth: 1280, margin: '0 auto' }}>
-              <PageHeader titulo={nombreTab(areaSel)} perfil={perfil} email={email} />
+      <div style={{ padding: esMovil ? '14px 12px' : '26px 30px', maxWidth: 1280, margin: '0 auto' }}>
+              <PageHeader titulo={nombreTab(areaSel)} perfil={perfil} email={email} onMenu={() => setMenuMovil(true)} />
         {esModuloOrganigrama ? (<OrganigramaModule esGerencia={esGerencia} />) : esModuloCRM ? (<CRMModule />) : esModuloAsesor && puedeVer('ASESOR') ? (<AsesorModule fin={fin} pp={pp} proyectos={proyectos} ots={ots} params={params} onIr={setAreaSel} />) : esModuloLibroCompras && puedeVer('LIBRO_COMPRAS') ? (<LibroComprasModule esGerencia={esGerencia} ots={ots} factoringList={params.factoring || []} proyectos={proyectos} setProyectos={setProyectos} />) : esModuloLibroVentas && puedeVer('LIBRO_VENTAS') ? (<LibroVentasModule ots={ots} proyectos={proyectos} facturas={facturas} setFacturas={setFacturas} params={params} />) : esModuloProyectos && puedeVer('GESTION_PROYECTOS') ? (() => {
           // proyectosIdsPermitidos filtra por p.ot (el N de OT/cotizacion del
           // proyecto). setProyectosSeguro fusiona el resultado del modulo
