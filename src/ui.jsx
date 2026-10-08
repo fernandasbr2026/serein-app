@@ -205,7 +205,7 @@ export function Sidebar({ tabs, areaSel, setAreaSel, nombreTab, perfil, email, o
 }
 
 export function GlobalStyles() {
-  return (<style>{'*{box-sizing:border-box}' + 'body{margin:0}' + '::selection{background:rgba(247,119,22,.18)}' + '::-webkit-scrollbar{width:10px;height:10px}' + '::-webkit-scrollbar-thumb{background:#CBD2DC;border-radius:8px;border:2px solid transparent;background-clip:content-box}' + '::-webkit-scrollbar-thumb:hover{background:#AAB3C0;background-clip:content-box}' + '::-webkit-scrollbar-track{background:transparent}' + 'table tbody tr{transition:background .12s ease}' + 'table tbody tr:hover{background:#FAFBFB}' + 'input:focus,select:focus,textarea:focus{outline:none;box-shadow:0 0 0 3px rgba(247,119,22,.15);border-color:#F77716 !important}' + 'button{transition:filter .12s ease,transform .06s ease,background .12s ease}' + 'button:not(:disabled):active{transform:translateY(1px)}' + 'table thead th{background:#F5F6F8 !important;color:#59626C !important;font-weight:600 !important;border-bottom:1px solid #E4E8ED !important;letter-spacing:.4px}' + 'table thead tr{border-bottom-color:#E4E8ED !important}' + 'table tbody td{border-color:#EEF0F3 !important}' + 'input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{border-radius:6px !important;border-color:#DFE4EA !important}' + 'input:not([type=checkbox]):not([type=radio]):not([type=range]):hover,select:hover,textarea:hover{border-color:#C9D0D8 !important}' + 'h1,h2,h3{text-wrap:balance}' + 'button{text-transform:none !important;letter-spacing:0 !important;font-family:Inter,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif !important}' + 'button:not([style*="border-radius: 50%"]):not([style*="border-radius: 1"]):not([style*="border-radius: 2"]):not([style*="border-radius: 99"]){border-radius:8px !important}' + '@keyframes girar{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}'}</style>)
+  return (<style>{'*{box-sizing:border-box}' + 'body{margin:0}' + '::selection{background:rgba(247,119,22,.18)}' + '::-webkit-scrollbar{width:10px;height:10px}' + '::-webkit-scrollbar-thumb{background:#CBD2DC;border-radius:8px;border:2px solid transparent;background-clip:content-box}' + '::-webkit-scrollbar-thumb:hover{background:#AAB3C0;background-clip:content-box}' + '::-webkit-scrollbar-track{background:transparent}' + 'table tbody tr{transition:background .12s ease}' + 'table tbody tr:hover{background:#FAFBFB}' + 'input:focus,select:focus,textarea:focus{outline:none;box-shadow:0 0 0 3px rgba(247,119,22,.15);border-color:#F77716 !important}' + 'button{transition:filter .12s ease,transform .06s ease,background .12s ease}' + 'button:not(:disabled):active{transform:translateY(1px)}' + 'table thead th{background:#F5F6F8 !important;color:#59626C !important;font-weight:600 !important;border-bottom:1px solid #E4E8ED !important;letter-spacing:.4px}' + 'table thead tr{border-bottom-color:#E4E8ED !important}' + 'table tbody td{border-color:#EEF0F3 !important}' + 'input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{border-radius:6px !important;border-color:#DFE4EA !important}' + 'input:not([type=checkbox]):not([type=radio]):not([type=range]):hover,select:hover,textarea:hover{border-color:#C9D0D8 !important}' + 'h1,h2,h3{text-wrap:balance}' + 'label{max-width:100%}select{max-width:100%;min-width:0}' + 'button{text-transform:none !important;letter-spacing:0 !important;font-family:Inter,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif !important}' + 'button:not([style*="border-radius: 50%"]):not([style*="border-radius: 1"]):not([style*="border-radius: 2"]):not([style*="border-radius: 99"]){border-radius:8px !important}' + '@keyframes girar{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}'}</style>)
 }
 
 // ---------------- Componentes de presentacion reutilizables (Serein 2026) ----------------
@@ -284,14 +284,14 @@ export function PageHeader({ titulo, perfil, email, onMenu }) {
   const nom = (perfil && perfil.nombre) || email || 'Usuario'
   // Los títulos de cada módulo traen un emoji decorativo adelante; en el encabezado se muestra solo el nombre.
   titulo = String(titulo || '').replace(/^[^A-Za-z0-9ÁÉÍÓÚÑáéíóúñ]+/, '').trim()
-  return (<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 22, paddingBottom: 4, fontFamily: THEME.font }}>
+  return (<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: movil ? 'nowrap' : 'wrap', gap: 12, marginBottom: movil ? 16 : 22, paddingBottom: 4, fontFamily: THEME.font }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
     {movil && onMenu && <button onClick={onMenu} title="Abrir menú" aria-label="Abrir menú" style={{ width: 42, height: 42, flexShrink: 0, borderRadius: 12, background: SEREIN.orange, color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 18px -10px rgba(247,119,22,.8)' }}><Menu size={20} /></button>}
     <div style={{ minWidth: 0 }}>
       <div style={{ fontSize: 11.5, color: THEME.textMute, fontWeight: 500, marginBottom: 3 }}>SEREIN GROUP <span style={{ opacity: 0.5 }}>›</span> {titulo}</div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
         <h1 style={{ margin: 0, fontFamily: THEME.fontDisplay, fontSize: 24, fontWeight: 700, color: THEME.text, textTransform: 'none', letterSpacing: -0.5 }}>{titulo}</h1>
-        <span style={{ fontSize: 12.5, color: THEME.textMute }}>{fecha}</span>
+        <span style={{ fontSize: 12.5, color: THEME.textMute, display: movil ? 'none' : 'inline' }}>{fecha}</span>
       </div>
     </div>
     </div>
@@ -300,7 +300,7 @@ export function PageHeader({ titulo, perfil, email, onMenu }) {
         <Search size={15} color={THEME.textMute} />
         <input placeholder="Buscar..." style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, width: '100%', color: THEME.text, fontFamily: THEME.font }} />
       </div>
-      <button title="Notificaciones" style={{ position: 'relative', width: 38, height: 38, borderRadius: '50%', background: THEME.surface, border: '1px solid ' + THEME.border, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.textSoft }}>
+      <button title="Notificaciones" style={{ position: 'relative', width: 38, height: 38, borderRadius: '50%', background: THEME.surface, border: '1px solid ' + THEME.border, cursor: 'pointer', display: movil ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.textSoft }}>
         <Bell size={17} />
         <span style={{ position: 'absolute', top: 8, right: 9, width: 7, height: 7, borderRadius: '50%', background: THEME.orange, border: '1.5px solid #fff' }} />
       </button>

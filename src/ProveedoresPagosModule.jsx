@@ -970,7 +970,7 @@ export default function ProveedoresPagosModule({ pp: ppExt, setPp: setPpExt, gas
         const hayVencido = pend.some(g => g.vencimiento && g.vencimiento < hoyStr);
         return (<div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: '2px solid ' + (hayVencido ? '#C5453D' : '#F77716'), marginBottom: 16, padding: 14 }}>
           <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 8 }}>Gastos fijos por pagar ({pend.length})</div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}><tbody>
+          <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}><tbody>
           {pend.slice().sort((a, b) => (a.vencimiento || '').localeCompare(b.vencimiento || '')).map((g, i) => {
             const venc = g.vencimiento || '';
             const vencido = venc && venc < hoyStr;
@@ -983,7 +983,7 @@ export default function ProveedoresPagosModule({ pp: ppExt, setPp: setPpExt, gas
               <td style={{ padding: '6px 8px', color: color, fontWeight: (vencido || proximo) ? 700 : 400, whiteSpace: 'nowrap' }}>{venc || '-'}{vencido ? ' - VENCIDO' : proximo ? ' - vence pronto' : ''}</td>
             </tr>);
           })}
-          </tbody></table>
+          </tbody></table></div>
         </div>);
       })()}
       {(() => {
