@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react'
-import { Plus, Trash2, X, Copy, Landmark, ReceiptText, PieChart as PieIcon, CalendarClock, BarChart3, CheckCircle2, Download, TrendingUp, Pencil } from 'lucide-react'
+import { Plus, Trash2, X, Copy, Landmark, ReceiptText, PieChart as PieIcon, CalendarClock, BarChart3, CheckCircle2, Download, TrendingUp, Pencil, Users, Palette, AlertTriangle } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 import { SEREIN } from './theme-serein.js'
@@ -1048,12 +1048,12 @@ const esNomina = categoria => /sueldo/i.test(categoria || '') || categoria === '
 // a pedido explícito ("visualización de estos colores").
 function kpiSolida(label, valor, color, icono, sub, onClick) {
   return (
-    <div onClick={onClick} style={{ background: color, color: '#fff', borderRadius: 10, padding: '14px 16px', flex: '1 1 190px', boxShadow: '0 2px 6px rgba(0,0,0,.12)', cursor: onClick ? 'pointer' : 'default', transition: 'transform .1s ease, box-shadow .1s ease' }}
-      onMouseEnter={e => { if (onClick) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 14px rgba(0,0,0,.2)' } }}
-      onMouseLeave={e => { if (onClick) { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 2px 6px rgba(0,0,0,.12)' } }}>
+    <div onClick={onClick} style={{ backgroundColor: color, backgroundImage: 'linear-gradient(135deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,0) 58%)', color: '#fff', borderRadius: 14, padding: '16px 18px', flex: '1 1 190px', boxShadow: '0 12px 24px -14px rgba(16,19,21,.45)', cursor: onClick ? 'pointer' : 'default', transition: 'transform .12s ease, box-shadow .12s ease' }}
+      onMouseEnter={e => { if (onClick) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 16px 28px -14px rgba(16,19,21,.55)' } }}
+      onMouseLeave={e => { if (onClick) { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 12px 24px -14px rgba(16,19,21,.45)' } }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 22 }}>{valor}</div>
-        {icono}
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 22, letterSpacing: -0.4 }}>{valor}</div>
+        <span style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(255,255,255,.2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icono}</span>
       </div>
       <div style={{ fontSize: 12, marginTop: 4, opacity: 0.92 }}>{label}</div>
       {sub && <div style={{ fontSize: 10.5, marginTop: 3, opacity: 0.8 }}>{sub}</div>}
@@ -1352,9 +1352,9 @@ export function PorPagar({ fin, setFin, proyectos, setProyectos, params, setPara
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
         {kpiSolida('Por pagar esta semana', clp(totalSemana), C.naranja, <CalendarClock size={20} />, null, () => setDetalle('semana'))}
         {kpiSolida('Por pagar este mes', clp(totalMes), '#0E7A8F', <BarChart3 size={20} />, mesActual, () => setDetalle('mes'))}
-        {kpiSolida('Nóminas pendientes', clp(totalNominas), COLOR_TIPO_PAGO['Nómina'], <span style={{ fontSize: 18 }}>👥</span>, null, () => setDetalle('nominas'))}
-        {kpiSolida('Proveedores (proyectos)', clp(totalProveedores), COLOR_TIPO_PAGO['Compra proyecto'], <span style={{ fontSize: 18 }}>🎨</span>, null, () => setDetalle('proveedores'))}
-        {kpiSolida('Vencido', clp(totalVencido), C.rojo, <span style={{ fontSize: 18 }}>⚠</span>, null, () => setDetalle('vencido'))}
+        {kpiSolida('Nóminas pendientes', clp(totalNominas), COLOR_TIPO_PAGO['Nómina'], <Users size={18} />, null, () => setDetalle('nominas'))}
+        {kpiSolida('Proveedores (proyectos)', clp(totalProveedores), COLOR_TIPO_PAGO['Compra proyecto'], <Palette size={18} />, null, () => setDetalle('proveedores'))}
+        {kpiSolida('Vencido', clp(totalVencido), C.rojo, <AlertTriangle size={18} />, null, () => setDetalle('vencido'))}
         {kpiSolida('UF hoy', clp(uf.valor), ufHoyOk ? C.verde : '#94A3B8', <TrendingUp size={20} />, uf.fecha ? ('al ' + uf.fecha + (ufHoyOk ? ' · al día' : ' · desactualizada')) : 'sin datos', () => setDetalle('uf'))}
       </div>
       {detalle === 'uf' && (
