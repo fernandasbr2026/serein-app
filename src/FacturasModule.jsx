@@ -41,11 +41,13 @@ const colorEstado = e => ({ Pagado: C.verde, Factoring: C.ambar, Vencida: C.rojo
 
 const VENDEDORES = ['General', 'Mario']
 const IVA = 0.19
-const ivaDe = n => Math.round((parseInt(String(n).replace(/\D/g, ''), 10) || 0) * IVA)
-const brutoDe = n => { const v = parseInt(String(n).replace(/\D/g, ''), 10) || 0; return v + Math.round(v * IVA) }
+// Entero con signo: las notas de crédito traen el neto en negativo y antes el guion se perdía (quedaban como si fueran una factura).
+const enteroDe = n => { const s = String(n == null ? '' : n); const v = parseInt(s.replace(/\D/g, ''), 10) || 0; return /^\s*-/.test(s) ? -v : v }
+const ivaDe = n => Math.round(enteroDe(n) * IVA)
+const brutoDe = n => { const v = enteroDe(n); return v + Math.round(v * IVA) }
 // Versiones que respetan si la factura está marcada como exenta (sin IVA)
 const ivaFacturaDe = x => x.iva === 'exenta' ? 0 : ivaDe(x.neto)
-export const montoFacturaDe = x => x.iva === 'exenta' ? (parseInt(String(x.neto).replace(/\D/g, ''), 10) || 0) : brutoDe(x.neto)
+export const montoFacturaDe = x => x.iva === 'exenta' ? enteroDe(x.neto) : brutoDe(x.neto)
 
 // ————— Saldo pendiente real (neto/bruto) —————
 // Antes "cobrado"/"por cobrar" solo miraban el campo x.estado (Pagado o
@@ -66,10 +68,14 @@ export const montoFacturaDe = x => x.iva === 'exenta' ? (parseInt(String(x.neto)
 export function abonoTotalDe(x) {
   return (x.abonos || []).reduce((a, ab) => a + (Number(ab.monto) || 0), 0)
 }
+// Notas de crédito aplicadas a esta factura (las mantiene al día el Libro de Ventas en ncAplicadas): rebajan lo que queda por cobrar.
+export function ncTotalDe(x) {
+  return (x.ncAplicadas || []).reduce((a, n) => a + (Number(n.bruto) || 0), 0)
+}
 export function saldoPendienteDe(x) {
   const bruto = montoFacturaDe(x)
   if (x.estado === 'Anulada' || x.estado === 'Pagado' || x.estado === 'Factoring') return { neto: 0, bruto: 0 }
-  const pagadoBruto = (x.abonos || []).reduce((a, ab) => a + (Number(ab.monto) || 0), 0)
+  const pagadoBruto = (x.abonos || []).reduce((a, ab) => a + (Number(ab.monto) || 0), 0) + ncTotalDe(x)
   const saldoBruto = Math.max(0, bruto - pagadoBruto)
   const saldoNeto = bruto > 0 ? Math.max(0, Math.round((x.neto || 0) * (saldoBruto / bruto))) : 0
   return { neto: saldoNeto, bruto: saldoBruto }
@@ -79,7 +85,7 @@ export function saldoPendienteDe(x) {
 export function estadoPagoDe(x) {
   if (x.estado === 'Anulada') return 'Anulada'
   const { bruto } = saldoPendienteDe(x)
-  if (bruto <= 0) return 'Pagada'
+  if (bruto <= 0) return ncTotalDe(x) > 0 && ncTotalDe(x) >= montoFacturaDe(x) ? 'Anulada por NC' : 'Pagada'
   return (x.abonos || []).length > 0 ? 'Parcial' : (x.estado === 'Vencida' ? 'Vencida' : 'Pendiente')
 }
 
@@ -705,6 +711,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
                     <button onClick={() => setExpandido(expandido === x.id ? null : x.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: saldoPendienteDe(x).bruto > 0 ? C.rojo : C.verde, fontWeight: 600, textDecoration: 'underline', fontSize: 12.5 }}>
                       {clp(saldoPendienteDe(x).bruto)}
                     </button>
+                    {ncTotalDe(x) > 0 && <div style={{ fontSize: 10.5, color: C.rojo, fontWeight: 500 }}>NC −{clp(ncTotalDe(x))}</div>}
                   </td>
                   <td style={{ padding: '5px 6px' }}><input type="date" value={x.fecha_pago} onChange={e => actualizar(x.id, 'fecha_pago', e.target.value)} style={{ ...inp, width: 130 }} /></td>
                   <td style={{ padding: '5px 6px' }}>

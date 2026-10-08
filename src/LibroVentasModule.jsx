@@ -162,7 +162,12 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
   // Notas de credito (tipo 61): restan de la venta
   const esNC = r => String(r.document_type || '').trim() === '61'
   const sgn = r => esNC(r) ? -1 : 1
-  const fichaDe = r => ({ id: 'lv' + r.id, libroId: 'LV' + r.id, origen: 'libroVentas', numero: String(r.document_number || ''), cliente: r.client_name || '', ot: String(r.ot_id || ''), oc: r.oc || '', nv: r.nv || '', cc: r.cc_ot || '', fecha_emision: r.emission_date || '', vencimiento: r.vencimiento || '', neto: sgn(r) * Math.round(Number(r.neto) || 0), monto: sgn(r) * Math.round(Number(r.total) || 0), estado: r.estado_pago || 'Pendiente', fecha_pago: r.fecha_pago || '', banco: r.banco || '', medioPago: r.medio_pago || '', numeroCheque: r.numero_cheque || '', factoringId: r.factoring_id || '', dias: r.dias || 30, diasMora: r.dias_mora || 0, comentarios: 'Importada del Libro de Ventas', vendedor: 'General' })
+  // Notas de crédito que rebajan una factura: mismo folio y, si ambos traen RUT, mismo cliente.
+  const mismaFactura = (n, f) => !esNC(f) && String(f.document_number || '').trim() === String(n.anula_folio || '').trim() && (!n.client_rut || !f.client_rut || n.client_rut === f.client_rut)
+  const vigente = n => esNC(n) && !n.oculto && n.estado_pago !== 'Anulada' && String(n.anula_folio || '').trim()
+  const ncsDe = f => todas.filter(n => vigente(n) && mismaFactura(n, f))
+  const ncAplicadasDe = f => esNC(f) ? [] : ncsDe(f).map(n => ({ folio: String(n.document_number || ''), neto: Math.round(Number(n.neto) || 0), bruto: Math.round(Number(n.total) || 0) }))
+  const fichaDe = r => ({ id: 'lv' + r.id, libroId: 'LV' + r.id, origen: 'libroVentas', numero: String(r.document_number || ''), cliente: r.client_name || '', ot: String(r.ot_id || ''), oc: r.oc || '', nv: r.nv || '', cc: r.cc_ot || '', fecha_emision: r.emission_date || '', vencimiento: r.vencimiento || '', neto: sgn(r) * Math.round(Number(r.neto) || 0), monto: sgn(r) * Math.round(Number(r.total) || 0), estado: r.estado_pago || 'Pendiente', fecha_pago: r.fecha_pago || '', banco: r.banco || '', medioPago: r.medio_pago || '', numeroCheque: r.numero_cheque || '', factoringId: r.factoring_id || '', dias: r.dias || 30, diasMora: r.dias_mora || 0, comentarios: 'Importada del Libro de Ventas', vendedor: 'General', ncAplicadas: ncAplicadasDe(r) })
   const vaAFacturas = r => !!r.area && !r.oculto && r.estado_pago !== 'Anulada'
 
   // Copia una o varias filas del libro hacia Facturas de una sola vez (cada llamada reescribe
@@ -274,6 +279,29 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todas, loading])
+
+  // Cada vez que cambian las notas de crédito (alta, folio asociado, ocultar), la ficha de la factura en Facturas
+  // se actualiza sola: solo se toca el campo ncAplicadas, nada de lo que se edite allá.
+  useEffect(() => {
+    if (loading || !todas.length) return
+    const esperado = {}
+    todas.forEach(r => { if (vaAFacturas(r) && !esNC(r)) esperado['LV' + r.id] = JSON.stringify(ncAplicadasDe(r)) })
+    let cambio = false
+    const base = {}
+    Object.keys(facturas || {}).forEach(a => {
+      base[a] = (facturas[a] || []).map(f => {
+        if (f.origen !== 'libroVentas' || !(f.libroId in esperado)) return f
+        if (JSON.stringify(f.ncAplicadas || []) === esperado[f.libroId]) return f
+        cambio = true
+        return { ...f, ncAplicadas: JSON.parse(esperado[f.libroId]) }
+      })
+    })
+    if (!cambio) return
+    try { localStorage.setItem('serein_facturas', JSON.stringify(base)) } catch (e) {}
+    setFacturas(base)
+    pushState()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todas, loading, facturas])
 
   const meses = useMemo(() => [...new Set(todas.map(r => (r.emission_date || '').slice(0, 7)).filter(Boolean))].sort().reverse(), [todas])
   const tipos = useMemo(() => [...new Set(todas.map(r => r.document_type).filter(Boolean))].sort(), [todas])
@@ -390,6 +418,13 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
       if (error) throw error
       if (!data || !data.ok) throw new Error((data && data.error) || 'No se pudo leer la factura.')
       const d = data.datos || {}
+      if (/cr[eé]dito/i.test(String(d.tipoDocumento || ''))) {
+        const emisionNC = /^\d{4}-\d{2}-\d{2}$/.test(String(d.fecha || '')) ? d.fecha : hoyISO()
+        abrirNC({ folioNC: d.folio != null ? String(d.folio) : '', folioFactura: d.folioReferencia != null ? String(d.folioReferencia) : '', emission_date: emisionNC, modo: d.neto != null ? 'parcial' : 'completa', neto: d.neto != null ? String(Math.round(d.neto)) : '' })
+        setMsgIA(d.folioReferencia ? 'Nota de crédito leída: confirma la factura que corrige y el monto.' : 'Nota de crédito leída: indica el folio de la factura que corrige.')
+        setLeyendoIA(false)
+        return
+      }
       const exenta = /exent/i.test(String(d.tipoDocumento || '')) || (d.iva === 0 && d.total != null && d.neto != null && Math.round(d.total) === Math.round(d.neto))
       const emision = /^\d{4}-\d{2}-\d{2}$/.test(String(d.fecha || '')) ? d.fecha : hoyISO()
       const neto = d.neto != null ? Math.round(d.neto) : ''
@@ -433,6 +468,41 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
     } catch (e) { window.alert('No se pudo guardar la factura: ' + (e.message || e)) }
   }
 
+  // ---------- Nota de crédito: se escribe el folio de la factura y el sistema completa el resto ----------
+  const ncVacia = { folioNC: '', folioFactura: '', clienteRut: '', emission_date: hoyISO(), modo: 'completa', neto: '' }
+  const [mostrarNC, setMostrarNC] = useState(false)
+  const [nc, setNC] = useState(ncVacia)
+  const candidatasNC = nc.folioFactura.trim() ? todas.filter(x => !esNC(x) && !x.oculto && String(x.document_number || '').trim() === nc.folioFactura.trim()) : []
+  const facturaNC = candidatasNC.length === 1 ? candidatasNC[0] : (candidatasNC.find(x => (x.client_rut || '') === nc.clienteRut) || null)
+  const previasNC = facturaNC ? ncsDe(facturaNC) : []
+  const sum = (arr, k) => arr.reduce((a, x) => a + (Math.round(Number(x[k]) || 0)), 0)
+  const saldoNetoNC = facturaNC ? Math.max(0, Math.round(Number(facturaNC.neto) || 0) - sum(previasNC, 'neto')) : 0
+  const saldoIvaNC = facturaNC ? Math.max(0, Math.round(Number(facturaNC.iva) || 0) - sum(previasNC, 'iva')) : 0
+  const netoNC = !facturaNC ? 0 : (nc.modo === 'completa' ? saldoNetoNC : Math.round(Number(nc.neto) || 0))
+  const exentaNC = !!facturaNC && Math.round(Number(facturaNC.iva) || 0) === 0
+  const ivaNC = !facturaNC ? 0 : exentaNC ? 0 : (netoNC === saldoNetoNC ? saldoIvaNC : Math.round(netoNC * 0.19))
+  const folioNCRepetido = !!nc.folioNC.trim() && !!facturaNC && todas.some(x => esNC(x) && String(x.document_number || '').trim() === nc.folioNC.trim() && (x.client_rut || '') === (facturaNC.client_rut || ''))
+  const errorNC = !facturaNC ? '' : netoNC <= 0 ? 'Indica el monto neto a rebajar.' : netoNC > saldoNetoNC ? 'El monto supera lo que queda por rebajar de esta factura (' + clp(saldoNetoNC) + ' neto).' : folioNCRepetido ? 'Ya existe una nota de crédito con ese folio para este cliente.' : ''
+  const abrirNC = (extra) => { setNC({ ...ncVacia, ...(extra || {}) }); setMostrarNC(true); setMostrarAgregar(false) }
+  const guardarNC = async () => {
+    if (!facturaNC || errorNC || !nc.folioNC.trim()) return
+    const f = facturaNC
+    const reg = {
+      emission_date: nc.emission_date || hoyISO(), vencimiento: null, document_number: nc.folioNC.trim(),
+      client_name: f.client_name || '', client_rut: f.client_rut || '', document_type: '61',
+      neto: netoNC, iva: ivaNC, total: netoNC + ivaNC, area: f.area || null, estado_pago: 'Pendiente', oculto: false,
+      oc: f.oc || '', nv: f.nv || '', anula_folio: String(f.document_number || '').trim(),
+      ...(f.ot_id ? { ot_id: f.ot_id } : {}), ...(f.cc_ot ? { cc_ot: f.cc_ot } : {}),
+    }
+    try {
+      const { data, error } = await supabase.from('libro_ventas').insert(reg).select().single()
+      if (error) throw error
+      setRows(rs => [data, ...rs])
+      setMostrarNC(false); setNC(ncVacia)
+      setMsgIA('Nota de crédito ' + reg.document_number + ' registrada: rebaja ' + clp(netoNC) + ' neto de la factura ' + reg.anula_folio + '.')
+    } catch (e) { window.alert('No se pudo guardar la nota de crédito: ' + (e.message || e)) }
+  }
+
   const perdidaDe = r => {
     if (r.estado_pago !== 'Factoring') return null
     const f = facs.find(x => x.id === r.factoring_id) || facs[0]
@@ -454,7 +524,8 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
           <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.xls,.csv" style={{ display: 'none' }} onChange={e => { const f = e.target.files[0]; if (f) importarExcel(f); e.target.value = '' }} />
           <input ref={archivoIARef} type="file" accept=".pdf,image/*" multiple style={{ display: 'none' }} onChange={leerFacturaIA} />
           <button onClick={() => archivoIARef.current && archivoIARef.current.click()} disabled={leyendoIA} style={{ background: C.orange, color: '#fff', border: 'none', padding: '9px 16px', borderRadius: 6, cursor: leyendoIA ? 'wait' : 'pointer', fontWeight: 600, fontSize: 13 }}>{leyendoIA ? 'Leyendo factura...' : 'Leer factura con IA'}</button>
-          <button onClick={() => setMostrarAgregar(v => !v)} style={{ background: '#fff', color: C.navy, border: '1px solid ' + C.navy, padding: '9px 16px', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>{mostrarAgregar ? 'Cancelar' : '+ Agregar factura'}</button>
+          <button onClick={() => { if (mostrarNC) setMostrarNC(false); else abrirNC() }} style={{ background: '#fff', color: C.red, border: '1px solid ' + C.red, padding: '9px 16px', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>{mostrarNC ? 'Cancelar nota' : '+ Nota de crédito'}</button>
+          <button onClick={() => { setMostrarNC(false); setMostrarAgregar(v => !v) }} style={{ background: '#fff', color: C.navy, border: '1px solid ' + C.navy, padding: '9px 16px', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>{mostrarAgregar ? 'Cancelar' : '+ Agregar factura'}</button>
           <button onClick={() => fileRef.current && fileRef.current.click()} style={{ background: C.orange, color: '#fff', border: 'none', padding: '9px 16px', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Importar Excel</button>
           <button onClick={sincronizar} disabled={syncing} style={{ background: C.navy, color: '#fff', border: 'none', padding: '9px 16px', borderRadius: 6, cursor: syncing ? 'wait' : 'pointer', fontWeight: 600, fontSize: 13 }}>{syncing ? 'Sincronizando...' : 'Sincronizar con Defontana'}</button>
         </div>
@@ -482,6 +553,51 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
       )}
 
       {msgIA ? <div style={{ background: msgIA.startsWith('Error') ? '#FCEBEA' : '#E6F7EE', border: '1px solid ' + (msgIA.startsWith('Error') ? C.red : C.green), color: msgIA.startsWith('Error') ? C.red : '#1B9E5D', padding: '8px 12px', borderRadius: 6, fontSize: 12.5, marginBottom: 12 }}>{msgIA}</div> : null}
+
+      {mostrarNC && (
+        <div style={{ border: '1px solid ' + C.red, borderRadius: 8, padding: 14, marginBottom: 14, background: '#FFF8F7' }}>
+          <div style={{ fontWeight: 700, color: C.red, marginBottom: 10 }}>Nueva nota de crédito</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 10, alignItems: 'end' }}>
+            <label style={{ fontSize: 11, color: C.mut }}>Folio de la factura que corrige
+              <input list="facturas-nc" autoFocus value={nc.folioFactura} onChange={e => setNC(v => ({ ...v, folioFactura: e.target.value, clienteRut: '' }))} placeholder="ej. 1700" style={{ ...ip, width: '100%' }} />
+              <datalist id="facturas-nc">{todas.filter(x => !esNC(x) && !x.oculto).map(x => <option key={x.id} value={String(x.document_number || '')}>{(x.client_name || '') + ' - ' + clp(x.total)}</option>)}</datalist>
+            </label>
+            <label style={{ fontSize: 11, color: C.mut }}>N° de la nota de crédito<input value={nc.folioNC} onChange={e => setNC(v => ({ ...v, folioNC: e.target.value }))} style={{ ...ip, width: '100%' }} /></label>
+            <label style={{ fontSize: 11, color: C.mut }}>Fecha de emisión<input type="date" value={nc.emission_date} onChange={e => setNC(v => ({ ...v, emission_date: e.target.value }))} style={{ ...ip, width: '100%' }} /></label>
+            {candidatasNC.length > 1 && <label style={{ fontSize: 11, color: C.mut }}>Hay más de una factura con ese folio: elige el cliente
+              <select value={nc.clienteRut} onChange={e => setNC(v => ({ ...v, clienteRut: e.target.value }))} style={{ ...ip, width: '100%' }}><option value="">- cliente -</option>{candidatasNC.map(x => <option key={x.id} value={x.client_rut || ''}>{(x.client_name || x.client_rut) + ' - ' + clp(x.total)}</option>)}</select>
+            </label>}
+          </div>
+          {nc.folioFactura.trim() && candidatasNC.length === 0 && <div style={{ marginTop: 10, fontSize: 12.5, color: C.red }}>No encontré una factura con el folio {nc.folioFactura.trim()} en el libro.</div>}
+          {facturaNC && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ background: '#fff', border: '1px solid ' + C.border, borderRadius: 8, padding: '10px 12px', fontSize: 12.5, display: 'flex', flexWrap: 'wrap', gap: '4px 22px' }}>
+                <span><b>Factura {facturaNC.document_number}</b> · {fmtF(facturaNC.emission_date)}</span>
+                <span>{facturaNC.client_name} <span style={{ color: C.mut }}>{facturaNC.client_rut}</span></span>
+                <span>Neto {clp(facturaNC.neto)} · Total {clp(facturaNC.total)}</span>
+                {facturaNC.area && <span>Área: {facturaNC.area}</span>}
+                {facturaNC.ot_id && <span>OT: {facturaNC.ot_id}</span>}
+                {facturaNC.oc && <span>OC: {facturaNC.oc}</span>}
+                {previasNC.length > 0 && <span style={{ color: C.red }}>NC previas: −{clp(sum(previasNC, 'neto'))} neto ({previasNC.map(n => n.document_number).join(', ')})</span>}
+                <span style={{ fontWeight: 700 }}>Queda por rebajar: {clp(saldoNetoNC)} neto</span>
+              </div>
+              {saldoNetoNC <= 0 ? <div style={{ marginTop: 10, fontSize: 12.5, color: C.red }}>Esta factura ya está rebajada por completo con notas de crédito.</div> : (
+                <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center' }}>
+                  <label style={{ fontSize: 13, cursor: 'pointer' }}><input type="radio" checked={nc.modo === 'completa'} onChange={() => setNC(v => ({ ...v, modo: 'completa' }))} /> Completa (anula {clp(saldoNetoNC)} neto)</label>
+                  <label style={{ fontSize: 13, cursor: 'pointer' }}><input type="radio" checked={nc.modo === 'parcial'} onChange={() => setNC(v => ({ ...v, modo: 'parcial' }))} /> Parcial</label>
+                  {nc.modo === 'parcial' && <label style={{ fontSize: 11, color: C.mut }}>Neto a rebajar<input type="number" value={nc.neto} onChange={e => setNC(v => ({ ...v, neto: e.target.value }))} style={{ ...ip, width: 150, marginLeft: 6 }} /></label>}
+                  <span style={{ fontSize: 13 }}>Neto <b style={{ color: C.red }}>−{clp(netoNC)}</b> · IVA <b style={{ color: C.red }}>−{clp(ivaNC)}</b> · Total <b style={{ color: C.red }}>−{clp(netoNC + ivaNC)}</b></span>
+                </div>
+              )}
+              {errorNC && saldoNetoNC > 0 && <div style={{ marginTop: 8, fontSize: 12.5, color: C.red }}>{errorNC}</div>}
+              {saldoNetoNC > 0 && !nc.folioNC.trim() && <div style={{ marginTop: 8, fontSize: 12.5, color: C.mut }}>Falta el N° de la nota de crédito.</div>}
+              <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                <button onClick={guardarNC} disabled={!!errorNC || !nc.folioNC.trim() || saldoNetoNC <= 0} style={{ padding: '9px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, border: 'none', background: (errorNC || !nc.folioNC.trim() || saldoNetoNC <= 0) ? '#CBD2D8' : C.red, color: '#fff', cursor: (errorNC || !nc.folioNC.trim() || saldoNetoNC <= 0) ? 'default' : 'pointer' }}>Confirmar nota de crédito</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {syncMsg ? <div style={{ background: syncMsg.startsWith('Error') ? '#FCEBEA' : '#E6F7EE', border: '1px solid ' + (syncMsg.startsWith('Error') ? C.red : C.green), color: syncMsg.startsWith('Error') ? C.red : '#1B9E5D', padding: '8px 12px', borderRadius: 6, fontSize: 12.5, marginBottom: 12 }}>{syncMsg}</div> : null}
 
@@ -549,7 +665,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
                   <td style={{ padding: '7px 10px', fontSize: 11.5 }}>{r.document_type}{esNC(r) ? <span style={{ marginLeft: 5, background: C.red, color: '#fff', padding: '1px 5px', borderRadius: 3, fontSize: 10, fontWeight: 700 }}>NC</span> : null}</td>
                   <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', color: esNC(r) ? C.red : undefined }}>{clp(sgn(r) * (+r.neto || 0))}</td>
                   <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', color: esNC(r) ? C.red : C.orange }}>{clp(sgn(r) * (+r.iva || 0))}</td>
-                  <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700, color: esNC(r) ? C.red : undefined }}>{clp(sgn(r) * (+r.total || 0))}</td>
+                  <td style={{ padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700, color: esNC(r) ? C.red : undefined }}>{clp(sgn(r) * (+r.total || 0))}{(() => { const ns = esNC(r) ? [] : ncsDe(r); return ns.length ? <div style={{ fontSize: 10.5, fontWeight: 500, color: C.red }}>NC −{clp(sum(ns, 'total'))} · saldo {clp((+r.total || 0) - sum(ns, 'total'))}</div> : null })()}</td>
                   <td style={{ padding: '7px 10px' }}>
                     <select style={{ ...sel, minWidth: 110 }} value={r.area || ''} onChange={e => setCampo(r, 'area', e.target.value)}>
                       <option value="">- area -</option>
@@ -603,12 +719,12 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
                     <td colSpan={headersLV.length + 1} style={{ padding: '8px 12px' }}>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5 }}>
                         <b style={{ color: C.red }}>Nota de credito</b>
-                        <span style={{ color: C.mut }}>Anula / rebaja la factura N\u00b0</span>
+                        <span style={{ color: C.mut }}>Anula / rebaja la factura N°</span>
                         <input list={'facturas-' + r.id} value={r.anula_folio || ''} onChange={e => setCampo(r, 'anula_folio', e.target.value)} placeholder="Folio de la factura" style={{ ...ip, width: 160 }} />
                         <datalist id={'facturas-' + r.id}>
                           {todas.filter(x => !esNC(x) && x.client_rut === r.client_rut).map(x => <option key={x.id} value={String(x.document_number || '')}>{x.document_number} - {clp(x.total)}</option>)}
                         </datalist>
-                        {r.anula_folio ? <span style={{ color: C.mut }}>Anula la factura {r.anula_folio}</span> : <span style={{ color: C.mut }}>Sin factura asociada</span>}
+                        {(() => { const fo = r.anula_folio ? todas.find(x => mismaFactura(r, x)) : null; return r.anula_folio ? <span style={{ color: C.mut }}>{fo ? 'Corrige la factura ' + r.anula_folio + ' de ' + (fo.client_name || fo.client_rut) + ' (' + clp(fo.total) + ')' + (Math.round(Number(r.neto) || 0) >= Math.round(Number(fo.neto) || 0) ? ' · completa' : ' · parcial') : 'Anula la factura ' + r.anula_folio + ' (no está en el libro)'}</span> : <span style={{ color: C.mut }}>Sin factura asociada: elige el folio para que descuente</span> })()}
                       </div>
                     </td>
                   </tr>

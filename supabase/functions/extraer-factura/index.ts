@@ -33,6 +33,7 @@ const ESQUEMA_JSON = `{
   "cliente": string | null,
   "rutCliente": string | null,
   "tipoDocumento": string | null,
+  "folioReferencia": string | null,
   "m2Total": number | null,
   "marcas": [{ "tag": string, "id": string | null, "m2": number | null }]
 }`;
@@ -50,6 +51,7 @@ Reglas:
 - "cliente": la razón social del CLIENTE al que se factura (el receptor, no SEREIN que es quien emite); si no aparece, null.
 - "rutCliente": el RUT de ese cliente tal como aparece impreso (ej. "96.946.410-1"); si no aparece, null.
 - "tipoDocumento": "Factura", "Factura exenta", "Nota de crédito" o "Nota de débito" según el documento; si no se distingue, null.
+- "folioReferencia": solo si el documento es una NOTA DE CRÉDITO: el folio de la factura que corrige o anula, tal como aparece en la sección de referencias; si no es nota de crédito o no aparece, null.
 - "m2Total": si el detalle indica una superficie total en metros cuadrados, ese número; si no aparece, null.
 - "marcas": identifica CADA código de pieza/tag mencionado en el detalle de la factura, revisando la tabla completa de principio a fin sin importar cuántas filas tenga ni en cuántas páginas o archivos esté repartida — no omitas ninguna fila (ej. "2610-SP-32402-A", "2610-SP-32402"). Si el código termina en un sufijo de letra separado por guion (A, B, C...), sepáralo como "tag" (sin el sufijo) e "id" (el sufijo). Si no tiene sufijo, "id" es null. "m2" es la superficie de esa línea si la factura la detalla por pieza; si no, null.
 - Si la factura NO detalla piezas individuales (solo trae un concepto global, ej. "Aplicación de pintura intumescente según OC 1234"), deja "marcas" como arreglo vacío — no inventes códigos.
