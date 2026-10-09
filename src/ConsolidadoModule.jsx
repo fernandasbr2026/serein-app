@@ -3,7 +3,7 @@ import { calcularResumenFin } from './FinanzasModule.jsx'
 import { totales as totalesCot } from './CotizacionesModule.jsx'
 import { ocTotal } from './OrdenesCompraModule.jsx'
 import { supabase } from './supabase.js'
-import { AlertTriangle, TrendingUp, TrendingDown, Wallet, Landmark, Receipt, Sparkles, CheckCircle2, ShieldAlert, Info } from 'lucide-react'
+import { AlertTriangle, TrendingUp, TrendingDown, Wallet, Landmark, Receipt, Sparkles, CheckCircle2, ShieldAlert, Info, Factory, Users, Building2, FileText, Gauge } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { SEREIN } from './theme-serein.js'
 
@@ -20,7 +20,7 @@ function fechaCL(f) { if (!f) return '-'; const s = ('' + f).slice(0, 10); const
 const num = n => (+n || 0)
 
 function Card({ titulo, icon: Ico, children, borde }) {
-  return (<div style={{ background: SEREIN.paper, border: '1px solid ' + C.line, borderTop: '2px solid ' + (borde || C.orange), borderRadius: SEREIN.radius, boxShadow: SEREIN.shadow, padding: '16px 18px', marginBottom: 18 }}>
+  return (<div style={{ background: SEREIN.paper, border: '1px solid ' + C.line, borderTop: '2px solid ' + (borde || C.orange), borderRadius: 14, boxShadow: SEREIN.shadow, padding: '16px 18px', marginBottom: 18 }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
       {Ico && <Ico size={16} color={borde || C.navy} />}
       <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 13.5, textTransform: 'uppercase', letterSpacing: 0.4, color: C.carbon }}>{titulo}</span>
@@ -29,12 +29,52 @@ function Card({ titulo, icon: Ico, children, borde }) {
   </div>)
 }
 
-function SemCard({ label, valor, sub, sev }) {
+// Tarjeta de una cifra con su estado (Bien / Atención / Revisar) y una línea que explica qué es, para que
+// quien entra al consolidado entienda cada número sin preguntar.
+function SemCard({ label, valor, sub, sev, ayuda }) {
   const col = SEV[sev] || C.navy
-  return (<div style={{ flex: '1 1 160px', minWidth: 150, background: SEREIN.paper, border: '1px solid ' + C.line, borderLeft: '4px solid ' + col, borderRadius: SEREIN.radius, boxShadow: SEREIN.shadow, padding: '14px 16px' }}>
-    <div style={{ fontSize: 10.5, color: C.gray, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, marginBottom: 3 }}>{label}</div>
-    <div style={{ fontSize: 22, fontWeight: 800, color: col, fontFamily: SEREIN.fontDisplay, lineHeight: 1.1 }}>{valor}</div>
-    {sub && <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>{sub}</div>}
+  const est = { ok: ['Bien', SEREIN.greenSoft], warn: ['Atención', SEREIN.orangeSoft], crit: ['Revisar', SEREIN.redSoft] }[sev]
+  return (<div className="kpi-card" title={ayuda} style={{ background: SEREIN.paper, border: '1px solid ' + C.line, borderRadius: 14, boxShadow: SEREIN.shadow, padding: '14px 16px', minWidth: 0 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+      <span style={{ fontSize: 11, color: C.gray, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>{label}</span>
+      {est && <span style={{ fontSize: 10.5, fontWeight: 700, color: col, background: est[1], borderRadius: 20, padding: '2px 8px', whiteSpace: 'nowrap' }}>{est[0]}</span>}
+    </div>
+    <div className="kpi-v" style={{ fontSize: 20, fontWeight: 800, color: col, fontFamily: SEREIN.fontDisplay, lineHeight: 1.1, whiteSpace: 'nowrap' }}>{valor}</div>
+    {sub && <div style={{ fontSize: 11.5, color: C.gray, marginTop: 3 }}>{sub}</div>}
+    {ayuda && <div style={{ fontSize: 11.5, color: C.gray, marginTop: 6, lineHeight: 1.4 }}>{ayuda}</div>}
+  </div>)
+}
+
+// Título de sección con una frase que explica qué se está mirando; `id` permite saltar desde la barra de navegación.
+export function SeccionTitulo({ id, icon: Ico, titulo, ayuda, color }) {
+  const col = color || C.orange
+  return (<div id={id} style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '30px 0 12px', scrollMarginTop: 16 }}>
+    {Ico && <span style={{ width: 38, height: 38, borderRadius: 11, background: SEREIN.orangeSoft, color: col, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Ico size={19} strokeWidth={1.75} /></span>}
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 18, color: C.navy, letterSpacing: -0.2 }}>{titulo}</div>
+      {ayuda && <div style={{ fontSize: 12.5, color: C.gray, marginTop: 1 }}>{ayuda}</div>}
+    </div>
+  </div>)
+}
+
+// Encabezado del consolidado: qué es, cómo leer los colores y un menú para saltar a cada parte.
+export function ConsolidadoIntro() {
+  const ir = id => { const el = document.getElementById(id); if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
+  const nav = [['cons-resumen', 'En pocas palabras'], ['cons-alertas', 'Alertas'], ['cons-libros', 'Resultado'], ['cons-caja', 'Caja y 7 días'], ['cons-rentab', 'Rentabilidad'], ['cons-operacion', 'Operación'], ['cons-clientes', 'Clientes y calendario'], ['cons-areas', 'Por área']]
+  const leyenda = [[C.verde, 'Bien'], [C.ambar, 'Atención'], [C.rojo, 'Revisar']]
+  return (<div>
+    <div style={{ background: SEREIN.paper, border: '1px solid ' + C.line, borderRadius: 14, boxShadow: SEREIN.shadow, padding: '16px 18px' }}>
+      <div style={{ fontSize: 13.5, color: C.carbon, lineHeight: 1.5 }}>Una sola vista de cómo va Serein: lo que vendimos y cobramos, la caja que hay, lo que viene en los próximos días y lo que hay que atender. Baja por la pantalla o salta directo a una parte:</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+        {nav.map(([id, t]) => <button key={id} onClick={() => ir(id)} style={{ border: '1px solid ' + C.line, background: '#fff', color: C.carbon, borderRadius: 20, padding: '5px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>{t}</button>)}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', alignItems: 'center', marginTop: 12, fontSize: 12, color: C.gray }}>
+        <span>Colores:</span>
+        {leyenda.map(([col, t]) => <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: col }} />{t}</span>)}
+      </div>
+    </div>
+    <SeccionTitulo id="cons-kpis" icon={TrendingUp} titulo="Cómo vamos" ayuda="Ventas, cobros y deuda de todo el grupo, según las facturas y los libros." />
+    <div style={{ fontSize: 12, color: C.gray, margin: '-4px 0 12px', lineHeight: 1.6 }}><b>Venta neta:</b> lo facturado sin IVA · <b>Cobrado:</b> lo que ya se pagó (incluye factoring) · <b>Por cobrar:</b> facturas aún sin pagar · <b>Pérdida factoring:</b> costo de adelantar facturas · <b>Carga financiera:</b> deuda vigente en créditos y leasing · <b>% factorizado:</b> parte de la venta adelantada con factoring.</div>
   </div>)
 }
 
@@ -194,18 +234,23 @@ function VentasInformePanel({ facturas }) {
 }
 
 // ============ PANELES ============
-function ExecutiveSummaryCards({ cc, d }) {
+function ExecutiveSummaryCards({ cc, d, grupo }) {
   const sevSaldo = v => v >= 0 ? 'ok' : 'crit'
-  return (<div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 18 }}>
-    <SemCard label="Caja actual" valor={clp(d.caja)} sev={sevSaldo(d.caja)} />
-    <SemCard label="Cobros 7 días" valor={clp(d.cobros7)} sev="ok" />
-    <SemCard label="Pagos 7 días" valor={clp(d.pagos7)} sev={d.pagos7 > d.cobros7 ? 'warn' : 'ok'} />
-    <SemCard label="Saldo proyectado 7 días" valor={clp(d.saldo7)} sev={sevSaldo(d.saldo7)} />
-    <SemCard label="Posición financiera" valor={clp(num(cc.posicionFin))} sev={sevSaldo(num(cc.posicionFin))} />
-    <SemCard label="Facturas vencidas" valor={d.facVencidas.length} sub={clp(d.montoVencidas)} sev={d.facVencidas.length > 0 ? 'crit' : 'ok'} />
-    <SemCard label="OT listas para facturar" valor={d.otPorFacturarN} sub={clp(d.montoPorFacturar)} sev={d.otPorFacturarN > 0 ? 'warn' : 'ok'} />
-    {/* Valor total de trabajo en curso (cotizada + en ejecucion + terminada), no solo lo que ya esta listo para facturar arriba — ya se calculaba en Dashboard.jsx (cc.otEnCursoTotal) y llegaba hasta aca sin mostrarse en ningun lado, era codigo muerto en la practica. */}
-    <SemCard label="OT en curso (valor total)" valor={clp(num(cc.otEnCursoTotal))} sub="cotizada + en ejecución + terminada" sev="ok" />
+  const grid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(176px, 1fr))', gap: 12, marginBottom: 18 }
+  if (grupo === 'operacion') {
+    return (<div style={grid}>
+      <SemCard label="OT listas para facturar" valor={d.otPorFacturarN} sub={clp(d.montoPorFacturar)} sev={d.otPorFacturarN > 0 ? 'warn' : 'ok'} ayuda="Trabajos terminados que todavía no se facturan." />
+      {/* Valor total de trabajo en curso (cotizada + en ejecucion + terminada), no solo lo que ya esta listo para facturar: ya se calculaba en Dashboard.jsx (cc.otEnCursoTotal). */}
+      <SemCard label="OT en curso (valor total)" valor={clp(num(cc.otEnCursoTotal))} sub="cotizada + en ejecución + terminada" sev="ok" ayuda="Todo el trabajo que está en marcha, aún sin cobrar." />
+    </div>)
+  }
+  return (<div style={grid}>
+    <SemCard label="Caja actual" valor={clp(d.caja)} sev={sevSaldo(d.caja)} ayuda="Saldo inicial más cobros menos pagos ya registrados." />
+    <SemCard label="Cobros 7 días" valor={clp(d.cobros7)} sev="ok" ayuda="Lo que se espera que paguen los clientes esta semana." />
+    <SemCard label="Pagos 7 días" valor={clp(d.pagos7)} sev={d.pagos7 > d.cobros7 ? 'warn' : 'ok'} ayuda="Lo que vence de pagar en los próximos 7 días." />
+    <SemCard label="Saldo proyectado 7 días" valor={clp(d.saldo7)} sev={sevSaldo(d.saldo7)} ayuda="Caja actual + cobros − pagos de la semana." />
+    <SemCard label="Posición financiera" valor={clp(num(cc.posicionFin))} sev={sevSaldo(num(cc.posicionFin))} ayuda="Caja + por cobrar − por pagar + trabajo en curso." />
+    <SemCard label="Facturas vencidas" valor={d.facVencidas.length} sub={clp(d.montoVencidas)} sev={d.facVencidas.length > 0 ? 'crit' : 'ok'} ayuda="Facturas con la fecha de pago pasada y sin cobrar." />
   </div>)
 }
 
@@ -218,7 +263,7 @@ function AISereinPanel({ cc, d }) {
   if (num(cc.netoTotalFact) > 0) msgs.push({ t: 'El factoring acumulado representa ' + num(cc.pctFactorizado).toFixed(1) + '% de la venta.', s: num(cc.pctFactorizado) > 40 ? 'warn' : 'ok' })
   if ((d.resumen.cuotasVencidas || []).length > 0) msgs.push({ t: 'Hay ' + d.resumen.cuotasVencidas.length + ' cuota(s) de crédito/leasing vencida(s).', s: 'crit' })
   msgs.push({ t: 'Posición financiera ' + (num(cc.posicionFin) >= 0 ? 'positiva' : 'negativa') + ': ' + clp(num(cc.posicionFin)) + '.', s: num(cc.posicionFin) >= 0 ? 'ok' : 'crit' })
-  return (<Card titulo="IA SEREIN · Resumen gerencial" icon={Sparkles} borde={C.orange}>
+  return (<Card titulo="Resumen gerencial" icon={Sparkles} borde={C.orange}>
     <div style={{ fontSize: 11, color: C.gray, marginBottom: 8 }}>Lectura automática por reglas · preparado para IA (pendiente de conectar modelo)</div>
     <div style={{ display: 'grid', gap: 7 }}>
       {msgs.map((m, i) => (<div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, color: C.carbon }}>
@@ -522,7 +567,8 @@ export default function ConsolidadoModule(props) {
     return () => { vivo = false }
   }, [])
   const dosCol = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16 }
-  return (<div>
+  const bloqueLibros = (<div>
+    <SeccionTitulo id="cons-libros" icon={Receipt} color={C.azul} titulo="Resultado según los libros" ayuda="Lo vendido menos lo comprado, y la caja que deberíamos tener." />
     {libroCons && (() => {
       const lcCard = { background: '#fff', border: '1px solid ' + C.line, borderRadius: 8, padding: 10 }
       const lbl = { fontSize: 11, color: C.gray, marginBottom: 2 }
@@ -531,56 +577,78 @@ export default function ConsolidadoModule(props) {
       const res = libroCons.vNeta - libroCons.cNeto
       return (
         <div style={{ border: '1px solid #DFE4EA', borderRadius: 14, boxShadow: '0 1px 2px rgba(16,19,21,.04), 0 8px 20px -14px rgba(16,19,21,.18)', padding: 16, marginBottom: 18, background: C.soft }}>
-          <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 800, color: C.navy, fontSize: 15, textTransform: 'uppercase', letterSpacing: 0.5 }}>Consolidado segun libros</div>
-          <div style={{ fontSize: 12, color: C.gray, marginBottom: 12 }}>Cifras reales del Libro de Ventas ({libroCons.nV} facturas) y del Libro de Compras ({libroCons.nC} documentos).</div>
+          <div style={{ fontSize: 12.5, color: C.gray, marginBottom: 12 }}>Cifras reales del Libro de Ventas ({libroCons.nV} facturas) y del Libro de Compras ({libroCons.nC} documentos).</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
             <div style={lcCard}><div style={lbl}>Venta neta (Libro de Ventas)</div><div style={{ ...val, color: C.azul }}>{clp(libroCons.vNeta)}</div><div style={sub}>Bruto {clp(libroCons.vBruta)}</div></div>
             <div style={lcCard}><div style={lbl}>Compras neto (Libro de Compras)</div><div style={{ ...val, color: C.orange }}>{clp(libroCons.cNeto)}</div><div style={sub}>Bruto {clp(libroCons.cTotal)}</div></div>
             <div style={lcCard}><div style={lbl}>Resultado (venta - compra)</div><div style={{ ...val, color: res < 0 ? C.rojo : C.verde }}>{clp(res)}</div><div style={sub}>neto, sin impuestos</div></div>
             <div style={lcCard}><div style={lbl}>IVA (debito - credito)</div><div style={{ ...val, color: C.navy }}>{clp(libroCons.ivaDeb - libroCons.ivaCred)}</div><div style={sub}>ventas {clp(libroCons.ivaDeb)} / compras {clp(libroCons.ivaCred)}</div></div>
           </div>
-          <div style={{ fontSize: 11, color: C.gray, marginTop: 10 }}>El cobrado y el factoring se muestran abajo desde proyectos, porque el Libro de Ventas no registra el estado de pago ni el factoring por factura.</div>
+          <div style={{ fontSize: 11, color: C.gray, marginTop: 10 }}>El cobrado y el factoring salen de las facturas y proyectos (arriba, en «Cómo vamos»), porque el Libro de Ventas no registra el estado de pago ni el factoring por factura.</div>
           <div style={{ marginTop: 14, borderTop: '1px solid ' + C.line, paddingTop: 12 }}>
             {(() => {
               const cobrado = num(cc.kCobrado)
               const ivaPagar = Math.max(0, libroCons.ivaDeb - libroCons.ivaCred)
               const egr = num(libroCons.cNeto) + num(libroCons.sinDoc) + num(libroCons.gastosOp) + num(libroCons.cuotasMes) + ivaPagar
               const caja = cobrado - egr
-              const linea = (t, v, neg) => (<div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '3px 0' }}><span style={{ color: C.gray }}>{t}</span><span style={{ fontWeight: 600, color: neg ? C.rojo : C.navy }}>{neg ? '- ' : ''}{clp(v)}</span></div>)
-              return (<div>
-                <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 800, color: C.navy, fontSize: 13, textTransform: 'uppercase', marginBottom: 6 }}>Caja que deberias tener</div>
-                <div style={{ maxWidth: 480 }}>
-                  {linea('Cobrado (ingresos reales)', cobrado, false)}
-                  {linea('Compras (Libro de Compras)', num(libroCons.cNeto), true)}
-                  {linea('Compras sin documento', num(libroCons.sinDoc), true)}
-                  {linea('Sueldos y gastos operativos', num(libroCons.gastosOp), true)}
-                  {linea('Cuotas de creditos/leasing (mes)', num(libroCons.cuotasMes), true)}
-                  {linea('IVA a pagar', ivaPagar, true)}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #CBD2D8', marginTop: 6, paddingTop: 6 }}><span style={{ fontWeight: 700, color: C.navy }}>Caja que deberias tener</span><span style={{ fontWeight: 800, fontSize: 18, color: caja < 0 ? C.rojo : C.verde }}>{clp(caja)}</span></div>
+              const escala = Math.max(Math.abs(cobrado), egr, 1)
+              const fila = (t, v, neg, nota) => (<div style={{ padding: '6px 0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13 }}>
+                  <span style={{ color: C.carbon }}>{t}{nota ? <span style={{ color: C.gray, fontSize: 11.5 }}> · {nota}</span> : null}</span>
+                  <span style={{ fontWeight: 700, color: neg ? C.rojo : C.verde, whiteSpace: 'nowrap' }}>{neg ? '− ' : '+ '}{clp(v)}</span>
                 </div>
-                <div style={{ fontSize: 11, color: C.gray, marginTop: 8 }}>Base: lo efectivamente cobrado. Descuenta compras, compras sin documento, sueldos y gastos operativos, cuotas de deuda del mes e IVA a pagar.</div>
+                <div style={{ height: 6, background: '#EEF1F4', borderRadius: 4, marginTop: 4 }}><div style={{ width: Math.min(100, Math.max(0, (Math.abs(v) / escala) * 100)) + '%', height: '100%', borderRadius: 4, background: neg ? '#E5857E' : '#5CBF8E' }} /></div>
+              </div>)
+              return (<div>
+                <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, color: C.navy, fontSize: 15 }}>¿Cuánta caja deberíamos tener?</div>
+                <div style={{ fontSize: 12, color: C.gray, marginBottom: 8 }}>Partimos de lo efectivamente cobrado y descontamos todo lo que ya salió o corresponde pagar.</div>
+                <div style={{ maxWidth: 640 }}>
+                  {fila('Cobrado (ingresos reales)', cobrado, false)}
+                  {fila('Compras', num(libroCons.cNeto), true, 'Libro de Compras')}
+                  {fila('Compras sin documento', num(libroCons.sinDoc), true)}
+                  {fila('Sueldos y gastos operativos', num(libroCons.gastosOp), true)}
+                  {fila('Cuotas de créditos y leasing', num(libroCons.cuotasMes), true, 'del mes')}
+                  {fila('IVA a pagar', ivaPagar, true, 'débito − crédito')}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginTop: 10, padding: '10px 14px', borderRadius: 10, background: caja < 0 ? SEREIN.redSoft : SEREIN.greenSoft, border: '1px solid ' + (caja < 0 ? C.rojo : C.verde) }}>
+                    <span style={{ fontWeight: 700, color: C.navy }}>Caja que deberíamos tener</span>
+                    <span style={{ fontWeight: 800, fontSize: 20, color: caja < 0 ? C.rojo : C.verde, fontFamily: SEREIN.fontDisplay, whiteSpace: 'nowrap' }}>{clp(caja)}</span>
+                  </div>
+                </div>
+                <div style={{ fontSize: 11.5, color: C.gray, marginTop: 8 }}>Base: lo efectivamente cobrado. Descuenta compras, compras sin documento, sueldos y gastos operativos, cuotas de deuda del mes e IVA a pagar.</div>
               </div>)
             })()}
           </div>
         </div>
       )
     })()}
-    <ExecutiveSummaryCards cc={cc} d={d} />
-    <VentasInformePanel facturas={props.facturas} />
+  </div>)
+  return (<div>
+    <SeccionTitulo id="cons-resumen" icon={Sparkles} titulo="En pocas palabras" ayuda="Lo más importante de hoy, escrito en simple." />
     <AISereinPanel cc={cc} d={d} />
+    <SeccionTitulo id="cons-alertas" icon={ShieldAlert} color={C.rojo} titulo="Qué hay que atender" ayuda="Lo urgente primero. Toca una alerta para ir al módulo donde se resuelve." />
     <CriticalAlertsPanel cc={cc} d={d} onIr={props.onIr} />
+    {bloqueLibros}
+    <SeccionTitulo id="cons-caja" icon={Wallet} color={C.azul} titulo="Caja y próximos 7 días" ayuda="Cuánta plata hay hoy y cuánto entra y sale esta semana." />
+    <ExecutiveSummaryCards cc={cc} d={d} grupo="caja" />
     <CashFlowPanel cc={cc} d={d} />
+    <SeccionTitulo id="cons-rentab" icon={Gauge} color={C.teal} titulo="Rentabilidad y factoring" ayuda="Cuánto queda después de los costos, y cuánto cuesta adelantar facturas." />
     <div style={dosCol}>
       <ProfitabilityPanel cc={cc} d={d} costosArea={costosArea} />
       <FactoringSummaryPanel cc={cc} d={d} />
     </div>
+    <SeccionTitulo id="cons-operacion" icon={Factory} titulo="Operación y ventas por venir" ayuda="Trabajos en planta, por facturar y cotizaciones en juego." />
+    <ExecutiveSummaryCards cc={cc} d={d} grupo="operacion" />
     <div style={dosCol}>
       <ProductionStatusPanel d={d} />
       <CommercialFunnelPanel d={d} />
     </div>
+    <OTPorAreaPanel ots={props.ots} proyectos={props.proyectos} />
+    <SeccionTitulo id="cons-clientes" icon={Users} titulo="Clientes y calendario" ayuda="Quién nos debe más y qué fechas vienen." />
     <CustomerRiskPanel d={d} />
     <FinancialCalendarPanel d={d} />
+    <SeccionTitulo id="cons-areas" icon={Building2} titulo="Costos y ventas por área" ayuda="Cómo le va a cada área: lo que vende y lo que cuesta." />
     <AreaCostPanel rows={costosArea && costosArea.rows} tot={costosArea && costosArea.tot} />
-    <OTPorAreaPanel ots={props.ots} proyectos={props.proyectos} />
+    <SeccionTitulo id="cons-informes" icon={FileText} titulo="Informes para descargar" ayuda="Ventas del año en Excel." />
+    <VentasInformePanel facturas={props.facturas} />
   </div>)
 }
