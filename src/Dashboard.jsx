@@ -30,6 +30,7 @@ import OrganigramaModule from './OrganigramaModule.jsx'
 import CRMModule from './CRMModule.jsx'
 import ContactosModule, { CONTACTOS_SEED, nombresClientes } from './ContactosModule.jsx'
 import CreditoModule from './CreditoModule.jsx'
+import RevisionContableModule from './RevisionContableModule.jsx'
 import FacturasModule, { FACTURAS_SEED, saldoPendienteDe, montoFacturaDe, CobranzaAtrasadaModule } from './FacturasModule.jsx'
 import { MO_SEED } from './ManoObraModule.jsx'
 import { PROYECTOS } from './proyectos-data.js'
@@ -212,6 +213,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     ...(esGerencia ? ['ORDENES_COMPRA'] : []),
       ...(esGerencia ? ['LIBRO_COMPRAS'] : []),
       ...(esGerencia ? ['LIBRO_VENTAS'] : []),
+      ...(esGerencia ? ['REVISION_CONTABLE'] : []),
       ...(esGerencia ? ['CARTOLAS_BANCARIAS'] : []),
     ...(esGerencia ? ['TRAZABILIDAD'] : []),
     ...(esGerencia ? ['FINANZAS'] : []),
@@ -226,7 +228,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     'INVENTARIO',
     ...(esGerencia ? ['PARAMETROS'] : []),
   ]
-  const ORDEN_MODULOS = ['TODAS', 'ORGANIGRAMA', 'CRM', 'ASESOR', 'Santa Rosa', 'Istria', 'GESTION_PROYECTOS', 'CALENDARIO_PAGOS', 'FINANZAS', 'ORDENES_COMPRA', 'PAGOS', 'LIBRO_COMPRAS', 'LIBRO_VENTAS', 'CARTOLAS_BANCARIAS', 'TRAZABILIDAD', 'COTIZADOR', 'CLIENTES', 'CREDITO', 'CONTACTOS', 'COMPRAS_OP', 'PRODUCCION', 'GESTION_OT', 'ASISTENCIA', 'INVENTARIO', 'PARAMETROS']
+  const ORDEN_MODULOS = ['TODAS', 'ORGANIGRAMA', 'CRM', 'ASESOR', 'Santa Rosa', 'Istria', 'GESTION_PROYECTOS', 'CALENDARIO_PAGOS', 'FINANZAS', 'ORDENES_COMPRA', 'PAGOS', 'LIBRO_COMPRAS', 'LIBRO_VENTAS', 'REVISION_CONTABLE', 'CARTOLAS_BANCARIAS', 'TRAZABILIDAD', 'COTIZADOR', 'CLIENTES', 'CREDITO', 'CONTACTOS', 'COMPRAS_OP', 'PRODUCCION', 'GESTION_OT', 'ASISTENCIA', 'INVENTARIO', 'PARAMETROS']
   // INVENTARIO se agrega siempre para los perfiles con lista blanca de
   // modulos (varios supervisores lo necesitan aunque no este en su lista) —
   // perfil.ocultar_inventario es la excepcion explicita para un perfil que
@@ -267,6 +269,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const esModuloComprasOp = areaSel === 'COMPRAS_OP'
   const esModuloLibroCompras = areaSel === 'LIBRO_COMPRAS'
   const esModuloLibroVentas = areaSel === 'LIBRO_VENTAS'
+  const esModuloRevision = areaSel === 'REVISION_CONTABLE'
   const esModuloCartolas = areaSel === 'CARTOLAS_BANCARIAS'
   const esModuloAsesor = areaSel === 'ASESOR'
   const [comprasOp, setComprasOp] = useState(() => LS('comprasOp', COMPRAS_OP_SEED))
@@ -799,7 +802,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     )
   }
 
-  const nombreTab = t => t === 'ASESOR' ? 'Asesor IA' : t === 'TODAS' ? 'Consolidado' : t === 'ORGANIGRAMA' ? '🗂️ Organigrama' : t === 'CRM' ? '📞 CRM' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'CALENDARIO_PAGOS' ? '🗓️ Pagos' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'ORDENES_COMPRA' ? '🧾 Órdenes de Compra' : t === 'TRAZABILIDAD' ? '🔗 Trazabilidad y Alertas' : t === 'INVENTARIO' ? '📦 Inventario' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Resumen ventas por cliente' : t === 'CONTACTOS' ? '📇 Clientes y Proveedores' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t === 'LIBRO_COMPRAS' ? 'Libro de Compras' : t === 'LIBRO_VENTAS' ? 'Libro de Ventas' : t === 'CREDITO' ? 'Crédito de clientes' : t === 'CARTOLAS_BANCARIAS' ? 'Cartolas Bancarias' : t
+  const nombreTab = t => t === 'ASESOR' ? 'Asesor IA' : t === 'TODAS' ? 'Consolidado' : t === 'ORGANIGRAMA' ? '🗂️ Organigrama' : t === 'CRM' ? '📞 CRM' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'CALENDARIO_PAGOS' ? '🗓️ Pagos' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'ORDENES_COMPRA' ? '🧾 Órdenes de Compra' : t === 'TRAZABILIDAD' ? '🔗 Trazabilidad y Alertas' : t === 'INVENTARIO' ? '📦 Inventario' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Resumen ventas por cliente' : t === 'CONTACTOS' ? '📇 Clientes y Proveedores' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t === 'LIBRO_COMPRAS' ? 'Libro de Compras' : t === 'LIBRO_VENTAS' ? 'Libro de Ventas' : t === 'REVISION_CONTABLE' ? 'Revisión contable' : t === 'CREDITO' ? 'Crédito de clientes' : t === 'CARTOLAS_BANCARIAS' ? 'Cartolas Bancarias' : t
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: THEME.bg, fontFamily: THEME.font }}>
@@ -882,6 +885,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
           <InventarioModule inventario={inventario} setInventario={setInventario} movimientos={invMov} setMovimientos={setInvMov} usuario={email} />
         ) : esModuloParams && puedeVer('PARAMETROS') ? (
           <ParametrosModule params={params} setParams={setParams} />
+        ) : esModuloRevision && puedeVer('REVISION_CONTABLE') ? (
+          <RevisionContableModule facturas={facturas} />
         ) : esModuloCredito && puedeVer('CREDITO') ? (
           <CreditoModule esGerencia={esGerencia} />
         ) : esModuloClientes ? (
