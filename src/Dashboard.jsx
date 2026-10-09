@@ -100,13 +100,14 @@ function Kpi({ label, valor, sub, color, icon: Icon }) {
   )
 }
 
-function Panel({ title, children, right }) {
+function Panel({ title, children, right, ayuda }) {
   return (
     <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 14, boxShadow: '0 1px 3px rgba(16,24,40,.06)', padding: 18, minWidth: 0 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
         <h3 style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, letterSpacing: 0.5, textTransform: 'uppercase', margin: 0 }}>{title}</h3>
         {right}
       </div>
+      {ayuda && <div style={{ fontSize: 12, color: '#9AA3AD', margin: '-8px 0 12px' }}>{ayuda}</div>}
       {children}
     </div>
   )
@@ -121,7 +122,7 @@ function GraficoVentaConEquilibrio({ af, area, color, clp }) {
   const [verTabla, setVerTabla] = useState(false)
   const eq = af.equilibrioNeto
   return (
-    <Panel title={`Venta neta y bruta por mes · ${area}`}>
+    <Panel title={`Venta neta y bruta por mes · ${area}`} ayuda="Naranja: venta neta. Gris punteado: venta bruta. Línea roja: punto de equilibrio.">
       <ResponsiveContainer width="100%" height={260}>
         <LineChart data={af.porMes} margin={{ left: 4, right: 8 }}>
           <CartesianGrid stroke="#DFE4EA" vertical={false} />
@@ -740,8 +741,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
     return (
       <div>
         <PeriodoSelector />
-        <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: `2px solid ${AREA_COLOR[a] || C.teal}`, marginBottom: 16 }}>
-          <div style={{ padding: '14px 18px 6px', fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Resumen financiero · {a}</div>
+        <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: `2px solid ${AREA_COLOR[a] || C.teal}`, borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 2px rgba(16,19,21,.04)', marginBottom: 16 }}>
+          <div style={{ padding: '14px 18px 6px', fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Resumen financiero · {a}<span style={{ display: 'block', fontFamily: SEREIN.fontBody, fontWeight: 400, textTransform: 'none', fontSize: 12, color: '#9AA3AD', marginTop: 2, letterSpacing: 0 }}>Lo que el área vendió y cobró en el período elegido, y lo que falta por cobrar. A la derecha, el gasto promedio por mes.</span></div>
           <div style={{ padding: '4px 18px 18px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
             <MontoNetoBruto label="Venta total" neto={clp(af.ventaNetaTot)} bruto={clp(af.ventaBrutaTot)} icon={TrendingUp} iconColor={C.azul} iconBg="#E7EFFB" />
             <MontoNetoBruto label="Total cobrado" neto={clp(af.cobradoNeto)} bruto={clp(af.cobradoBruto)} icon={Wallet} iconColor={C.verde} iconBg="#E6F7EE" />
@@ -752,9 +753,9 @@ export default function Dashboard({ perfil, email, onLogout }) {
           {af.sinClasificar > 0 && <div style={{ padding: '0 18px 14px', fontSize: 12, color: C.ambar }}>⚠ Hay {clp(af.sinClasificar)} en gastos de este periodo sin clasificar como fijo/variable — no se incluyen en los promedios de arriba. Clasifícalos en Finanzas para un cálculo más preciso.</div>}
         </div>
 
-        <div style={{ background: '#fff', border: '1px solid #DFE4EA', marginBottom: 16 }}>
+        <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 2px rgba(16,19,21,.04)', marginBottom: 16 }}>
           <div style={{ padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-            <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Análisis financiero</span>
+            <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Análisis financiero<span style={{ display: 'block', fontFamily: SEREIN.fontBody, fontWeight: 400, textTransform: 'none', fontSize: 12, color: '#9AA3AD', marginTop: 2, letterSpacing: 0 }}>Compara lo que vende el área con lo que le cuesta funcionar cada mes.</span></span>
             {af.hayDatos && <span style={{ background: SEMAFORO_COLOR[af.semaforo] + '22', color: SEMAFORO_COLOR[af.semaforo], padding: '4px 10px', borderRadius: 20, fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 8, background: SEMAFORO_COLOR[af.semaforo] }} />{SEMAFORO_TXT[af.semaforo]}</span>}
           </div>
           {!af.hayDatos ? (
@@ -779,8 +780,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
           </>)}
         </div>
 
-        <div style={{ background: '#fff', border: '1px solid #DFE4EA', marginBottom: 16 }}>
-          <div style={{ padding: '14px 18px 6px', fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Punto de equilibrio</div>
+        <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 2px rgba(16,19,21,.04)', marginBottom: 16 }}>
+          <div style={{ padding: '14px 18px 6px', fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Punto de equilibrio<span style={{ display: 'block', fontFamily: SEREIN.fontBody, fontWeight: 400, textTransform: 'none', fontSize: 12, color: '#9AA3AD', marginTop: 2, letterSpacing: 0 }}>La venta mínima al mes para cubrir los gastos. La barra muestra cuánto de ese mínimo se está cubriendo.</span></div>
           <div style={{ padding: '4px 18px 10px', display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             {itemAnalisis('Equilibrio neto mensual', clp(af.equilibrioNeto))}
             {itemAnalisis('Equilibrio bruto mensual', clp(af.equilibrioBruto))}
@@ -928,7 +929,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
           const r = resumenOTArea(ots, areaSel, { ordenesCompra: pp.ocs || [], mo })
           return (
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase', color: '#9AA3AD', marginBottom: 8 }}>Órdenes de Trabajo — cartera y utilidad</div>
+              <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase', color: '#9AA3AD', marginBottom: 8 }}>Órdenes de Trabajo — cartera y utilidad<span style={{ display: 'block', fontFamily: SEREIN.fontBody, fontWeight: 400, textTransform: 'none', fontSize: 12, color: '#9AA3AD', marginTop: 2, letterSpacing: 0 }}>Trabajos de planta: cuántos están activos, cuánto valen y la utilidad estimada.</span></div>
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                 <Kpi label="OT activas" valor={r.otActivas} color={C.azul} icon={TrendingUp} />
                 <Kpi label="Venta en proceso" valor={clp(r.ventaEnProceso)} color={C.ambar} icon={Wallet} />
@@ -959,7 +960,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
             )}
           </div>
 
-          <Panel title="Estado facturas">
+          <Panel title="Estado facturas" ayuda="Cuántas facturas hay en cada estado de pago.">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 4 }}>
               {estados.map(([est, n]) => {
                 const col = est === 'Pagado' ? C.verde : est === 'Pendiente' ? C.rojo : est === 'Factoring' ? C.ambar : '#9AA3AD'
