@@ -862,9 +862,9 @@ export function CobranzaAtrasadaModule({ area, facturas, setFacturas, usuarioEma
 
   return (
     <div style={{ marginTop: 16 }}>
-      <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: `3px solid ${C.rojo}` }}>
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: `2px solid ${C.rojo}`, borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 2px rgba(16,19,21,.04)' }}>
         <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, borderBottom: '1px solid #DFE4EA' }}>
-          <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Cobranza atrasada · {area}</span>
+          <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Cobranza atrasada · {area}<span style={{ display: 'block', fontFamily: SEREIN.fontBody, fontWeight: 400, textTransform: 'none', fontSize: 12, color: '#9AA3AD', marginTop: 2, letterSpacing: 0 }}>Facturas vencidas que todavía tienen saldo por cobrar.</span></span>
           <div style={{ display: 'flex', gap: 14, alignItems: 'center', fontSize: 12, color: C.gris, flexWrap: 'wrap' }}>
             <span>{filtradas.length} de {atrasadas.length} facturas</span>
             <span>1-20 días: <b style={{ color: C.ambar }}>{nEnCobranza}</b></span>
