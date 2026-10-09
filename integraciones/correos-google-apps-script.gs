@@ -8,12 +8,11 @@
 // pone la etiqueta "Serein-Revisado" para que los veas en Gmail.
 // No borra, no mueve ni responde ningún correo.
 //
-// SOLO HAY QUE CAMBIAR LAS DOS LÍNEAS DE ABAJO. Se instala igual en cada casilla
+// No hay claves que poner: el ERP reconoce la casilla de Google donde está instalado el script. Se instala igual en cada casilla
 // (comercial@, administracion@, facturacion@): el ERP junta todo y descarta lo repetido.
 // ============================================================
 
 const URL_FUNCION = 'https://TU-PROYECTO.supabase.co/functions/v1/correos-ingresar';
-const CLAVE = 'PEGA-AQUI-LA-MISMA-CLAVE-QUE-GUARDASTE-EN-SUPABASE (CORREOS_TOKEN)';
 
 // ---------- Ajustes (se pueden dejar como están) ----------
 const DIAS_ATRAS = 180;                    // hasta cuántos días atrás revisar
@@ -91,7 +90,7 @@ function enviar_(obj) {
     const resp = UrlFetchApp.fetch(URL_FUNCION, {
       method: 'post',
       contentType: 'application/json',
-      headers: { 'x-correos-token': CLAVE },
+      headers: { 'x-google-token': ScriptApp.getOAuthToken() },
       payload: JSON.stringify(obj),
       muteHttpExceptions: true,
     });

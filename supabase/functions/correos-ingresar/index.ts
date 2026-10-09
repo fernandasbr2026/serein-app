@@ -23,7 +23,7 @@
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-correos-token",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-correos-token, x-google-token",
 };
 
 const MODEL = "claude-sonnet-5";
@@ -147,13 +147,31 @@ async function leerConIA(apiKey: string, m: any) {
   return Array.isArray(parsed.documentos) ? parsed.documentos : [];
 }
 
+// Quién puede enviar correos: solo las casillas de Serein. Se reconoce con el acceso de Google del propio script
+// (no hay clave que recordar). CORREOS_TOKEN queda como alternativa opcional si existe en los secretos.
+const CASILLAS_PERMITIDAS = ["comercial@sereinspa.com", "administracion@sereinspa.com", "facturacion@sereinspa.com"];
+
+async function autorizado(req: Request): Promise<{ ok: boolean; quien?: string; error?: string }> {
+  const secreta = (Deno.env.get("CORREOS_TOKEN") || "").trim();
+  const enviada = (req.headers.get("x-correos-token") || "").trim();
+  if (secreta && enviada && enviada === secreta) return { ok: true, quien: "clave" };
+  const tk = (req.headers.get("x-google-token") || "").trim();
+  if (!tk) return { ok: false, error: "Falta identificarse con la cuenta de Google." };
+  const r = await fetch("https://oauth2.googleapis.com/tokeninfo?access_token=" + encodeURIComponent(tk));
+  if (!r.ok) return { ok: false, error: "Google no reconoció el acceso. Vuelve a autorizar el script." };
+  const info = await r.json();
+  const email = String(info.email || "").toLowerCase();
+  const verificado = info.email_verified === true || info.email_verified === "true";
+  if (email && verificado && CASILLAS_PERMITIDAS.includes(email)) return { ok: true, quien: email };
+  return { ok: false, error: "Esta casilla no está autorizada: " + (email || "sin correo") };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ ok: false, error: "Method not allowed" }, 405);
 
-  const clave = (Deno.env.get("CORREOS_TOKEN") || "").trim();
-  if (!clave) return json({ ok: false, error: "Falta el secreto CORREOS_TOKEN en Supabase (Edge Functions > Secrets)." }, 500);
-  if ((req.headers.get("x-correos-token") || "").trim() !== clave) return json({ ok: false, error: "Clave incorrecta." }, 401);
+  const acceso = await autorizado(req);
+  if (!acceso.ok) return json({ ok: false, error: acceso.error }, 401);
 
   try {
     const body = await req.json();
