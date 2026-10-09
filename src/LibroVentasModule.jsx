@@ -6,6 +6,7 @@ import { calcularPerdidaFactoring } from './ParametrosModule.jsx'
 import { descargarInformeFacturas } from './informeFacturas.js'
 import { fileToBase64 } from './protocolo-pdf.js'
 import { leerFacturasOcultasLibro } from './facturasOcultas.js'
+import { useRevisionVentas, BannerRevision, PanelFaltantes, ChipRepetida, pistaDeFolio } from './RevisionEnLibro.jsx'
 import { PLAZOS_SUGERIDOS, PLAZO_POR_DEFECTO, PLAZO_MAX, plazoValido, sumarDias, plazoDe, conFechasCoherentes, diasParaVencer, textoDiasParaVencer, hoyISO } from './vencimientos.js'
 
 import { SEREIN } from './theme-serein.js'
@@ -30,7 +31,7 @@ const colorPago = e => e === 'Pagado' ? C.green : e === 'Factoring' ? C.orange :
 const FIJA_TD = { position: 'sticky', left: 0, zIndex: 2, background: '#fff', boxShadow: '4px 0 6px -4px rgba(15, 23, 42, 0.28)' }
 const FIJA_TH = { ...FIJA_TD, zIndex: 3, background: C.navy }
 
-export default function LibroVentasModule({ ots = [], proyectos = [], facturas = {}, setFacturas = () => {}, params = { factoring: [] } }) {
+export default function LibroVentasModule({ ots = [], proyectos = [], facturas = {}, setFacturas = () => {}, params = { factoring: [] }, onIr = null }) {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [errMsg, setErrMsg] = useState('')
@@ -308,6 +309,11 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
 
   const [sel, setSel] = useState(() => new Set())
   const [verOcultas, setVerOcultas] = useState(false)
+  // Revisión de repetidos y folios que faltan, sobre las mismas filas que muestra el libro (ver RevisionEnLibro.jsx)
+  const rev = useRevisionVentas(todas, facturas)
+  const [soloRepetidas, setSoloRepetidas] = useState(false)
+  const [verFaltantes, setVerFaltantes] = useState(false)
+  const [pistaFolio, setPistaFolio] = useState(null)
   // El Folio va aparte, como primera columna fija junto a la casilla (ver FIJA_TD): por eso no está en esta lista.
   const headersLV = ['Emision', 'Cliente', 'Tipo', 'Neto', 'IVA', 'Total', 'Area', 'OT', 'OC', 'Centro de costo', 'NV', 'Plazo (días)', 'Vence', 'Estado pago', 'Medio pago', 'Fecha pago']
   const filtradas = useMemo(() => todas.filter(r => {
@@ -315,10 +321,11 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
     if (mes && (r.emission_date || '').slice(0, 7) !== mes) return false
     if (tipo && r.document_type !== tipo) return false
     if (fArea && (r.area || '') !== fArea) return false
+    if (soloRepetidas && !rev.idsRepetidos.has(r.id)) return false
     if (q) { const t = ((r.client_name || '') + ' ' + (r.client_rut || '') + ' ' + (r.document_number || '') + ' ' + (r.ot_id || '')).toLowerCase(); if (!t.includes(q.toLowerCase())) return false }
     return true
   // De más reciente a más antigua: fecha de emisión, y a igual fecha, N° de documento.
-  }).sort((a, b) => String(b.emission_date || '').localeCompare(String(a.emission_date || '')) || String(b.document_number || '').localeCompare(String(a.document_number || ''), undefined, { numeric: true })), [todas, mes, tipo, fArea, q, verOcultas])
+  }).sort((a, b) => (soloRepetidas ? (rev.orden.get(a.id) - rev.orden.get(b.id)) : 0) || String(b.emission_date || '').localeCompare(String(a.emission_date || '')) || String(b.document_number || '').localeCompare(String(a.document_number || ''), undefined, { numeric: true })), [todas, mes, tipo, fArea, q, verOcultas, soloRepetidas, rev])
   const toggleSel = id => setSel(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const toggleTodas = () => setSel(s => s.size === filtradas.length ? new Set() : new Set(filtradas.map(r => r.id)))
   const eliminarSel = async () => {
@@ -484,6 +491,18 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
   const folioNCRepetido = !!nc.folioNC.trim() && !!facturaNC && todas.some(x => esNC(x) && String(x.document_number || '').trim() === nc.folioNC.trim() && (x.client_rut || '') === (facturaNC.client_rut || ''))
   const errorNC = !facturaNC ? '' : netoNC <= 0 ? 'Indica el monto neto a rebajar.' : netoNC > saldoNetoNC ? 'El monto supera lo que queda por rebajar de esta factura (' + clp(saldoNetoNC) + ' neto).' : folioNCRepetido ? 'Ya existe una nota de crédito con ese folio para este cliente.' : ''
   const abrirNC = (extra) => { setNC({ ...ncVacia, ...(extra || {}) }); setMostrarNC(true); setMostrarAgregar(false) }
+  // Un folio que faltaba (lista de la revisión): abre el formulario con el número puesto; la nota de crédito, el suyo.
+  const agregarFolioFaltante = (t, folio, tr) => {
+    setPistaFolio({ folio: String(folio), texto: pistaDeFolio(t, folio, tr) })
+    if (t.tipo === '61') abrirNC({ folioNC: String(folio) })
+    else { setMostrarNC(false); setNuevaFC(f => ({ ...f, document_number: String(folio), document_type: t.tipo })); setMostrarAgregar(true) }
+    const m = document.querySelector('main'); if (m && m.scrollTo) m.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+  // Marca las casillas de las copias que se sugiere ocultar; ocultarlas lo hace la persona con «Eliminar seleccionados».
+  const seleccionarSobrantes = () => {
+    if (!rev.idsSobrantes.size) return
+    setVerOcultas(false); setSoloRepetidas(true); setSel(new Set(rev.idsSobrantes))
+  }
   const guardarNC = async () => {
     if (!facturaNC || errorNC || !nc.folioNC.trim()) return
     const f = facturaNC
@@ -531,6 +550,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
         </div>
       </div>
 
+      {mostrarAgregar && pistaFolio && pistaFolio.folio === String(nuevaFC.document_number) && <div style={{ background: '#FFF7E6', border: '1px solid ' + C.orange, borderRadius: 6, padding: '8px 12px', fontSize: 12.5, marginBottom: 10 }}>{pistaFolio.texto}</div>}
       {mostrarAgregar && (
         <div style={{ border: '1px solid ' + C.border, borderRadius: 8, padding: 14, marginBottom: 14, background: C.gray, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
           <label style={{ fontSize: 11, color: C.mut }}>Fecha emisión<input type="date" value={nuevaFC.emission_date} onChange={e => setNuevaFCCampo('emission_date', e.target.value)} style={ip} /></label>
@@ -610,6 +630,9 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
         ))}
       </div>
 
+      {!loading && !errMsg && todas.length > 0 && <BannerRevision rev={rev} soloRepetidas={soloRepetidas} setSoloRepetidas={setSoloRepetidas} verFaltantes={verFaltantes} setVerFaltantes={setVerFaltantes} onSeleccionarSobrantes={seleccionarSobrantes} onIr={onIr ? () => onIr('REVISION_CONTABLE') : null} />}
+      {verFaltantes && <PanelFaltantes faltantes={rev.faltantes} onAgregar={agregarFolioFaltante} />}
+
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
         <input style={{ ...ip, flex: '2 1 220px' }} placeholder="Buscar cliente, RUT, folio u OT..." value={q} onChange={e => setQ(e.target.value)} />
         <select style={{ ...ip, flex: '1 1 120px' }} value={mes} onChange={e => setMes(e.target.value)}><option value="">Todos los meses</option>{meses.map(m => <option key={m} value={m}>{mesLabel(m)}</option>)}</select>
@@ -656,9 +679,9 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
                 const atrasada = dias !== null && dias < 0
                 return (
                 <React.Fragment key={r.id}>
-                <tr style={{ borderBottom: perd ? 'none' : '1px solid #E2E7EC' }}>
-                  <td style={{ ...FIJA_TD, padding: '7px 10px', whiteSpace: 'nowrap' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={sel.has(r.id)} onChange={() => toggleSel(r.id)} aria-label={'Seleccionar folio ' + (r.document_number || '')} /><b>{r.document_number || '-'}</b>{!esNC(r) && r.document_number ? <button title="Crear una nota de crédito de esta factura" onClick={() => { abrirNC({ folioFactura: String(r.document_number), clienteRut: r.client_rut || '' }); const m = document.querySelector('main'); if (m && m.scrollTo) m.scrollTo({ top: 0, behavior: 'smooth' }) }} style={{ border: '1px solid ' + C.red, color: C.red, background: '#fff', borderRadius: 6, fontSize: 10, fontWeight: 700, padding: '1px 6px', cursor: 'pointer', lineHeight: 1.4 }}>NC</button> : null}</span>
+                <tr style={{ borderBottom: perd ? 'none' : '1px solid #E2E7EC', ...(rev.idsRepetidos.has(r.id) ? { background: '#FFF9ED' } : {}) }}>
+                  <td style={{ ...FIJA_TD, padding: '7px 10px', whiteSpace: 'nowrap', ...(rev.idsRepetidos.has(r.id) ? { background: '#FFF9ED' } : {}) }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={sel.has(r.id)} onChange={() => toggleSel(r.id)} aria-label={'Seleccionar folio ' + (r.document_number || '')} /><b>{r.document_number || '-'}</b><ChipRepetida info={rev.info.get(r.id)} />{!esNC(r) && r.document_number ? <button title="Crear una nota de crédito de esta factura" onClick={() => { abrirNC({ folioFactura: String(r.document_number), clienteRut: r.client_rut || '' }); const m = document.querySelector('main'); if (m && m.scrollTo) m.scrollTo({ top: 0, behavior: 'smooth' }) }} style={{ border: '1px solid ' + C.red, color: C.red, background: '#fff', borderRadius: 6, fontSize: 10, fontWeight: 700, padding: '1px 6px', cursor: 'pointer', lineHeight: 1.4 }}>NC</button> : null}</span>
                   </td>
                   <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{fmtF(r.emission_date)}</td>
                   <td style={{ padding: '7px 10px' }}><div style={{ fontWeight: 600 }}>{r.client_name || r.client_rut || '-'}</div><div style={{ color: C.mut, fontSize: 11 }}>{r.client_rut}{r.origen === 'xlsx' ? ' - Excel' : ''}</div></td>
