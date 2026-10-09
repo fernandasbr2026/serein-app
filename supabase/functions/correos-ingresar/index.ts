@@ -161,9 +161,10 @@ Deno.serve(async (req) => {
 
     const apiKey = (Deno.env.get("ANTHROPIC_API_KEY") || "").trim();
     const sbUrl = Deno.env.get("SUPABASE_URL") || "";
-    const sbKey = (Deno.env.get("SERVICE_ROLE_KEY") || "").trim();
+    // Supabase entrega esta llave sola a cada función (SUPABASE_SERVICE_ROLE_KEY); SERVICE_ROLE_KEY solo hace falta si alguien la guardó a mano
+    const sbKey = (Deno.env.get("SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "").trim();
     if (!apiKey) throw new Error("Falta el secreto ANTHROPIC_API_KEY.");
-    if (!sbUrl || !sbKey) throw new Error("Falta el secreto SERVICE_ROLE_KEY.");
+    if (!sbUrl || !sbKey) throw new Error("No se encontró la llave de servicio de Supabase.");
     const sbHeaders = { apikey: sbKey, Authorization: "Bearer " + sbKey };
 
     const mensajes = Array.isArray(body.mensajes) ? body.mensajes : [];
