@@ -658,7 +658,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
                 <React.Fragment key={r.id}>
                 <tr style={{ borderBottom: perd ? 'none' : '1px solid #E2E7EC' }}>
                   <td style={{ ...FIJA_TD, padding: '7px 10px', whiteSpace: 'nowrap' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={sel.has(r.id)} onChange={() => toggleSel(r.id)} aria-label={'Seleccionar folio ' + (r.document_number || '')} /><b>{r.document_number || '-'}</b></span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={sel.has(r.id)} onChange={() => toggleSel(r.id)} aria-label={'Seleccionar folio ' + (r.document_number || '')} /><b>{r.document_number || '-'}</b>{!esNC(r) && r.document_number ? <button title="Crear una nota de crédito de esta factura" onClick={() => { abrirNC({ folioFactura: String(r.document_number), clienteRut: r.client_rut || '' }); const m = document.querySelector('main'); if (m && m.scrollTo) m.scrollTo({ top: 0, behavior: 'smooth' }) }} style={{ border: '1px solid ' + C.red, color: C.red, background: '#fff', borderRadius: 6, fontSize: 10, fontWeight: 700, padding: '1px 6px', cursor: 'pointer', lineHeight: 1.4 }}>NC</button> : null}</span>
                   </td>
                   <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{fmtF(r.emission_date)}</td>
                   <td style={{ padding: '7px 10px' }}><div style={{ fontWeight: 600 }}>{r.client_name || r.client_rut || '-'}</div><div style={{ color: C.mut, fontSize: 11 }}>{r.client_rut}{r.origen === 'xlsx' ? ' - Excel' : ''}</div></td>
