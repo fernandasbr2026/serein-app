@@ -1048,12 +1048,12 @@ const esNomina = categoria => /sueldo/i.test(categoria || '') || categoria === '
 // a pedido explícito ("visualización de estos colores").
 function kpiSolida(label, valor, color, icono, sub, onClick) {
   return (
-    <div onClick={onClick} style={{ backgroundColor: color, backgroundImage: 'linear-gradient(135deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,0) 58%)', color: '#fff', borderRadius: 14, padding: '16px 18px', flex: '1 1 190px', boxShadow: '0 12px 24px -14px rgba(16,19,21,.45)', cursor: onClick ? 'pointer' : 'default', transition: 'transform .12s ease, box-shadow .12s ease' }}
+    <div className="kpi-card" onClick={onClick} style={{ backgroundColor: color, backgroundImage: 'linear-gradient(135deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,0) 58%)', color: '#fff', borderRadius: 14, padding: '16px 18px', flex: '1 1 190px', boxShadow: '0 12px 24px -14px rgba(16,19,21,.45)', cursor: onClick ? 'pointer' : 'default', transition: 'transform .12s ease, box-shadow .12s ease' }}
       onMouseEnter={e => { if (onClick) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 16px 28px -14px rgba(16,19,21,.55)' } }}
       onMouseLeave={e => { if (onClick) { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 12px 24px -14px rgba(16,19,21,.45)' } }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 22, letterSpacing: -0.4 }}>{valor}</div>
-        <span style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(255,255,255,.2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icono}</span>
+        <div className="kpi-v" style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 22, letterSpacing: -0.4 }}>{valor}</div>
+        <span className="kpi-ic" style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(255,255,255,.2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icono}</span>
       </div>
       <div style={{ fontSize: 12, marginTop: 4, opacity: 0.92 }}>{label}</div>
       {sub && <div style={{ fontSize: 10.5, marginTop: 3, opacity: 0.8 }}>{sub}</div>}

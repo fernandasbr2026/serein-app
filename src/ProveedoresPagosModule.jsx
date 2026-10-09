@@ -96,9 +96,9 @@ const chequeProximo = (c, hoyStr, en7) => c.estado === 'Pendiente' && c.fechaCob
 // ============================================================
 function Kpi({ label, valor, color, sub }) {
   return (
-    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 14, flex: '1 1 165px', minWidth: 0 }}>
+    <div className="kpi-card" style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 14, flex: '1 1 165px', minWidth: 0 }}>
       <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 600 }}>{label}</div>
-      <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 21, fontWeight: 600, color: color || C.carbon, whiteSpace: 'nowrap', marginTop: 4 }}>{valor}</div>
+      <div className="kpi-v" style={{ fontFamily: SEREIN.fontDisplay, fontSize: 21, fontWeight: 600, color: color || C.carbon, whiteSpace: 'nowrap', marginTop: 4 }}>{valor}</div>
       {sub && <div style={{ fontSize: 11.5, color: C.gris, marginTop: 2 }}>{sub}</div>}
     </div>
   )

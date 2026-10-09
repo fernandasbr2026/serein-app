@@ -89,12 +89,12 @@ export function borrarDatosLocales() {
 
 function Kpi({ label, valor, sub, color, icon: Icon }) {
   return (
-    <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 14, boxShadow: '0 1px 2px rgba(16,19,21,.04), 0 6px 16px -10px rgba(16,19,21,.10)', padding: '16px 18px', flex: '1 1 180px', minWidth: 0 }}>
+    <div className="kpi-card" style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 14, boxShadow: '0 1px 2px rgba(16,19,21,.04), 0 6px 16px -10px rgba(16,19,21,.10)', padding: '16px 18px', flex: '1 1 180px', minWidth: 0 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>{label}</span>
         <Icon size={16} strokeWidth={1.75} color={color} />
       </div>
-      <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 24, fontWeight: 700, letterSpacing: -0.4, color: C.carbon, marginTop: 8, whiteSpace: 'nowrap' }}>{valor}</div>
+      <div className="kpi-v" style={{ fontFamily: SEREIN.fontDisplay, fontSize: 24, fontWeight: 700, letterSpacing: -0.4, color: C.carbon, marginTop: 8, whiteSpace: 'nowrap' }}>{valor}</div>
       {sub && <div style={{ fontSize: 12, color: '#9AA3AD', marginTop: 3 }}>{sub}</div>}
     </div>
   )

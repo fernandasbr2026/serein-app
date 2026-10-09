@@ -311,10 +311,10 @@ function Barra({ pct, color, alto = 8 }) {
 // secundaria, una advertencia y una explicación breve del cálculo).
 function KpiCardOT({ icon: Icon, iconBg, iconColor, value, label, secundario, advertencia, explicacion, onClick }) {
   return (
-    <div onClick={onClick} title={explicacion} role={onClick ? 'button' : undefined}
+    <div className="kpi-card" onClick={onClick} title={explicacion} role={onClick ? 'button' : undefined}
       style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: SEREIN.radius, padding: 20, cursor: onClick ? 'pointer' : 'default' }}>
-      {Icon && <div style={{ width: 38, height: 38, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: iconBg || SEREIN.orangeSoft, color: iconColor || SEREIN.orangeDark, marginBottom: 14 }}><Icon size={19} /></div>}
-      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 800, fontSize: 26, color: '#101315', lineHeight: 1 }}>{value}</div>
+      {Icon && <div className="kpi-ic" style={{ width: 38, height: 38, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: iconBg || SEREIN.orangeSoft, color: iconColor || SEREIN.orangeDark, marginBottom: 14 }}><Icon size={19} /></div>}
+      <div className="kpi-v" style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 800, fontSize: 26, color: '#101315', lineHeight: 1 }}>{value}</div>
       <div style={{ fontSize: 13, color: '#9AA3AD', marginTop: 6 }}>{label}</div>
       {secundario && <div style={{ fontSize: 11.5, color: '#9AA3AD', marginTop: 3 }}>{secundario}</div>}
       {advertencia && <div style={{ fontSize: 11.5, color: C.rojo, marginTop: 4 }}>⚠ {advertencia}</div>}
