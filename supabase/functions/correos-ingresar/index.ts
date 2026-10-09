@@ -23,7 +23,7 @@
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-correos-token, x-google-token",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-correos-token, x-acceso-casilla",
 };
 
 const MODEL = "claude-sonnet-5";
@@ -155,7 +155,7 @@ async function autorizado(req: Request): Promise<{ ok: boolean; quien?: string; 
   const secreta = (Deno.env.get("CORREOS_TOKEN") || "").trim();
   const enviada = (req.headers.get("x-correos-token") || "").trim();
   if (secreta && enviada && enviada === secreta) return { ok: true, quien: "clave" };
-  const tk = (req.headers.get("x-google-token") || "").trim();
+  const tk = (req.headers.get("x-acceso-casilla") || "").trim();
   if (!tk) return { ok: false, error: "Falta identificarse con la cuenta de Google." };
   const r = await fetch("https://oauth2.googleapis.com/tokeninfo?access_token=" + encodeURIComponent(tk));
   if (!r.ok) return { ok: false, error: "Google no reconoció el acceso. Vuelve a autorizar el script." };

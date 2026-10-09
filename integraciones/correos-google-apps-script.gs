@@ -90,7 +90,7 @@ function enviar_(obj) {
     const resp = UrlFetchApp.fetch(URL_FUNCION, {
       method: 'post',
       contentType: 'application/json',
-      headers: { 'x-google-token': ScriptApp.getOAuthToken() },
+      headers: { 'x-acceso-casilla': ScriptApp.getOAuthToken() },
       payload: JSON.stringify(obj),
       muteHttpExceptions: true,
     });
