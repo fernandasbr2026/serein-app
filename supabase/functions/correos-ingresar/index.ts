@@ -60,7 +60,7 @@ Reglas:
 - Un elemento por cada adjunto que sea una orden de compra o una cotización. "archivo" es el nombre exacto del adjunto del que sale el dato; si el dato sale solo del texto del correo, "archivo" es null.
 - "tipo": "oc" si es una ORDEN DE COMPRA (u orden de trabajo / pedido de compra) que un CLIENTE le manda a Serein; "cotizacion" si es una COTIZACIÓN, oferta o presupuesto que SEREIN le manda a un cliente; "otro" para cualquier otra cosa (facturas, guías, fotos, firmas, avisos). Si el correo es ENVIADO por Serein, lo normal es "cotizacion"; si es RECIBIDO, lo normal es "oc".
 - "cliente": la razón social de la EMPRESA CLIENTE (en una orden de compra, quien la emite; en una cotización, a quien va dirigida). Nunca pongas a Serein como cliente. "rutCliente": su RUT tal como aparece.
-- "numeroOC": el número de la orden de compra del cliente, tal como está impreso. "nv": el número de nota de venta (NV) si aparece; si no, null. No confundas el número de OC con folios de cotización, RUT, teléfonos o fechas.
+- "numeroOC": el número de la orden de compra del cliente, tal como está impreso. "nv": el número de nota de venta (NV) que trae la ORDEN DE COMPRA DEL CLIENTE (es un número del propio cliente, no de Serein); si no aparece, null. No confundas el número de OC con folios de cotización, RUT, teléfonos o fechas.
 - "folioCotizacion": el número/folio de la cotización de Serein (ej. "942", "COT-SER-REV-0942"). En una orden de compra, "refCotizacion" es el folio de la cotización de Serein a la que hace referencia (si la menciona).
 - "fechaDocumento": la fecha del documento (no la del correo), formato YYYY-MM-DD.
 - "detalle": resumen corto (máximo 200 caracteres) de lo que se compra o cotiza (servicio, m², piezas, proyecto o planta).
@@ -91,6 +91,22 @@ function base64ABytes(b64: string): Uint8Array {
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
+}
+
+// ¿El mismo documento ya entró por otra casilla? (un cliente suele escribir a varias casillas de Serein a la vez)
+async function yaExiste(sbUrl: string, sbHeaders: Record<string, string>, tipo: string, d: any): Promise<boolean> {
+  const numero = tipo === "oc" ? texto(d.numeroOC) : texto(d.folioCotizacion);
+  if (!numero) return false;
+  const campo = tipo === "oc" ? "numero_oc" : "folio_cotizacion";
+  const rut = texto(d.rutCliente), cliente = texto(d.cliente);
+  let filtro = "";
+  if (rut) filtro = "&rut_cliente=eq." + encodeURIComponent(rut);
+  else if (cliente) filtro = "&cliente=ilike." + encodeURIComponent(cliente);
+  else return false;
+  const r = await fetch(sbUrl + "/rest/v1/correo_documentos?select=id&tipo=eq." + tipo + "&" + campo + "=eq." + encodeURIComponent(numero) + "&estado=neq.descartado" + filtro + "&limit=1", { headers: sbHeaders });
+  if (!r.ok) return false;
+  const filas = await r.json();
+  return Array.isArray(filas) && filas.length > 0;
 }
 
 const nombreSeguro = (n: string) => (n || "adjunto").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 120);
@@ -167,7 +183,8 @@ Deno.serve(async (req) => {
           const cuadra = neto != null && iva != null && total != null ? Math.abs(neto + iva - total) <= Math.max(2, total * 0.01) : total != null || neto != null;
           const clienteOk = !!texto(d.cliente);
           const numeroOk = d.tipo === "oc" ? !!texto(d.numeroOC) : !!texto(d.folioCotizacion);
-          const auto = d.confianza === "alta" && cuadra && clienteOk && numeroOk;
+          const repetida = await yaExiste(sbUrl, sbHeaders, d.tipo, d);
+          const auto = d.confianza === "alta" && cuadra && clienteOk && numeroOk && !repetida;
 
           // PDF al bucket privado (si falla, el documento igual se guarda sin PDF)
           let pdfPath: string | null = null;
@@ -188,7 +205,7 @@ Deno.serve(async (req) => {
             gmail_id: String(m.id),
             adjunto: archivo,
             tipo: d.tipo,
-            estado: auto ? "confirmado" : "por_revisar",
+            estado: repetida ? "descartado" : auto ? "confirmado" : "por_revisar",
             confirmado_por: auto ? "auto" : null,
             confianza: texto(d.confianza),
             fecha_correo: m.fecha || null,
@@ -200,7 +217,8 @@ Deno.serve(async (req) => {
             detalle: texto(d.detalle),
             neto, iva, total,
             moneda: texto(d.moneda) || "CLP",
-            notas: texto(d.notas),
+            notas: repetida ? "Repetida: este documento ya estaba leído desde otra casilla." : texto(d.notas),
+            buzon: texto(m.buzon),
             pdf_path: pdfPath,
             datos_ia: d,
           });

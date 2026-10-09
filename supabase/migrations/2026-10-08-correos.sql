@@ -21,6 +21,7 @@ create table if not exists public.correo_documentos (
   de text,
   para text,
   asunto text,
+  buzon text,                                  -- casilla de Serein de donde se leyó (comercial@, administracion@, facturacion@)
   cliente text,
   rut_cliente text,
   numero_oc text,

@@ -8,7 +8,8 @@
 // pone la etiqueta "Serein-Revisado" para que los veas en Gmail.
 // No borra, no mueve ni responde ningún correo.
 //
-// SOLO HAY QUE CAMBIAR LAS DOS LÍNEAS DE ABAJO.
+// SOLO HAY QUE CAMBIAR LAS DOS LÍNEAS DE ABAJO. Se instala igual en cada casilla
+// (comercial@, administracion@, facturacion@): el ERP junta todo y descarta lo repetido.
 // ============================================================
 
 const URL_FUNCION = 'https://TU-PROYECTO.supabase.co/functions/v1/correos-ingresar';
@@ -18,6 +19,7 @@ const CLAVE = 'PEGA-AQUI-LA-MISMA-CLAVE-QUE-GUARDASTE-EN-SUPABASE (CORREOS_TOKEN
 const DIAS_ATRAS = 180;                    // hasta cuántos días atrás revisar
 const DOMINIO_PROPIO = '@sereinspa.com';   // para distinguir tus correos de los de los clientes
 const ETIQUETA = 'Serein-Revisado';
+const BUZON = Session.getEffectiveUser().getEmail();   // casilla donde está instalado el script (se detecta sola)
 const MAX_MB_ADJUNTO = 6;                  // adjuntos más pesados se omiten
 const MINUTOS_MAX = 4.5;                   // tiempo máximo por ejecución
 const MAX_HILOS = 300;                     // cuántas conversaciones recorrer por consulta
@@ -64,6 +66,7 @@ function sincronizar() {
           if (!adjuntos.length) return;
           const r = enviar_({ mensajes: [{
             id: id,
+            buzon: BUZON,
             fecha: msg.getDate().toISOString(),
             de: msg.getFrom(),
             para: msg.getTo(),

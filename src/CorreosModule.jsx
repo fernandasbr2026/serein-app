@@ -52,6 +52,7 @@ export default function CorreosModule({ esGerencia = true, ots = [], proyectos =
   const [fCliente, setFCliente] = useState('')
   const [fMes, setFMes] = useState('')
   const [fEstado, setFEstado] = useState('')
+  const [fBuzon, setFBuzon] = useState('')
   const [editando, setEditando] = useState(null)
   const [clienteSel, setClienteSel] = useState('')
   const [verGuia, setVerGuia] = useState(false)
@@ -102,10 +103,12 @@ export default function CorreosModule({ esGerencia = true, ots = [], proyectos =
       if (fEstado ? d.estado !== fEstado : (tab !== 'rev' && d.estado === 'descartado')) return false
       if (fCliente && claveCl(d) !== fCliente) return false
       if (fMes && fechaDe(d).slice(0, 7) !== fMes) return false
+      if (fBuzon && (d.buzon || '') !== fBuzon) return false
       if (q) { const t = norm([d.cliente, d.numero_oc, d.nv, d.folio_cotizacion, d.detalle, d.asunto, d.rut_cliente].join(' ')); if (!t.includes(norm(q))) return false }
       return true
     }).sort((a, b) => String(fechaDe(b)).localeCompare(String(fechaDe(a))))
-  }, [docs, tab, fEstado, fCliente, fMes, q, claveDeDoc])
+  }, [docs, tab, fEstado, fCliente, fMes, fBuzon, q, claveDeDoc])
+  const buzones = useMemo(() => [...new Set(docs.map(d => d.buzon).filter(Boolean))].sort(), [docs])
 
   const clientes = useMemo(() => { const m = new Map(); vivos.forEach(d => { const k = claveCl(d); if (!m.has(k) || (d.rut_cliente && d.cliente && String(m.get(k)).length < String(d.cliente).length)) m.set(k, d.cliente || k) }); return [...m.entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1]))) }, [vivos, claveDeDoc])
   const meses = useMemo(() => [...new Set(docs.map(d => fechaDe(d).slice(0, 7)).filter(Boolean))].sort().reverse(), [docs])
@@ -188,8 +191,8 @@ export default function CorreosModule({ esGerencia = true, ots = [], proyectos =
     <div style={{ fontWeight: 700, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}><Info size={16} color={C.orange} />Cómo se conecta tu correo</div>
     <ol style={{ margin: 0, paddingLeft: 20 }}>
       <li>En Supabase se activa el módulo (un SQL) y se crea la función <b>correos-ingresar</b> con su clave.</li>
-      <li>En <b>script.google.com</b>, con tu cuenta de Serein, se pega el script de Correos y se ejecuta <b>probarConexion</b> y luego <b>activarEnvioAutomatico</b>.</li>
-      <li>Desde ahí, cada 15 minutos el script manda al ERP las órdenes de compra que recibes y las cotizaciones que envías (solo PDF). La IA las lee y aparecen aquí.</li>
+      <li>En <b>script.google.com</b>, dentro de cada casilla (comercial@, administracion@ y facturacion@), se pega el script de Correos y se ejecuta <b>probarConexion</b> y luego <b>activarEnvioAutomatico</b>.</li>
+      <li>Desde ahí, cada 15 minutos cada casilla manda al ERP las órdenes de compra que recibe y las cotizaciones que envía (solo PDF). La IA las lee, el ERP junta todo y descarta lo repetido, y aparece aquí.</li>
     </ol>
     <div style={{ marginTop: 8, color: C.soft }}>El script solo lee: no borra, no mueve ni responde correos. Los datos dudosos quedan en «Por revisar» para que tú los confirmes.</div>
   </div>)
@@ -222,6 +225,7 @@ export default function CorreosModule({ esGerencia = true, ots = [], proyectos =
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar cliente, N° OC, NV, detalle…" style={{ ...ip, flex: '1 1 240px' }} />
           <select value={fCliente} onChange={e => setFCliente(e.target.value)} style={ip}><option value="">Todos los clientes</option>{clientes.map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select>
           <select value={fMes} onChange={e => setFMes(e.target.value)} style={ip}><option value="">Todos los meses</option>{meses.map(m => <option key={m} value={m}>{m}</option>)}</select>
+          {buzones.length > 1 && <select value={fBuzon} onChange={e => setFBuzon(e.target.value)} style={ip}><option value="">Todas las casillas</option>{buzones.map(b => <option key={b} value={b}>{b}</option>)}</select>}
           <select value={fEstado} onChange={e => setFEstado(e.target.value)} style={ip}><option value="">Estado: todos</option><option value="confirmado">Leídas / confirmadas</option><option value="por_revisar">Por revisar</option><option value="descartado">Descartadas</option></select>
           {tab !== 'rev' && <button onClick={exportar} disabled={!lista.length} style={{ ...ip, cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Download size={14} />Excel</button>}
         </div>
@@ -230,7 +234,7 @@ export default function CorreosModule({ esGerencia = true, ots = [], proyectos =
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>
                 <th style={th}>Fecha</th><th style={th}>Cliente</th>
-                {tab === 'cot' ? <th style={th}>Folio</th> : tab === 'rev' ? <th style={th}>Tipo / N°</th> : <><th style={th}>N° OC</th><th style={th}>NV</th></>}
+                {tab === 'cot' ? <th style={th}>Folio</th> : tab === 'rev' ? <th style={th}>Tipo / N°</th> : <><th style={th}>N° OC</th><th style={th}>NV cliente</th></>}
                 <th style={th}>Detalle</th><th style={{ ...th, textAlign: 'right' }}>Neto</th><th style={{ ...th, textAlign: 'right' }}>IVA</th><th style={{ ...th, textAlign: 'right' }}>Total</th>
                 {tab === 'oc' && <th style={th}>Cot. ref.</th>}{tab === 'cot' && <th style={th}>Seguimiento</th>}
                 <th style={th}>Estado</th><th style={th}></th>
@@ -242,7 +246,7 @@ export default function CorreosModule({ esGerencia = true, ots = [], proyectos =
                   {tab === 'cot' ? <td style={{ ...td, fontWeight: 700 }}>{d.folio_cotizacion || '—'}</td>
                     : tab === 'rev' ? <td style={td}><div style={{ fontWeight: 700 }}>{d.tipo === 'oc' ? 'OC ' + (d.numero_oc || '—') : 'Cot. ' + (d.folio_cotizacion || '—')}</div></td>
                     : <><td style={{ ...td, fontWeight: 700, whiteSpace: 'nowrap' }}>{d.numero_oc || '—'}</td><td style={{ ...td, whiteSpace: 'nowrap' }}>{d.nv || '—'}</td></>}
-                  <td style={{ ...td, maxWidth: 280 }}><div style={{ lineHeight: 1.4 }}>{d.detalle || '—'}</div><div style={{ color: C.faint, fontSize: 11, marginTop: 2 }}>{d.asunto}</div></td>
+                  <td style={{ ...td, maxWidth: 280 }}><div style={{ lineHeight: 1.4 }}>{d.detalle || '—'}</div><div style={{ color: C.faint, fontSize: 11, marginTop: 2 }}>{d.asunto}{d.buzon ? ' · ' + d.buzon.split('@')[0] : ''}</div></td>
                   {montos(d)}
                   {tab === 'oc' && <td style={td}>{d.ref_cotizacion || '—'}</td>}
                   {tab === 'cot' && <td style={td}>{seguimiento(d)}</td>}
@@ -293,7 +297,7 @@ export default function CorreosModule({ esGerencia = true, ots = [], proyectos =
           <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 700, fontSize: 18, marginBottom: 4 }}>Corregir datos</div>
           <div style={{ fontSize: 12.5, color: C.soft, marginBottom: 12 }}>Correo: {editando.asunto || '—'} · {editando.de || ''}</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
-            {[['Tipo', 'tipo', 'sel'], ['Cliente', 'cliente'], ['RUT cliente', 'rut_cliente'], ['N° de OC', 'numero_oc'], ['NV', 'nv'], ['Folio cotización', 'folio_cotizacion'], ['Cotización a la que se refiere', 'ref_cotizacion'], ['Fecha del documento', 'fecha_documento', 'date'], ['Neto', 'neto', 'num'], ['IVA', 'iva', 'num'], ['Total', 'total', 'num']].map(([lab, k, t]) => (
+            {[['Tipo', 'tipo', 'sel'], ['Cliente', 'cliente'], ['RUT cliente', 'rut_cliente'], ['N° de OC', 'numero_oc'], ['NV (del cliente)', 'nv'], ['Folio cotización', 'folio_cotizacion'], ['Cotización a la que se refiere', 'ref_cotizacion'], ['Fecha del documento', 'fecha_documento', 'date'], ['Neto', 'neto', 'num'], ['IVA', 'iva', 'num'], ['Total', 'total', 'num']].map(([lab, k, t]) => (
               <label key={k} style={{ fontSize: 11, color: C.faint }}>{lab}
                 {t === 'sel' ? <select value={editando.tipo} onChange={e => setEditando(v => ({ ...v, tipo: e.target.value }))} style={{ ...ip, width: '100%' }}><option value="oc">Orden de compra</option><option value="cotizacion">Cotización enviada</option></select>
                   : <input type={t === 'date' ? 'date' : t === 'num' ? 'number' : 'text'} value={editando[k] ?? ''} onChange={e => setEditando(v => ({ ...v, [k]: e.target.value }))} style={{ ...ip, width: '100%' }} />}
