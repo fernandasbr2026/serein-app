@@ -1,7 +1,7 @@
 // ============================================================
 // SEREIN · Envío de correos al ERP (Google Apps Script)
 // ============================================================
-// Se pega en script.google.com con la cuenta de correo de Serein. Cada 15
+// Se pega en script.google.com con la cuenta de correo de Serein. Cada 10
 // minutos revisa los correos nuevos que parecen ÓRDENES DE COMPRA (recibidos)
 // o COTIZACIONES (enviadas por ti), manda cada uno al ERP (función
 // correos-ingresar) y recuerda cuáles ya mandó para no repetirlos. Además les
@@ -21,21 +21,29 @@ const ETIQUETA = 'Serein-Revisado';
 const BUZON = Session.getEffectiveUser().getEmail();   // casilla donde está instalado el script (se detecta sola)
 const MAX_MB_ADJUNTO = 6;                  // adjuntos más pesados se omiten
 const MINUTOS_MAX = 4.5;                   // tiempo máximo por ejecución
-const MAX_HILOS = 300;                     // cuántas conversaciones recorrer por consulta
+const MAX_HILOS = 800;                     // cuántas conversaciones recorrer por consulta
+const CLIENTES_PRIORITARIOS = ['kronos']; // se leen primero, sin filtro de palabras
+const ANIOS_PRIORITARIOS = 5;              // y hasta cuántos años atrás
 
 // Palabras que hacen que un correo se considere candidato (la IA confirma después)
 const PALABRAS_OC = '"orden de compra" OR "orden compra" OR "o/c" OR oc OR "purchase order" OR "orden de trabajo" OR pedido';
 const PALABRAS_COT = 'cotizacion OR cotización OR "COT-SER" OR presupuesto OR oferta OR propuesta';
 
 function consultas_() {
+  const prior = [];
+  CLIENTES_PRIORITARIOS.forEach(function (cl) {
+    const b = cl + ' newer_than:' + (ANIOS_PRIORITARIOS * 365) + 'd has:attachment filename:pdf';
+    prior.push({ carpeta: 'entrada', q: 'in:inbox ' + b });
+    prior.push({ carpeta: 'enviados', q: 'in:sent ' + b });
+  });
   const base = 'newer_than:' + DIAS_ATRAS + 'd has:attachment filename:pdf';
-  return [
+  return prior.concat([
     { carpeta: 'entrada', q: 'in:inbox ' + base + ' (' + PALABRAS_OC + ')' },
     { carpeta: 'enviados', q: 'in:sent ' + base + ' (' + PALABRAS_COT + ')' },
-  ];
+  ]);
 }
 
-// Revisa los correos pendientes y los manda al ERP. Es lo que corre cada 15 minutos.
+// Revisa los correos pendientes y los manda al ERP. Es lo que corre cada 10 minutos.
 function sincronizar() {
   const inicio = new Date().getTime();
   const etiqueta = GmailApp.getUserLabelByName(ETIQUETA) || GmailApp.createLabel(ETIQUETA);
@@ -134,11 +142,11 @@ function probarConexion() {
   if (!r || !r.ok) throw new Error('No hay conexión con el ERP: ' + JSON.stringify(r));
 }
 
-// 2) Ejecuta esta UNA vez: deja el envío automático cada 15 minutos.
+// 2) Ejecuta esta UNA vez: deja el envío automático cada 10 minutos.
 function activarEnvioAutomatico() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'sincronizar') ScriptApp.deleteTrigger(t); });
-  ScriptApp.newTrigger('sincronizar').timeBased().everyMinutes(15).create();
-  Logger.log('Listo: se enviarán los correos nuevos cada 15 minutos.');
+  ScriptApp.newTrigger('sincronizar').timeBased().everyMinutes(10).create();
+  Logger.log('Listo: se enviarán los correos nuevos cada 10 minutos.');
 }
 
 // Para apagarlo: ejecuta esta función.
