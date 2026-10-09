@@ -1,5 +1,5 @@
 import LogoSerein from './LogoSerein.jsx'
-import { ShieldCheck, LayoutGrid, Sparkles, Building2, Factory, Wrench, Wallet, ShoppingCart, FileText, Receipt, ShieldAlert, Landmark, Users, ClipboardList, Package, Settings, User, Search, Bell, Menu, ChevronsLeft, LogOut, Circle, ChevronDown, Network, Handshake, Archive, ArrowUp, ArrowDown, CheckCircle2, UploadCloud, AlertTriangle, RotateCw, Banknote, CalendarClock } from 'lucide-react'
+import { Mail, ShieldCheck, LayoutGrid, Sparkles, Building2, Factory, Wrench, Wallet, ShoppingCart, FileText, Receipt, ShieldAlert, Landmark, Users, ClipboardList, Package, Settings, User, Search, Bell, Menu, ChevronsLeft, LogOut, Circle, ChevronDown, Network, Handshake, Archive, ArrowUp, ArrowDown, CheckCircle2, UploadCloud, AlertTriangle, RotateCw, Banknote, CalendarClock } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { SEREIN, PILL_VARIANT } from './theme-serein.js'
 import { suscribirEstadoGuardado, pushState } from './sync.js'
@@ -87,7 +87,7 @@ const ICON = {
   COMPRAS_OP: Package, ASISTENCIA: Users, COTIZADOR: ClipboardList,
   CLIENTES: Users, CONTACTOS: User, FINANZAS: Landmark, CALENDARIO_PAGOS: CalendarClock, PAGOS: Wallet,
   ORDENES_COMPRA: ShoppingCart, LIBRO_COMPRAS: FileText, LIBRO_VENTAS: Receipt,
-  CARTOLAS_BANCARIAS: Banknote, CREDITO: ShieldCheck,
+  CARTOLAS_BANCARIAS: Banknote, CREDITO: ShieldCheck, CORREOS: Mail,
   TRAZABILIDAD: ShieldAlert, PARAMETROS: Settings, INVENTARIO: Archive
 }
 const iconoTab = c => ICON[c] || Circle
@@ -99,7 +99,7 @@ const SECCIONES_SEREIN = [
   { nombre: 'General', codes: ['TODAS', 'ORGANIGRAMA', 'CRM', 'ASESOR', 'Santa Rosa', 'Istria', 'Proyectos'] },
   { nombre: 'Proyectos', codes: ['GESTION_PROYECTOS'] },
   { nombre: 'Finanzas', codes: ['CALENDARIO_PAGOS', 'FINANZAS', 'ORDENES_COMPRA', 'PAGOS', 'LIBRO_COMPRAS', 'LIBRO_VENTAS', 'CARTOLAS_BANCARIAS'] },
-  { nombre: 'Comercial', codes: ['TRAZABILIDAD', 'COTIZADOR', 'CLIENTES', 'CREDITO', 'CONTACTOS', 'COMPRAS_OP'] },
+  { nombre: 'Comercial', codes: ['TRAZABILIDAD', 'CORREOS', 'COTIZADOR', 'CLIENTES', 'CREDITO', 'CONTACTOS', 'COMPRAS_OP'] },
   { nombre: 'Operaciones', codes: ['PRODUCCION', 'GESTION_OT', 'ASISTENCIA', 'INVENTARIO'] },
   { nombre: 'Sistema', codes: ['PARAMETROS'] }
 ]
