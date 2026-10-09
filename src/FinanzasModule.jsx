@@ -866,7 +866,7 @@ function ProyeccionFin({ fin }) {
   }
   const max = Math.max(1, ...meses.map(m => m.total))
   return (
-    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18, marginTop: 16 }}>
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 14, boxShadow: '0 1px 2px rgba(16,19,21,.04)', padding: 18, marginTop: 16 }}>
       <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 4 }}>Proyeccion a 12 meses</div>
       <div style={{ fontSize: 12, color: '#9AA3AD', marginBottom: 14 }}>Forecast informativo: gastos fijos y variables proyectados mes a mes segun vencimiento y frecuencia cargada (los Mensuales y Anuales se repiten hacia adelante). Se actualiza a medida que cargas mas gastos.</div>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 140, marginBottom: 8 }}>
@@ -900,29 +900,31 @@ function ResumenMensual({ fin }) {
   const [mes, setMes] = useState(hoy().slice(0, 7))
   const r = useMemo(() => calcularResumenFin(fin, mes), [fin, mes])
 
-  const kpi = (label, valor, color) => (
-    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 14, flex: '1 1 170px' }}>
-      <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{label}</div>
-      <div style={{ fontFamily: SEREIN.fontDisplay, fontSize: 21, fontWeight: 600, color: color || C.carbon, whiteSpace: 'nowrap' }}>{valor}</div>
+  const kpi = (label, valor, color, ayuda) => (
+    <div className="kpi-card" title={ayuda} style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 14, boxShadow: '0 1px 2px rgba(16,19,21,.04)', padding: '14px 16px', flex: '1 1 190px', minWidth: 0 }}>
+      <div style={{ fontSize: 11, color: C.gris, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600 }}>{label}</div>
+      <div className="kpi-v" style={{ fontFamily: SEREIN.fontDisplay, fontSize: 21, fontWeight: 600, color: color || C.carbon, whiteSpace: 'nowrap', marginTop: 2 }}>{valor}</div>
+      {ayuda && <div style={{ fontSize: 11.5, color: C.gris, marginTop: 6, lineHeight: 1.4 }}>{ayuda}</div>}
     </div>
   )
 
   return (
     <div>
-      <div style={{ marginBottom: 14 }}>
+      <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <input type="month" value={mes} onChange={e => setMes(e.target.value)} style={inp} />
+        <span style={{ fontSize: 12.5, color: C.gris }}>Elige un mes: abajo ves cuánto cuestan los gastos y las cuotas de deuda, y cuánta plata saldría de caja.</span>
       </div>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-        {kpi('Gastos fijos del mes', clp(r.fijos))}
-        {kpi('Gastos variables del mes', clp(r.variables))}
-        {kpi('Cuotas créditos/leasing', clp(r.totalCuotasMes), C.naranja)}
-        {kpi('Salida de caja proyectada', clp(r.salidaCaja), C.rojo)}
-        {kpi('Deuda total propia', clp(r.deudaVigente), C.carbon)}
-        {r.reembolsable > 0 ? kpi('Reembolsable por tercero', clp(r.reembolsable), C.gris) : null}
-        {kpi('Cuotas vencidas', r.cuotasVencidas.length, r.cuotasVencidas.length > 0 ? C.rojo : C.verde)}
+        {kpi('Gastos fijos del mes', clp(r.fijos), null, 'Arriendos, sueldos y otros gastos que se repiten.')}
+        {kpi('Gastos variables del mes', clp(r.variables), null, 'Gastos que cambian de un mes a otro.')}
+        {kpi('Cuotas créditos/leasing', clp(r.totalCuotasMes), C.naranja, 'Cuotas de deuda que vencen este mes.')}
+        {kpi('Salida de caja proyectada', clp(r.salidaCaja), C.rojo, 'Gastos fijos + variables + cuotas del mes.')}
+        {kpi('Deuda total propia', clp(r.deudaVigente), C.carbon, 'Lo que queda por pagar de créditos y leasing.')}
+        {r.reembolsable > 0 ? kpi('Reembolsable por tercero', clp(r.reembolsable), C.gris, 'Cuotas que paga Serein pero un tercero las reembolsa.') : null}
+        {kpi('Cuotas vencidas', r.cuotasVencidas.length, r.cuotasVencidas.length > 0 ? C.rojo : C.verde, r.cuotasVencidas.length > 0 ? 'Cuotas con fecha pasada sin pagar: conviene regularizarlas.' : 'No hay cuotas atrasadas.')}
       </div>
-      <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 18 }}>
-        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Gastos del mes por área</div>
+      <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: 14, boxShadow: '0 1px 2px rgba(16,19,21,.04)', padding: 18 }}>
+        <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', marginBottom: 10 }}>Gastos del mes por área<span style={{ display: 'block', fontFamily: SEREIN.fontBody, fontWeight: 400, textTransform: 'none', fontSize: 12, color: '#9AA3AD', marginTop: 2 }}>Cómo se reparte el gasto del mes entre Santa Rosa, Istria y Proyectos.</span></div>
         {Object.keys(r.porArea).length === 0 ? <div style={{ fontSize: 13, color: '#9AA3AD' }}>Sin gastos este mes.</div> : (
           Object.entries(r.porArea).sort((a, b) => b[1] - a[1]).map(([area, monto]) => {
             const max = Math.max(...Object.values(r.porArea))
