@@ -25,7 +25,7 @@ import LibroComprasModule from './LibroComprasModule.jsx'
 import LibroVentasModule from './LibroVentasModule.jsx'
 import CartolasBancariasModule from './CartolasBancariasModule.jsx'
 import AsesorModule from './AsesorModule.jsx'
-import ConsolidadoModule from './ConsolidadoModule.jsx'
+import ConsolidadoModule, { ConsolidadoIntro } from './ConsolidadoModule.jsx'
 import OrganigramaModule from './OrganigramaModule.jsx'
 import CRMModule from './CRMModule.jsx'
 import ContactosModule, { CONTACTOS_SEED, nombresClientes } from './ContactosModule.jsx'
@@ -94,7 +94,7 @@ function Kpi({ label, valor, sub, color, icon: Icon }) {
         <span style={{ fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>{label}</span>
         <Icon size={16} strokeWidth={1.75} color={color} />
       </div>
-      <div className="kpi-v" style={{ fontFamily: SEREIN.fontDisplay, fontSize: 24, fontWeight: 700, letterSpacing: -0.4, color: C.carbon, marginTop: 8, whiteSpace: 'nowrap' }}>{valor}</div>
+      <div className="kpi-v" style={{ fontFamily: SEREIN.fontDisplay, fontSize: 22, fontWeight: 700, letterSpacing: -0.4, color: C.carbon, marginTop: 8, whiteSpace: 'nowrap' }}>{valor}</div>
       {sub && <div style={{ fontSize: 12, color: '#9AA3AD', marginTop: 3 }}>{sub}</div>}
     </div>
   )
@@ -899,6 +899,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
           />
         ) : (
         <>
+        {esGerencia && areaSel === 'TODAS' && <ConsolidadoIntro />}
         {!(areaSel === 'Santa Rosa' || areaSel === 'Istria') && (
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
           <Kpi label="Venta Neta" valor={clp(kVenta)} sub={`Bruto ${clp(_lvR.length ? kVentaLibroBruto : kVentaBruto)} · ${_lvR.length ? kNFactLibro : kNFact} facturas`} color={C.azul} icon={TrendingUp} />
