@@ -6,6 +6,7 @@ import { costoOCdeOT, FormOC, nuevaOC, guardarOcFrescoEn, ocNeto } from './Orden
 import { supabase } from './supabase.js'
 import { generarPdfProtocoloBlob, blobToBase64, fileToBase64, protocoloCompleto } from './protocolo-pdf.js'
 import { costoMOdeOT } from './ManoObraModule.jsx'
+import { costoComprasOpDeOT } from './ComprasOperativasModule.jsx'
 import Paginador, { paginar } from './Paginador.jsx'
 import { pullState, pushState } from './sync.js'
 import { sumarDiasHabiles, diasHabilesHasta } from './plazos.js'
@@ -102,7 +103,7 @@ export const saldoActivoDeOT = ot => {
 // pantalla de inicio, sin tener que cambiar de pestaña). Mismo cálculo
 // exacto que ya usa cada tarjeta de OT y la tarjeta "Utilidad estimada"
 // de la cabecera de esta pestaña — una sola fuente, no una fórmula aparte.
-export function resumenOTArea(ots, area, { ordenesCompra = [], mo = null } = {}) {
+export function resumenOTArea(ots, area, { ordenesCompra = [], mo = null, comprasOp = [] } = {}) {
   const delArea = (ots || []).filter(o => o.area === area && !o.eliminada)
   const activasArea = delArea.filter(o => o.estado !== 'Cerrada')
   const cerradasTodas = delArea.filter(o => o.estado === 'Cerrada')
@@ -115,7 +116,7 @@ export function resumenOTArea(ots, area, { ordenesCompra = [], mo = null } = {})
 
   const detalle = delArea.map(o => {
     const venta = (o.ventas || []).reduce((a, v) => a + (v.neta || 0), 0)
-    const costo = (o.costos || []).reduce((a, c) => a + (c.monto || 0), 0) + costoOCdeOT(ordenesCompra, o.numero) + costoMOdeOT(mo, o.numero)
+    const costo = (o.costos || []).reduce((a, c) => a + (c.monto || 0), 0) + costoOCdeOT(ordenesCompra, o.numero) + costoComprasOpDeOT(comprasOp, o.numero) + costoMOdeOT(mo, o.numero)
     return { venta, utilidad: venta - costo }
   })
   const ventaTotal = detalle.reduce((a, x) => a + x.venta, 0)
@@ -2168,7 +2169,7 @@ function TileOT({ ot, onOpen, onDragStart, onDropOn, verValores }) {
   )
 }
 
-function TarjetaOT({ pp = null, setPp = null, ot, onUpdate, onUpdateProtocolos, onUpdateProtocolo, onUpdateMarcasEsperadas, onDelete, onCambiarEstado, onAgregarVenta, onEliminarVenta, onAgregarArray, verValores = true, ordenesCompra = [], mo = null, otsAll = [], instrumentos = null, libroCompras = [], clientesActivos = [], enModal = false }) {
+function TarjetaOT({ pp = null, setPp = null, comprasOp = [], ot, onUpdate, onUpdateProtocolos, onUpdateProtocolo, onUpdateMarcasEsperadas, onDelete, onCambiarEstado, onAgregarVenta, onEliminarVenta, onAgregarArray, verValores = true, ordenesCompra = [], mo = null, otsAll = [], instrumentos = null, libroCompras = [], clientesActivos = [], enModal = false }) {
   const [abierta, setAbierta] = useState(false)
   const [addVenta, setAddVenta] = useState(false)
   const [addAbono, setAddAbono] = useState(false)
@@ -2254,6 +2255,7 @@ function TarjetaOT({ pp = null, setPp = null, ot, onUpdate, onUpdateProtocolos, 
 
   const ventaTotal = (ot.ventas || []).reduce((a, v) => a + v.neta, 0)
   const costoOC = costoOCdeOT(ordenesCompra, ot.numero)
+  const costoComb = costoComprasOpDeOT(comprasOp, ot.numero)
   const costoMO = costoMOdeOT(mo, ot.numero)
   const abonoTotal = (ot.abonos || []).reduce((a, x) => a + (x.monto || 0), 0)
   // Saldo real que falta por facturar o percibir: venta neta de la OT (misma
@@ -2275,7 +2277,7 @@ function TarjetaOT({ pp = null, setPp = null, ot, onUpdate, onUpdateProtocolos, 
   if (ot.estado === 'Cerrada' && saldoFacturarOT > 0 && !facturaReal) alertasOT.push('OT cerrada con saldo pendiente de facturación')
   if (facturaReal && (ot.ventas || []).some(v => !((v.folio || '').trim()))) alertasOT.push('Factura registrada sin número de folio')
   if (facturaReal && saldoPercibirOT > 0) alertasOT.push('Factura con saldo pendiente de cobro')
-  const costoTotal = (ot.costos || []).reduce((a, c) => a + c.monto, 0) + costoOC + costoMO
+  const costoTotal = (ot.costos || []).reduce((a, c) => a + c.monto, 0) + costoOC + costoComb + costoMO
   const utilidad = ventaTotal - costoTotal
   const margen = ventaTotal > 0 ? (utilidad / ventaTotal) * 100 : 0
   const precioM2 = ot.m2 > 0 && ventaTotal > 0 ? ventaTotal / ot.m2 : null
@@ -2682,6 +2684,7 @@ function TarjetaOT({ pp = null, setPp = null, ot, onUpdate, onUpdateProtocolos, 
                 {facturaReal && saldoPercibirOT > 0 && <span>Saldo por percibir: <b style={{ color: C.rojo }}>{clp(saldoPercibirOT)}</b></span>}
                 <span>Costos: <b>{clp(costoTotal)}</b></span>{costoMO > 0 && <span style={{ color: '#9AA3AD' }}>(incluye {clp(costoMO)} de mano de obra)</span>}
                 {costoOC > 0 && <span style={{ color: C.teal }}>(incluye {clp(costoOC)} de OC proveedores)</span>}
+                {costoComb > 0 && <span style={{ color: C.teal }}>(incluye {clp(costoComb)} de combustible, con su impuesto específico)</span>}
                 <span>Utilidad real: <b style={{ color: colorMargen(margen) }}>{clp(utilidad)} ({margen.toFixed(1)}%)</b></span>
               </div>
               <div style={{ marginTop: 8, padding: '10px 14px', background: '#fff', border: '1px dashed #DFE4EA', fontSize: 12, display: 'flex', gap: 18, flexWrap: 'wrap', color: '#9AA3AD' }}>
@@ -3521,7 +3524,7 @@ function ProtocolosOT({ ot, onUpdate, onUpdateProtocolo, otsAll = [], instrument
   const protocolosHermanos = listaMostrada.filter(x => x.tipo === 'PGP' || x.tipo === 'PIG')
   return (<div style={{ marginTop: 14, borderTop: '1px dashed #DFE4EA', paddingTop: 12 }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase' }}>Protocolos de calidad ({listaMostrada.length})</div><div style={{ display: 'flex', gap: 8 }}><button onClick={() => gen('PIG')} style={{ background: '#F77716', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>+ Generar PIG</button><button onClick={() => gen('PGP')} style={{ background: '#101315', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>+ Generar PGP</button><button onClick={() => gen('EA')} style={{ background: '#0E7A8F', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>+ Generar Ensayo Adherencia</button></div></div>{listaMostrada.map(p => { const usadasEnOtros = listaMostrada.filter(x => x.id !== p.id).flatMap(x => x.marcas || []); const mEsp = ot.marcasEsperadas || []; return p.tipo === 'PIG' ? <ProtoPIGForm key={p.id} p={p} upd={updP} onDel={() => delP(p.id)} instrumentos={instrumentos} marcasEsperadas={mEsp} usadasEnOtros={usadasEnOtros} /> : p.tipo === 'EA' ? <ProtoEAForm key={p.id} p={p} upd={updP} onDel={() => delP(p.id)} instrumentos={instrumentos} protocolosHermanos={protocolosHermanos.filter(x => x.id !== p.id)} /> : <ProtoPGPForm key={p.id} p={p} upd={updP} onDel={() => delP(p.id)} instrumentos={instrumentos} marcasEsperadas={mEsp} usadasEnOtros={usadasEnOtros} /> })}</div>) }
 
-export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], ots: otsExt, setOts: setOtsExt, verValores = true, clientes = [], ordenesCompra = [], mo = null, instrumentos = null, pp = null, setPp = null }) {
+export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], ots: otsExt, setOts: setOtsExt, verValores = true, clientes = [], ordenesCompra = [], mo = null, instrumentos = null, pp = null, setPp = null, comprasOp = [] }) {
   const [otsInt, setOtsInt] = useState(OTS_INICIALES)
   const [libroCompras, setLibroCompras] = useState([])
   useEffect(() => { supabase.from('libro_compras').select('ot_id,provider_name,document_number,neto,document_total,emission_date').not('ot_id', 'is', null).then(({ data }) => setLibroCompras(data || [])) }, [])
@@ -3630,7 +3633,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
       // costos directos + OC de proveedor asignadas + mano de obra —
       // antes este informe solo sumaba o.costos y mostraba una utilidad
       // más optimista que la que ve la persona al abrir la OT.
-      const costo = (o.costos || []).reduce((a, c) => a + (c.monto || 0), 0) + costoOCdeOT(ordenesCompra, o.numero) + costoMOdeOT(mo, o.numero)
+      const costo = (o.costos || []).reduce((a, c) => a + (c.monto || 0), 0) + costoOCdeOT(ordenesCompra, o.numero) + costoComprasOpDeOT(comprasOp, o.numero) + costoMOdeOT(mo, o.numero)
       const base = [o.numero, o.cliente, o.area, o.estado, otFecha(o), o.cotizacion || '']
       return verValores ? [...base, o.montoCotizado || 0, venta, costo, venta - costo, o.esquema || '', (o.partidas || []).length] : [...base, o.esquema || '', (o.partidas || []).length]
     })
@@ -3879,7 +3882,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   // no una fórmula aparte.
   const utilidadAreaDetalle = delArea.map(o => {
     const ventaOT = (o.ventas || []).reduce((a, v) => a + (v.neta || 0), 0)
-    const costoOT = (o.costos || []).reduce((a, c) => a + (c.monto || 0), 0) + costoOCdeOT(ordenesCompra, o.numero) + costoMOdeOT(mo, o.numero)
+    const costoOT = (o.costos || []).reduce((a, c) => a + (c.monto || 0), 0) + costoOCdeOT(ordenesCompra, o.numero) + costoComprasOpDeOT(comprasOp, o.numero) + costoMOdeOT(mo, o.numero)
     return { ot: o, venta: ventaOT, costo: costoOT, utilidad: ventaOT - costoOT }
   })
   const ventaAreaTotal = utilidadAreaDetalle.reduce((a, x) => a + x.venta, 0)
@@ -4033,7 +4036,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
                 <button onClick={() => setSel(null)} style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><X size={15} /> Cerrar</button>
               </div>
               <div style={{ padding: 12 }}>
-                <TarjetaOT pp={pp} setPp={setPp} ot={so} onUpdate={actualizar} onUpdateProtocolos={actualizarProtocolos} onUpdateProtocolo={actualizarUnProtocolo} onUpdateMarcasEsperadas={actualizarMarcasEsperadas} onDelete={id => { eliminar(id); setSel(null) }} onCambiarEstado={cambiarEstado} onAgregarVenta={agregarVenta} onEliminarVenta={eliminarVenta} onAgregarArray={agregarAArray} verValores={verValores} ordenesCompra={ordenesCompra} mo={mo} otsAll={otsAll} instrumentos={instrumentos} libroCompras={libroCompras} clientesActivos={clientesActivos} enModal />
+                <TarjetaOT pp={pp} setPp={setPp} comprasOp={comprasOp} ot={so} onUpdate={actualizar} onUpdateProtocolos={actualizarProtocolos} onUpdateProtocolo={actualizarUnProtocolo} onUpdateMarcasEsperadas={actualizarMarcasEsperadas} onDelete={id => { eliminar(id); setSel(null) }} onCambiarEstado={cambiarEstado} onAgregarVenta={agregarVenta} onEliminarVenta={eliminarVenta} onAgregarArray={agregarAArray} verValores={verValores} ordenesCompra={ordenesCompra} mo={mo} otsAll={otsAll} instrumentos={instrumentos} libroCompras={libroCompras} clientesActivos={clientesActivos} enModal />
               </div>
             </div>
           </div>

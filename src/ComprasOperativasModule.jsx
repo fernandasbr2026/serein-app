@@ -11,7 +11,7 @@ const hoy = () => { const d = new Date(); return d.getFullYear() + '-' + String(
 const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 
 const AREAS_COMPRA = ['Santa Rosa', 'Istria', 'Producción / Planta', 'Proyectos', 'Administración', 'Comercial', 'Otra']
-const CATEGORIAS = ['Pintura', 'Granalla', 'Diésel', 'EPP', 'Herramientas', 'Repuestos', 'Transporte', 'Materiales menores', 'Arriendo de equipo', 'Mantención', 'Otro']
+const CATEGORIAS = ['Pintura', 'Granalla', 'Diésel', 'Bencina', 'EPP', 'Herramientas', 'Repuestos', 'Transporte', 'Materiales menores', 'Arriendo de equipo', 'Mantención', 'Otro']
 const TIPOS_DOC = ['Factura', 'Boleta', 'Guía', 'Comprobante', 'Sin documento', 'Otro']
 const ESTADOS = ['Pendiente de revisión', 'Aprobada', 'Observada', 'Rechazada', 'Corregida por Gerencia', 'Contabilizada', 'Pagada']
 const TIPOS_ASIG = ['Área completa', 'OT/OC específica', 'Proyecto específico', 'Varias OT/OC', 'Varias áreas', 'Pendiente de revisión por Gerencia']
@@ -61,9 +61,17 @@ function ChipEstado({ e }) {
   return <span style={{ background: bg, color: fg, padding: '2px 8px', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>{e}</span>
 }
 
-// Cálculo de IVA y total bruto a partir del neto
-const ivaDe = c => (c.neto != null && c.aplicaIva) ? Math.round(c.neto * 0.19) : 0
-const totalDe = c => c.neto != null ? c.neto + ivaDe(c) : null
+// Combustibles: la factura trae un impuesto específico aparte del IVA. El IVA se calcula sobre
+// neto + impuesto específico y se recupera; el impuesto específico NO se recupera, es costo.
+export const esCombustible = c => ['Diésel', 'Bencina'].includes(c && c.categoria)
+const impEspDe = c => esCombustible(c) ? (Number(c.impEsp) || 0) : 0
+// Cálculo de IVA y total bruto a partir del neto (y del impuesto específico si es combustible)
+const ivaDe = c => (c.neto != null && c.aplicaIva) ? Math.round((c.neto + impEspDe(c)) * 0.19) : 0
+const totalDe = c => c.neto != null ? c.neto + impEspDe(c) + ivaDe(c) : null
+// Costo (sin IVA) que una compra de combustible le carga a una OT según el reparto %.
+// Solo cuenta lo que Gerencia no rechazó y que ya tiene monto.
+export const costoComprasOpDeOT = (compras, numeroOT) => (compras || []).filter(c => esCombustible(c) && c.estado !== 'Rechazada' && c.neto != null).reduce((a, c) =>
+  a + ((c.asignacion && c.asignacion.items) || []).filter(i => i.ref === numeroOT).reduce((s2, i) => s2 + (c.neto + impEspDe(c)) * (parseFloat(i.pct) || 0) / 100, 0), 0)
 
 // ===== VISTA SUPERVISOR: MIS OT/OC/PROYECTOS (información limitada) =====
 function MisOTs({ ots, proyectos, mo, comprasOp, planta }) {
@@ -117,7 +125,7 @@ function MisOTs({ ots, proyectos, mo, comprasOp, planta }) {
 function FormCompra({ config, ots, proyectos, planta, usuario, onGuardar }) {
   const [f, setF] = useState({
     fecha: hoy(), area: planta || AREAS_COMPRA[0], proveedor: '', tipoDoc: 'Factura', numDoc: '',
-    categoria: CATEGORIAS[0], descripcion: '', cantidad: '', unidad: '', obs: '', neto: '', aplicaIva: true, adjunto: null,
+    categoria: CATEGORIAS[0], descripcion: '', cantidad: '', unidad: '', obs: '', neto: '', impEsp: '', aplicaIva: true, adjunto: null,
   })
   const [tipoAsig, setTipoAsig] = useState('Área completa')
   const [items, setItems] = useState([{ ref: 'Producción / Planta', pct: 100 }])
@@ -154,11 +162,12 @@ function FormCompra({ config, ots, proyectos, planta, usuario, onGuardar }) {
       descripcion: f.descripcion, cantidad: f.cantidad, unidad: f.unidad, obs: f.obs,
       adjunto: f.adjunto,
       neto: config.supervisorIngresaMonto && num(f.neto) > 0 ? num(f.neto) : null,
+      impEsp: esCombustible(f) && config.supervisorIngresaMonto ? num(f.impEsp) : 0,
       aplicaIva: f.aplicaIva,
       asignacion: { tipo: tipoAsig, items: items.map(i => ({ ref: i.ref, pct: parseFloat(i.pct) })) },
       estado: 'Pendiente de revisión', obsGerencia: '',
     })
-    setF({ ...f, proveedor: '', numDoc: '', descripcion: '', cantidad: '', unidad: '', obs: '', neto: '', aplicaIva: true, adjunto: null })
+    setF({ ...f, proveedor: '', numDoc: '', descripcion: '', cantidad: '', unidad: '', obs: '', neto: '', impEsp: '', aplicaIva: true, adjunto: null })
     setGuardado(true); setTimeout(() => setGuardado(false), 4000)
   }
 
@@ -183,6 +192,9 @@ function FormCompra({ config, ots, proyectos, planta, usuario, onGuardar }) {
         {config.supervisorIngresaMonto && (
           <input style={inp} placeholder="Monto NETO (si viene en el documento)" value={f.neto} onChange={e => setF({ ...f, neto: e.target.value })} />
         )}
+        {config.supervisorIngresaMonto && esCombustible(f) && (
+          <input style={inp} placeholder="Impuesto específico (como sale en la factura)" value={f.impEsp} onChange={e => setF({ ...f, impEsp: e.target.value })} />
+        )}
         {config.supervisorIngresaMonto && (
           <button type="button" onClick={() => setF({ ...f, aplicaIva: !f.aplicaIva })}
             style={{ ...inp, cursor: 'pointer', background: f.aplicaIva ? '#fff' : '#FDECDD', color: f.aplicaIva ? C.carbon : '#D9600A', fontWeight: 600, textAlign: 'left' }}>
@@ -198,8 +210,9 @@ function FormCompra({ config, ots, proyectos, planta, usuario, onGuardar }) {
       {config.supervisorIngresaMonto && num(f.neto) > 0 && (
         <div style={{ fontSize: 13, background: '#F2F4F7', padding: '8px 12px', marginTop: 10, display: 'flex', gap: 18, flexWrap: 'wrap' }}>
           <span>Neto: <b>{clp(num(f.neto))}</b></span>
-          <span>IVA {f.aplicaIva ? '19%' : '(no aplica)'}: <b>{clp(f.aplicaIva ? Math.round(num(f.neto) * 0.19) : 0)}</b></span>
-          <span>Total bruto: <b style={{ color: C.naranja }}>{clp(f.aplicaIva ? num(f.neto) + Math.round(num(f.neto) * 0.19) : num(f.neto))}</b></span>
+          {esCombustible(f) && <span>Impuesto específico: <b>{clp(num(f.impEsp))}</b></span>}
+          <span>IVA {f.aplicaIva ? '19%' : '(no aplica)'}{esCombustible(f) && f.aplicaIva ? ' sobre neto + imp. específico' : ''}: <b>{clp(ivaDe({ neto: num(f.neto), impEsp: num(f.impEsp), categoria: f.categoria, aplicaIva: f.aplicaIva }))}</b></span>
+          <span>Total bruto: <b style={{ color: C.naranja }}>{clp(totalDe({ neto: num(f.neto), impEsp: num(f.impEsp), categoria: f.categoria, aplicaIva: f.aplicaIva }))}</b></span>
         </div>
       )}
 
@@ -370,6 +383,11 @@ function RevisionGerencia({ comprasOp, setComprasOp }) {
                   <input value={c.neto ?? ''} placeholder="neto"
                     onChange={e => upd(c.id, { neto: e.target.value === '' ? null : num(e.target.value) })}
                     style={{ ...inp, width: 92, padding: '4px 6px', fontStyle: c.neto == null ? 'italic' : 'normal' }} />
+                  {esCombustible(c) && (
+                    <input value={c.impEsp ?? ''} placeholder="imp. específico" title="Impuesto específico del combustible (no es IVA, no se recupera)"
+                      onChange={e => upd(c.id, { impEsp: e.target.value === '' ? 0 : num(e.target.value) })}
+                      style={{ ...inp, width: 110, padding: '4px 6px', marginTop: 3, display: 'block' }} />
+                  )}
                   <div onClick={() => upd(c.id, { aplicaIva: !c.aplicaIva })} title="Tocar para cambiar"
                     style={{ fontSize: 11, cursor: 'pointer', marginTop: 3, color: c.aplicaIva ? C.gris : '#D9600A', fontWeight: 600 }}>
                     {c.aplicaIva ? `+IVA ${clp(ivaDe(c))}` : 'sin IVA ✕'}
