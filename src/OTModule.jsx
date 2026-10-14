@@ -1810,6 +1810,35 @@ export function calcularFilasTrazabilidad(ot) {
   })
   return { filas, maxCapas }
 }
+// Hechos de producción de una OT leídos de sus protocolos (una sola fuente, nada se vuelve a tipear):
+// cada PIG con granallado medido es un «Granallado» con la fecha ambiental del protocolo, y cada capa
+// medida de un PGP es «Capa N» con la fecha ambiental de esa capa (mismo criterio que la trazabilidad por pieza).
+// Los m² salen de las piezas del protocolo que están en las marcas esperadas de la OT.
+export function eventosProduccionDeOT(ot) {
+  const m2PorMarca = {}
+  ;(ot.marcasEsperadas || []).forEach(m => { m2PorMarca[normMarca(m.marca)] = m2FacturableDeMarca(m) })
+  const base = p => {
+    const codigos = (p.marcas || []).flatMap(marcasDeCampo)
+    const m2 = codigos.reduce((a, c) => a + (m2PorMarca[normMarca(c)] || 0), 0)
+    return { ot: ot.numero || '', cliente: ot.cliente || '', area: ot.area || ot.sede || '', protocolo: p.codigo || p.tipo, piezas: codigos.length, m2: Math.round(m2 * 100) / 100 }
+  }
+  const fechaOk = f => (/^\d{4}-\d{2}-\d{2}/.test(String(f || '')) ? String(f).slice(0, 10) : null)
+  const evs = []
+  ;(ot.protocolos || []).forEach(p => {
+    if (p.tipo === 'PIG' && granalladoHecho(p)) {
+      const f = fechaOk((p.amb && p.amb.fecha) || p.fecha)
+      if (f) evs.push({ ...base(p), fecha: f, etapa: 'Granallado', orden: 0 })
+    }
+    if (p.tipo === 'PGP') {
+      ;(p.capas || []).forEach((cap, i) => {
+        if (!capaHecha(cap)) return
+        const f = fechaOk(cap.amb && cap.amb.fecha)
+        if (f) evs.push({ ...base(p), fecha: f, etapa: 'Capa ' + (i + 1), orden: i + 1 })
+      })
+    }
+  })
+  return evs
+}
 function TrazabilidadPiezasOT({ ot, onUpdateMarcasEsperadas }) {
   const marcas = ot.marcasEsperadas || []
   const partidas = ot.partidas || []

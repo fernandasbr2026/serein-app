@@ -8,12 +8,140 @@ import { piezasDelCliente, lotesDelClienteConPlazo, resumenTableroCliente } from
 import { parseKronosWorkbook, construirPlanImportacion, aplicarPlanImportacion } from './importKronos.js'
 import { KpiCard } from './ui.jsx'
 import { Upload } from 'lucide-react'
+import * as XLSX from 'xlsx'
+import { eventosProduccionDeOT } from './OTModule.jsx'
 
 // ============================================================
 // MÓDULO: Trazabilidad y Alertas (Gerencia)
 // Cadena: Cotización → OT → OC proveedor / Compras → Producción → Factura → Cobranza
 // + Fase E del rediseño de OT: vencimiento de lotes de piezas por plazo
 // comprometido (ver plan en C:\Users\maria\.claude\plans\sorted-singing-sundae.md)
+// ============================================================
+// Granallado y pintura por fecha: cuándo se hizo cada etapa y cuántos m².
+// Todo sale de los protocolos (PIG y PGP) ya cargados en las OT.
+// ============================================================
+const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+const fm2 = n => (n || 0).toLocaleString('es-CL', { maximumFractionDigits: 1 })
+const etiquetaPeriodo = (f, modo) => modo === 'dia' ? f.slice(8, 10) + '/' + f.slice(5, 7) + '/' + f.slice(0, 4) : modo === 'mes' ? MESES[parseInt(f.slice(5, 7), 10) - 1] + ' ' + f.slice(0, 4) : f.slice(0, 4)
+const claveDe = (f, modo) => modo === 'dia' ? f : modo === 'mes' ? f.slice(0, 7) : f.slice(0, 4)
+
+function ProduccionPorFecha({ ots }) {
+  const hoyD = new Date()
+  const [desde, setDesde] = useState(hoyD.getFullYear() + '-01-01')
+  const [hasta, setHasta] = useState(ymd(hoyD))
+  const [modo, setModo] = useState('mes')
+  const [area, setArea] = useState('')
+  const [cliente, setCliente] = useState('')
+  const [etapa, setEtapa] = useState('')
+  const [detalle, setDetalle] = useState(false)
+
+  const todos = useMemo(() => ots.filter(o => !o.eliminada).flatMap(o => eventosProduccionDeOT(o)), [ots])
+  const areas = useMemo(() => Array.from(new Set(todos.map(e => e.area).filter(Boolean))).sort(), [todos])
+  const clientes = useMemo(() => Array.from(new Set(todos.map(e => e.cliente).filter(Boolean))).sort(), [todos])
+  const evs = useMemo(() => todos.filter(e => (!desde || e.fecha >= desde) && (!hasta || e.fecha <= hasta) && (!area || e.area === area) && (!cliente || e.cliente === cliente) && (!etapa || e.etapa === etapa)).sort((a, b) => b.fecha.localeCompare(a.fecha) || a.orden - b.orden), [todos, desde, hasta, area, cliente, etapa])
+  const etapas = useMemo(() => Array.from(new Set(todos.map(e => e.etapa))).sort((a, b) => (a === 'Granallado' ? -1 : b === 'Granallado' ? 1 : parseInt(a.slice(5), 10) - parseInt(b.slice(5), 10))), [todos])
+  const etapasVista = etapa ? [etapa] : etapas
+
+  const filas = useMemo(() => {
+    const m = {}
+    evs.forEach(e => {
+      const k = claveDe(e.fecha, modo)
+      const f = m[k] || (m[k] = { k, fecha: e.fecha, porEtapa: {} })
+      const c = f.porEtapa[e.etapa] || (f.porEtapa[e.etapa] = { m2: 0, piezas: 0 })
+      c.m2 += e.m2; c.piezas += e.piezas
+    })
+    return Object.values(m).sort((a, b) => b.k.localeCompare(a.k))
+  }, [evs, modo])
+  const totales = useMemo(() => { const t = {}; evs.forEach(e => { const c = t[e.etapa] || (t[e.etapa] = { m2: 0, piezas: 0 }); c.m2 += e.m2; c.piezas += e.piezas }); return t }, [evs])
+  const sinM2 = evs.filter(e => e.piezas > 0 && e.m2 === 0).length
+
+  const exportar = () => {
+    const wb = XLSX.utils.book_new()
+    const resumen = filas.map(f => { const r = { Período: etiquetaPeriodo(f.fecha, modo) }; etapasVista.forEach(et => { const c = f.porEtapa[et] || { m2: 0, piezas: 0 }; r[et + ' m²'] = Math.round(c.m2 * 100) / 100; r[et + ' piezas'] = c.piezas }); return r })
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumen), 'Resumen')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(evs.map(e => ({ Fecha: e.fecha, Etapa: e.etapa, OT: e.ot, Cliente: e.cliente, Área: e.area, Protocolo: e.protocolo, Piezas: e.piezas, 'm²': e.m2 }))), 'Detalle')
+    XLSX.writeFile(wb, 'produccion-por-fecha-' + desde + '-a-' + hasta + '.xlsx')
+  }
+  const sel = { border: '1px solid #DFE4EA', borderRadius: 4, padding: '7px 10px', fontSize: 13 }
+  const th = { textAlign: 'right', padding: '6px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase', whiteSpace: 'nowrap' }
+
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, textTransform: 'uppercase', marginBottom: 4 }}>Granallado y pintura por fecha</div>
+      <div style={{ fontSize: 12, color: '#9AA3AD', marginBottom: 10 }}>Se arma solo con los protocolos de granallado (PIG) y de pintura (PGP) de las OT: la fecha es la del protocolo y los m² son los de las piezas que lleva. No hay que ingresar nada aparte.</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+        <label style={{ fontSize: 12, color: '#5A636E' }}>Desde <input type="date" value={desde} onChange={e => setDesde(e.target.value)} style={sel} /></label>
+        <label style={{ fontSize: 12, color: '#5A636E' }}>Hasta <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} style={sel} /></label>
+        <select value={modo} onChange={e => setModo(e.target.value)} style={sel}><option value="dia">Por día</option><option value="mes">Por mes</option><option value="anio">Por año</option></select>
+        <select value={etapa} onChange={e => setEtapa(e.target.value)} style={sel}><option value="">Todas las etapas</option>{etapas.map(x => <option key={x}>{x}</option>)}</select>
+        <select value={area} onChange={e => setArea(e.target.value)} style={sel}><option value="">Todas las áreas</option>{areas.map(x => <option key={x}>{x}</option>)}</select>
+        <select value={cliente} onChange={e => setCliente(e.target.value)} style={sel}><option value="">Todos los clientes</option>{clientes.map(x => <option key={x}>{x}</option>)}</select>
+        <button onClick={exportar} disabled={!evs.length} style={{ ...sel, background: evs.length ? '#fff' : '#F2F4F7', cursor: evs.length ? 'pointer' : 'default' }}>Descargar Excel</button>
+      </div>
+      {todos.length === 0 ? (
+        <div style={{ color: '#9AA3AD', fontSize: 13 }}>Aún no hay protocolos de granallado o pintura con mediciones cargadas.</div>
+      ) : (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 12 }}>
+            {etapasVista.map(et => <KpiCard key={et} value={fm2((totales[et] || {}).m2) + ' m²'} label={et + ' · ' + ((totales[et] || {}).piezas || 0) + ' pzas'} />)}
+          </div>
+          {sinM2 > 0 && <div style={{ fontSize: 11.5, color: '#D9600A', marginBottom: 8 }}>{sinM2} registro(s) con piezas sin m² informados: cuentan piezas pero no suman m².</div>}
+          {filas.length === 0 ? (
+            <div style={{ color: '#9AA3AD', fontSize: 13 }}>No hay granallado ni pintura en ese período.</div>
+          ) : (
+            <div style={{ overflowX: 'auto', background: '#fff', border: '1px solid #DFE4EA' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>
+                  <th style={{ ...th, textAlign: 'left' }}>Período</th>
+                  {etapasVista.map(et => <th key={et} style={th}>{et} (m² · pzas)</th>)}
+                </tr></thead>
+                <tbody>
+                  {filas.map(f => (
+                    <tr key={f.k} style={{ borderBottom: '1px solid #DFE4EA' }}>
+                      <td style={{ padding: '7px 8px', fontWeight: 600, textTransform: modo === 'mes' ? 'capitalize' : 'none' }}>{etiquetaPeriodo(f.fecha, modo)}</td>
+                      {etapasVista.map(et => { const c = f.porEtapa[et]; return <td key={et} style={{ padding: '7px 8px', textAlign: 'right', color: c ? C.carbon : '#C5CBD3', whiteSpace: 'nowrap' }}>{c ? fm2(c.m2) + ' · ' + c.piezas : '—'}</td> })}
+                    </tr>
+                  ))}
+                  <tr style={{ background: '#F2F4F7', fontWeight: 700 }}>
+                    <td style={{ padding: '7px 8px' }}>Total del período</td>
+                    {etapasVista.map(et => <td key={et} style={{ padding: '7px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>{fm2((totales[et] || {}).m2)} · {(totales[et] || {}).piezas || 0}</td>)}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+          {evs.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              <button onClick={() => setDetalle(v => !v)} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '5px 10px', fontSize: 12, cursor: 'pointer' }}>{detalle ? 'Ocultar detalle' : 'Ver detalle por OT y protocolo (' + evs.length + ')'}</button>
+              {detalle && (
+                <div style={{ overflowX: 'auto', background: '#fff', border: '1px solid #DFE4EA', marginTop: 8 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                    <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['Fecha', 'Etapa', 'OT', 'Cliente', 'Protocolo', 'Piezas', 'm²'].map(h => <th key={h} style={{ ...th, textAlign: ['Piezas', 'm²'].includes(h) ? 'right' : 'left' }}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {evs.map((e, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>
+                          <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{e.fecha}</td>
+                          <td style={{ padding: '6px 8px' }}>{e.etapa}</td>
+                          <td style={{ padding: '6px 8px', fontWeight: 600 }}>{e.ot}</td>
+                          <td style={{ padding: '6px 8px', color: '#9AA3AD' }}>{e.cliente}</td>
+                          <td style={{ padding: '6px 8px', color: '#9AA3AD' }}>{e.protocolo}</td>
+                          <td style={{ padding: '6px 8px', textAlign: 'right' }}>{e.piezas}</td>
+                          <td style={{ padding: '6px 8px', textAlign: 'right' }}>{fm2(e.m2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 // ============================================================
 
 import { SEREIN } from './theme-serein.js'
@@ -383,6 +511,8 @@ export default function TrazabilidadModule({ cotizaciones = [], ots = [], ordene
   return (
     <div>
       <VistaPorCliente ots={ots} setOts={setOts || (() => {})} />
+
+      <ProduccionPorFecha ots={ots} />
 
       {/* ALERTAS */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
