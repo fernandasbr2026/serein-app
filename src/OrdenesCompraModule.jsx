@@ -15,6 +15,8 @@ import { SEREIN } from './theme-serein.js'
 const C = { naranja: SEREIN.orange, teal: '#0E7A8F', carbon: SEREIN.text, verde: SEREIN.green, rojo: SEREIN.red, gris: SEREIN.textFaint, azul: SEREIN.ink }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const num = s => { const v = parseInt(String(s).replace(/[^\d-]/g, ''), 10); return isNaN(v) ? 0 : v }
+// Porcentajes de reparto: admiten decimales (el reparto por m² casi nunca da exacto)
+const pctNum = s => { const v = parseFloat(String(s).replace(',', '.')); return isNaN(v) ? 0 : v }
 const inp = { padding: '6px 8px', border: '1px solid #DFE4EA', fontSize: 12.5, boxSizing: 'border-box' }
 const hoy = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 const sumarDias = (fecha, dias) => { if (!fecha) return ''; const d = new Date(fecha + 'T12:00:00'); d.setDate(d.getDate() + (parseInt(dias, 10) || 0)); return d.toISOString().slice(0, 10) }
@@ -72,8 +74,38 @@ export const vencOC = oc => oc.vencimiento || (oc.fecha ? sumarDias(oc.fecha, nu
 export const costoOCdeOT = (ocs, numeroOT) => (ocs || []).filter(o => o.estadoPago !== 'Anulada').reduce((a, o) => {
   const asigs = (o.asignaciones && o.asignaciones.length) ? o.asignaciones : null
   if (!asigs) return a
-  return a + asigs.filter(x => x.ot === numeroOT).reduce((s, x) => s + ocNeto(o) * (num(x.pct) || 0) / 100, 0)
+  return a + asigs.filter(x => x.ot === numeroOT).reduce((s, x) => s + ocNeto(o) * (pctNum(x.pct) || 0) / 100, 0)
 }, 0)
+
+// Reparte 100 % entre las OT elegidas en proporción a sus m² (si alguna no tiene m², en partes iguales).
+// Los porcentajes llevan 2 decimales y el último absorbe la diferencia para que sumen exactamente 100.
+export const repartirPorM2 = (numeros, otsInfo) => {
+  const ms = numeros.map(n => { const o = (otsInfo || []).find(x => x.numero === n); return Math.max(0, parseFloat(o && o.m2) || 0) })
+  const todas = ms.every(m => m > 0)
+  const total = todas ? ms.reduce((a, m) => a + m, 0) : numeros.length
+  let acum = 0
+  return numeros.map((n, i) => {
+    const pct = i === numeros.length - 1 ? Math.round((100 - acum) * 100) / 100 : Math.round(((todas ? ms[i] : 1) / total) * 10000) / 100
+    acum += pct
+    return { ot: n, pct }
+  })
+}
+// pp.ocs lo escriben varios módulos: antes de cambiarlo se trae lo más fresco de la nube.
+export const guardarOcFrescoEn = async (pp, setPp, mutar) => {
+  try { await pullState() } catch (e) {}
+  let fresco = null
+  try { fresco = JSON.parse(localStorage.getItem('serein_pp') || 'null') } catch (e) {}
+  const basePp = fresco && typeof fresco === 'object' ? fresco : pp
+  const nuevoPp = { ...basePp, ocs: mutar(basePp.ocs || []) }
+  try { localStorage.setItem('serein_pp', JSON.stringify(nuevoPp)) } catch (e) {}
+  setPp(nuevoPp)
+  pushState()
+}
+// OC en blanco con el siguiente correlativo; `extra` pisa los valores por defecto.
+export const nuevaOC = (ocs, extra = {}) => {
+  const max = (ocs || []).reduce((m, o) => Math.max(m, parseInt(String(o.numero).replace(/\D/g, ''), 10) || 0), 517)
+  return { id: 'oc' + Date.now(), numero: String(max + 1), proveedor: '', rut: '', categoria: 'Pintura', detalle: '', area: 'Santa Rosa', fecha: hoy(), neto: 0, plazo: 30, vencimiento: sumarDias(hoy(), 30), estadoPago: 'Pendiente', asignaciones: [], items: [], direccion: '', despacho: '', adjunto: '', obs: '', ...extra }
+}
 
 const fondoEstado = e => ({ Pagada: '#E6F7EE', 'Parcialmente pagada': '#FDECDD', Vencida: '#FCEBEA', Pendiente: '#FDECDD', Anulada: '#EEE' }[e] || '#EEE')
 const colorEstado = e => ({ Pagada: C.verde, 'Parcialmente pagada': C.naranja, Vencida: C.rojo, Pendiente: '#D9600A', Anulada: C.gris }[e] || C.gris)
@@ -83,7 +115,7 @@ function FilaOC({ oc, otsDisponibles, upd, onDelete, proveedores = PROVEEDORES_F
   const setProv = v => { const p = buscarProv(proveedores, v); upd(oc.id, { proveedor: v, ...(p ? { rut: p.rut || oc.rut, direccion: p.direccion || oc.direccion } : {}) }) }
   const v = vencOC(oc), vencido = ocPorPagar(oc) && v && v < hoy()
   const asigs = oc.asignaciones || []
-  const sumaPct = asigs.reduce((a, x) => a + (num(x.pct) || 0), 0)
+  const sumaPct = Math.round(asigs.reduce((a, x) => a + (pctNum(x.pct) || 0), 0) * 100) / 100
   const addAsig = () => upd(oc.id, { asignaciones: [...asigs, { ot: otsDisponibles[0] || '', pct: asigs.length === 0 ? 100 : 0 }] })
   const updAsig = (i, k, val) => upd(oc.id, { asignaciones: asigs.map((x, j) => j === i ? { ...x, [k]: val } : x) })
   const delAsig = i => upd(oc.id, { asignaciones: asigs.filter((_, j) => j !== i) })
@@ -151,14 +183,14 @@ function FilaOC({ oc, otsDisponibles, upd, onDelete, proveedores = PROVEEDORES_F
                   <option value="">(elige OT)</option>
                   {otsDisponibles.map(o => <option key={o}>{o}</option>)}
                 </select>
-                <input value={x.pct} onChange={e => updAsig(i, 'pct', num(e.target.value))} style={{ ...inp, width: 60, textAlign: 'right' }} />%
-                <span style={{ fontSize: 12, color: C.gris }}>= {clp(ocNeto(oc) * (num(x.pct) || 0) / 100)} de costo</span>
+                <input value={x.pct} onChange={e => updAsig(i, 'pct', e.target.value)} style={{ ...inp, width: 70, textAlign: 'right' }} />%
+                <span style={{ fontSize: 12, color: C.gris }}>= {clp(ocNeto(oc) * (pctNum(x.pct) || 0) / 100)} de costo</span>
                 <button onClick={() => delAsig(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button>
               </div>
             ))}
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 4 }}>
               <button onClick={addAsig} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Asignar a OT</button>
-              {asigs.length > 0 && <span style={{ fontSize: 12, fontWeight: 600, color: sumaPct === 100 ? C.verde : C.rojo }}>Suma: {sumaPct}% {sumaPct === 100 ? '✓' : '(debería ser 100%)'}</span>}
+              {asigs.length > 0 && <span style={{ fontSize: 12, fontWeight: 600, color: Math.abs(sumaPct - 100) < 0.05 ? C.verde : C.rojo }}>Suma: {sumaPct}% {Math.abs(sumaPct - 100) < 0.05 ? '✓' : '(debería ser 100%)'}</span>}
             </div>
           </td>
         </tr>
@@ -168,7 +200,7 @@ function FilaOC({ oc, otsDisponibles, upd, onDelete, proveedores = PROVEEDORES_F
 }
 
 // ---- Formulario para crear / editar una OC en una mini ventana ----
-function FormOC({ inicial, otsDisponibles, onGuardar, onCancelar, proveedores = PROVEEDORES_FICHA }) {
+export function FormOC({ inicial, otsDisponibles, otsInfo = [], onGuardar, onCancelar, proveedores = PROVEEDORES_FICHA }) {
   const [f, setF] = useState(inicial)
   const set = (k, v) => setF({ ...f, [k]: v })
   const setProveedor = v => { const p = buscarProv(proveedores, v); setF(prev => ({ ...prev, proveedor: v, ...(p ? { rut: p.rut || prev.rut, direccion: p.direccion || prev.direccion } : {}) })) }
@@ -182,8 +214,14 @@ function FormOC({ inicial, otsDisponibles, onGuardar, onCancelar, proveedores = 
   const setAsig = (i, k, v) => setF({ ...f, asignaciones: asigs.map((x, j) => j === i ? { ...x, [k]: v } : x) })
   const addAsig = () => setF({ ...f, asignaciones: [...asigs, { ot: otsDisponibles[0] || '', pct: asigs.length === 0 ? 100 : 0 }] })
   const delAsig = i => setF({ ...f, asignaciones: asigs.filter((_, j) => j !== i) })
+  // OT activas que se pueden tocar para cargarles la compra (diésel, flete…): al marcar o desmarcar, el reparto se rehace por m²
+  const activas = otsInfo.filter(o => o.estado !== 'Cerrada')
+  const marcadas = new Set(asigs.map(a => a.ot))
+  const conM2 = asigs.length > 0 && asigs.every(a => (otsInfo.find(o => o.numero === a.ot) || {}).m2 > 0)
+  const alternarOT = n => { const nums = marcadas.has(n) ? asigs.map(a => a.ot).filter(x => x !== n) : [...asigs.map(a => a.ot), n]; setF({ ...f, asignaciones: repartirPorM2(nums, otsInfo) }) }
+  const repartir = () => setF({ ...f, asignaciones: repartirPorM2(asigs.map(a => a.ot), otsInfo) })
   const lab = { fontSize: 11, color: C.gris, display: 'flex', flexDirection: 'column', gap: 3 }
-  const sumaPct = asigs.reduce((a, x) => a + (num(x.pct) || 0), 0)
+  const sumaPct = Math.round(asigs.reduce((a, x) => a + (pctNum(x.pct) || 0), 0) * 100) / 100
   const conItems = items.length > 0
   const guardar = () => { if (f.proveedor.trim() && (ocNeto(f) > 0)) onGuardar(f) }
   return (
@@ -229,17 +267,31 @@ function FormOC({ inicial, otsDisponibles, onGuardar, onCancelar, proveedores = 
         </div>
 
         <div style={{ fontSize: 12, fontWeight: 600, color: C.gris, textTransform: 'uppercase', margin: '10px 0 6px' }}>Asignación a OT (reparto del costo)</div>
+        {activas.length > 0 && (
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 11, color: C.gris, marginBottom: 4 }}>Toca las OT activas a las que se carga esta compra (el reparto se calcula por m²; puedes corregir los %):</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {activas.map(o => (
+                <button key={o.numero} type="button" onClick={() => alternarOT(o.numero)} title={(o.cliente || '') + (o.m2 > 0 ? ' · ' + o.m2 + ' m²' : ' · sin m² informados')}
+                  style={{ border: '1px solid ' + (marcadas.has(o.numero) ? C.naranja : '#DFE4EA'), background: marcadas.has(o.numero) ? '#FDECDD' : '#fff', color: marcadas.has(o.numero) ? '#C2570B' : C.carbon, padding: '4px 9px', fontSize: 12, cursor: 'pointer' }}>
+                  {o.numero}{o.m2 > 0 ? ' · ' + o.m2 + ' m²' : ''}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {asigs.map((x, i) => (
           <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
             <select value={x.ot} onChange={e => setAsig(i, 'ot', e.target.value)} style={{ ...inp, width: 170 }}><option value="">(elige OT)</option>{otsDisponibles.map(o => <option key={o}>{o}</option>)}</select>
-            <input value={x.pct} onChange={e => setAsig(i, 'pct', num(e.target.value))} style={{ ...inp, width: 60, textAlign: 'right' }} />%
-            <span style={{ fontSize: 12, color: C.gris }}>= {clp(ocNeto(f) * (num(x.pct) || 0) / 100)}</span>
+            <input value={x.pct} onChange={e => setAsig(i, 'pct', e.target.value)} style={{ ...inp, width: 70, textAlign: 'right' }} />%
+            <span style={{ fontSize: 12, color: C.gris }}>= {clp(ocNeto(f) * (pctNum(x.pct) || 0) / 100)}</span>
             <button onClick={() => delAsig(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button>
           </div>
         ))}
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <button onClick={addAsig} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Asignar a OT</button>
-          {asigs.length > 0 && <span style={{ fontSize: 12, fontWeight: 600, color: sumaPct === 100 ? C.verde : C.rojo }}>Suma: {sumaPct}%</span>}
+          {asigs.length > 1 && <button onClick={repartir} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.carbon }}>Repartir por m²</button>}
+          {asigs.length > 0 && <span style={{ fontSize: 12, fontWeight: 600, color: Math.abs(sumaPct - 100) < 0.05 ? C.verde : C.rojo }}>Suma: {sumaPct}%{asigs.length > 1 && !conM2 ? ' · alguna OT sin m²: se repartió en partes iguales' : ''}</span>}
         </div>
 
         <input style={{ ...inp, width: '100%', marginTop: 10 }} placeholder="Observaciones" value={f.obs} onChange={e => set('obs', e.target.value)} />
@@ -259,20 +311,12 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
   const ocs = pp.ocs || []
   const provLista = Object.values((proveedores || []).reduce((m, p) => { const n = (p.nombre || '').trim(); if (n && !m[n.toLowerCase()]) m[n.toLowerCase()] = p; return m }, {}))
   const otsDisponibles = [...new Set((ots || []).map(o => o.numero).filter(Boolean))]
+  const otsInfo = (ots || []).filter(o => o.numero).map(o => ({ numero: o.numero, m2: parseFloat(o.m2) || 0, cliente: o.cliente || '', estado: o.estado }))
   // pp.ocs tambien lo escriben ProveedoresPagosModule.jsx y
   // generarOCPintura() en CotizacionesModule.jsx — antes de agregar o
   // eliminar una OC acá se trae lo más fresco de la nube, para no partir
   // de una copia vieja si alguien más tocó las OC mientras tanto.
-  const guardarOcFresco = async mutar => {
-    try { await pullState() } catch (e) {}
-    let fresco = null
-    try { fresco = JSON.parse(localStorage.getItem('serein_pp') || 'null') } catch (e) {}
-    const basePp = fresco && typeof fresco === 'object' ? fresco : pp
-    const nuevoPp = { ...basePp, ocs: mutar(basePp.ocs || []) }
-    try { localStorage.setItem('serein_pp', JSON.stringify(nuevoPp)) } catch (e) {}
-    setPp(nuevoPp)
-    pushState()
-  }
+  const guardarOcFresco = mutar => guardarOcFrescoEn(pp, setPp, mutar)
   const eliminar = id => guardarOcFresco(base => base.filter(o => o.id !== id))
   // upd() se llama por cada tecla/click al editar campos de una OC (numero,
   // proveedor, items, asignaciones...). Antes escribia directo sobre la
@@ -301,9 +345,8 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
       if (acumulados) guardarOcFresco(base => base.map(o => o.id === id ? { ...o, ...acumulados } : o))
     }, 700)
   }
-  const maxOC = ocs.reduce((m, o) => Math.max(m, parseInt(String(o.numero).replace(/\D/g, ''), 10) || 0), 517)
   const [creando, setCreando] = useState(false)
-  const nueva = () => ({ id: 'oc' + Date.now(), numero: String(maxOC + 1), proveedor: '', rut: '', categoria: 'Pintura', detalle: '', area: 'Santa Rosa', fecha: hoy(), neto: 0, plazo: 30, vencimiento: sumarDias(hoy(), 30), estadoPago: 'Pendiente', asignaciones: [], items: [], direccion: '', despacho: '', adjunto: '', obs: '' })
+  const nueva = () => nuevaOC(ocs)
   const [busca, setBusca] = useState('')
   const [fEst, setFEst] = useState('')
   const mostradas = ocs.filter(o =>
@@ -320,7 +363,7 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
       <datalist id="prov-list-oc">
         {provLista.map(p => <option key={p.id || p.nombre} value={p.nombre}>{p.rut || ''}</option>)}
       </datalist>
-      {creando && <FormOC inicial={nueva()} otsDisponibles={otsDisponibles} proveedores={proveedores} onGuardar={oc => { guardarOcFresco(base => [oc, ...base]); setCreando(false) }} onCancelar={() => setCreando(false)} />}
+      {creando && <FormOC inicial={nueva()} otsDisponibles={otsDisponibles} otsInfo={otsInfo} proveedores={proveedores} onGuardar={oc => { guardarOcFresco(base => [oc, ...base]); setCreando(false) }} onCancelar={() => setCreando(false)} />}
       <div style={{ fontSize: 12, color: '#D9600A', background: '#FDECDD', padding: '8px 12px', marginBottom: 12 }}>
         <b>Órdenes de compra a proveedores</b> (emitidas por Serein). Cada OC puede asociarse a una o varias OT con reparto porcentual; su costo neto se carga a esas OT. Las OC pendientes alimentan cuentas por pagar y el flujo de caja del Consolidado.
       </div>

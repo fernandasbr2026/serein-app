@@ -837,7 +837,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
             </>
           )
         })() : esModuloOT ? (
-          <OTModule areasPermitidas={areasOTUsuario} ots={ots} setOts={setOts} verValores={verValoresOT} clientes={contactos.clientes || []} ordenesCompra={pp.ocs || []} mo={mo} instrumentos={params.instrumentos} />
+          <OTModule areasPermitidas={areasOTUsuario} ots={ots} setOts={setOts} verValores={verValoresOT} clientes={contactos.clientes || []} ordenesCompra={pp.ocs || []} mo={mo} instrumentos={params.instrumentos} pp={pp} setPp={setPp} />
         ) : esModuloComprasOp && puedeVer('COMPRAS_OP') ? (
           <ComprasOperativasModule
             esGerencia={esGerencia}
