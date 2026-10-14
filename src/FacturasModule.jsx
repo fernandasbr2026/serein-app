@@ -152,6 +152,85 @@ async function guardarVencimientoEnLibro(libroId, vencimiento) {
   } catch (e) { console.warn('No se pudo copiar el vencimiento al Libro de Ventas:', e && e.message) }
 }
 
+// ————— Flujo por percibir —————
+// Cuánto se espera cobrar y cuándo, según el vencimiento de cada factura con saldo pendiente
+// (el saldo ya descuenta abonos y notas de crédito; Pagado, Factoring y Anulada no entran).
+const MESES_FLUJO = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+const isoFlujo = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+export function flujoPorPercibir(lista, hoyRef) {
+  const hoy = new Date(hoyRef || Date.now()); hoy.setHours(0, 0, 0, 0)
+  const finSemana = new Date(hoy); finSemana.setDate(hoy.getDate() + ((7 - hoy.getDay()) % 7))          // domingo de esta semana
+  const finSig = new Date(finSemana); finSig.setDate(finSemana.getDate() + 7)                            // domingo de la próxima
+  const finMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0)
+  const finMesSig = new Date(hoy.getFullYear(), hoy.getMonth() + 2, 0)
+  const cubetas = [
+    { id: 'venc', etq: 'Vencidas', sub: 'ya debían estar pagadas', hasta: null, rojo: true },
+    { id: 'sem', etq: 'Esta semana', sub: 'hasta el ' + isoFlujo(finSemana).slice(8) + '/' + isoFlujo(finSemana).slice(5, 7), hasta: finSemana },
+    { id: 'sig', etq: 'La próxima semana', sub: 'hasta el ' + isoFlujo(finSig).slice(8) + '/' + isoFlujo(finSig).slice(5, 7), hasta: finSig },
+    { id: 'mes', etq: 'Resto de ' + MESES_FLUJO[hoy.getMonth()], sub: 'hasta el ' + isoFlujo(finMes).slice(8) + '/' + isoFlujo(finMes).slice(5, 7), hasta: finMes },
+    { id: 'mes2', etq: 'En ' + MESES_FLUJO[(hoy.getMonth() + 1) % 12], sub: 'mes siguiente', hasta: finMesSig },
+    { id: 'mas', etq: 'Más adelante', sub: 'después de ' + MESES_FLUJO[(hoy.getMonth() + 1) % 12], hasta: new Date(8640000000000000) },
+  ].map(c => ({ ...c, bruto: 0, neto: 0, items: [] }))
+  const sinFecha = { id: 'sin', etq: 'Sin fecha de vencimiento', sub: 'no se puede ubicar en el tiempo', bruto: 0, neto: 0, items: [] }
+  ;(lista || []).forEach(x => {
+    const { bruto, neto } = saldoPendienteDe(x)
+    if (bruto <= 0) return
+    const v = x.vencimiento ? new Date(x.vencimiento + 'T00:00:00') : null
+    let c
+    if (!v || isNaN(v.getTime())) c = sinFecha
+    else if (v < hoy) c = cubetas[0]
+    else c = cubetas.slice(1).find(k => v <= k.hasta)
+    c.bruto += bruto; c.neto += neto; c.items.push(x)
+  })
+  const total = cubetas.reduce((a, c) => a + c.bruto, 0) + sinFecha.bruto
+  return { cubetas, sinFecha, total }
+}
+function FlujoPorPercibir({ lista }) {
+  const [abierta, setAbierta] = useState('')
+  const f = flujoPorPercibir(lista)
+  const todas = [...f.cubetas, f.sinFecha]
+  const max = Math.max(1, ...todas.map(c => c.bruto))
+  const sel = todas.find(c => c.id === abierta)
+  const items = sel ? [...sel.items].sort((a, b) => String(a.vencimiento || '').localeCompare(String(b.vencimiento || ''))) : []
+  return (
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: '3px solid ' + C.ambar, marginBottom: 14, padding: '12px 16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+        <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Flujo por percibir</span>
+        <span style={{ fontSize: 12.5, color: C.gris }}>Por cobrar en total (con IVA): <b style={{ color: C.carbon, fontSize: 15 }}>{clp(f.total)}</b></span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
+        {todas.filter(c => c.id !== 'sin' || c.items.length > 0).map(c => (
+          <button key={c.id} onClick={() => setAbierta(abierta === c.id ? '' : c.id)} style={{ textAlign: 'left', cursor: 'pointer', background: abierta === c.id ? '#FDECDD' : '#fff', border: '1px solid ' + (abierta === c.id ? C.ambar : '#DFE4EA'), padding: '10px 12px', borderRadius: 8 }}>
+            <div style={{ fontSize: 11.5, fontWeight: 700, color: c.rojo ? C.rojo : C.carbon }}>{c.etq}</div>
+            <div style={{ fontSize: 10.5, color: C.gris }}>{c.sub}</div>
+            <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 800, fontSize: 18, marginTop: 4, color: c.rojo ? C.rojo : C.carbon }}>{clp(c.bruto)}</div>
+            <div style={{ height: 5, background: '#DFE4EA', marginTop: 5 }}><div style={{ height: '100%', width: (100 * c.bruto / max) + '%', background: c.rojo ? C.rojo : C.ambar }} /></div>
+            <div style={{ fontSize: 10.5, color: C.gris, marginTop: 4 }}>{c.items.length} factura{c.items.length === 1 ? '' : 's'}</div>
+          </button>
+        ))}
+      </div>
+      {sel && (
+        <div style={{ marginTop: 10, overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+            <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['N°', 'Cliente', 'Vence', 'Saldo (con IVA)'].map((h, i) => <th key={h} style={{ textAlign: i === 3 ? 'right' : 'left', padding: '4px 8px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+            <tbody>
+              {items.slice(0, 60).map(x => (
+                <tr key={x.id} style={{ borderBottom: '1px solid #EEF1F4' }}>
+                  <td style={{ padding: '4px 8px', fontWeight: 600 }}>{x.numero}</td>
+                  <td style={{ padding: '4px 8px' }}>{x.cliente}</td>
+                  <td style={{ padding: '4px 8px', color: C.gris, whiteSpace: 'nowrap' }}>{x.vencimiento || 'sin fecha'}</td>
+                  <td style={{ padding: '4px 8px', textAlign: 'right' }}>{clp(saldoPendienteDe(x).bruto)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {items.length > 60 && <div style={{ fontSize: 11.5, color: C.gris, marginTop: 4 }}>Se muestran las primeras 60 de {items.length}.</div>}
+        </div>
+      )}
+      <div style={{ fontSize: 11.5, color: C.gris, marginTop: 8 }}>Se calcula con el vencimiento de cada factura y su saldo pendiente (ya descuenta abonos y notas de crédito). Las facturas pagadas, en factoring o anuladas no entran. Toca una tarjeta para ver las facturas.</div>
+    </div>
+  )
+}
 export default function FacturasModule({ area, facturas, setFacturas, params = { factoring: [] }, comisionPct = 0, setComisionPct = () => {}, ppmPct = 2, setPpmPct = () => {}, clientesSugeridos = [], proyectos = [], ots = [] }) {
   const lista = (facturas && facturas[area]) || []
   const esIstria = area === 'Istria'
@@ -511,6 +590,7 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
 
   return (
     <div style={{ marginTop: 16 }}>
+      <FlujoPorPercibir lista={lista} />
       <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: `3px solid ${C.teal}` }}>
         <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, borderBottom: '1px solid #DFE4EA' }}>
           <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Receipt size={15} /> Facturas · {area}</span>
