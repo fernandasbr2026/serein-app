@@ -1925,7 +1925,7 @@ function TrazabilidadPiezasOT({ ot, onUpdateMarcasEsperadas }) {
                   <td style={{ padding: '5px 6px', color: fechaGranallado ? '#5A6B85' : '#C9C4B8', whiteSpace: 'nowrap' }}>{fechaGranallado || '—'}</td>
                   {fechasCapas.map((f, i) => <td key={i} style={{ padding: '5px 6px', color: f ? C.teal : '#C9C4B8', whiteSpace: 'nowrap' }}>{f || '—'}</td>)}
                   <td style={{ padding: '5px 6px' }}><span style={{ background: colorEstado, color: '#fff', borderRadius: 10, padding: '2px 8px', fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap' }}>{estado}</span></td>
-                  <td style={{ padding: '5px 6px', whiteSpace: 'nowrap' }}>{vencimiento ? (<span style={{ color: diasRestantes < 0 ? '#C5453D' : diasRestantes <= 2 ? '#D9600A' : '#9AA3AD', fontWeight: diasRestantes < 0 ? 700 : 400 }}>{vencimiento}{diasRestantes < 0 ? ` (vencido, ${Math.abs(diasRestantes)} d.h.)` : ` (${diasRestantes} d.h.)`}</span>) : '—'}</td>
+                  <td style={{ padding: '5px 6px', whiteSpace: 'nowrap' }}>{vencimiento ? (<span style={{ color: diasRestantes < 0 ? '#C5453D' : diasRestantes <= 2 ? '#D9600A' : '#9AA3AD', fontWeight: diasRestantes < 0 ? 700 : 400 }}>{vencimiento}{diasRestantes == null ? '' : diasRestantes < 0 ? ` (vencido, ${Math.abs(diasRestantes)} d.h.)` : ` (${diasRestantes} d.h.)`}</span>) : '—'}</td>
                   <td style={{ padding: '5px 6px' }}>
                     <select value={m.loteId || ''} onChange={e => asignarLote(m.id, e.target.value)} style={{ border: '1px solid #DFE4EA', borderRadius: 4, padding: '3px 5px', fontSize: 11 }}>
                       <option value="">— sin lote —</option>
