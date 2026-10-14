@@ -183,7 +183,8 @@ export function flujoPorPercibir(lista, hoyRef) {
     c.bruto += bruto; c.neto += neto; c.items.push(x)
   })
   const total = cubetas.reduce((a, c) => a + c.bruto, 0) + sinFecha.bruto
-  return { cubetas, sinFecha, total }
+  const totalNeto = cubetas.reduce((a, c) => a + c.neto, 0) + sinFecha.neto
+  return { cubetas, sinFecha, total, totalNeto }
 }
 function FlujoPorPercibir({ lista }) {
   const [abierta, setAbierta] = useState('')
@@ -196,14 +197,15 @@ function FlujoPorPercibir({ lista }) {
     <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderTop: '3px solid ' + C.ambar, marginBottom: 14, padding: '12px 16px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
         <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 14, textTransform: 'uppercase' }}>Flujo por percibir</span>
-        <span style={{ fontSize: 12.5, color: C.gris }}>Por cobrar en total (con IVA): <b style={{ color: C.carbon, fontSize: 15 }}>{clp(f.total)}</b></span>
+        <span style={{ fontSize: 12.5, color: C.gris }}>Por cobrar en total: neto <b style={{ color: C.carbon, fontSize: 15 }}>{clp(f.totalNeto)}</b> · bruto <b style={{ color: C.carbon }}>{clp(f.total)}</b></span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
         {todas.filter(c => c.id !== 'sin' || c.items.length > 0).map(c => (
           <button key={c.id} onClick={() => setAbierta(abierta === c.id ? '' : c.id)} style={{ textAlign: 'left', cursor: 'pointer', background: abierta === c.id ? '#FDECDD' : '#fff', border: '1px solid ' + (abierta === c.id ? C.ambar : '#DFE4EA'), padding: '10px 12px', borderRadius: 8 }}>
             <div style={{ fontSize: 11.5, fontWeight: 700, color: c.rojo ? C.rojo : C.carbon }}>{c.etq}</div>
             <div style={{ fontSize: 10.5, color: C.gris }}>{c.sub}</div>
-            <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 800, fontSize: 18, marginTop: 4, color: c.rojo ? C.rojo : C.carbon }}>{clp(c.bruto)}</div>
+            <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 800, fontSize: 18, marginTop: 4, color: c.rojo ? C.rojo : C.carbon }}>{clp(c.neto)}<span style={{ fontSize: 10.5, fontWeight: 500, color: C.gris }}> neto</span></div>
+            <div style={{ fontSize: 12, color: C.gris }}>{clp(c.bruto)} bruto</div>
             <div style={{ height: 5, background: '#DFE4EA', marginTop: 5 }}><div style={{ height: '100%', width: (100 * c.bruto / max) + '%', background: c.rojo ? C.rojo : C.ambar }} /></div>
             <div style={{ fontSize: 10.5, color: C.gris, marginTop: 4 }}>{c.items.length} factura{c.items.length === 1 ? '' : 's'}</div>
           </button>
@@ -212,14 +214,15 @@ function FlujoPorPercibir({ lista }) {
       {sel && (
         <div style={{ marginTop: 10, overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-            <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['N°', 'Cliente', 'Vence', 'Saldo (con IVA)'].map((h, i) => <th key={h} style={{ textAlign: i === 3 ? 'right' : 'left', padding: '4px 8px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+            <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['N°', 'Cliente', 'Vence', 'Neto', 'Bruto'].map((h, i) => <th key={h} style={{ textAlign: i >= 3 ? 'right' : 'left', padding: '4px 8px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
             <tbody>
               {items.slice(0, 60).map(x => (
                 <tr key={x.id} style={{ borderBottom: '1px solid #EEF1F4' }}>
                   <td style={{ padding: '4px 8px', fontWeight: 600 }}>{x.numero}</td>
                   <td style={{ padding: '4px 8px' }}>{x.cliente}</td>
                   <td style={{ padding: '4px 8px', color: C.gris, whiteSpace: 'nowrap' }}>{x.vencimiento || 'sin fecha'}</td>
-                  <td style={{ padding: '4px 8px', textAlign: 'right' }}>{clp(saldoPendienteDe(x).bruto)}</td>
+                  <td style={{ padding: '4px 8px', textAlign: 'right' }}>{clp(saldoPendienteDe(x).neto)}</td>
+                  <td style={{ padding: '4px 8px', textAlign: 'right', color: C.gris }}>{clp(saldoPendienteDe(x).bruto)}</td>
                 </tr>
               ))}
             </tbody>
@@ -227,7 +230,7 @@ function FlujoPorPercibir({ lista }) {
           {items.length > 60 && <div style={{ fontSize: 11.5, color: C.gris, marginTop: 4 }}>Se muestran las primeras 60 de {items.length}.</div>}
         </div>
       )}
-      <div style={{ fontSize: 11.5, color: C.gris, marginTop: 8 }}>Se calcula con el vencimiento de cada factura y su saldo pendiente (ya descuenta abonos y notas de crédito). Las facturas pagadas, en factoring o anuladas no entran. Toca una tarjeta para ver las facturas.</div>
+      <div style={{ fontSize: 11.5, color: C.gris, marginTop: 8 }}>Se calcula con el vencimiento de cada factura y su saldo pendiente: arriba el neto y debajo el bruto (ambos descuentan abonos y notas de crédito). Las facturas pagadas, en factoring o anuladas no entran. Toca una tarjeta para ver las facturas.</div>
     </div>
   )
 }
