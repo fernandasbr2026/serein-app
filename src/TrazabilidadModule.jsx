@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo } from 'react'
 import { AlertTriangle, ArrowRight, CheckCircle2, Mail, Users } from 'lucide-react'
-import { ocNeto, ocTotal, vencOC } from './OrdenesCompraModule.jsx'
+import { ocNeto, ocTotal, vencOC, esGastoMensual } from './OrdenesCompraModule.jsx'
 import { supabase } from './supabase.js'
 import { sumarDiasHabiles, diasHabilesHasta } from './plazos.js'
 import { pullState, pushState } from './sync.js'
@@ -477,7 +477,7 @@ export default function TrazabilidadModule({ cotizaciones = [], ots = [], ordene
     alertas.push({ col: C.ambar, txt: `${o.numero} está terminada pero no tiene factura emitida.` }))
   ordenesCompra.filter(o => o.estadoPago !== 'Pagada' && o.estadoPago !== 'Anulada' && vencOC(o) && vencOC(o) < hoy()).forEach(o =>
     alertas.push({ col: C.rojo, txt: `OC N° ${o.numero} (${o.proveedor}) está vencida sin pago (${clp(ocTotal(o))}).` }))
-  ordenesCompra.filter(o => o.estadoPago !== 'Anulada' && (!o.asignaciones || o.asignaciones.length === 0)).slice(0, 30).forEach(o =>
+  ordenesCompra.filter(o => o.estadoPago !== 'Anulada' && !esGastoMensual(o) && (!o.asignaciones || o.asignaciones.length === 0)).slice(0, 30).forEach(o =>
     alertas.push({ col: C.gris, txt: `OC N° ${o.numero} (${o.proveedor}) no está asociada a ninguna OT.` }))
   ots.filter(o => (o.ventas || []).some(v => v.estadoPago !== 'Pagado')).forEach(o =>
     alertas.push({ col: C.ambar, txt: `${o.numero} tiene facturas emitidas pendientes de cobro.` }))
