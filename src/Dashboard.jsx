@@ -837,7 +837,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
             </>
           )
         })() : esModuloOT ? (
-          <OTModule areasPermitidas={areasOTUsuario} ots={ots} setOts={setOts} verValores={verValoresOT} clientes={contactos.clientes || []} ordenesCompra={pp.ocs || []} mo={mo} instrumentos={params.instrumentos} pp={pp} setPp={setPp} />
+          <OTModule areasPermitidas={areasOTUsuario} ots={ots} setOts={setOts} verValores={verValoresOT} clientes={contactos.clientes || []} ordenesCompra={pp.ocs || []} mo={mo} instrumentos={params.instrumentos} pp={pp} setPp={setPp} comprasOp={comprasOp} />
         ) : esModuloComprasOp && puedeVer('COMPRAS_OP') ? (
           <ComprasOperativasModule
             esGerencia={esGerencia}
@@ -936,7 +936,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
         {(areaSel === 'Santa Rosa' || areaSel === 'Istria') && resumenFinancieroArea(areaSel)}
 
         {(areaSel === 'Santa Rosa' || areaSel === 'Istria') && (() => {
-          const r = resumenOTArea(ots, areaSel, { ordenesCompra: pp.ocs || [], mo })
+          const r = resumenOTArea(ots, areaSel, { ordenesCompra: pp.ocs || [], mo, comprasOp })
           return (
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase', color: '#9AA3AD', marginBottom: 8 }}>Órdenes de Trabajo — cartera y utilidad<span style={{ display: 'block', fontFamily: SEREIN.fontBody, fontWeight: 400, textTransform: 'none', fontSize: 12, color: '#9AA3AD', marginTop: 2, letterSpacing: 0 }}>Trabajos de planta: cuántos están activos, cuánto valen y la utilidad estimada.</span></div>
