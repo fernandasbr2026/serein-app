@@ -63,11 +63,12 @@ function ChipEstado({ e }) {
 }
 
 // Combustibles: la factura trae un impuesto específico aparte del IVA. El IVA se calcula sobre
-// neto + impuesto específico y se recupera; el impuesto específico NO se recupera, es costo.
+// el neto (no incluye el impuesto específico) y se recupera; el impuesto específico NO se recupera, es costo.
+// Comprobado con una boleta real: neto 23.211 + imp. 2.379 + IVA 19 % del neto (4.410) = 30.000.
 export const esCombustible = c => ['Diésel', 'Bencina'].includes(c && c.categoria)
 const impEspDe = c => esCombustible(c) ? (Number(c.impEsp) || 0) : 0
 // Cálculo de IVA y total bruto a partir del neto (y del impuesto específico si es combustible)
-const ivaDe = c => (c.neto != null && c.aplicaIva) ? Math.round((c.neto + impEspDe(c)) * 0.19) : 0
+const ivaDe = c => (c.neto != null && c.aplicaIva) ? Math.round(c.neto * 0.19) : 0
 const totalDe = c => c.neto != null ? c.neto + impEspDe(c) + ivaDe(c) : null
 // Costo (sin IVA) que una compra de combustible le carga a una OT según el reparto %.
 // Solo cuenta lo que Gerencia no rechazó y que ya tiene monto.
@@ -218,7 +219,7 @@ function FormCompra({ config, ots, proyectos, planta, usuario, onGuardar }) {
         <div style={{ fontSize: 13, background: '#F2F4F7', padding: '8px 12px', marginTop: 10, display: 'flex', gap: 18, flexWrap: 'wrap' }}>
           <span>Neto: <b>{clp(num(f.neto))}</b></span>
           {esCombustible(f) && <span>Impuesto específico: <b>{clp(num(f.impEsp))}</b></span>}
-          <span>IVA {f.aplicaIva ? '19%' : '(no aplica)'}{esCombustible(f) && f.aplicaIva ? ' sobre neto + imp. específico' : ''}: <b>{clp(ivaDe({ neto: num(f.neto), impEsp: num(f.impEsp), categoria: f.categoria, aplicaIva: f.aplicaIva }))}</b></span>
+          <span>IVA {f.aplicaIva ? '19%' : '(no aplica)'}{esCombustible(f) && f.aplicaIva ? ' sobre el neto' : ''}: <b>{clp(ivaDe({ neto: num(f.neto), impEsp: num(f.impEsp), categoria: f.categoria, aplicaIva: f.aplicaIva }))}</b></span>
           <span>Total bruto: <b style={{ color: C.naranja }}>{clp(totalDe({ neto: num(f.neto), impEsp: num(f.impEsp), categoria: f.categoria, aplicaIva: f.aplicaIva }))}</b></span>
         </div>
       )}
