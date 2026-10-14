@@ -70,8 +70,11 @@ export function descargarOCPDF(oc) {
 }
 export const ocPorPagar = oc => !['Pagada', 'Anulada'].includes(oc.estadoPago) && ocTotal(oc) > 0
 export const vencOC = oc => oc.vencimiento || (oc.fecha ? sumarDias(oc.fecha, num(oc.plazo)) : '')
+// Gasto mensual general (EPP y similares): no se carga a ninguna OT, se mide por mes.
+// Si la OC no dice nada, el EPP cuenta como mensual; marcarlo o desmarcarlo a mano manda siempre.
+export const esGastoMensual = oc => oc.mensual === true || (oc.mensual == null && oc.categoria === 'EPP')
 // Costo neto que una OT recibe desde las OC (según asignación %)
-export const costoOCdeOT = (ocs, numeroOT) => (ocs || []).filter(o => o.estadoPago !== 'Anulada').reduce((a, o) => {
+export const costoOCdeOT = (ocs, numeroOT) => (ocs || []).filter(o => o.estadoPago !== 'Anulada' && !esGastoMensual(o)).reduce((a, o) => {
   const asigs = (o.asignaciones && o.asignaciones.length) ? o.asignaciones : null
   if (!asigs) return a
   return a + asigs.filter(x => x.ot === numeroOT).reduce((s, x) => s + ocNeto(o) * (pctNum(x.pct) || 0) / 100, 0)
@@ -115,6 +118,7 @@ function FilaOC({ oc, otsDisponibles, upd, onDelete, proveedores = PROVEEDORES_F
   const setProv = v => { const p = buscarProv(proveedores, v); upd(oc.id, { proveedor: v, ...(p ? { rut: p.rut || oc.rut, direccion: p.direccion || oc.direccion } : {}) }) }
   const v = vencOC(oc), vencido = ocPorPagar(oc) && v && v < hoy()
   const asigs = oc.asignaciones || []
+  const mensual = esGastoMensual(oc)
   const sumaPct = Math.round(asigs.reduce((a, x) => a + (pctNum(x.pct) || 0), 0) * 100) / 100
   const addAsig = () => upd(oc.id, { asignaciones: [...asigs, { ot: otsDisponibles[0] || '', pct: asigs.length === 0 ? 100 : 0 }] })
   const updAsig = (i, k, val) => upd(oc.id, { asignaciones: asigs.map((x, j) => j === i ? { ...x, [k]: val } : x) })
@@ -129,7 +133,7 @@ function FilaOC({ oc, otsDisponibles, upd, onDelete, proveedores = PROVEEDORES_F
         <td style={{ padding: '4px 6px' }}><input value={oc.numero} onChange={e => upd(oc.id, { numero: e.target.value })} style={{ ...inp, width: 66, fontWeight: 600, padding: '5px 6px' }} /></td>
         <td style={{ padding: '4px 6px' }}><input list="prov-list-oc" value={oc.proveedor} onChange={e => setProv(e.target.value)} style={{ ...inp, width: 180, padding: '5px 6px' }} /></td>
         <td style={{ padding: '4px 6px' }}><input value={oc.rut || ''} onChange={e => upd(oc.id, { rut: e.target.value })} style={{ ...inp, width: 100, padding: '5px 6px' }} /></td>
-        <td style={{ padding: '4px 6px' }}><select value={oc.categoria || ''} onChange={e => upd(oc.id, { categoria: e.target.value })} style={{ ...inp, width: 120, padding: '5px 6px' }}><option value="">—</option>{CATEGORIAS.map(x => <option key={x}>{x}</option>)}</select></td>
+        <td style={{ padding: '4px 6px' }}><select value={oc.categoria || ''} onChange={e => upd(oc.id, { categoria: e.target.value })} style={{ ...inp, width: 120, padding: '5px 6px' }}><option value="">—</option>{CATEGORIAS.map(x => <option key={x}>{x}</option>)}</select>{esGastoMensual(oc) ? <div style={{ fontSize: 10, color: '#C2570B', marginTop: 2 }}>Gasto mensual</div> : null}</td>
         <td style={{ padding: '4px 6px' }}><input type="date" value={oc.fecha || ''} onChange={e => upd(oc.id, { fecha: e.target.value })} style={{ ...inp, width: 132, padding: '5px 6px' }} /></td>
         <td style={{ padding: '4px 6px', textAlign: 'right' }}><input value={ocNeto(oc)} readOnly={items.length > 0} title={items.length > 0 ? 'Se calcula desde los ítems' : ''} onChange={e => upd(oc.id, { neto: num(e.target.value), monto: undefined })} style={{ ...inp, width: 100, padding: '5px 6px', textAlign: 'right', fontWeight: 600, background: items.length > 0 ? '#E2E7EC' : '#fff' }} /></td>
         <td style={{ padding: '4px 6px', textAlign: 'right', color: C.gris, whiteSpace: 'nowrap' }}>{clp(ocIva(oc))}</td>
@@ -176,6 +180,12 @@ function FilaOC({ oc, otsDisponibles, upd, onDelete, proveedores = PROVEEDORES_F
             )}
             <button onClick={addItem} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris, marginBottom: 12 }}>+ Agregar ítem</button>
 
+            <label style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <input type="checkbox" checked={mensual} onChange={e => upd(oc.id, e.target.checked ? { mensual: true, asignaciones: [] } : { mensual: false })} />
+              Gasto mensual general (EPP y similares): no se carga a ninguna OT
+            </label>
+            {mensual ? <div style={{ fontSize: 12, color: C.gris }}>Se cuenta como gasto del mes (ver «Gastos mensuales» arriba) y no afecta la utilidad de ninguna OT.</div> : (
+              <>
             <div style={{ fontSize: 11.5, fontWeight: 600, color: C.gris, textTransform: 'uppercase', marginBottom: 6 }}>Asignación a OT (reparto del costo)</div>
             {asigs.map((x, i) => (
               <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
@@ -192,6 +202,8 @@ function FilaOC({ oc, otsDisponibles, upd, onDelete, proveedores = PROVEEDORES_F
               <button onClick={addAsig} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Asignar a OT</button>
               {asigs.length > 0 && <span style={{ fontSize: 12, fontWeight: 600, color: Math.abs(sumaPct - 100) < 0.05 ? C.verde : C.rojo }}>Suma: {sumaPct}% {Math.abs(sumaPct - 100) < 0.05 ? '✓' : '(debería ser 100%)'}</span>}
             </div>
+              </>
+            )}
           </td>
         </tr>
       )}
@@ -223,6 +235,7 @@ export function FormOC({ inicial, otsDisponibles, otsInfo = [], onGuardar, onCan
   const lab = { fontSize: 11, color: C.gris, display: 'flex', flexDirection: 'column', gap: 3 }
   const sumaPct = Math.round(asigs.reduce((a, x) => a + (pctNum(x.pct) || 0), 0) * 100) / 100
   const conItems = items.length > 0
+  const mensual = esGastoMensual(f)
   const guardar = () => { if (f.proveedor.trim() && (ocNeto(f) > 0)) onGuardar(f) }
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 70, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '30px 16px' }} onClick={onCancelar}>
@@ -266,6 +279,12 @@ export function FormOC({ inicial, otsDisponibles, otsInfo = [], onGuardar, onCan
           {!conItems && <label style={{ fontSize: 12, color: C.gris, display: 'flex', alignItems: 'center', gap: 6 }}>o Monto neto directo: <input value={f.neto} onChange={e => set('neto', num(e.target.value))} style={{ ...inp, width: 120, textAlign: 'right' }} /></label>}
         </div>
 
+        <label style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, margin: '10px 0 8px' }}>
+          <input type="checkbox" checked={mensual} onChange={e => setF({ ...f, ...(e.target.checked ? { mensual: true, asignaciones: [] } : { mensual: false }) })} />
+          Gasto mensual general (EPP y similares): no se carga a ninguna OT
+        </label>
+        {mensual ? <div style={{ fontSize: 12, color: C.gris }}>Se cuenta como gasto del mes y no afecta la utilidad de ninguna OT.</div> : (
+          <>
         <div style={{ fontSize: 12, fontWeight: 600, color: C.gris, textTransform: 'uppercase', margin: '10px 0 6px' }}>Asignación a OT (reparto del costo)</div>
         {activas.length > 0 && (
           <div style={{ marginBottom: 8 }}>
@@ -294,6 +313,8 @@ export function FormOC({ inicial, otsDisponibles, otsInfo = [], onGuardar, onCan
           {asigs.length > 0 && <span style={{ fontSize: 12, fontWeight: 600, color: Math.abs(sumaPct - 100) < 0.05 ? C.verde : C.rojo }}>Suma: {sumaPct}%{asigs.length > 1 && !conM2 ? ' · alguna OT sin m²: se repartió en partes iguales' : ''}</span>}
         </div>
 
+          </>
+        )}
         <input style={{ ...inp, width: '100%', marginTop: 10 }} placeholder="Observaciones" value={f.obs} onChange={e => set('obs', e.target.value)} />
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 20, marginTop: 10, fontSize: 13 }}>
           <span>Neto: <b>{clp(ocNeto(f))}</b></span><span>IVA: <b>{clp(ocIva(f))}</b></span><span>Total: <b style={{ color: C.naranja }}>{clp(ocTotal(f))}</b></span>
@@ -302,6 +323,40 @@ export function FormOC({ inicial, otsDisponibles, otsInfo = [], onGuardar, onCan
           <button onClick={guardar} style={{ background: C.verde, color: '#fff', border: 'none', padding: '9px 18px', cursor: 'pointer', fontSize: 13 }}>Guardar OC</button>
           <button onClick={onCancelar} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// Gastos mensuales (EPP y similares): suma por categoría del mes elegido y evolución mes a mes.
+function GastosMensuales({ ocs }) {
+  const mens = ocs.filter(o => esGastoMensual(o) && o.estadoPago !== 'Anulada' && /^\d{4}-\d{2}/.test(o.fecha || ''))
+  const meses = [...new Set(mens.map(o => o.fecha.slice(0, 7)))].sort().reverse()
+  const [mes, setMes] = useState('')
+  if (!mens.length) return null
+  const sel = mes && meses.includes(mes) ? mes : meses[0]
+  const nombreMes = m => ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'][parseInt(m.slice(5, 7), 10) - 1] + ' ' + m.slice(0, 4)
+  const delMes = mens.filter(o => o.fecha.slice(0, 7) === sel)
+  const porCat = {}
+  delMes.forEach(o => { const k = o.categoria || 'Sin categoría'; const c = porCat[k] || (porCat[k] = { n: 0, neto: 0 }); c.n++; c.neto += ocNeto(o) })
+  const totMes = delMes.reduce((a, o) => a + ocNeto(o), 0)
+  const th = { textAlign: 'right', padding: '4px 8px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase' }
+  return (
+    <div style={{ background: '#fff', border: '1px solid #DFE4EA', padding: 12, marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+        <span style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase' }}>Gastos mensuales (sin OT)</span>
+        <select value={sel} onChange={e => setMes(e.target.value)} style={{ ...inp, textTransform: 'capitalize' }}>{meses.map(m => <option key={m} value={m}>{nombreMes(m)}</option>)}</select>
+        <span style={{ fontSize: 12.5, color: C.gris }}>{delMes.length} OC · neto <b style={{ color: C.carbon }}>{clp(totMes)}</b></span>
+      </div>
+      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: 12.5, minWidth: 260 }}>
+          <thead><tr><th style={{ ...th, textAlign: 'left' }}>Categoría</th><th style={th}>OC</th><th style={th}>Neto</th></tr></thead>
+          <tbody>{Object.entries(porCat).map(([k, c]) => <tr key={k} style={{ borderTop: '1px solid #DFE4EA' }}><td style={{ padding: '5px 8px' }}>{k}</td><td style={{ padding: '5px 8px', textAlign: 'right' }}>{c.n}</td><td style={{ padding: '5px 8px', textAlign: 'right' }}>{clp(c.neto)}</td></tr>)}</tbody>
+        </table>
+        <table style={{ borderCollapse: 'collapse', fontSize: 12.5, minWidth: 220 }}>
+          <thead><tr><th style={{ ...th, textAlign: 'left' }}>Mes a mes</th><th style={th}>Neto</th></tr></thead>
+          <tbody>{meses.slice(0, 12).map(m => <tr key={m} style={{ borderTop: '1px solid #DFE4EA' }}><td style={{ padding: '5px 8px', textTransform: 'capitalize' }}>{nombreMes(m)}</td><td style={{ padding: '5px 8px', textAlign: 'right' }}>{clp(mens.filter(o => o.fecha.slice(0, 7) === m).reduce((a, o) => a + ocNeto(o), 0))}</td></tr>)}</tbody>
+        </table>
       </div>
     </div>
   )
@@ -367,6 +422,7 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
       <div style={{ fontSize: 12, color: '#D9600A', background: '#FDECDD', padding: '8px 12px', marginBottom: 12 }}>
         <b>Órdenes de compra a proveedores</b> (emitidas por Serein). Cada OC puede asociarse a una o varias OT con reparto porcentual; su costo neto se carga a esas OT. Las OC pendientes alimentan cuentas por pagar y el flujo de caja del Consolidado.
       </div>
+      <GastosMensuales ocs={ocs} />
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
         <button onClick={() => setCreando(true)} style={{ background: C.naranja, color: '#fff', border: 'none', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: SEREIN.fontDisplay, fontWeight: 600, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Agregar OC</button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, border: '1px solid #DFE4EA', padding: '2px 6px' }}>
