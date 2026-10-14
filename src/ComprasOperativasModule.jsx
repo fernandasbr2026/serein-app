@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { Plus, Trash2, X, ShoppingCart, ClipboardList, Factory, CheckCircle2, AlertTriangle, Paperclip, Settings2, Filter } from 'lucide-react'
 import { pullState, pushState } from './sync.js'
+import { repartirPorM2 } from './OrdenesCompraModule.jsx'
 
 import { SEREIN } from './theme-serein.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
@@ -151,6 +152,12 @@ function FormCompra({ config, ots, proyectos, planta, usuario, onGuardar }) {
   }
 
   const opciones = tipoAsig.includes('OT') ? refsOT : tipoAsig.includes('Proyecto') ? refsProy : AREAS_COMPRA
+  // Varias OT: se tocan las OT activas y el reparto se calcula por m² (se puede corregir a mano)
+  const otsInfo = ots.map(o => ({ numero: o.numero, m2: parseFloat(o.m2) || 0, estado: o.estado }))
+  const activas = otsInfo.filter(o => o.estado !== 'Cerrada')
+  const marcadas = new Set(items.map(i => i.ref).filter(Boolean))
+  const alternarOT = n => { const nums = [...marcadas].filter(x => x !== n); if (!marcadas.has(n)) nums.push(n); setItems(nums.length ? repartirPorM2(nums, otsInfo).map(a => ({ ref: a.ot, pct: a.pct })) : [{ ref: '', pct: 100 }]) }
+  const repartirM2 = () => setItems(repartirPorM2(items.map(i => i.ref).filter(Boolean), otsInfo).map(a => ({ ref: a.ot, pct: a.pct })))
   const suma = items.reduce((a, i) => a + (parseFloat(i.pct) || 0), 0)
   const asigOk = tipoAsig === 'Pendiente de revisión por Gerencia' || (items.length > 0 && Math.abs(suma - 100) < 0.02 && items.every(i => i.ref))
 
@@ -231,13 +238,26 @@ function FormCompra({ config, ots, proyectos, planta, usuario, onGuardar }) {
           <div style={{ fontSize: 13, color: '#D9600A' }}>Gerencia asignará esta compra después. Puedes guardarla igual.</div>
         ) : (
           <>
+            {tipoAsig === 'Varias OT/OC' && activas.length > 0 && (
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 11, color: C.gris, marginBottom: 4 }}>Toca las OT activas a las que va esta compra: el reparto se calcula por m² (puedes corregir los %).</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {activas.map(o => (
+                    <button key={o.numero} type="button" onClick={() => alternarOT(o.numero)} title={o.m2 > 0 ? o.m2 + ' m²' : 'sin m² informados'}
+                      style={{ border: '1px solid ' + (marcadas.has(o.numero) ? C.naranja : '#DFE4EA'), background: marcadas.has(o.numero) ? '#FDECDD' : '#fff', color: marcadas.has(o.numero) ? '#C2570B' : C.carbon, padding: '4px 9px', fontSize: 12, cursor: 'pointer' }}>
+                      {o.numero}{o.m2 > 0 ? ' · ' + o.m2 + ' m²' : ''}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {items.map((it, i) => (
               <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
                 <select value={it.ref} onChange={e => setItems(items.map((x, j) => j === i ? { ...x, ref: e.target.value } : x))} style={{ ...inp, flex: 1 }}>
                   <option value="">— seleccionar —</option>
                   {opciones.map(o => <option key={o}>{o}</option>)}
                 </select>
-                <input type="number" value={it.pct} onChange={e => setItems(items.map((x, j) => j === i ? { ...x, pct: e.target.value } : x))} style={{ ...inp, width: 76, textAlign: 'right' }} />
+                <input type="number" step="any" value={it.pct} onChange={e => setItems(items.map((x, j) => j === i ? { ...x, pct: e.target.value } : x))} style={{ ...inp, width: 76, textAlign: 'right' }} />
                 <span style={{ fontSize: 13, color: C.gris }}>%</span>
                 {items.length > 1 && <button onClick={() => setItems(items.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><X size={15} /></button>}
               </div>
@@ -245,6 +265,9 @@ function FormCompra({ config, ots, proyectos, planta, usuario, onGuardar }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               {(tipoAsig === 'Varias OT/OC' || tipoAsig === 'Varias áreas') && (
                 <button onClick={agregarItem} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>+ Agregar (reparte en partes iguales)</button>
+              )}
+              {tipoAsig === 'Varias OT/OC' && items.filter(i => i.ref).length > 1 && (
+                <button onClick={repartirM2} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.carbon, marginLeft: 6 }}>Repartir por m²</button>
               )}
               <span style={{ fontSize: 13, fontWeight: 700, color: asigOk ? C.verde : C.rojo, marginLeft: 'auto' }}>Suma: {suma.toFixed(2).replace('.00', '')}% {asigOk ? '✓' : '— debe ser 100%'}</span>
             </div>
