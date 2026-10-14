@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { ChevronDown, ChevronUp, Plus, Trash2, X, Ruler, Paintbrush, FileText, Receipt, ShoppingCart, CircleDollarSign, Download, Camera, Search, RotateCcw, Lock, Unlock, CalendarDays, Save, TrendingUp, Pencil } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { descargarOTDesdeOT } from './CotizacionesModule.jsx'
-import { costoOCdeOT } from './OrdenesCompraModule.jsx'
+import { costoOCdeOT, FormOC, nuevaOC, guardarOcFrescoEn, ocNeto } from './OrdenesCompraModule.jsx'
 import { supabase } from './supabase.js'
 import { generarPdfProtocoloBlob, blobToBase64, fileToBase64, protocoloCompleto } from './protocolo-pdf.js'
 import { costoMOdeOT } from './ManoObraModule.jsx'
@@ -409,6 +409,65 @@ function FormCosto({ onAdd, onCancel }) {
       <button onClick={() => num(f.monto) > 0 && onAdd({ categoria: f.categoria, detalle: f.detalle, monto: num(f.monto) })}
         style={{ background: C.teal, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Agregar</button>
       <button onClick={onCancel} style={{ ...btnMini, color: '#9AA3AD' }}><X size={16} /></button>
+    </div>
+  )
+}
+
+// Órdenes de compra a proveedores que cargan costo a esta OT. Son las mismas del módulo
+// «Órdenes de Compra» (un solo registro): acá se ven filtradas por OT y se pueden emitir nuevas.
+function SeccionOCsDeOT({ ot, ordenesCompra = [], otsAll = [], pp = null, setPp = null }) {
+  const [form, setForm] = useState(null)
+  const delaOT = (ordenesCompra || []).filter(o => (o.asignaciones || []).some(a => a.ot === ot.numero))
+  const pctDe = o => (o.asignaciones || []).filter(a => a.ot === ot.numero).reduce((x, a) => x + (parseFloat(a.pct) || 0), 0)
+  const total = delaOT.filter(o => o.estadoPago !== 'Anulada').reduce((a, o) => a + ocNeto(o) * pctDe(o) / 100, 0)
+  const otsDisponibles = [...new Set((otsAll || []).map(o => o.numero).filter(Boolean))]
+  const otsInfo = (otsAll || []).filter(o => o.numero).map(o => ({ numero: o.numero, m2: parseFloat(o.m2) || 0, cliente: o.cliente || '', estado: o.estado }))
+  const nueva = categoria => setForm(nuevaOC((pp && pp.ocs) || ordenesCompra, { categoria, area: ot.area || ot.sede || 'Santa Rosa', detalle: categoria === 'Pintura' ? 'Pintura OT ' + ot.numero : '', asignaciones: [{ ot: ot.numero, pct: 100 }] }))
+  const btn = { background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }
+  return (
+    <div style={{ marginBottom: 18 }}>
+      {form && <FormOC inicial={form} otsDisponibles={otsDisponibles} otsInfo={otsInfo} onCancelar={() => setForm(null)} onGuardar={oc => { guardarOcFrescoEn(pp, setPp, base => [oc, ...base]); setForm(null) }} />}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: '#9AA3AD', display: 'flex', alignItems: 'center', gap: 5 }}>
+          <ShoppingCart size={13} /> Órdenes de compra a proveedores
+        </span>
+        {pp && setPp && (
+          <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <button onClick={() => nueva('Pintura')} style={btn}><Plus size={13} /> OC de pintura</button>
+            <button onClick={() => nueva('Otro')} style={{ ...btn, background: '#fff', color: C.teal, border: '1px solid ' + C.teal }}><Plus size={13} /> Otra OC</button>
+          </span>
+        )}
+      </div>
+      {delaOT.length === 0 ? (
+        <div style={{ fontSize: 13, color: '#9AA3AD' }}>Ninguna orden de compra cargada a esta OT todavía.</div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
+                {['N° OC', 'Proveedor', 'Categoría', 'Fecha', '% a esta OT', 'Costo neto OT', 'Pago'].map((h, i) => (
+                  <th key={i} style={{ textAlign: ['% a esta OT', 'Costo neto OT'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {delaOT.map(o => (
+                <tr key={o.id} style={{ borderBottom: '1px solid #DFE4EA', opacity: o.estadoPago === 'Anulada' ? 0.5 : 1 }}>
+                  <td style={{ padding: '7px 8px', fontWeight: 600 }}>{o.numero}</td>
+                  <td style={{ padding: '7px 8px' }}>{o.proveedor}</td>
+                  <td style={{ padding: '7px 8px', color: '#9AA3AD' }}>{o.categoria || '—'}</td>
+                  <td style={{ padding: '7px 8px', color: '#9AA3AD', whiteSpace: 'nowrap' }}>{o.fecha || '—'}</td>
+                  <td style={{ padding: '7px 8px', textAlign: 'right' }}>{Math.round(pctDe(o) * 100) / 100}%</td>
+                  <td style={{ padding: '7px 8px', textAlign: 'right' }}>{clp(ocNeto(o) * pctDe(o) / 100)}</td>
+                  <td style={{ padding: '7px 8px' }}>{o.estadoPago || 'Pendiente'}</td>
+                </tr>
+              ))}
+              <tr><td colSpan={5} style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700 }}>Total OC a esta OT</td><td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700 }}>{clp(total)}</td><td /></tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div style={{ fontSize: 11.5, color: '#9AA3AD', marginTop: 6 }}>Estas son las mismas órdenes del módulo «Órdenes de Compra»: se editan allá y el costo ya está sumado a la utilidad de la OT.</div>
     </div>
   )
 }
@@ -2080,7 +2139,7 @@ function TileOT({ ot, onOpen, onDragStart, onDropOn, verValores }) {
   )
 }
 
-function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateProtocolo, onUpdateMarcasEsperadas, onDelete, onCambiarEstado, onAgregarVenta, onEliminarVenta, onAgregarArray, verValores = true, ordenesCompra = [], mo = null, otsAll = [], instrumentos = null, libroCompras = [], clientesActivos = [], enModal = false }) {
+function TarjetaOT({ pp = null, setPp = null, ot, onUpdate, onUpdateProtocolos, onUpdateProtocolo, onUpdateMarcasEsperadas, onDelete, onCambiarEstado, onAgregarVenta, onEliminarVenta, onAgregarArray, verValores = true, ordenesCompra = [], mo = null, otsAll = [], instrumentos = null, libroCompras = [], clientesActivos = [], enModal = false }) {
   const [abierta, setAbierta] = useState(false)
   const [addVenta, setAddVenta] = useState(false)
   const [addAbono, setAddAbono] = useState(false)
@@ -2096,6 +2155,7 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateProtocolo, onUpda
     { id: 'produccion', label: 'Producción y Trazabilidad' },
     { id: 'calidad', label: 'Calidad' },
     { id: 'comercial', label: 'Comercial' },
+    ...(verValores ? [{ id: 'compras', label: 'Compras' }] : []),
     { id: 'datos', label: 'Datos' },
   ]
   // Botón explícito de guardar, pedido directamente: todo lo que se edita
@@ -2578,6 +2638,42 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateProtocolo, onUpda
               )}
               {addAbono && <FormAbono onAdd={x => { onAgregarArray(ot.id, 'abonos', x); setAddAbono(false) }} onCancel={() => setAddAbono(false)} />}
 
+              <div style={{ marginTop: 16, padding: '12px 14px', background: '#F2F4F7', fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+                <CircleDollarSign size={16} color={margen >= 30 ? C.verde : C.ambar} />
+                <span>Venta neta: <b>{clp(ventaTotal)}</b></span>
+                {abonoTotal > 0 && <span>Abonado: <b style={{ color: C.verde }}>{clp(abonoTotal)}</b></span>}
+                {!facturaReal && abonoTotal > 0 && (
+                  saldoPendiente > 0
+                    ? <span>Saldo pendiente por facturar/percibir: <b style={{ color: C.ambar }}>{clp(saldoPendiente)}</b></span>
+                    : saldoPendiente < 0
+                      ? <span>Saldo a favor del cliente: <b style={{ color: '#5B4E8C' }}>{clp(-saldoPendiente)}</b></span>
+                      : <span>Saldo pendiente: <b style={{ color: C.verde }}>$0</b></span>
+                )}
+                {facturaReal && saldoFacturarOT > 0 && <span>Saldo por facturar: <b style={{ color: C.ambar }}>{clp(saldoFacturarOT)}</b></span>}
+                {facturaReal && saldoPercibirOT > 0 && <span>Saldo por percibir: <b style={{ color: C.rojo }}>{clp(saldoPercibirOT)}</b></span>}
+                <span>Costos: <b>{clp(costoTotal)}</b></span>{costoMO > 0 && <span style={{ color: '#9AA3AD' }}>(incluye {clp(costoMO)} de mano de obra)</span>}
+                {costoOC > 0 && <span style={{ color: C.teal }}>(incluye {clp(costoOC)} de OC proveedores)</span>}
+                <span>Utilidad real: <b style={{ color: colorMargen(margen) }}>{clp(utilidad)} ({margen.toFixed(1)}%)</b></span>
+              </div>
+              <div style={{ marginTop: 8, padding: '10px 14px', background: '#fff', border: '1px dashed #DFE4EA', fontSize: 12, display: 'flex', gap: 18, flexWrap: 'wrap', color: '#9AA3AD' }}>
+                <span>Facturación: <b style={{ color: C.carbon }}>{estadoFacturacionDeOT(ot)}</b></span>
+                <span>Pago: <b style={{ color: C.carbon }}>{estadoPagoOTDeOT(ot)}</b></span>
+                {avanceFacturado != null && <span>Avance facturado: <b style={{ color: C.carbon }}>{avanceFacturado}%</b></span>}
+                {diasActiva != null && <span>Días activa: <b style={{ color: C.carbon }}>{diasActiva}</b></span>}
+                {diasCerradaSinFacturar != null && <span>Días cerrada sin facturar: <b style={{ color: C.ambar }}>{diasCerradaSinFacturar}</b></span>}
+                {diasFacturadaSinPago != null && <span>Días facturada sin pago: <b style={{ color: C.rojo }}>{diasFacturadaSinPago}</b></span>}
+              </div>
+              {alertasOT.length > 0 && (
+                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {alertasOT.map((a, i) => <span key={i} style={{ fontSize: 12, color: C.rojo }}>⚠ {a}</span>)}
+                </div>
+              )}
+            </>
+          )}
+          </>)}
+
+          {tab === 'compras' && verValores && (<>
+              <SeccionOCsDeOT ot={ot} ordenesCompra={ordenesCompra} otsAll={otsAll} pp={pp} setPp={setPp} />
               {verValores && (libroCompras || []).some(l => l.ot_id === ot.numero) ? (() => { const cs = (libroCompras || []).filter(l => l.ot_id === ot.numero); const sub = cs.reduce((a, l) => a + (Number(l.neto) || 0), 0); return (<div style={{ marginTop: 14, border: '1px solid #D8DCE5', borderRadius: 6, padding: 10, background: '#F2F4F7' }}><div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#101315', marginBottom: 6 }}>Compras del libro de compras (SII) asignadas</div><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}><tbody>{cs.map((l, i) => (<tr key={i} style={{ borderBottom: '1px solid #E7E4DC' }}><td style={{ padding: '4px 6px', color: '#9AA3AD', whiteSpace: 'nowrap' }}>{l.emission_date}</td><td style={{ padding: '4px 6px' }}>{l.provider_name}</td><td style={{ padding: '4px 6px', color: '#9AA3AD' }}>Folio {l.document_number}</td><td style={{ padding: '4px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>{clp(l.neto)}</td></tr>))}</tbody></table><div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}><span style={{ fontSize: 11, color: '#9AA3AD' }}>Subtotal neto (informativo, aun no sumado a la utilidad)</span><span style={{ fontWeight: 700, color: '#101315' }}>{clp(sub)}</span></div></div>); })() : null}
 
           {/* COSTOS */}
@@ -2631,38 +2727,6 @@ function TarjetaOT({ ot, onUpdate, onUpdateProtocolos, onUpdateProtocolo, onUpda
                 </div>
               )}
 
-              <div style={{ marginTop: 16, padding: '12px 14px', background: '#F2F4F7', fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
-                <CircleDollarSign size={16} color={margen >= 30 ? C.verde : C.ambar} />
-                <span>Venta neta: <b>{clp(ventaTotal)}</b></span>
-                {abonoTotal > 0 && <span>Abonado: <b style={{ color: C.verde }}>{clp(abonoTotal)}</b></span>}
-                {!facturaReal && abonoTotal > 0 && (
-                  saldoPendiente > 0
-                    ? <span>Saldo pendiente por facturar/percibir: <b style={{ color: C.ambar }}>{clp(saldoPendiente)}</b></span>
-                    : saldoPendiente < 0
-                      ? <span>Saldo a favor del cliente: <b style={{ color: '#5B4E8C' }}>{clp(-saldoPendiente)}</b></span>
-                      : <span>Saldo pendiente: <b style={{ color: C.verde }}>$0</b></span>
-                )}
-                {facturaReal && saldoFacturarOT > 0 && <span>Saldo por facturar: <b style={{ color: C.ambar }}>{clp(saldoFacturarOT)}</b></span>}
-                {facturaReal && saldoPercibirOT > 0 && <span>Saldo por percibir: <b style={{ color: C.rojo }}>{clp(saldoPercibirOT)}</b></span>}
-                <span>Costos: <b>{clp(costoTotal)}</b></span>{costoMO > 0 && <span style={{ color: '#9AA3AD' }}>(incluye {clp(costoMO)} de mano de obra)</span>}
-                {costoOC > 0 && <span style={{ color: C.teal }}>(incluye {clp(costoOC)} de OC proveedores)</span>}
-                <span>Utilidad real: <b style={{ color: colorMargen(margen) }}>{clp(utilidad)} ({margen.toFixed(1)}%)</b></span>
-              </div>
-              <div style={{ marginTop: 8, padding: '10px 14px', background: '#fff', border: '1px dashed #DFE4EA', fontSize: 12, display: 'flex', gap: 18, flexWrap: 'wrap', color: '#9AA3AD' }}>
-                <span>Facturación: <b style={{ color: C.carbon }}>{estadoFacturacionDeOT(ot)}</b></span>
-                <span>Pago: <b style={{ color: C.carbon }}>{estadoPagoOTDeOT(ot)}</b></span>
-                {avanceFacturado != null && <span>Avance facturado: <b style={{ color: C.carbon }}>{avanceFacturado}%</b></span>}
-                {diasActiva != null && <span>Días activa: <b style={{ color: C.carbon }}>{diasActiva}</b></span>}
-                {diasCerradaSinFacturar != null && <span>Días cerrada sin facturar: <b style={{ color: C.ambar }}>{diasCerradaSinFacturar}</b></span>}
-                {diasFacturadaSinPago != null && <span>Días facturada sin pago: <b style={{ color: C.rojo }}>{diasFacturadaSinPago}</b></span>}
-              </div>
-              {alertasOT.length > 0 && (
-                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  {alertasOT.map((a, i) => <span key={i} style={{ fontSize: 12, color: C.rojo }}>⚠ {a}</span>)}
-                </div>
-              )}
-            </>
-          )}
           </>)}
 
           {tab === 'datos' && (
@@ -3428,7 +3492,7 @@ function ProtocolosOT({ ot, onUpdate, onUpdateProtocolo, otsAll = [], instrument
   const protocolosHermanos = listaMostrada.filter(x => x.tipo === 'PGP' || x.tipo === 'PIG')
   return (<div style={{ marginTop: 14, borderTop: '1px dashed #DFE4EA', paddingTop: 12 }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}><div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 13, textTransform: 'uppercase' }}>Protocolos de calidad ({listaMostrada.length})</div><div style={{ display: 'flex', gap: 8 }}><button onClick={() => gen('PIG')} style={{ background: '#F77716', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>+ Generar PIG</button><button onClick={() => gen('PGP')} style={{ background: '#101315', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>+ Generar PGP</button><button onClick={() => gen('EA')} style={{ background: '#0E7A8F', color: '#fff', border: 'none', padding: '7px 12px', cursor: 'pointer', fontSize: 12.5 }}>+ Generar Ensayo Adherencia</button></div></div>{listaMostrada.map(p => { const usadasEnOtros = listaMostrada.filter(x => x.id !== p.id).flatMap(x => x.marcas || []); const mEsp = ot.marcasEsperadas || []; return p.tipo === 'PIG' ? <ProtoPIGForm key={p.id} p={p} upd={updP} onDel={() => delP(p.id)} instrumentos={instrumentos} marcasEsperadas={mEsp} usadasEnOtros={usadasEnOtros} /> : p.tipo === 'EA' ? <ProtoEAForm key={p.id} p={p} upd={updP} onDel={() => delP(p.id)} instrumentos={instrumentos} protocolosHermanos={protocolosHermanos.filter(x => x.id !== p.id)} /> : <ProtoPGPForm key={p.id} p={p} upd={updP} onDel={() => delP(p.id)} instrumentos={instrumentos} marcasEsperadas={mEsp} usadasEnOtros={usadasEnOtros} /> })}</div>) }
 
-export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], ots: otsExt, setOts: setOtsExt, verValores = true, clientes = [], ordenesCompra = [], mo = null, instrumentos = null }) {
+export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], ots: otsExt, setOts: setOtsExt, verValores = true, clientes = [], ordenesCompra = [], mo = null, instrumentos = null, pp = null, setPp = null }) {
   const [otsInt, setOtsInt] = useState(OTS_INICIALES)
   const [libroCompras, setLibroCompras] = useState([])
   useEffect(() => { supabase.from('libro_compras').select('ot_id,provider_name,document_number,neto,document_total,emission_date').not('ot_id', 'is', null).then(({ data }) => setLibroCompras(data || [])) }, [])
@@ -3940,7 +4004,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
                 <button onClick={() => setSel(null)} style={{ background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}><X size={15} /> Cerrar</button>
               </div>
               <div style={{ padding: 12 }}>
-                <TarjetaOT ot={so} onUpdate={actualizar} onUpdateProtocolos={actualizarProtocolos} onUpdateProtocolo={actualizarUnProtocolo} onUpdateMarcasEsperadas={actualizarMarcasEsperadas} onDelete={id => { eliminar(id); setSel(null) }} onCambiarEstado={cambiarEstado} onAgregarVenta={agregarVenta} onEliminarVenta={eliminarVenta} onAgregarArray={agregarAArray} verValores={verValores} ordenesCompra={ordenesCompra} mo={mo} otsAll={otsAll} instrumentos={instrumentos} libroCompras={libroCompras} clientesActivos={clientesActivos} enModal />
+                <TarjetaOT pp={pp} setPp={setPp} ot={so} onUpdate={actualizar} onUpdateProtocolos={actualizarProtocolos} onUpdateProtocolo={actualizarUnProtocolo} onUpdateMarcasEsperadas={actualizarMarcasEsperadas} onDelete={id => { eliminar(id); setSel(null) }} onCambiarEstado={cambiarEstado} onAgregarVenta={agregarVenta} onEliminarVenta={eliminarVenta} onAgregarArray={agregarAArray} verValores={verValores} ordenesCompra={ordenesCompra} mo={mo} otsAll={otsAll} instrumentos={instrumentos} libroCompras={libroCompras} clientesActivos={clientesActivos} enModal />
               </div>
             </div>
           </div>
