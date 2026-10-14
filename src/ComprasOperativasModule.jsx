@@ -66,7 +66,10 @@ function ChipEstado({ e }) {
 // el neto (no incluye el impuesto específico) y se recupera; el impuesto específico NO se recupera, es costo.
 // Comprobado con una boleta real: neto 23.211 + imp. 2.379 + IVA 19 % del neto (4.410) = 30.000.
 export const esCombustible = c => ['Diésel', 'Bencina'].includes(c && c.categoria)
-const impEspDe = c => esCombustible(c) ? (Number(c.impEsp) || 0) : 0
+// El impuesto específico puede venir NEGATIVO en la factura (impuesto variable): se acepta el signo «-».
+const limpiaSigno = s => { const t = String(s == null ? '' : s).replace(/[^\d-]/g, ''); return (t.startsWith('-') ? '-' : '') + t.replace(/-/g, '') }
+const numSigno = s => Number(limpiaSigno(s)) || 0
+const impEspDe = c => esCombustible(c) ? numSigno(c.impEsp) : 0
 // Cálculo de IVA y total bruto a partir del neto (y del impuesto específico si es combustible)
 const ivaDe = c => (c.neto != null && c.aplicaIva) ? Math.round(c.neto * 0.19) : 0
 const totalDe = c => c.neto != null ? c.neto + impEspDe(c) + ivaDe(c) : null
@@ -170,7 +173,7 @@ function FormCompra({ config, ots, proyectos, planta, usuario, onGuardar }) {
       descripcion: f.descripcion, cantidad: f.cantidad, unidad: f.unidad, obs: f.obs,
       adjunto: f.adjunto,
       neto: config.supervisorIngresaMonto && num(f.neto) > 0 ? num(f.neto) : null,
-      impEsp: esCombustible(f) && config.supervisorIngresaMonto ? num(f.impEsp) : 0,
+      impEsp: esCombustible(f) && config.supervisorIngresaMonto ? numSigno(f.impEsp) : 0,
       aplicaIva: f.aplicaIva,
       asignacion: { tipo: tipoAsig, items: items.map(i => ({ ref: i.ref, pct: parseFloat(i.pct) })) },
       estado: 'Pendiente de revisión', obsGerencia: '',
@@ -201,7 +204,7 @@ function FormCompra({ config, ots, proyectos, planta, usuario, onGuardar }) {
           <input style={inp} placeholder="Monto NETO (si viene en el documento)" value={f.neto} onChange={e => setF({ ...f, neto: e.target.value })} />
         )}
         {config.supervisorIngresaMonto && esCombustible(f) && (
-          <input style={inp} placeholder="Impuesto específico (como sale en la factura)" value={f.impEsp} onChange={e => setF({ ...f, impEsp: e.target.value })} />
+          <input style={inp} placeholder="Impuesto específico (puede ser negativo, como sale en la factura)" value={f.impEsp} onChange={e => setF({ ...f, impEsp: limpiaSigno(e.target.value) })} />
         )}
         {config.supervisorIngresaMonto && (
           <button type="button" onClick={() => setF({ ...f, aplicaIva: !f.aplicaIva })}
@@ -218,9 +221,9 @@ function FormCompra({ config, ots, proyectos, planta, usuario, onGuardar }) {
       {config.supervisorIngresaMonto && num(f.neto) > 0 && (
         <div style={{ fontSize: 13, background: '#F2F4F7', padding: '8px 12px', marginTop: 10, display: 'flex', gap: 18, flexWrap: 'wrap' }}>
           <span>Neto: <b>{clp(num(f.neto))}</b></span>
-          {esCombustible(f) && <span>Impuesto específico: <b>{clp(num(f.impEsp))}</b></span>}
-          <span>IVA {f.aplicaIva ? '19%' : '(no aplica)'}{esCombustible(f) && f.aplicaIva ? ' sobre el neto' : ''}: <b>{clp(ivaDe({ neto: num(f.neto), impEsp: num(f.impEsp), categoria: f.categoria, aplicaIva: f.aplicaIva }))}</b></span>
-          <span>Total bruto: <b style={{ color: C.naranja }}>{clp(totalDe({ neto: num(f.neto), impEsp: num(f.impEsp), categoria: f.categoria, aplicaIva: f.aplicaIva }))}</b></span>
+          {esCombustible(f) && <span>Impuesto específico: <b>{clp(numSigno(f.impEsp))}</b></span>}
+          <span>IVA {f.aplicaIva ? '19%' : '(no aplica)'}{esCombustible(f) && f.aplicaIva ? ' sobre el neto' : ''}: <b>{clp(ivaDe({ neto: num(f.neto), impEsp: numSigno(f.impEsp), categoria: f.categoria, aplicaIva: f.aplicaIva }))}</b></span>
+          <span>Total bruto: <b style={{ color: C.naranja }}>{clp(totalDe({ neto: num(f.neto), impEsp: numSigno(f.impEsp), categoria: f.categoria, aplicaIva: f.aplicaIva }))}</b></span>
         </div>
       )}
 
@@ -409,7 +412,7 @@ function RevisionGerencia({ comprasOp, setComprasOp }) {
                     style={{ ...inp, width: 92, padding: '4px 6px', fontStyle: c.neto == null ? 'italic' : 'normal' }} />
                   {esCombustible(c) && (
                     <input value={c.impEsp ?? ''} placeholder="imp. específico" title="Impuesto específico del combustible (no es IVA, no se recupera)"
-                      onChange={e => upd(c.id, { impEsp: e.target.value === '' ? 0 : num(e.target.value) })}
+                      onChange={e => upd(c.id, { impEsp: limpiaSigno(e.target.value) })}
                       style={{ ...inp, width: 110, padding: '4px 6px', marginTop: 3, display: 'block' }} />
                   )}
                   <div onClick={() => upd(c.id, { aplicaIva: !c.aplicaIva })} title="Tocar para cambiar"
