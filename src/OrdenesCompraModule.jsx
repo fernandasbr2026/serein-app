@@ -21,6 +21,18 @@ const inp = { padding: '6px 8px', border: '1px solid #DFE4EA', fontSize: 12.5, b
 const hoy = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 const sumarDias = (fecha, dias) => { if (!fecha) return ''; const d = new Date(fecha + 'T12:00:00'); d.setDate(d.getDate() + (parseInt(dias, 10) || 0)); return d.toISOString().slice(0, 10) }
 
+// Lista única de proveedores para autocompletar en cualquier formulario de compra: la ficha fija,
+// los cargados en Proveedores y Pagos, y los nombres que ya vienen en el Libro de Compras (SII) y en
+// las OC existentes. Sin repetidos (por nombre), ordenada.
+export function listaProveedores(pp, libroCompras = []) {
+  const m = {}
+  const add = p => { const n = String((p && p.nombre) || '').trim(); if (!n) return; const k = n.toLowerCase(); if (!m[k]) m[k] = { id: p.id || k, nombre: n, rut: p.rut || '', direccion: p.direccion || '' }; else { if (!m[k].rut && p.rut) m[k].rut = p.rut; if (!m[k].direccion && p.direccion) m[k].direccion = p.direccion } }
+  ;(PROVEEDORES_FICHA || []).forEach(add)
+  ;((pp && pp.proveedores) || []).forEach(add)
+  ;((pp && pp.ocs) || []).forEach(o => add({ nombre: o.proveedor, rut: o.rut, direccion: o.direccion }))
+  ;(libroCompras || []).forEach(r => add({ nombre: r.provider_name, rut: r.provider_rut }))
+  return Object.values(m).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+}
 const buscarProv = (proveedores, nombre) => {
   const n = (nombre || '').trim().toLowerCase()
   if (!n) return null
@@ -243,7 +255,8 @@ export function FormOC({ inicial, otsDisponibles, otsInfo = [], onGuardar, onCan
         <div style={{ fontFamily: SEREIN.fontDisplay, fontWeight: 600, fontSize: 15, textTransform: 'uppercase', marginBottom: 12 }}>Orden de compra · N° {f.numero}</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
           <label style={lab}>N° OC (correlativo)<input style={{ ...inp, background: '#E2E7EC', fontWeight: 600 }} value={f.numero} onChange={e => set('numero', e.target.value)} /></label>
-          <label style={lab}>Proveedor *<input list="prov-list-oc" style={inp} value={f.proveedor} onChange={e => setProveedor(e.target.value)} placeholder="Escribe o elige de la lista…" /></label>
+          <label style={lab}>Proveedor *<input list="prov-list-form-oc" style={inp} value={f.proveedor} onChange={e => setProveedor(e.target.value)} placeholder="Escribe o elige de la lista…" /></label>
+          <datalist id="prov-list-form-oc">{(proveedores || []).map(p => <option key={p.id || p.nombre} value={p.nombre}>{p.rut || ''}</option>)}</datalist>
           <label style={lab}>RUT proveedor<input style={inp} value={f.rut} onChange={e => set('rut', e.target.value)} /></label>
           <label style={lab}>Categoría<select style={inp} value={f.categoria} onChange={e => set('categoria', e.target.value)}>{CATEGORIAS.map(x => <option key={x}>{x}</option>)}</select></label>
           <label style={lab}>Centro de negocio / Área<select style={inp} value={f.area} onChange={e => set('area', e.target.value)}>{AREAS.map(a => <option key={a}>{a}</option>)}</select></label>
@@ -362,9 +375,9 @@ function GastosMensuales({ ocs }) {
   )
 }
 
-export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}, ots = [], proveedores = PROVEEDORES_FICHA }) {
+export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}, ots = [], proveedores = null, libroCompras = [] }) {
   const ocs = pp.ocs || []
-  const provLista = Object.values((proveedores || []).reduce((m, p) => { const n = (p.nombre || '').trim(); if (n && !m[n.toLowerCase()]) m[n.toLowerCase()] = p; return m }, {}))
+  const provLista = proveedores || listaProveedores(pp, libroCompras)
   const otsDisponibles = [...new Set((ots || []).map(o => o.numero).filter(Boolean))]
   const otsInfo = (ots || []).filter(o => o.numero).map(o => ({ numero: o.numero, m2: parseFloat(o.m2) || 0, cliente: o.cliente || '', estado: o.estado }))
   // pp.ocs tambien lo escriben ProveedoresPagosModule.jsx y
@@ -418,7 +431,7 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
       <datalist id="prov-list-oc">
         {provLista.map(p => <option key={p.id || p.nombre} value={p.nombre}>{p.rut || ''}</option>)}
       </datalist>
-      {creando && <FormOC inicial={nueva()} otsDisponibles={otsDisponibles} otsInfo={otsInfo} proveedores={proveedores} onGuardar={oc => { guardarOcFresco(base => [oc, ...base]); setCreando(false) }} onCancelar={() => setCreando(false)} />}
+      {creando && <FormOC inicial={nueva()} otsDisponibles={otsDisponibles} otsInfo={otsInfo} proveedores={provLista} onGuardar={oc => { guardarOcFresco(base => [oc, ...base]); setCreando(false) }} onCancelar={() => setCreando(false)} />}
       <div style={{ fontSize: 12, color: '#D9600A', background: '#FDECDD', padding: '8px 12px', marginBottom: 12 }}>
         <b>Órdenes de compra a proveedores</b> (emitidas por Serein). Cada OC puede asociarse a una o varias OT con reparto porcentual; su costo neto se carga a esas OT. Las OC pendientes alimentan cuentas por pagar y el flujo de caja del Consolidado.
       </div>
@@ -438,7 +451,7 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
             {['Nº OC', 'Proveedor', 'RUT', 'Categoría', 'Fecha', 'Neto', 'IVA', 'Total', 'Plazo', 'Vencimiento', 'Estado de pago', ''].map((h, hi) => <th key={hi} style={{ textAlign: ['Neto', 'IVA', 'Total'].includes(h) ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap', ...(h === '' ? { position: 'sticky', right: 0, background: '#fff', zIndex: 3 } : {}) }}>{h || 'Acciones'}</th>)}
           </tr></thead>
           <tbody>
-            {pg.items.map(o => <FilaOC key={o.id} oc={o} otsDisponibles={otsDisponibles} upd={upd} onDelete={eliminar} proveedores={proveedores} />)}
+            {pg.items.map(o => <FilaOC key={o.id} oc={o} otsDisponibles={otsDisponibles} upd={upd} onDelete={eliminar} proveedores={provLista} />)}
             {mostradas.length === 0 && <tr><td colSpan={12} style={{ padding: 16, textAlign: 'center', color: '#9AA3AD' }}>Sin órdenes de compra.</td></tr>}
           </tbody>
         </table>

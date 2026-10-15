@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { ChevronDown, ChevronUp, Plus, Trash2, X, Ruler, Paintbrush, FileText, Receipt, ShoppingCart, CircleDollarSign, Download, Camera, Search, RotateCcw, Lock, Unlock, CalendarDays, Save, TrendingUp, Pencil } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { descargarOTDesdeOT } from './CotizacionesModule.jsx'
-import { costoOCdeOT, FormOC, nuevaOC, guardarOcFrescoEn, ocNeto } from './OrdenesCompraModule.jsx'
+import { costoOCdeOT, FormOC, nuevaOC, guardarOcFrescoEn, ocNeto, listaProveedores } from './OrdenesCompraModule.jsx'
 import { supabase } from './supabase.js'
 import { generarPdfProtocoloBlob, blobToBase64, fileToBase64, protocoloCompleto } from './protocolo-pdf.js'
 import { costoMOdeOT } from './ManoObraModule.jsx'
@@ -398,16 +398,18 @@ function FormAbono({ onAdd, onCancel }) {
   )
 }
 
-function FormCosto({ onAdd, onCancel }) {
-  const [f, setF] = useState({ categoria: 'Materiales', detalle: '', monto: '' })
+function FormCosto({ onAdd, onCancel, proveedores = [] }) {
+  const [f, setF] = useState({ categoria: 'Materiales', detalle: '', monto: '', proveedor: '' })
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', background: '#F2F4F7', padding: 10, marginTop: 8, alignItems: 'center' }}>
       <select style={inp} value={f.categoria} onChange={e => setF({ ...f, categoria: e.target.value })}>
         {CATEGORIAS_COSTO.map(c => <option key={c}>{c}</option>)}
       </select>
-      <input style={{ ...inp, flex: '1 1 160px' }} placeholder="Detalle (proveedor, concepto…)" value={f.detalle} onChange={e => setF({ ...f, detalle: e.target.value })} />
+      <input list="prov-list-costo" style={{ ...inp, flex: '1 1 150px' }} placeholder="Proveedor (escribe y elige)" value={f.proveedor} onChange={e => setF({ ...f, proveedor: e.target.value })} />
+      <datalist id="prov-list-costo">{proveedores.map(p => <option key={p.id || p.nombre} value={p.nombre}>{p.rut || ''}</option>)}</datalist>
+      <input style={{ ...inp, flex: '1 1 160px' }} placeholder="Concepto" value={f.detalle} onChange={e => setF({ ...f, detalle: e.target.value })} />
       <input style={{ ...inp, width: 140 }} placeholder="Monto neto CLP" value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} />
-      <button onClick={() => num(f.monto) > 0 && onAdd({ categoria: f.categoria, detalle: f.detalle, monto: num(f.monto) })}
+      <button onClick={() => num(f.monto) > 0 && onAdd({ categoria: f.categoria, detalle: [f.proveedor.trim(), f.detalle.trim()].filter(Boolean).join(' · '), proveedor: f.proveedor.trim(), monto: num(f.monto) })}
         style={{ background: C.teal, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Agregar</button>
       <button onClick={onCancel} style={{ ...btnMini, color: '#9AA3AD' }}><X size={16} /></button>
     </div>
@@ -416,8 +418,9 @@ function FormCosto({ onAdd, onCancel }) {
 
 // Órdenes de compra a proveedores que cargan costo a esta OT. Son las mismas del módulo
 // «Órdenes de Compra» (un solo registro): acá se ven filtradas por OT y se pueden emitir nuevas.
-function SeccionOCsDeOT({ ot, ordenesCompra = [], otsAll = [], pp = null, setPp = null }) {
+function SeccionOCsDeOT({ ot, ordenesCompra = [], otsAll = [], pp = null, setPp = null, libroCompras = [] }) {
   const [form, setForm] = useState(null)
+  const proveedores = useMemo(() => listaProveedores(pp, libroCompras), [pp, libroCompras])
   const delaOT = (ordenesCompra || []).filter(o => (o.asignaciones || []).some(a => a.ot === ot.numero))
   const pctDe = o => (o.asignaciones || []).filter(a => a.ot === ot.numero).reduce((x, a) => x + (parseFloat(a.pct) || 0), 0)
   const total = delaOT.filter(o => o.estadoPago !== 'Anulada').reduce((a, o) => a + ocNeto(o) * pctDe(o) / 100, 0)
@@ -427,7 +430,7 @@ function SeccionOCsDeOT({ ot, ordenesCompra = [], otsAll = [], pp = null, setPp 
   const btn = { background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }
   return (
     <div style={{ marginBottom: 18 }}>
-      {form && <FormOC inicial={form} otsDisponibles={otsDisponibles} otsInfo={otsInfo} onCancelar={() => setForm(null)} onGuardar={oc => { guardarOcFrescoEn(pp, setPp, base => [oc, ...base]); setForm(null) }} />}
+      {form && <FormOC inicial={form} otsDisponibles={otsDisponibles} otsInfo={otsInfo} proveedores={proveedores} onCancelar={() => setForm(null)} onGuardar={oc => { guardarOcFrescoEn(pp, setPp, base => [oc, ...base]); setForm(null) }} />}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
         <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: '#9AA3AD', display: 'flex', alignItems: 'center', gap: 5 }}>
           <ShoppingCart size={13} /> Órdenes de compra a proveedores
@@ -2705,7 +2708,7 @@ function TarjetaOT({ pp = null, setPp = null, comprasOp = [], ot, onUpdate, onUp
           </>)}
 
           {tab === 'compras' && verValores && (<>
-              <SeccionOCsDeOT ot={ot} ordenesCompra={ordenesCompra} otsAll={otsAll} pp={pp} setPp={setPp} />
+              <SeccionOCsDeOT ot={ot} ordenesCompra={ordenesCompra} otsAll={otsAll} pp={pp} setPp={setPp} libroCompras={libroCompras} />
               {verValores && (libroCompras || []).some(l => l.ot_id === ot.numero) ? (() => { const cs = (libroCompras || []).filter(l => l.ot_id === ot.numero); const sub = cs.reduce((a, l) => a + (Number(l.neto) || 0), 0); return (<div style={{ marginTop: 14, border: '1px solid #D8DCE5', borderRadius: 6, padding: 10, background: '#F2F4F7' }}><div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#101315', marginBottom: 6 }}>Compras del libro de compras (SII) asignadas</div><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}><tbody>{cs.map((l, i) => (<tr key={i} style={{ borderBottom: '1px solid #E7E4DC' }}><td style={{ padding: '4px 6px', color: '#9AA3AD', whiteSpace: 'nowrap' }}>{l.emission_date}</td><td style={{ padding: '4px 6px' }}>{l.provider_name}</td><td style={{ padding: '4px 6px', color: '#9AA3AD' }}>Folio {l.document_number}</td><td style={{ padding: '4px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>{clp(l.neto)}</td></tr>))}</tbody></table><div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}><span style={{ fontSize: 11, color: '#9AA3AD' }}>Subtotal neto (informativo, aun no sumado a la utilidad)</span><span style={{ fontWeight: 700, color: '#101315' }}>{clp(sub)}</span></div></div>); })() : null}
 
           {/* COSTOS */}
@@ -2744,7 +2747,7 @@ function TarjetaOT({ pp = null, setPp = null, comprasOp = [], ot, onUpdate, onUp
                   </tbody>
                 </table>
               )}
-              {addCosto && <FormCosto onAdd={c => { onAgregarArray(ot.id, 'costos', c); setAddCosto(false) }} onCancel={() => setAddCosto(false)} />}
+              {addCosto && <FormCosto proveedores={listaProveedores(pp, libroCompras)} onAdd={c => { onAgregarArray(ot.id, 'costos', c); setAddCosto(false) }} onCancel={() => setAddCosto(false)} />}
 
               {porCat.length > 0 && (
                 <div style={{ marginTop: 14 }}>
