@@ -420,6 +420,7 @@ function FormCosto({ onAdd, onCancel, proveedores = [] }) {
 // «Órdenes de Compra» (un solo registro): acá se ven filtradas por OT y se pueden emitir nuevas.
 function SeccionOCsDeOT({ ot, ordenesCompra = [], otsAll = [], pp = null, setPp = null, libroCompras = [] }) {
   const [form, setForm] = useState(null)
+  const [guardadaMsg, setGuardadaMsg] = useState('')
   const proveedores = useMemo(() => listaProveedores(pp, libroCompras), [pp, libroCompras])
   const delaOT = (ordenesCompra || []).filter(o => (o.asignaciones || []).some(a => a.ot === ot.numero))
   const pctDe = o => (o.asignaciones || []).filter(a => a.ot === ot.numero).reduce((x, a) => x + (parseFloat(a.pct) || 0), 0)
@@ -430,7 +431,8 @@ function SeccionOCsDeOT({ ot, ordenesCompra = [], otsAll = [], pp = null, setPp 
   const btn = { background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }
   return (
     <div style={{ marginBottom: 18 }}>
-      {form && <FormOC inicial={form} otsDisponibles={otsDisponibles} otsInfo={otsInfo} proveedores={proveedores} onCancelar={() => setForm(null)} onGuardar={oc => { guardarOcFrescoEn(pp, setPp, base => [oc, ...base]); setForm(null) }} />}
+      {form && <FormOC inicial={form} otsDisponibles={otsDisponibles} otsInfo={otsInfo} proveedores={proveedores} onCancelar={() => setForm(null)} onGuardar={oc => { guardarOcFrescoEn(pp, setPp, base => [oc, ...base]); setForm(null); setGuardadaMsg('OC N° ' + oc.numero + ' guardada: ya aparece abajo y en el módulo Órdenes de Compra.'); setTimeout(() => setGuardadaMsg(''), 6000) }} />}
+      {guardadaMsg && <div style={{ background: '#E6F7EE', color: '#1B9E5D', fontWeight: 700, fontSize: 12.5, padding: '8px 12px', borderRadius: 8, marginBottom: 8 }}>✓ {guardadaMsg}</div>}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
         <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: '#9AA3AD', display: 'flex', alignItems: 'center', gap: 5 }}>
           <ShoppingCart size={13} /> Órdenes de compra a proveedores

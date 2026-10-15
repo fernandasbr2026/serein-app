@@ -248,7 +248,14 @@ export function FormOC({ inicial, otsDisponibles, otsInfo = [], onGuardar, onCan
   const sumaPct = Math.round(asigs.reduce((a, x) => a + (pctNum(x.pct) || 0), 0) * 100) / 100
   const conItems = items.length > 0
   const mensual = esGastoMensual(f)
-  const guardar = () => { if (f.proveedor.trim() && (ocNeto(f) > 0)) onGuardar(f) }
+  // Antes, si faltaba el proveedor o el monto, el botón no hacía nada y parecía que la OC «no se guardaba».
+  const [aviso, setAviso] = useState('')
+  const guardar = () => {
+    if (!f.proveedor.trim()) { setAviso('Falta el proveedor.'); return }
+    if (!(ocNeto(f) > 0)) { setAviso(conItems ? 'Los ítems suman $0: revisa cantidad y precio.' : 'Falta el monto neto (o agrega ítems con precio).'); return }
+    setAviso('')
+    onGuardar(f)
+  }
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 70, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '30px 16px' }} onClick={onCancelar}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#fff', border: `2px solid ${C.naranja}`, width: '100%', maxWidth: 780, padding: 18 }}>
@@ -334,6 +341,7 @@ export function FormOC({ inicial, otsDisponibles, otsInfo = [], onGuardar, onCan
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
           <button onClick={guardar} style={{ background: C.verde, color: '#fff', border: 'none', padding: '9px 18px', cursor: 'pointer', fontSize: 13 }}>Guardar OC</button>
+          {aviso && <span style={{ color: C.rojo, fontSize: 13, alignSelf: 'center', fontWeight: 600 }}>{aviso}</span>}
           <button onClick={onCancelar} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
         </div>
       </div>
@@ -414,6 +422,8 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
     }, 700)
   }
   const [creando, setCreando] = useState(false)
+  const [guardadaMsg, setGuardadaMsg] = useState('')
+  const avisarGuardada = oc => { setGuardadaMsg('OC N° ' + oc.numero + ' guardada (' + oc.proveedor + ').'); setTimeout(() => setGuardadaMsg(''), 6000) }
   const nueva = () => nuevaOC(ocs)
   const [busca, setBusca] = useState('')
   const [fEst, setFEst] = useState('')
@@ -431,7 +441,7 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
       <datalist id="prov-list-oc">
         {provLista.map(p => <option key={p.id || p.nombre} value={p.nombre}>{p.rut || ''}</option>)}
       </datalist>
-      {creando && <FormOC inicial={nueva()} otsDisponibles={otsDisponibles} otsInfo={otsInfo} proveedores={provLista} onGuardar={oc => { guardarOcFresco(base => [oc, ...base]); setCreando(false) }} onCancelar={() => setCreando(false)} />}
+      {creando && <FormOC inicial={nueva()} otsDisponibles={otsDisponibles} otsInfo={otsInfo} proveedores={provLista} onGuardar={oc => { guardarOcFresco(base => [oc, ...base]); setCreando(false); avisarGuardada(oc) }} onCancelar={() => setCreando(false)} />}
       <div style={{ fontSize: 12, color: '#D9600A', background: '#FDECDD', padding: '8px 12px', marginBottom: 12 }}>
         <b>Órdenes de compra a proveedores</b> (emitidas por Serein). Cada OC puede asociarse a una o varias OT con reparto porcentual; su costo neto se carga a esas OT. Las OC pendientes alimentan cuentas por pagar y el flujo de caja del Consolidado.
       </div>
@@ -444,6 +454,7 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
         </div>
         <select style={inp} value={fEst} onChange={e => setFEst(e.target.value)}><option value="">Todos los estados</option>{ESTADOS_PAGO.map(x => <option key={x}>{x}</option>)}</select>
         <span style={{ fontSize: 12.5, color: C.gris }}>{mostradas.length} OC · Total {clp(totalTodas)} · <b style={{ color: C.rojo }}>Por pagar {clp(totalPend)}</b></span>
+        {guardadaMsg && <span style={{ fontSize: 12.5, color: C.verde, fontWeight: 700 }}>✓ {guardadaMsg}</span>}
       </div>
       <div style={{ background: '#fff', border: '1px solid #DFE4EA', overflowX: 'auto', padding: 8 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>

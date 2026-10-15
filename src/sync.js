@@ -16,6 +16,12 @@ const PROT_DESDE_PREFIX = '__protdesde_'
 // que ver). Pasado este plazo se deja de proteger y se acepta la nube —
 // se prefiere perder una edición atascada a quedar aislado para siempre.
 const PROTECCION_MAX_MS = 90 * 1000
+// Excepción al plazo de arriba: si la subida está FALLANDO (Supabase caído, sin red, sesión vencida),
+// descartar lo local a los 90 s significa perder lo que la persona acaba de ingresar (así se perdieron
+// órdenes de compra el 2026-10-15, durante una caída de Supabase). Mientras los pushes sigan fallando,
+// se protege lo local hasta 30 minutos; apenas una subida vuelve a funcionar, rige el plazo normal.
+const PROTECCION_CON_FALLAS_MS = 30 * 60 * 1000
+let ultimoFalloPush = 0
 let lastPushed = {}
 
 // Huella liviana de un string (FNV-1a, no criptográfico — solo para
@@ -76,7 +82,8 @@ export function aplicarSiSeguro(id, value) {
       const ahora = Date.now()
       let desde = Number(localStorage.getItem(protKey))
       if (!desde) { desde = ahora; localStorage.setItem(protKey, String(ahora)) }
-      if (ahora - desde < PROTECCION_MAX_MS) {
+      const limite = (ahora - ultimoFalloPush < 10 * 60 * 1000) ? PROTECCION_CON_FALLAS_MS : PROTECCION_MAX_MS
+      if (ahora - desde < limite) {
         pushState()
         return false
       }
@@ -214,6 +221,7 @@ export async function pushState() {
       if (error) {
         const msg = error.message || String(error)
         console.error('sync: pushState() falló al subir a la nube —', msg, error)
+        ultimoFalloPush = Date.now()
         emitirEstado({ fase: 'error', ultimoError: msg })
         return { ok: false, error: msg }
       }
@@ -222,6 +230,7 @@ export async function pushState() {
       if (idsFallidos.length) {
         const msg = 'Supabase no confirmó el guardado de: ' + idsFallidos.join(', ') + ' (probablemente un permiso/política RLS está bloqueando la escritura en silencio, sin marcar error).'
         console.error('sync: pushState() —', msg)
+        ultimoFalloPush = Date.now()
         emitirEstado({ fase: 'error', ultimoError: msg })
         return { ok: false, error: msg }
       }
@@ -235,6 +244,7 @@ export async function pushState() {
   } catch (e) {
     const msg = (e && e.message) || String(e)
     console.error('sync: pushState() lanzó una excepción —', e)
+    ultimoFalloPush = Date.now()
     emitirEstado({ fase: 'error', ultimoError: msg })
     return { ok: false, error: msg }
   } finally {
