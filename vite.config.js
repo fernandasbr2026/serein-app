@@ -1,3 +1,37 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-export default defineConfig({ plugins: [react()] })
+import { VitePWA } from 'vite-plugin-pwa'
+// PWA: deja instalar el ERP en el celular (icono en la pantalla de inicio), igual que COPRESEG.
+// El service worker solo guarda los archivos de la app; los datos siguen viniendo siempre de Supabase.
+export default defineConfig({
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['icons/icon-192.png', 'icons/apple-touch-icon.png'],
+      manifest: {
+        id: '/',
+        name: 'SEREIN · Panel de Gestión',
+        short_name: 'SEREIN',
+        description: 'ERP de Serein Group: OT, cotizaciones, compras, facturas y producción',
+        lang: 'es-CL',
+        start_url: '/',
+        scope: '/',
+        display: 'standalone',
+        orientation: 'any',
+        categories: ['business', 'productivity'],
+        background_color: '#FFFFFF',
+        theme_color: '#F77716',
+        icons: [
+          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'icons/icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
+        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+      },
+    }),
+  ],
+})
