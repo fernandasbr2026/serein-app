@@ -17,7 +17,7 @@ import CotizacionesModule from './CotizacionesModule.jsx'
 import ProduccionModule, { AVANCES_SEED } from './ProduccionModule.jsx'
 import ComprasOperativasModule, { COMPRAS_OP_SEED, CONFIG_COMPRAS_DEFAULT } from './ComprasOperativasModule.jsx'
 import ProveedoresPagosModule, { PP_SEED } from './ProveedoresPagosModule.jsx'
-import OrdenesCompraModule, { ocTotal, costoOCdeOT } from './OrdenesCompraModule.jsx'
+import OrdenesCompraModule, { ocTotal, costoOCdeOT, listaProveedores } from './OrdenesCompraModule.jsx'
 import TrazabilidadModule from './TrazabilidadModule.jsx'
 import ParametrosModule, { PARAMS_SEED, perdidaFactoringFactura } from './ParametrosModule.jsx'
 import ClientesModule, { CLIENTES_SEED } from './ClientesModule.jsx'
@@ -850,6 +850,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
             setComprasOp={setComprasOp}
             config={configCompras}
             setConfig={setConfigCompras}
+            proveedores={listaProveedores(pp)}
           />
         ) : esModuloProd ? (
           <ProduccionModule

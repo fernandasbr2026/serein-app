@@ -127,7 +127,7 @@ function MisOTs({ ots, proyectos, mo, comprasOp, planta }) {
 }
 
 // ===== FORMULARIO REGISTRAR COMPRA =====
-function FormCompra({ config, ots, proyectos, planta, usuario, onGuardar }) {
+function FormCompra({ config, ots, proyectos, planta, usuario, onGuardar, proveedores = [] }) {
   const [f, setF] = useState({
     fecha: hoy(), area: planta || AREAS_COMPRA[0], proveedor: '', tipoDoc: 'Factura', numDoc: '',
     categoria: CATEGORIAS[0], descripcion: '', cantidad: '', unidad: '', obs: '', neto: '', impEsp: '', aplicaIva: true, adjunto: null,
@@ -193,7 +193,8 @@ function FormCompra({ config, ots, proyectos, planta, usuario, onGuardar }) {
             {AREAS_COMPRA.map(a => <option key={a}>{a}</option>)}
           </select>
         </label>
-        <input style={inp} placeholder="Proveedor *" value={f.proveedor} onChange={e => setF({ ...f, proveedor: e.target.value })} />
+        <input list="prov-list-cop" style={inp} placeholder="Proveedor *" value={f.proveedor} onChange={e => setF({ ...f, proveedor: e.target.value })} />
+        <datalist id="prov-list-cop">{(proveedores || []).map(p => <option key={p.id || p.nombre} value={p.nombre}>{p.rut || ''}</option>)}</datalist>
         <select style={inp} value={f.tipoDoc} onChange={e => setF({ ...f, tipoDoc: e.target.value })}>{TIPOS_DOC.map(t => <option key={t}>{t}</option>)}</select>
         <input style={inp} placeholder="Nº documento" value={f.numDoc} onChange={e => setF({ ...f, numDoc: e.target.value })} />
         <select style={inp} value={f.categoria} onChange={e => setF({ ...f, categoria: e.target.value })}>{CATEGORIAS.map(c => <option key={c}>{c}</option>)}</select>
@@ -510,7 +511,7 @@ function TotalesAlertas({ comprasOp, config, setConfig }) {
 }
 
 // ===== MÓDULO PRINCIPAL =====
-export default function ComprasOperativasModule({ esGerencia, planta = null, usuario = 'Daniel Matus', ots = [], proyectos = [], mo = null, comprasOp: extC, setComprasOp: extSet, config: extCfg, setConfig: extSetCfg }) {
+export default function ComprasOperativasModule({ esGerencia, planta = null, usuario = 'Daniel Matus', ots = [], proyectos = [], mo = null, comprasOp: extC, setComprasOp: extSet, config: extCfg, setConfig: extSetCfg, proveedores = [] }) {
   const [intC, setIntC] = useState(COMPRAS_OP_SEED)
   const [intCfg, setIntCfg] = useState(CONFIG_COMPRAS_DEFAULT)
   const comprasOp = extC ?? intC
@@ -559,7 +560,7 @@ export default function ComprasOperativasModule({ esGerencia, planta = null, usu
           </button>
         ))}
       </div>
-      {tab === 'registrar' && <FormCompra config={config} ots={veTodasLasOT ? ots : ots.filter(o => o.area === planta)} proyectos={proyectos} planta={planta} usuario={usuario} onGuardar={agregarCompraFresca} />}
+      {tab === 'registrar' && <FormCompra proveedores={proveedores} config={config} ots={veTodasLasOT ? ots : ots.filter(o => o.area === planta)} proyectos={proyectos} planta={planta} usuario={usuario} onGuardar={agregarCompraFresca} />}
       {tab === 'mias' && !esGerencia && <MisCompras comprasOp={comprasOp} usuario={usuario} config={config} />}
       {tab === 'misots' && !esGerencia && <MisOTs ots={ots} proyectos={proyectos} mo={mo} comprasOp={comprasOp} planta={planta} />}
       {tab === 'revision' && esGerencia && <RevisionGerencia comprasOp={comprasOp} setComprasOp={setComprasOp} />}
