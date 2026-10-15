@@ -1,4 +1,5 @@
 import LogoSerein from './LogoSerein.jsx'
+import InstalarApp from './InstalarApp.jsx'
 import { Mail, ShieldCheck, LayoutGrid, Sparkles, Building2, Factory, Wrench, Wallet, ShoppingCart, FileText, Receipt, ShieldAlert, Landmark, Users, ClipboardList, Package, Settings, User, Search, Bell, Menu, ChevronsLeft, LogOut, Circle, ChevronDown, Network, Handshake, Archive, ArrowUp, ArrowDown, CheckCircle2, UploadCloud, AlertTriangle, RotateCw, Banknote, CalendarClock, ClipboardCheck } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { SEREIN, PILL_VARIANT } from './theme-serein.js'
@@ -196,6 +197,7 @@ export function Sidebar({ tabs, areaSel, setAreaSel, nombreTab, perfil, email, o
         onMouseLeave={e => { e.currentTarget.style.opacity = 1 }}>
         <LogOut size={15} />{!colapsado && 'Salir'}
       </button>
+      {!colapsado && <InstalarApp compacto />}
       {!colapsado && <div style={{ marginTop: 8, fontSize: 10.5, color: 'rgba(255,255,255,.75)', lineHeight: 1.7 }}>
         SEREIN GROUP · Panel de Gestión
         {onReset && <div><span onClick={() => { if (window.confirm('¿Borrar los datos guardados y volver a los valores base? Esta acción no se puede deshacer.')) onReset() }} style={{ color: '#fff', textDecoration: 'underline', cursor: 'pointer' }}>Restablecer datos</span></div>}

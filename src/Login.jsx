@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { supabase } from './supabase.js'
 import { Lock } from 'lucide-react'
+import InstalarApp from './InstalarApp.jsx'
 import LogoSerein from './LogoSerein.jsx'
 
 import { SEREIN } from './theme-serein.js'
@@ -67,6 +68,7 @@ export default function Login() {
         <p style={{ color: '#9AA3AD', fontSize: 11, textAlign: 'center', marginTop: 16 }}>
           Acceso solo para personal autorizado de SEREIN SpA.
         </p>
+        <InstalarApp />
       </div>
     </div>
   )
