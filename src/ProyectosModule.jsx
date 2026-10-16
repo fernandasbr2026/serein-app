@@ -213,6 +213,8 @@ const guardarCuentaDeCompra = (contactos, setContactos, d) => {
   guardarCuentaProveedor(contactos, setContactos, { nombre: d.proveedor, rut: d.rut }, d)
 }
 function FormCompra({ p, onAdd, onCancel, params, contactos, setContactos }) {
+  // Antes, si faltaba el proveedor o el monto, el botón no hacía nada y parecía que «no se guardaba».
+  const [aviso, setAviso] = useState('')
   const [f, setF] = useState({ proveedor: '', detalle: '', fecha: '', monto: '', cc: CC_DEFS[0].id, folio: '', rut: '', exento: false, abonado: '', pagadaCompleta: false, formaPago: 'Contado', vencimiento: '', factorizada: false, factoringNombre: '', ...CUENTA_VACIA })
   const bruto = montoBrutoCompra({ monto: num(f.monto), exento: f.exento })
   return (
@@ -247,9 +249,10 @@ function FormCompra({ p, onAdd, onCancel, params, contactos, setContactos }) {
         <label style={{ fontSize: 12, color: C.gris, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" checked={f.pagadaCompleta} onChange={e => setF({ ...f, pagadaCompleta: e.target.checked })} /> Pagada por completo</label>
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-        <button onClick={() => { if (f.proveedor && num(f.monto) > 0) { const ok = onAdd({ proveedor: f.proveedor, detalle: f.detalle, fecha: f.fecha || '—', monto: num(f.monto), cc: f.cc, folio: f.folio, rut: f.rut, exento: !!f.exento, abonado: f.pagadaCompleta ? bruto : num(f.abonado), formaPago: f.formaPago, vencimiento: f.formaPago === 'Programado' ? f.vencimiento : '', factorizada: !!f.factorizada, factoringNombre: f.factorizada ? f.factoringNombre.trim() : '', banco: f.banco, tipoCuenta: f.tipoCuenta, numeroCuenta: f.numeroCuenta }); if (ok !== false) guardarCuentaDeCompra(contactos, setContactos, f) } }}
+        <button onClick={() => { if (!String(f.proveedor || '').trim()) { setAviso('Falta el proveedor.'); return } if (!(num(f.monto) > 0)) { setAviso('Falta el monto neto CLP de la compra (el campo «Abonado» es solo lo ya pagado).'); return } setAviso(''); { const ok = onAdd({ proveedor: f.proveedor, detalle: f.detalle, fecha: f.fecha || '—', monto: num(f.monto), cc: f.cc, folio: f.folio, rut: f.rut, exento: !!f.exento, abonado: f.pagadaCompleta ? bruto : num(f.abonado), formaPago: f.formaPago, vencimiento: f.formaPago === 'Programado' ? f.vencimiento : '', factorizada: !!f.factorizada, factoringNombre: f.factorizada ? f.factoringNombre.trim() : '', banco: f.banco, tipoCuenta: f.tipoCuenta, numeroCuenta: f.numeroCuenta }); if (ok !== false) guardarCuentaDeCompra(contactos, setContactos, f) } }}
           style={{ background: C.verde, color: '#fff', border: 'none', padding: '7px 14px', cursor: 'pointer', fontSize: 13 }}>Agregar compra</button>
         <button onClick={onCancel} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+        {aviso && <span style={{ color: C.rojo, fontSize: 13, alignSelf: 'center', fontWeight: 600 }}>{aviso}</span>}
       </div>
     </div>
   )
