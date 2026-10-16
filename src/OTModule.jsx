@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { ChevronDown, ChevronUp, Plus, Trash2, X, Ruler, Paintbrush, FileText, Receipt, ShoppingCart, CircleDollarSign, Download, Camera, Search, RotateCcw, Lock, Unlock, CalendarDays, Save, TrendingUp, Pencil } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { descargarOTDesdeOT } from './CotizacionesModule.jsx'
-import { costoOCdeOT, FormOC, nuevaOC, guardarOcFrescoEn, ocNeto, listaProveedores } from './OrdenesCompraModule.jsx'
+import { costoOCdeOT, FormOC, nuevaOC, guardarOcFrescoEn, ocNeto, listaProveedores, esGastoMensual, facturasDeOC, FacturasDeOC } from './OrdenesCompraModule.jsx'
 import { supabase } from './supabase.js'
 import { generarPdfProtocoloBlob, blobToBase64, fileToBase64, protocoloCompleto } from './protocolo-pdf.js'
 import { costoMOdeOT } from './ManoObraModule.jsx'
@@ -421,6 +421,12 @@ function FormCosto({ onAdd, onCancel, proveedores = [] }) {
 function SeccionOCsDeOT({ ot, ordenesCompra = [], otsAll = [], pp = null, setPp = null, libroCompras = [] }) {
   const [form, setForm] = useState(null)
   const [guardadaMsg, setGuardadaMsg] = useState('')
+  const [facturasDe, setFacturasDe] = useState(null)   // id de la OC cuyo panel de facturas está abierto
+  const editable = !!(pp && setPp)
+  // OC del módulo que no están ligadas a ninguna OT (y no son gasto mensual): se pueden enganchar a esta OT con un clic
+  const sueltas = (ordenesCompra || []).filter(o => o.estadoPago !== 'Anulada' && !esGastoMensual(o) && (o.asignaciones || []).filter(a => a.ot).length === 0)
+  const vincularOC = id => { if (!id) return; guardarOcFrescoEn(pp, setPp, base => base.map(o => o.id === id ? { ...o, asignaciones: [{ ot: ot.numero, pct: 100 }] } : o)); setGuardadaMsg('OC vinculada a la OT ' + ot.numero + '.'); setTimeout(() => setGuardadaMsg(''), 5000) }
+  const guardarFacturas = (id, facturas) => guardarOcFrescoEn(pp, setPp, base => base.map(o => o.id === id ? { ...o, facturas } : o))
   const proveedores = useMemo(() => listaProveedores(pp, libroCompras), [pp, libroCompras])
   const delaOT = (ordenesCompra || []).filter(o => (o.asignaciones || []).some(a => a.ot === ot.numero))
   const pctDe = o => (o.asignaciones || []).filter(a => a.ot === ot.numero).reduce((x, a) => x + (parseFloat(a.pct) || 0), 0)
@@ -444,21 +450,31 @@ function SeccionOCsDeOT({ ot, ordenesCompra = [], otsAll = [], pp = null, setPp 
           </span>
         )}
       </div>
+      {editable && sueltas.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8, fontSize: 12.5 }}>
+          <span style={{ color: '#9AA3AD' }}>Vincular una OC ya creada en el módulo:</span>
+          <select value="" onChange={e => vincularOC(e.target.value)} style={{ border: '1px solid #DFE4EA', padding: '5px 8px', fontSize: 12.5, maxWidth: 420 }}>
+            <option value="">— OC sin OT asignada ({sueltas.length}) —</option>
+            {sueltas.map(o => <option key={o.id} value={o.id}>N° {o.numero} · {o.proveedor || 'sin proveedor'} · {o.fecha || ''} · {clp(ocNeto(o))}</option>)}
+          </select>
+        </div>
+      )}
       {delaOT.length === 0 ? (
-        <div style={{ fontSize: 13, color: '#9AA3AD' }}>Ninguna orden de compra cargada a esta OT todavía.</div>
+        <div style={{ fontSize: 13, color: '#9AA3AD' }}>Ninguna orden de compra cargada a esta OT todavía.{editable && sueltas.length > 0 ? ' Si ya la creaste en el módulo, elígela arriba para vincularla.' : ''}</div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #E4E8ED' }}>
-                {['N° OC', 'Proveedor', 'Categoría', 'Fecha', '% a esta OT', 'Costo neto OT', 'Pago'].map((h, i) => (
+                {['N° OC', 'Proveedor', 'Categoría', 'Fecha', '% a esta OT', 'Costo neto OT', 'Pago', 'Factura'].map((h, i) => (
                   <th key={i} style={{ textAlign: ['% a esta OT', 'Costo neto OT'].includes(h) ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: '#9AA3AD', textTransform: 'uppercase' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {delaOT.map(o => (
-                <tr key={o.id} style={{ borderBottom: '1px solid #DFE4EA', opacity: o.estadoPago === 'Anulada' ? 0.5 : 1 }}>
+              {delaOT.map(o => { const fs = facturasDeOC(o); const abierta = facturasDe === o.id; return (
+                <React.Fragment key={o.id}>
+                <tr style={{ borderBottom: abierta ? 'none' : '1px solid #DFE4EA', opacity: o.estadoPago === 'Anulada' ? 0.5 : 1 }}>
                   <td style={{ padding: '7px 8px', fontWeight: 600 }}>{o.numero}</td>
                   <td style={{ padding: '7px 8px' }}>{o.proveedor}</td>
                   <td style={{ padding: '7px 8px', color: '#9AA3AD' }}>{o.categoria || '—'}</td>
@@ -466,9 +482,15 @@ function SeccionOCsDeOT({ ot, ordenesCompra = [], otsAll = [], pp = null, setPp 
                   <td style={{ padding: '7px 8px', textAlign: 'right' }}>{Math.round(pctDe(o) * 100) / 100}%</td>
                   <td style={{ padding: '7px 8px', textAlign: 'right' }}>{clp(ocNeto(o) * pctDe(o) / 100)}</td>
                   <td style={{ padding: '7px 8px' }}>{o.estadoPago || 'Pendiente'}</td>
+                  <td style={{ padding: '7px 8px', whiteSpace: 'nowrap' }}>
+                    {fs.length ? fs.map((f, i) => <div key={i} style={{ fontSize: 12.5 }}><b>{f.folio}</b>{f.fecha ? <span style={{ color: '#9AA3AD' }}> · {f.fecha}</span> : null}</div>) : <span style={{ color: '#C2570B', fontWeight: 600, fontSize: 12.5 }}>sin factura</span>}
+                    {editable && <button onClick={() => setFacturasDe(abierta ? null : o.id)} style={{ marginLeft: 8, background: 'none', border: '1px solid #DFE4EA', cursor: 'pointer', fontSize: 11, padding: '2px 7px', color: '#555' }}>{abierta ? 'Cerrar' : (fs.length ? 'Editar' : '+ Factura')}</button>}
+                  </td>
                 </tr>
-              ))}
-              <tr><td colSpan={5} style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700 }}>Total OC a esta OT</td><td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700 }}>{clp(total)}</td><td /></tr>
+                {abierta && <tr style={{ borderBottom: '1px solid #DFE4EA', background: '#F2F4F7' }}><td colSpan={8} style={{ padding: '8px 12px' }}><FacturasDeOC oc={o} libroCompras={libroCompras} ocs={ordenesCompra} compacto onChange={facturas => guardarFacturas(o.id, facturas)} /></td></tr>}
+                </React.Fragment>
+              ) })}
+              <tr><td colSpan={5} style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700 }}>Total OC a esta OT</td><td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700 }}>{clp(total)}</td><td /><td /></tr>
             </tbody>
           </table>
         </div>
