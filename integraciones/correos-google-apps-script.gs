@@ -39,15 +39,18 @@ const ANIOS_PRIORITARIOS = 5;              // y hasta cuántos años atrás
 // Palabras que hacen que un correo se considere candidato (la IA confirma después)
 const PALABRAS_OC = '"orden de compra" OR "orden compra" OR "o/c" OR oc OR "purchase order" OR "orden de trabajo" OR pedido';
 const PALABRAS_COT = 'cotizacion OR cotización OR "COT-SER" OR presupuesto OR oferta OR propuesta';
+// Correos que NUNCA son órdenes de compra ni cotizaciones y que igual caían en la búsqueda (cartolas y estados de
+// cuenta del banco, boletas, liquidaciones): no se mandan al ERP ni se leen con la IA.
+const EXCLUIR = '-subject:(cartola OR "estado de cuenta" OR "resumen de cuenta" OR boleta OR liquidacion OR liquidación OR nomina OR nómina OR "tarjeta de crédito" OR "tarjeta de credito")';
 
 function consultas_() {
   const prior = [];
   CLIENTES_PRIORITARIOS.forEach(function (cl) {
-    const b = cl + ' newer_than:' + (ANIOS_PRIORITARIOS * 365) + 'd has:attachment filename:pdf';
+    const b = cl + ' newer_than:' + (ANIOS_PRIORITARIOS * 365) + 'd has:attachment filename:pdf ' + EXCLUIR;
     prior.push({ carpeta: 'entrada', q: 'in:inbox ' + b });
     prior.push({ carpeta: 'enviados', q: 'in:sent ' + b });
   });
-  const base = 'newer_than:' + DIAS_ATRAS + 'd has:attachment filename:pdf';
+  const base = 'newer_than:' + DIAS_ATRAS + 'd has:attachment filename:pdf ' + EXCLUIR;
   return prior.concat([
     { carpeta: 'entrada', q: 'in:inbox ' + base + ' (' + PALABRAS_OC + ')' },
     { carpeta: 'enviados', q: 'in:sent ' + base + ' (' + PALABRAS_COT + ')' },
