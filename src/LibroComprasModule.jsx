@@ -5,6 +5,7 @@ import { pullState, pushState } from './sync.js'
 import { calcularPerdidaFactoring } from './ParametrosModule.jsx'
 
 import { SEREIN } from './theme-serein.js'
+import { ocDeFactura, facturasDeOC, guardarOcFrescoEn, ocNeto } from './OrdenesCompraModule.jsx'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
 const C = { navy: SEREIN.ink, orange: SEREIN.orange, gray: SEREIN.fog, border: SEREIN.line, text: SEREIN.text, green: SEREIN.green, red: SEREIN.red, mut: SEREIN.textFaint }
 const clp = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-CL')
@@ -25,7 +26,19 @@ const rutN = r => String(r || '').split('.').join('').split(' ').join('').toUppe
 const reglaTipo = nombre => { const n = (nombre || '').toLowerCase(); for (const par of REGLAS) { for (const k of par[0]) { if (n.indexOf(k) >= 0) return par[1] } } return '' }
 const norm = s => (s || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
-export default function LibroComprasModule({ esGerencia = true, ots = [], factoringList = [], proyectos = [], setProyectos = null }) {
+export default function LibroComprasModule({ esGerencia = true, ots = [], factoringList = [], proyectos = [], setProyectos = null, pp = null, setPp = null }) {
+  // Vínculo factura -> OC. El dato vive en la OC (oc.facturas): acá solo se elige y se guarda allá.
+  const ocsTodas = (pp && pp.ocs) || []
+  const ocsParaFila = r => { const rut = rutN(r.provider_rut); const mismas = ocsTodas.filter(o => o.estadoPago !== 'Anulada' && rutN(o.rut) === rut); return (rut && mismas.length ? mismas : ocsTodas.filter(o => o.estadoPago !== 'Anulada')).slice(0, 300) }
+  const setOCdeFactura = (r, ocId) => {
+    if (!pp || !setPp) return
+    const nueva = { libroId: r.id, folio: String(r.document_number || ''), fecha: r.emission_date || '', neto: Number(r.neto) || 0, rut: r.provider_rut || '' }
+    guardarOcFrescoEn(pp, setPp, base => base.map(o => {
+      const sinEsta = facturasDeOC(o).filter(f => !((f.libroId != null && String(f.libroId) === String(r.id)) || (f.libroId == null && String(f.folio || '').trim() === String(r.document_number || '').trim() && rutN(f.rut || o.rut) === rutN(r.provider_rut))))
+      if (o.id === ocId) return { ...o, facturas: [...sinEsta, nueva] }
+      return sinEsta.length === facturasDeOC(o).length ? o : { ...o, facturas: sinEsta }
+    }))
+  }
   const otNumProy = p => String(p.ot || '').trim()
   const otsActivas = [
     ...(proyectos || []).filter(p => !p.cerrado).map(p => ({ n: otNumProy(p), etq: 'Proyectos · ' + otNumProy(p) + (p.cliente ? ' · ' + p.cliente : '') })),
@@ -607,7 +620,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
             <thead>
               <tr style={{ background: C.navy, color: '#fff' }}>
                 <th style={{ padding: '9px 10px', width: 34 }}><input type="checkbox" checked={filtradas.length > 0 && sel.size === filtradas.length} onChange={toggleTodas} /></th>
-                {['Emision', 'Proveedor', 'Folio', 'Tipo', 'Tipo compra', 'Neto', 'IVA', 'Total', 'OT', 'Centro de costo', 'Area', 'Pago', 'Reparto area'].map(h => (
+                {['Emision', 'Proveedor', 'Folio', 'Tipo', 'Tipo compra', 'Neto', 'IVA', 'Total', 'OT', 'OC', 'Centro de costo', 'Area', 'Pago', 'Reparto area'].map(h => (
                   <th key={h} style={{ textAlign: h === 'Neto' || h === 'IVA' || h === 'Total' ? 'right' : 'left', padding: '9px 10px', fontSize: 11, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -638,6 +651,14 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
                       <option value="">- sin OT -</option>
                       {otsActivas.map(o => <option key={o.etq} value={o.n}>{o.etq}</option>)}
                     </select>
+                  </td>
+                  <td style={{ padding: '7px 10px' }}>
+                    {esNC(r) ? <span style={{ color: C.mut }}>—</span> : (() => { const oc = ocDeFactura(ocsTodas, r); const lista = ocsParaFila(r); return (
+                      <select style={{ ...sel, minWidth: 130, color: oc ? C.text : '#C2570B', fontWeight: oc ? 500 : 600 }} value={oc ? oc.id : ''} disabled={!pp || !setPp} title={oc ? ('OC N° ' + oc.numero + ' · ' + (oc.proveedor || '')) : 'Esta factura no respalda ninguna OC'} onChange={e => setOCdeFactura(r, e.target.value)}>
+                        <option value="">- sin OC -</option>
+                        {oc && !lista.some(o => o.id === oc.id) ? <option value={oc.id}>N° {oc.numero} · {clp(ocNeto(oc))}</option> : null}
+                        {lista.map(o => <option key={o.id} value={o.id}>N° {o.numero} · {(o.proveedor || '').slice(0, 22)} · {clp(ocNeto(o))}</option>)}
+                      </select>) })()}
                   </td>
                   <td style={{ padding: '7px 10px' }}>
                     <select style={{ ...sel, minWidth: 150 }} value={r.cc_ot || ''} disabled={ccsDeOT(r.ot_id).length === 0} onChange={e => { const v = e.target.value; setCampo(r.id, 'cc_ot', v); imputarFicha(r, r.ot_id, v) }}>

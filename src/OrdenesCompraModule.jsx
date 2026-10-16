@@ -125,7 +125,63 @@ export const nuevaOC = (ocs, extra = {}) => {
 const fondoEstado = e => ({ Pagada: '#E6F7EE', 'Parcialmente pagada': '#FDECDD', Vencida: '#FCEBEA', Pendiente: '#FDECDD', Anulada: '#EEE' }[e] || '#EEE')
 const colorEstado = e => ({ Pagada: C.verde, 'Parcialmente pagada': C.naranja, Vencida: C.rojo, Pendiente: '#D9600A', Anulada: C.gris }[e] || C.gris)
 
-function FilaOC({ oc, otsDisponibles, upd, onDelete, proveedores = PROVEEDORES_FICHA }) {
+// ---- Trazabilidad OC <-> factura del proveedor (Libro de Compras) ----
+// La verdad vive en la OC: `oc.facturas = [{ libroId, folio, fecha, neto, rut }]`. Una OC puede tener varias
+// facturas (compras parciales); una factura del libro queda ligada a una sola OC. El Libro de Compras y la ficha
+// de la OT solo leen y escriben ese mismo campo, así no hay dos lugares que puedan contradecirse.
+const rutNorm = r => String(r || '').split('.').join('').split(' ').join('').toUpperCase()
+export const facturasDeOC = oc => (oc && Array.isArray(oc.facturas)) ? oc.facturas : []
+// ¿Qué OC respalda esta fila del libro? Primero por id de la fila; si la factura se escribió a mano, por folio + RUT.
+export const ocDeFactura = (ocs, fila) => (ocs || []).find(o => facturasDeOC(o).some(f =>
+  (fila.id != null && f.libroId != null && String(f.libroId) === String(fila.id)) ||
+  (f.libroId == null && String(f.folio || '').trim() === String(fila.document_number || '').trim() && rutNorm(f.rut || o.rut) === rutNorm(fila.provider_rut))))
+const filaAFactura = r => ({ libroId: r.id, folio: String(r.document_number || ''), fecha: r.emission_date || '', neto: Number(r.neto) || 0, rut: r.provider_rut || '' })
+
+export function FacturasDeOC({ oc, libroCompras = [], ocs = [], onChange, compacto = false }) {
+  const [folioManual, setFolioManual] = useState('')
+  const facturas = facturasDeOC(oc)
+  const rut = rutNorm(oc.rut)
+  // Facturas del libro del mismo proveedor (no notas de crédito) que todavía no están ligadas a ninguna OC
+  const candidatas = (libroCompras || []).filter(r => String(r.document_type || '').trim() !== '61' && (!rut || rutNorm(r.provider_rut) === rut) && !ocDeFactura(ocs, r))
+  const vincular = r => onChange([...facturas, filaAFactura(r)])
+  const quitar = i => onChange(facturas.filter((_, j) => j !== i))
+  const manual = () => { const f = folioManual.trim(); if (!f) return; onChange([...facturas, { libroId: null, folio: f, fecha: '', neto: 0, rut: oc.rut || '' }]); setFolioManual('') }
+  const sumaFact = facturas.reduce((a, f) => a + (Number(f.neto) || 0), 0)
+  return (
+    <div style={{ marginTop: compacto ? 0 : 12 }}>
+      <div style={{ fontSize: 11.5, fontWeight: 600, color: C.gris, textTransform: 'uppercase', marginBottom: 6 }}>Facturas del proveedor que respaldan esta OC</div>
+      {facturas.length === 0 ? <div style={{ fontSize: 12, color: '#C2570B', marginBottom: 6 }}>Sin factura todavía.</div> : (
+        <table style={{ borderCollapse: 'collapse', fontSize: 12, marginBottom: 6 }}>
+          <tbody>
+            {facturas.map((f, i) => (
+              <tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>
+                <td style={{ padding: '3px 8px 3px 0', fontWeight: 600 }}>Folio {f.folio || '—'}</td>
+                <td style={{ padding: '3px 8px', color: C.gris, whiteSpace: 'nowrap' }}>{f.fecha || (f.libroId == null ? 'escrita a mano' : '')}</td>
+                <td style={{ padding: '3px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>{f.neto ? clp(f.neto) : ''}</td>
+                <td style={{ padding: '3px 0 3px 8px' }}><button onClick={() => quitar(i)} title="Quitar el vínculo (la factura sigue en el libro)" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rojo }}><Trash2 size={13} /></button></td>
+              </tr>
+            ))}
+            {facturas.length > 1 && <tr><td colSpan={2} style={{ padding: '3px 8px 3px 0', color: C.gris }}>Suma facturada (neto)</td><td style={{ padding: '3px 8px', textAlign: 'right', fontWeight: 600 }}>{clp(sumaFact)}</td><td /></tr>}
+          </tbody>
+        </table>
+      )}
+      {facturas.length > 0 && ocNeto(oc) > 0 && Math.abs(sumaFact - ocNeto(oc)) > Math.max(1000, ocNeto(oc) * 0.02) && facturas.some(f => f.libroId != null)
+        ? <div style={{ fontSize: 11.5, color: '#C2570B', marginBottom: 6 }}>Lo facturado ({clp(sumaFact)}) no coincide con el neto de la OC ({clp(ocNeto(oc))}).</div> : null}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <select value="" onChange={e => { const r = candidatas.find(x => String(x.id) === e.target.value); if (r) vincular(r) }} style={{ ...inp, width: 300 }}>
+          <option value="">{candidatas.length ? '+ Vincular factura del Libro de Compras…' : (rut ? 'No hay facturas sin OC de este proveedor en el libro' : 'Pon el RUT del proveedor para buscar sus facturas')}</option>
+          {candidatas.map(r => <option key={r.id} value={String(r.id)}>Folio {r.document_number} · {r.emission_date || ''} · {clp(r.document_total || r.neto)}</option>)}
+        </select>
+        <span style={{ fontSize: 12, color: C.gris }}>o folio a mano:</span>
+        <input value={folioManual} onChange={e => setFolioManual(e.target.value)} onKeyDown={e => e.key === 'Enter' && manual()} placeholder="N° factura" style={{ ...inp, width: 110 }} />
+        <button onClick={manual} style={{ background: 'none', border: '1px dashed #DFE4EA', padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: C.gris }}>Agregar</button>
+      </div>
+      {!compacto && <div style={{ fontSize: 11, color: C.gris, marginTop: 4 }}>Si la factura todavía no llegó al libro, escribe el folio: cuando aparezca en el Libro de Compras se reconoce sola por folio y RUT.</div>}
+    </div>
+  )
+}
+
+function FilaOC({ oc, otsDisponibles, upd, onDelete, proveedores = PROVEEDORES_FICHA, libroCompras = [], ocs = [] }) {
   const [abierta, setAbierta] = useState(false)
   const setProv = v => { const p = buscarProv(proveedores, v); upd(oc.id, { proveedor: v, ...(p ? { rut: p.rut || oc.rut, direccion: p.direccion || oc.direccion } : {}) }) }
   const v = vencOC(oc), vencido = ocPorPagar(oc) && v && v < hoy()
@@ -142,7 +198,7 @@ function FilaOC({ oc, otsDisponibles, upd, onDelete, proveedores = PROVEEDORES_F
   return (
     <>
       <tr style={{ borderBottom: '1px solid #DFE4EA', background: vencido ? '#FDECDD' : 'transparent' }}>
-        <td style={{ padding: '4px 6px' }}><input value={oc.numero} onChange={e => upd(oc.id, { numero: e.target.value })} style={{ ...inp, width: 66, fontWeight: 600, padding: '5px 6px' }} /></td>
+        <td style={{ padding: '4px 6px' }}><input value={oc.numero} onChange={e => upd(oc.id, { numero: e.target.value })} style={{ ...inp, width: 66, fontWeight: 600, padding: '5px 6px' }} />{!mensual && asigs.length === 0 ? <div title="No está ligada a ninguna OT: no aparece en ninguna ficha" style={{ fontSize: 10, color: '#C2570B', marginTop: 2, fontWeight: 600 }}>Sin OT</div> : null}{facturasDeOC(oc).length ? <div style={{ fontSize: 10, color: C.verde, marginTop: 2 }}>Fact. {facturasDeOC(oc).map(f => f.folio).join(', ')}</div> : null}</td>
         <td style={{ padding: '4px 6px' }}><input list="prov-list-oc" value={oc.proveedor} onChange={e => setProv(e.target.value)} style={{ ...inp, width: 180, padding: '5px 6px' }} /></td>
         <td style={{ padding: '4px 6px' }}><input value={oc.rut || ''} onChange={e => upd(oc.id, { rut: e.target.value })} style={{ ...inp, width: 100, padding: '5px 6px' }} /></td>
         <td style={{ padding: '4px 6px' }}><select value={oc.categoria || ''} onChange={e => upd(oc.id, { categoria: e.target.value })} style={{ ...inp, width: 120, padding: '5px 6px' }}><option value="">—</option>{CATEGORIAS.map(x => <option key={x}>{x}</option>)}</select>{esGastoMensual(oc) ? <div style={{ fontSize: 10, color: '#C2570B', marginTop: 2 }}>Gasto mensual</div> : null}</td>
@@ -216,6 +272,7 @@ function FilaOC({ oc, otsDisponibles, upd, onDelete, proveedores = PROVEEDORES_F
             </div>
               </>
             )}
+            <FacturasDeOC oc={oc} libroCompras={libroCompras} ocs={ocs} onChange={facturas => upd(oc.id, { facturas })} />
           </td>
         </tr>
       )}
@@ -250,9 +307,12 @@ export function FormOC({ inicial, otsDisponibles, otsInfo = [], onGuardar, onCan
   const mensual = esGastoMensual(f)
   // Antes, si faltaba el proveedor o el monto, el botón no hacía nada y parecía que la OC «no se guardaba».
   const [aviso, setAviso] = useState('')
+  const [avisadoSinOT, setAvisadoSinOT] = useState(false)
   const guardar = () => {
     if (!f.proveedor.trim()) { setAviso('Falta el proveedor.'); return }
     if (!(ocNeto(f) > 0)) { setAviso(conItems ? 'Los ítems suman $0: revisa cantidad y precio.' : 'Falta el monto neto (o agrega ítems con precio).'); return }
+    // Sin OT la OC no aparece en ninguna ficha: se avisa una vez; si vuelve a pulsar Guardar, se guarda igual (puede ligarse después)
+    if (!mensual && asigs.filter(a => a.ot).length === 0 && !avisadoSinOT) { setAvisadoSinOT(true); setAviso('Esta OC no está ligada a ninguna OT: no aparecerá en la ficha de ninguna OT. Asígnala abajo, o pulsa Guardar otra vez para guardarla igual.'); return }
     setAviso('')
     onGuardar(f)
   }
@@ -462,7 +522,7 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
             {['Nº OC', 'Proveedor', 'RUT', 'Categoría', 'Fecha', 'Neto', 'IVA', 'Total', 'Plazo', 'Vencimiento', 'Estado de pago', ''].map((h, hi) => <th key={hi} style={{ textAlign: ['Neto', 'IVA', 'Total'].includes(h) ? 'right' : 'left', padding: '5px 6px', fontSize: 10.5, color: C.gris, textTransform: 'uppercase', whiteSpace: 'nowrap', ...(h === '' ? { position: 'sticky', right: 0, background: '#fff', zIndex: 3 } : {}) }}>{h || 'Acciones'}</th>)}
           </tr></thead>
           <tbody>
-            {pg.items.map(o => <FilaOC key={o.id} oc={o} otsDisponibles={otsDisponibles} upd={upd} onDelete={eliminar} proveedores={provLista} />)}
+            {pg.items.map(o => <FilaOC key={o.id} oc={o} otsDisponibles={otsDisponibles} upd={upd} onDelete={eliminar} proveedores={provLista} libroCompras={libroCompras} ocs={ocs} />)}
             {mostradas.length === 0 && <tr><td colSpan={12} style={{ padding: 16, textAlign: 'center', color: '#9AA3AD' }}>Sin órdenes de compra.</td></tr>}
           </tbody>
         </table>
