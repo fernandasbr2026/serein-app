@@ -41,6 +41,25 @@ function huella(str) {
   return str.length + ':' + (h >>> 0).toString(36)
 }
 
+// ————— Fusión de las OT (serein_ots) —————
+// serein_ots es UN solo blob que cada sesión sube completo: la última subida gana. Si una sesión con una
+// copia atrasada (pestaña vieja, celular dormido, canal en tiempo real muerto) guardaba cualquier edición,
+// pisaba el blob entero y una OT recién creada por otra persona desaparecía sin aviso (así se perdió la
+// OT-977 el 2026-10-23). Como las OT nunca se borran de verdad (borrado suave con `eliminada`), fusionar
+// por id es seguro: ninguna OT que exista en un lado puede desaparecer en el otro. Para las OT que están en
+// ambos lados manda `base` (la versión que se está aplicando o subiendo), igual que antes.
+// Devuelve el JSON fusionado, o null si no había nada que agregar.
+export function fusionarOts(baseStr, otroStr) {
+  try {
+    const base = JSON.parse(baseStr), otro = JSON.parse(otroStr)
+    if (!Array.isArray(base) || !Array.isArray(otro)) return null
+    const ids = new Set(base.map(o => o && o.id))
+    const faltan = otro.filter(o => o && o.id && !ids.has(o.id))
+    if (!faltan.length) return null
+    return JSON.stringify([...base, ...faltan])
+  } catch (e) { return null }
+}
+
 // ————— Estado de guardado observable —————
 // Antes no había forma honesta de saber, desde la pantalla, si un cambio
 // realmente llegó a la nube o no — la app asumía que sí. Este estado
@@ -90,9 +109,14 @@ export function aplicarSiSeguro(id, value) {
       console.warn(`sync: ${id} llevaba más de ${Math.round(PROTECCION_MAX_MS / 1000)}s sin poder subirse — se descarta la protección y se acepta la versión de la nube para no aislar esta sesión.`)
     }
     localStorage.removeItem(PROT_DESDE_PREFIX + id)
-    localStorage.setItem(id, value)
+    // Al aceptar la versión de la nube, las OT que solo existían acá no se pierden: se suman y se vuelven a
+    // subir. La huella "confirmada" es la de la nube, así la fusión cuenta como cambio local pendiente.
+    let valorFinal = value
+    if (id === 'serein_ots' && local != null) { const f = fusionarOts(value, local); if (f) valorFinal = f }
+    localStorage.setItem(id, valorFinal)
     localStorage.setItem(OK_PREFIX + id, huella(value))
     lastPushed[id] = value
+    if (valorFinal !== value) setTimeout(() => { pushState() }, 0)
     return true
   } catch (e) { return false }
 }
@@ -211,6 +235,18 @@ export async function pushState() {
     }
     if (rows.length) {
       emitirEstado({ fase: 'guardando' })
+      // Antes de pisar serein_ots en la nube, se traen las OT que otra sesión haya agregado mientras tanto
+      // y se suman a lo que se sube (ver fusionarOts). Un viaje extra solo cuando cambian las OT.
+      for (const r of rows) {
+        if (r.id !== 'serein_ots') continue
+        try {
+          const { data: nube } = await supabase.from('app_state').select('value').eq('id', r.id).maybeSingle()
+          if (nube && nube.value != null) {
+            const f = fusionarOts(r.value, nube.value)
+            if (f) { r.value = f; try { localStorage.setItem(r.id, f) } catch (e) {} }
+          }
+        } catch (e) { /* sin fusión: se sube lo local tal cual */ }
+      }
       // Se pide .select('id') a propósito: un upsert que solo mira `error`
       // puede reportar éxito aunque Supabase, por una política RLS, haya
       // filtrado la fila y actualizado 0 registros — Postgres NO trata eso

@@ -367,7 +367,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
       // cualquier cosa, sin necesidad de refrescar ni esperar nada.
       if (!aplicarSiSeguro(key, valorStr)) return
       try {
-        const valor = JSON.parse(valorStr)
+        // Se lee lo que quedó en localStorage (no valorStr): para las OT puede traer la fusión con las locales
+        const valor = JSON.parse(localStorage.getItem(key) ?? valorStr)
         if (clave === 'clientes') setter(sanearClientesArr(valor))
         else if (clave === 'contactos') setter({ ...valor, clientes: sanearClientesArr(valor.clientes) })
         else setter(valor)
