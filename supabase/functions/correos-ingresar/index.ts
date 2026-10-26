@@ -37,7 +37,7 @@ const MODEL = "claude-sonnet-5";
 const BUCKET = "correos";
 // La respuesta es un JSON corto (unos 150 tokens por documento): 3000 alcanza para
 // correos con varios adjuntos y evita respuestas desbocadas.
-const MAX_TOKENS_SALIDA = 3000;
+const MAX_TOKENS_SALIDA = 4096;
 // Tope de llamadas a la IA por cada invocación de la función (el script manda de a uno,
 // pero si alguien manda un lote grande no se dispara el gasto en una sola pasada).
 const MAX_IA_POR_LLAMADA = 10;
@@ -161,9 +161,15 @@ async function leerConIA(apiKey: string, m: any) {
   const data = await res.json();
   const uso = data.usage || {};
   const bruto = (data.content || []).map((b: any) => b.text || "").join("").trim();
-  const limpio = bruto.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+  const sinMarkdown = bruto.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+  // A veces la IA antepone o agrega una frase al JSON: se rescata lo que va entre la primera "{" y la última "}"
+  const ini = sinMarkdown.indexOf("{"), fin = sinMarkdown.lastIndexOf("}");
+  const limpio = ini >= 0 && fin > ini ? sinMarkdown.slice(ini, fin + 1) : sinMarkdown;
   let parsed: any;
-  try { parsed = JSON.parse(limpio); } catch (_e) { throw Object.assign(new Error("La IA no devolvió un JSON válido: " + limpio.slice(0, 200)), { uso }); }
+  try { parsed = JSON.parse(limpio); } catch (_e) {
+    const motivo = data.stop_reason === "max_tokens" ? " (respuesta cortada por largo)" : "";
+    throw Object.assign(new Error("La IA no devolvió un JSON válido" + motivo + ": " + limpio.slice(0, 200)), { uso });
+  }
   return { documentos: Array.isArray(parsed.documentos) ? parsed.documentos : [], uso };
 }
 
