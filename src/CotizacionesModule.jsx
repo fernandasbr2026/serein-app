@@ -1027,8 +1027,9 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
       const yaEstaba = baseCotsFrescas.some(c => c.id === cot.id)
       const baseCots = yaEstaba ? baseCotsFrescas : [cot, ...baseCotsFrescas]
       const cotFresca = baseCots.find(c => c.id === cot.id) || cot
-      if (cotFresca.estado === 'Aprobada') { window.alert('Esta cotización ya fue aprobada y su OT ya existe.'); return }
       const numeroOT = 'OT-' + cotFresca.folio
+      // Una cotización aprobada cuya OT no existe (se perdió en un choque de guardado) se puede volver a generar
+      if (cotFresca.estado === 'Aprobada' && baseOts.some(o => o.numero === numeroOT)) { window.alert('Esta cotización ya fue aprobada y su OT ya existe.'); return }
       let nuevasOts = baseOts
       if (baseOts.some(o => o.numero === numeroOT)) { window.alert('Ya existe una OT creada para esta cotización (' + numeroOT + '). No se creó otra.') }
       else {
@@ -1170,7 +1171,7 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
                   <td style={{ padding: '8px 10px' }}>{c.cliente}
                     {(() => {
                       const ot = (ots || []).find(o => o.numero === 'OT-' + c.folio)
-                      if (!ot) return c.estado === 'Aprobada' ? <div style={{ fontSize: 11, color: C.rojo, marginTop: 2 }}>Aprobada · falta crear OT</div> : null
+                      if (!ot) return c.estado === 'Aprobada' ? <div style={{ fontSize: 11, color: C.rojo, marginTop: 2 }}>Aprobada · falta crear OT <button onClick={() => aprobar(c)} style={{ marginLeft: 4, border: '1px solid ' + C.rojo, background: '#fff', color: C.rojo, borderRadius: 6, fontSize: 10.5, fontWeight: 700, padding: '1px 7px', cursor: 'pointer' }}>Crear OT ahora</button></div> : null
                       const ventas = ot.ventas || []
                       const fact = (ventas.length > 0 || ['Facturada', 'Cerrada'].includes(ot.estado)) ? 'Facturada' : 'Pendiente'
                       const cobro = ventas.length === 0 ? '—' : (ventas.every(v => v.estadoPago === 'Pagado') ? 'Cobrado' : 'Pendiente')
