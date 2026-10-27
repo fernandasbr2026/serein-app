@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react'
 import * as XLSX from 'xlsx'
 import { supabase } from './supabase.js'
-import { pushState } from './sync.js'
+import { pushState, registrarFacturasEliminadas, quitarFacturasEliminadas } from './sync.js'
 import { calcularPerdidaFactoring } from './ParametrosModule.jsx'
 import { descargarInformeFacturas } from './informeFacturas.js'
 import { fileToBase64 } from './protocolo-pdf.js'
@@ -188,6 +188,8 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
       (facturas[a] || []).forEach(f => { if (ids.has(f.libroId)) previas[f.libroId] = f })
       base[a] = (facturas[a] || []).filter(f => !ids.has(f.libroId))
     })
+    // Una ficha que se vuelve a copiar deja de contar como borrada (ver lápidas en sync.js)
+    quitarFacturasEliminadas(filas.filter(vaAFacturas).map(r => 'lv' + r.id))
     filas.forEach(r => {
       if (!vaAFacturas(r)) return
       // Se conserva lo editado en Facturas (OC, centro de costo, etc.); el libro solo pisa lo que trae con valor
@@ -268,15 +270,20 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
     const base = {}
     Object.keys(facturas || {}).forEach(a => { base[a] = [...(facturas[a] || [])] })
     const validos = new Set()
+    const agregadas = []
     todas.forEach(r => {
       if (!vaAFacturas(r)) return
       const libroId = 'LV' + r.id
       if (ocultas.has(libroId)) return
       validos.add(libroId)
       const yaEsta = Object.keys(base).some(a => (base[a] || []).some(f => f.libroId === libroId))
-      if (!yaEsta) base[r.area] = [...(base[r.area] || []), fichaDe(r)]
+      if (!yaEsta) { base[r.area] = [...(base[r.area] || []), fichaDe(r)]; agregadas.push('lv' + r.id) }
     })
-    Object.keys(base).forEach(a => { base[a] = (base[a] || []).filter(f => f.origen !== 'libroVentas' || validos.has(f.libroId)) })
+    const quitadas = []
+    Object.keys(base).forEach(a => { base[a] = (base[a] || []).filter(f => { const ok = f.origen !== 'libroVentas' || validos.has(f.libroId); if (!ok && f.id) quitadas.push(f.id); return ok }) })
+    // Lápidas (sync.js): lo que este efecto quita no debe volver por la fusión de guardados; lo que agrega, sí
+    if (agregadas.length) quitarFacturasEliminadas(agregadas)
+    if (quitadas.length) registrarFacturasEliminadas(quitadas)
     if (JSON.stringify(facturas || {}) !== JSON.stringify(base)) {
       // Mismo motivo que en sincronizarFicha(): persistir de inmediato
       // (sin bloquear con pullState() dentro de un efecto que corre en

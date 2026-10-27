@@ -3,7 +3,7 @@ import { Plus, Trash2, Receipt, Upload, Search, FileText } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { calcularPerdidaFactoring, perdidaFactoringFactura } from './ParametrosModule.jsx'
 import Paginador, { paginar } from './Paginador.jsx'
-import { pullState, pushState } from './sync.js'
+import { pullState, pushState, registrarFacturasEliminadas } from './sync.js'
 import { descargarInformeFacturas } from './informeFacturas.js'
 import { ocultarFacturasDeLibro } from './facturasOcultas.js'
 import { descargarInformeCobranza as descargarInformeCobranzaPDF } from './informeCobranzaPDF.js'
@@ -293,7 +293,11 @@ export default function FacturasModule({ area, facturas, setFacturas, params = {
     try { fresco = JSON.parse(localStorage.getItem('serein_facturas') || 'null') } catch (e) {}
     const baseFacturas = fresco && typeof fresco === 'object' ? fresco : (facturas || {})
     const baseLista = baseFacturas[area] || []
-    setLista(filtrar(baseLista))
+    const nuevaLista = filtrar(baseLista)
+    // Lo que se borra a propósito queda anotado como "lápida": así la fusión de guardados (sync.js) no lo resucita
+    const quitadas = baseLista.filter(x => x && x.id && !nuevaLista.some(y => y && y.id === x.id)).map(x => x.id)
+    if (quitadas.length) registrarFacturasEliminadas(quitadas)
+    setLista(nuevaLista)
   }
   // actualizar()/setNeto() se llaman por cada tecla al editar cualquier
   // campo de una factura (número, cliente, OT, OC, NV, banco, comentarios,
