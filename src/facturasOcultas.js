@@ -20,3 +20,17 @@ export function ocultarFacturasDeLibro(libroIds, pushState) {
   try { localStorage.setItem(OCULTAS_KEY, JSON.stringify([...s])) } catch (e) {}
   pushState()
 }
+
+// Saca facturas de la lista de "no volver a traer": vuelven a aparecer en Facturas por área en la
+// próxima sincronización del Libro de Ventas. Se usa cuando alguien les vuelve a asignar un área en el
+// libro (si la persona asigna un área, quiere verla) o pulsa «Volver a mostrar» en la fila.
+export function mostrarFacturasDeLibro(libroIds, pushState) {
+  if (!libroIds || !libroIds.length) return false
+  const s = leerFacturasOcultasLibro()
+  let cambio = false
+  libroIds.forEach(id => { if (s.delete(id)) cambio = true })
+  if (!cambio) return false
+  try { localStorage.setItem(OCULTAS_KEY, JSON.stringify([...s])) } catch (e) {}
+  pushState()
+  return true
+}
