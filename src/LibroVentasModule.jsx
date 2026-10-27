@@ -5,7 +5,7 @@ import { pushState } from './sync.js'
 import { calcularPerdidaFactoring } from './ParametrosModule.jsx'
 import { descargarInformeFacturas } from './informeFacturas.js'
 import { fileToBase64 } from './protocolo-pdf.js'
-import { leerFacturasOcultasLibro } from './facturasOcultas.js'
+import { leerFacturasOcultasLibro, mostrarFacturasDeLibro } from './facturasOcultas.js'
 import { useRevisionVentas, BannerRevision, PanelFaltantes, ChipRepetida, pistaDeFolio } from './RevisionEnLibro.jsx'
 import { PLAZOS_SUGERIDOS, PLAZO_POR_DEFECTO, PLAZO_MAX, plazoValido, sumarDias, plazoDe, conFechasCoherentes, diasParaVencer, textoDiasParaVencer, hoyISO } from './vencimientos.js'
 
@@ -37,6 +37,12 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
   const [errMsg, setErrMsg] = useState('')
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState('')
+  // Facturas que alguien eliminó desde Facturas por área (lista "no volver a traer"): se marcan en la fila,
+  // con un botón para volver a mostrarlas. Antes esa lista era invisible y una factura eliminada por error
+  // no había forma de recuperarla (así desapareció la 1825 de Ingomar de Santa Rosa).
+  const [ocultasVer, setOcultasVer] = useState(0)
+  const ocultasLibro = useMemo(() => leerFacturasOcultasLibro(), [ocultasVer, facturas])
+  const volverAMostrar = r => { if (mostrarFacturasDeLibro(['LV' + r.id], pushState)) { setOcultasVer(v => v + 1); sincronizarFicha(r) } }
   const [q, setQ] = useState('')
   const [mes, setMes] = useState('')
   const [tipo, setTipo] = useState('')
@@ -206,6 +212,8 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
   // Un solo guardado para uno o varios campos de la fila (el plazo cambia el vencimiento, y solo ese).
   const setCampos = async (r, cambios) => {
     const nueva = { ...r, ...cambios }
+    // Si la persona le asigna un área, quiere verla en Facturas aunque antes se hubiera eliminado de allá
+    if ('area' in cambios && cambios.area && mostrarFacturasDeLibro(['LV' + r.id], pushState)) setOcultasVer(v => v + 1)
     // La ficha de Facturas se actualiza al tiro, sin esperar a la base: así dos ediciones seguidas no se pisan.
     // El vencimiento lo manda el libro, incluso cuando se borra.
     sincronizarFicha(nueva, 'vencimiento' in cambios ? ['vencimiento'] : [])
@@ -694,6 +702,11 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
                       <option value="">- area -</option>
                       {AREAS.map(a => <option key={a} value={a}>{a}</option>)}
                     </select>
+                    {r.area && ocultasLibro.has('LV' + r.id) ? (
+                      <div style={{ marginTop: 4, fontSize: 10.5, color: '#C2570B', fontWeight: 600, whiteSpace: 'nowrap' }} title="Alguien la eliminó desde Facturas por área; por eso no figura allá aunque tenga área">
+                        No figura en Facturas · <button onClick={() => volverAMostrar(r)} style={{ border: '1px solid #C2570B', background: '#fff', color: '#C2570B', borderRadius: 6, fontSize: 10.5, fontWeight: 700, padding: '1px 7px', cursor: 'pointer' }}>Volver a mostrar</button>
+                      </div>
+                    ) : null}
                   </td>
                   <td style={{ padding: '7px 10px' }}>
                     <select style={{ ...sel, minWidth: 140 }} value={r.ot_id || ''} onChange={e => { const v = e.target.value; setCampo(r, 'ot_id', v) }}>
