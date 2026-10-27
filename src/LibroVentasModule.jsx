@@ -12,7 +12,7 @@ import { PLAZOS_SUGERIDOS, PLAZO_POR_DEFECTO, PLAZO_MAX, plazoValido, sumarDias,
 import { SEREIN } from './theme-serein.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
 const C = { navy: SEREIN.ink, orange: SEREIN.orange, gray: SEREIN.fog, border: SEREIN.line, green: SEREIN.green, red: SEREIN.red, mut: SEREIN.textFaint }
-const esExenta = t => /exent/i.test(String(t || ''))
+const esExenta = t => /exent/i.test(String(t || '')) || String(t || '').trim() === '34'
 const clp = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-CL')
 const ip = { padding: '6px 8px', border: '1px solid ' + C.border, fontSize: 12.5, boxSizing: 'border-box', borderRadius: 4 }
 const sel = { padding: '4px 6px', border: '1px solid ' + C.border, fontSize: 12, borderRadius: 4, background: '#fff' }
@@ -414,7 +414,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
     setSel(new Set())
   }
 
-  const facturaVacia = { emission_date: hoyISO(), document_number: '', client_name: '', client_rut: '', document_type: 'Factura', neto: '', iva: '', area: '', oc: '', nv: '', medio_pago: '', numero_cheque: '', plazo: String(PLAZO_POR_DEFECTO), vencimiento: sumarDias(hoyISO(), PLAZO_POR_DEFECTO) }
+  const facturaVacia = { emission_date: hoyISO(), document_number: '', client_name: '', client_rut: '', document_type: '33', neto: '', iva: '', area: '', oc: '', nv: '', medio_pago: '', numero_cheque: '', plazo: String(PLAZO_POR_DEFECTO), vencimiento: sumarDias(hoyISO(), PLAZO_POR_DEFECTO) }
   const [mostrarAgregar, setMostrarAgregar] = useState(false)
   const [leyendoIA, setLeyendoIA] = useState(false)
   const [msgIA, setMsgIA] = useState('')
@@ -467,9 +467,31 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
     } catch (err) { setMsgIA('Error: No se pudo leer la factura: ' + ((err && err.message) || String(err))) }
     setLeyendoIA(false)
   }
+  // Evidencia del 27-10-2026: la 1841 se cargó dos veces a mano (la primera copia se había eliminado desde Facturas por
+  // área y «no aparecía»), y la 1832/1825 igual. Ahora, antes de insertar, se busca el mismo folio + RUT en el libro
+  // (incluidas las ocultas) y se explica en qué estado está, en vez de crear otra copia. Además el botón se bloquea
+  // mientras guarda (doble clic) y la ficha se manda al área al instante, sin esperar al efecto de sincronización.
+  const [guardandoFC, setGuardandoFC] = useState(false)
+  const rutNorm = v => String(v || '').replace(/[^0-9kK]/g, '').toUpperCase()
   const agregarFactura = async () => {
+    if (guardandoFC) return
     const neto = Number(nuevaFC.neto) || 0
     if (!nuevaFC.client_name.trim() || neto <= 0) { window.alert('Ingresa al menos el cliente y un neto mayor a 0.'); return }
+    if (!nuevaFC.area) { window.alert('Elige el área (Santa Rosa, Istria o Proyectos): sin área la factura no aparece en ningún módulo.'); return }
+    const folioNuevo = nuevaFC.document_number.trim()
+    if (folioNuevo) {
+      const tipoNuevo = String(nuevaFC.document_type || '33').trim()
+      const repetida = todas.find(x => String(x.document_number || '').trim() === folioNuevo && String(x.document_type || '').trim() === tipoNuevo &&
+        (!rutNorm(nuevaFC.client_rut) || !rutNorm(x.client_rut) || rutNorm(x.client_rut) === rutNorm(nuevaFC.client_rut)))
+      if (repetida) {
+        const estado = repetida.oculto ? 'está OCULTA en este libro (botón «Ver ocultas» → Restaurar)'
+          : ocultasLibro.has('LV' + repetida.id) ? 'está en el libro pero fue eliminada desde Facturas por área (en su fila pulsa «Volver a mostrar»)'
+          : !repetida.area ? 'está en el libro sin área: asígnale el área en su fila y aparecerá en el módulo'
+          : 'ya está en el libro con área ' + repetida.area
+        window.alert('La factura ' + folioNuevo + ' de ' + (repetida.client_name || 'este cliente') + ' ya existe: ' + estado + '. No se creó otra copia.')
+        return
+      }
+    }
     const iva = esExenta(nuevaFC.document_type) ? 0 : Math.round(neto * 0.19)
     const reg = {
       emission_date: nuevaFC.emission_date || hoyISO(),
@@ -482,12 +504,17 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
       oc: nuevaFC.oc.trim(), nv: nuevaFC.nv.trim(), medio_pago: nuevaFC.medio_pago || null,
       numero_cheque: nuevaFC.medio_pago === 'Cheque' ? nuevaFC.numero_cheque.trim() : null,
     }
+    setGuardandoFC(true)
     try {
       const { data, error } = await supabase.from('libro_ventas').insert(reg).select().single()
       if (error) throw error
       setRows(rs => [data, ...rs])
+      // Al área de inmediato (misma copia que usa el cambio de área en la fila), no solo por el efecto de sincronización
+      sincronizarFicha(data)
       setNuevaFC(facturaVacia); setMostrarAgregar(false)
+      setMsgIA('Factura ' + (reg.document_number || '') + ' guardada en el libro y enviada a ' + reg.area + '.')
     } catch (e) { window.alert('No se pudo guardar la factura: ' + (e.message || e)) }
+    setGuardandoFC(false)
   }
 
   // ---------- Nota de crédito: se escribe el folio de la factura y el sistema completa el resto ----------
@@ -574,7 +601,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
           <label style={{ fontSize: 11, color: C.mut }}>Cliente<input value={nuevaFC.client_name} onChange={e => setNuevaFCCampo('client_name', e.target.value)} placeholder="Razón social" style={ip} /></label>
           <label style={{ fontSize: 11, color: C.mut }}>RUT cliente<input value={nuevaFC.client_rut} onChange={e => setNuevaFCCampo('client_rut', e.target.value)} placeholder="12.345.678-9" style={ip} /></label>
           <label style={{ fontSize: 11, color: C.mut }}>N° folio<input value={nuevaFC.document_number} onChange={e => setNuevaFCCampo('document_number', e.target.value)} style={ip} /></label>
-          <label style={{ fontSize: 11, color: C.mut }}>Tipo documento<input value={nuevaFC.document_type} onChange={e => setNuevaFCCampo('document_type', e.target.value)} style={ip} /></label>
+          <label style={{ fontSize: 11, color: C.mut }}>Tipo documento<input list="tipos-doc-venta" value={nuevaFC.document_type} onChange={e => setNuevaFCCampo('document_type', e.target.value)} placeholder="33" style={ip} /><datalist id="tipos-doc-venta"><option value="33">33 · Factura electrónica</option><option value="34">34 · Factura exenta</option><option value="Exenta">Exenta</option></datalist></label>
           <label style={{ fontSize: 11, color: C.mut }}>Área<select value={nuevaFC.area} onChange={e => setNuevaFCCampo('area', e.target.value)} style={ip}><option value="">- área -</option>{AREAS.map(a => <option key={a} value={a}>{a}</option>)}</select></label>
           <label style={{ fontSize: 11, color: C.mut }}>Orden de compra<input value={nuevaFC.oc} onChange={e => setNuevaFCCampo('oc', e.target.value)} style={ip} /></label>
           <label style={{ fontSize: 11, color: C.mut }}>NV<input value={nuevaFC.nv} onChange={e => setNuevaFCCampo('nv', e.target.value)} style={ip} /></label>
@@ -583,7 +610,7 @@ export default function LibroVentasModule({ ots = [], proyectos = [], facturas =
           <label style={{ fontSize: 11, color: C.mut }}>Neto<input type="number" value={nuevaFC.neto} onChange={e => setNuevaFCCampo('neto', e.target.value)} placeholder="0" style={ip} /></label>
           <label style={{ fontSize: 11, color: C.mut }}>IVA (19%)<input value={clp(nuevaFC.iva)} disabled style={{ ...ip, background: '#eee' }} /></label>
           <label style={{ fontSize: 11, color: C.mut }}>Total<input value={clp((Number(nuevaFC.neto) || 0) + (Number(nuevaFC.iva) || 0))} disabled style={{ ...ip, background: '#eee', fontWeight: 700 }} /></label>
-          <button onClick={agregarFactura} style={{ padding: '9px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, border: 'none', background: C.navy, color: '#fff' }}>Guardar factura</button>
+          <button onClick={agregarFactura} disabled={guardandoFC} style={{ padding: '9px 14px', borderRadius: 8, cursor: guardandoFC ? 'wait' : 'pointer', fontSize: 13, fontWeight: 600, border: 'none', background: guardandoFC ? '#5A636E' : C.navy, color: '#fff' }}>{guardandoFC ? 'Guardando…' : 'Guardar factura'}</button>
         </div>
       )}
 
