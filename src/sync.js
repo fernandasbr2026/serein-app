@@ -60,6 +60,56 @@ export function fusionarOts(baseStr, otroStr) {
   } catch (e) { return null }
 }
 
+// ————— Fusión de las facturas por área (serein_facturas) —————
+// Mismo problema que las OT: serein_facturas ({ area: [fichas] }) es un solo blob y la última subida gana,
+// así que una sesión atrasada borraba las fichas que el Libro de Ventas acababa de copiar a Santa Rosa.
+// Acá los borrados SÍ son definitivos (se quita la ficha del arreglo), por eso se lleva una lista de
+// "lápidas" (serein_facturasEliminadas, ids de fichas borradas a propósito) para que la fusión no
+// resucite lo que alguien eliminó. Una ficha que se vuelve a crear con el mismo id sale de la lista.
+const ELIMINADAS_KEY = 'serein_facturasEliminadas'
+function leerFacturasEliminadas() {
+  try { return new Set(JSON.parse(localStorage.getItem(ELIMINADAS_KEY) || '[]')) } catch (e) { return new Set() }
+}
+function guardarFacturasEliminadas(set) {
+  const arr = [...set].slice(-5000)
+  try { localStorage.setItem(ELIMINADAS_KEY, JSON.stringify(arr)) } catch (e) {}
+}
+export function registrarFacturasEliminadas(ids) {
+  if (!ids || !ids.length) return
+  const s = leerFacturasEliminadas()
+  ids.forEach(id => { if (id) s.add(id) })
+  guardarFacturasEliminadas(s)
+}
+export function quitarFacturasEliminadas(ids) {
+  if (!ids || !ids.length) return
+  const s = leerFacturasEliminadas()
+  let cambio = false
+  ids.forEach(id => { if (s.delete(id)) cambio = true })
+  if (cambio) guardarFacturasEliminadas(s)
+}
+export function fusionarFacturas(baseStr, otroStr) {
+  try {
+    const base = JSON.parse(baseStr), otro = JSON.parse(otroStr)
+    if (!base || typeof base !== 'object' || Array.isArray(base) || !otro || typeof otro !== 'object' || Array.isArray(otro)) return null
+    const ids = new Set()
+    Object.keys(base).forEach(a => (Array.isArray(base[a]) ? base[a] : []).forEach(f => { if (f && f.id) ids.add(f.id) }))
+    const lapidas = leerFacturasEliminadas()
+    const out = {}
+    Object.keys(base).forEach(a => { out[a] = Array.isArray(base[a]) ? [...base[a]] : base[a] })
+    let agregado = false
+    Object.keys(otro).forEach(a => {
+      (Array.isArray(otro[a]) ? otro[a] : []).forEach(f => {
+        if (!f || !f.id || ids.has(f.id) || lapidas.has(f.id)) return
+        if (!Array.isArray(out[a])) out[a] = []
+        out[a].push(f); ids.add(f.id); agregado = true
+      })
+    })
+    return agregado ? JSON.stringify(out) : null
+  } catch (e) { return null }
+}
+// Qué claves se fusionan en vez de pisarse enteras (ver fusionarOts / fusionarFacturas)
+const FUSIONES = { serein_ots: fusionarOts, serein_facturas: fusionarFacturas }
+
 // ————— Estado de guardado observable —————
 // Antes no había forma honesta de saber, desde la pantalla, si un cambio
 // realmente llegó a la nube o no — la app asumía que sí. Este estado
@@ -112,7 +162,8 @@ export function aplicarSiSeguro(id, value) {
     // Al aceptar la versión de la nube, las OT que solo existían acá no se pierden: se suman y se vuelven a
     // subir. La huella "confirmada" es la de la nube, así la fusión cuenta como cambio local pendiente.
     let valorFinal = value
-    if (id === 'serein_ots' && local != null) { const f = fusionarOts(value, local); if (f) valorFinal = f }
+    const fusion = FUSIONES[id]
+    if (fusion && local != null) { const f = fusion(value, local); if (f) valorFinal = f }
     localStorage.setItem(id, valorFinal)
     localStorage.setItem(OK_PREFIX + id, huella(value))
     lastPushed[id] = value
@@ -238,11 +289,12 @@ export async function pushState() {
       // Antes de pisar serein_ots en la nube, se traen las OT que otra sesión haya agregado mientras tanto
       // y se suman a lo que se sube (ver fusionarOts). Un viaje extra solo cuando cambian las OT.
       for (const r of rows) {
-        if (r.id !== 'serein_ots') continue
+        const fusion = FUSIONES[r.id]
+        if (!fusion) continue
         try {
           const { data: nube } = await supabase.from('app_state').select('value').eq('id', r.id).maybeSingle()
           if (nube && nube.value != null) {
-            const f = fusionarOts(r.value, nube.value)
+            const f = fusion(r.value, nube.value)
             if (f) { r.value = f; try { localStorage.setItem(r.id, f) } catch (e) {} }
           }
         } catch (e) { /* sin fusión: se sube lo local tal cual */ }
