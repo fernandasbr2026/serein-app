@@ -3684,8 +3684,16 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   // ediciones seguidas eso saturó la base de datos para toda la app. Se
   // vuelve al patrón liviano: localStorage sincrónico + pushState()
   // inmediato (que junta TODOS los cambios pendientes en una sola subida).
+  // Base más fresca para escribir: localStorage se actualiza de forma sincrónica en cada guardado (este
+  // módulo, Cotizaciones, Trazabilidad), mientras que `otsAll` (estado de React) puede ir una escritura
+  // atrás. Partir de otsAll perdía la escritura anterior cuando dos guardados caían casi al mismo tiempo:
+  // al agregar una venta y enseguida tocar cualquier otro campo de la ficha, la venta desaparecía.
+  const baseFresca = () => {
+    try { const f = JSON.parse(localStorage.getItem('serein_ots') || 'null'); if (Array.isArray(f) && f.length) return f } catch (e) {}
+    return otsAll
+  }
   const actualizar = (id, cambios) => {
-    const nuevo = otsAll.map(o => o.id === id ? { ...o, ...cambios } : o)
+    const nuevo = baseFresca().map(o => o.id === id ? { ...o, ...cambios } : o)
     try { localStorage.setItem('serein_ots', JSON.stringify(nuevo)) } catch (e) {}
     setOts(nuevo)
     pushState()
@@ -3816,7 +3824,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   // si no, pushState() podía alcanzar a leer localStorage todavía con el
   // valor viejo y no detectar el cambio recién hecho.
   function escribir(mutar) {
-    const nuevo = mutar(otsAll)
+    const nuevo = mutar(baseFresca())
     try { localStorage.setItem('serein_ots', JSON.stringify(nuevo)) } catch (e) {}
     setOts(nuevo)
     pushState()
