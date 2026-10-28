@@ -4,6 +4,7 @@ const SEREIN_AI_ACTIVO = true
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { LogOut, TrendingUp, Wallet, AlertTriangle, Landmark, User } from 'lucide-react'
 import { DATA } from './data.js'
+import { semilla, vaciar } from './semillas.js'
 import LogoSerein from './LogoSerein.jsx'
 import { Sidebar, PageHeader, THEME, GlobalStyles, MontoNetoBruto, useEsMovil } from './ui.jsx'
 import ProyectosModule from './ProyectosModule.jsx'
@@ -268,7 +269,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const esModuloContactos = areaSel === 'CONTACTOS'
   const esModuloCot = areaSel === 'COTIZADOR'
   const esModuloProd = areaSel === 'PRODUCCION'
-  const [avances, setAvances] = useState(() => LS('avances', AVANCES_SEED))
+  // Semillas de ejemplo solo en desarrollo; en producción se arranca vacío y manda la nube (auditoría F-1, ver semillas.js)
+  const [avances, setAvances] = useState(() => LS('avances', semilla(AVANCES_SEED, [])))
   const [mo, setMo] = useState(() => LS('mo', MO_SEED))
   const esModuloComprasOp = areaSel === 'COMPRAS_OP'
   const esModuloLibroCompras = areaSel === 'LIBRO_COMPRAS'
@@ -276,10 +278,12 @@ export default function Dashboard({ perfil, email, onLogout }) {
   const esModuloRevision = areaSel === 'REVISION_CONTABLE'
   const esModuloCartolas = areaSel === 'CARTOLAS_BANCARIAS'
   const esModuloAsesor = areaSel === 'ASESOR'
-  const [comprasOp, setComprasOp] = useState(() => LS('comprasOp', COMPRAS_OP_SEED))
+  const [comprasOp, setComprasOp] = useState(() => LS('comprasOp', semilla(COMPRAS_OP_SEED, [])))
   const [configCompras, setConfigCompras] = useState(() => LS('configCompras', CONFIG_COMPRAS_DEFAULT))
-  const [fin, setFin] = useState(() => { const _f = LS('fin', FIN_SEED); if (_f && _f.credVer !== FIN_SEED.credVer) { _f.obligaciones = FIN_SEED.obligaciones; _f.credVer = FIN_SEED.credVer } return _f })
-  const [pp, setPp] = useState(() => { const s = LS('pp', null); if (!s) return PP_SEED; return (s.ocsVer === PP_SEED.ocsVer) ? s : { ...s, ocs: PP_SEED.ocs, ocsVer: PP_SEED.ocsVer } })
+  // Puerta de versión ADITIVA: si cambia credVer se agregan las obligaciones nuevas de la semilla, nunca se reemplazan las guardadas (auditoría F-1)
+  const [fin, setFin] = useState(() => { const _f = LS('fin', FIN_SEED); if (_f && _f.credVer !== FIN_SEED.credVer) { const ids = new Set((_f.obligaciones || []).map(o => o && o.id)); _f.obligaciones = [...(_f.obligaciones || []), ...(FIN_SEED.obligaciones || []).filter(o => o && !ids.has(o.id))]; _f.credVer = FIN_SEED.credVer } return _f })
+  // Antes un cambio de ocsVer REEMPLAZABA todas las OC guardadas por las de la semilla; ahora solo se anota la versión (auditoría F-1)
+  const [pp, setPp] = useState(() => { const s = LS('pp', null); if (!s) return semilla(PP_SEED, vaciar(PP_SEED)); return (s.ocsVer === PP_SEED.ocsVer) ? s : { ...s, ocsVer: PP_SEED.ocsVer } })
   const [params, setParams] = useState(() => LS('params', PARAMS_SEED))
   useEffect(() => { const uv = (params.uf && params.uf.valor) || 0; if ((fin.ufValor || 0) !== uv) setFin(f => ({ ...f, ufValor: uv })) }, [params.uf && params.uf.valor])
   // Antes la UF solo se traía de mindicador.cl si NUNCA se había cargado
@@ -302,16 +306,26 @@ export default function Dashboard({ perfil, email, onLogout }) {
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  const [clientes, setClientes] = useState(() => sanearClientesArr(LS('clientes', CLIENTES_SEED)))
-  const [contactos, setContactos] = useState(() => { const s = LS('contactos', null); const base = (s && s.ver === CONTACTOS_SEED.ver) ? s : CONTACTOS_SEED; return { ...base, clientes: sanearClientesArr(base.clientes) } })
-  const [facturas, setFacturas] = useState(() => LS('facturas', FACTURAS_SEED))
+  const [clientes, setClientes] = useState(() => sanearClientesArr(LS('clientes', semilla(CLIENTES_SEED, []))))
+  // Si cambia la versión de la ficha maestra se AGREGAN los contactos nuevos de la semilla (por nombre); los editados a mano se conservan (auditoría F-1)
+  const [contactos, setContactos] = useState(() => {
+    const s = LS('contactos', null)
+    let base = s || CONTACTOS_SEED
+    if (s && s.ver !== CONTACTOS_SEED.ver) {
+      const n = x => ((x && x.nombre) || '').toString().trim().toLowerCase()
+      const agrega = (mios, seed) => { const vistos = new Set((mios || []).map(n)); return [...(mios || []), ...(seed || []).filter(x => n(x) && !vistos.has(n(x)))] }
+      base = { ...s, ver: CONTACTOS_SEED.ver, clientes: agrega(s.clientes, CONTACTOS_SEED.clientes), proveedores: agrega(s.proveedores, CONTACTOS_SEED.proveedores) }
+    }
+    return { ...base, clientes: sanearClientesArr(base.clientes) }
+  })
+  const [facturas, setFacturas] = useState(() => LS('facturas', semilla(FACTURAS_SEED, vaciar(FACTURAS_SEED))))
   const [cotizaciones, setCotizaciones] = useState(() => LS('cotizaciones', []))
   // Valores de las OT visibles solo para Gerencia, Caro y Mario
   const verValoresOT = (esGerencia || ['caro@sereinspa.com', 'mario@sereinspa.com'].includes((email || '').toLowerCase())) && !sinValores.includes('GESTION_OT')
   const [comisiones, setComisiones] = useState(() => LS('comisiones', { 'Santa Rosa': 3, 'Istria': 2, 'Proyectos': 2 }))
   const [ppmPct, setPpmPct] = useState(() => LS('ppmPct', 2))
-  const [ots, setOts] = useState(() => LS('ots', OTS_INICIALES))
-  const [proyectos, setProyectos] = useState(() => LS('proyectos', PROYECTOS))
+  const [ots, setOts] = useState(() => LS('ots', semilla(OTS_INICIALES, [])))
+  const [proyectos, setProyectos] = useState(() => LS('proyectos', semilla(PROYECTOS, [])))
   const [inventario, setInventario] = useState(() => LS('inventario', INVENTARIO_SEED))
   const [invMov, setInvMov] = useState(() => LS('invMov', []))
 

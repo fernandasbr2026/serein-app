@@ -20,9 +20,14 @@
 //      "Business", agregar el producto "WhatsApp", y conseguir:
 //        - el número de teléfono de WhatsApp Business (Phone Number ID)
 //        - un token de acceso permanente (System User token)
-//   3) Cargar el secreto WHATSAPP_VERIFY_TOKEN en este proyecto Supabase
-//      (Edge Functions > Secrets) — una palabra clave que tú inventes,
-//      Meta la usa solo para verificar que este webhook es tuyo.
+//   3) Cargar DOS secretos en este proyecto Supabase (Edge Functions > Secrets):
+//        - WHATSAPP_VERIFY_TOKEN: una palabra clave que tú inventes; Meta la usa
+//          solo para verificar que este webhook es tuyo.
+//        - WHATSAPP_APP_SECRET: el «App Secret» de tu app en Meta for Developers
+//          (Configuración > Básica). Con él se comprueba la firma X-Hub-Signature-256
+//          de cada mensaje: sin esa firma válida, el webhook no acepta nada
+//          (auditoría 2026-10-27, hallazgo S-11: antes cualquiera que conociera
+//          la URL podía inventar clientes e interacciones en el CRM).
 //      (SUPABASE_SERVICE_ROLE_KEY ya está disponible automáticamente
 //      en toda Edge Function de este proyecto, no hace falta cargarla.)
 //   4) Desplegar:  supabase functions deploy whatsapp-webhook
@@ -43,6 +48,22 @@ const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Firma de Meta: HMAC-SHA256 del cuerpo crudo con el App Secret, enviada como
+// «sha256=<hex>» en X-Hub-Signature-256. Comparación en tiempo constante.
+async function firmaValida(cuerpo: string, cabecera: string | null): Promise<boolean> {
+  const secreto = (Deno.env.get("WHATSAPP_APP_SECRET") || "").trim();
+  if (!secreto || !cabecera) return false;
+  const recibida = cabecera.trim().toLowerCase().replace(/^sha256=/, "");
+  if (!/^[0-9a-f]{64}$/.test(recibida)) return false;
+  const enc = new TextEncoder();
+  const clave = await crypto.subtle.importKey("raw", enc.encode(secreto), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const firma = new Uint8Array(await crypto.subtle.sign("HMAC", clave, enc.encode(cuerpo)));
+  const esperada = Array.from(firma).map((b) => b.toString(16).padStart(2, "0")).join("");
+  let diff = 0;
+  for (let i = 0; i < 64; i++) diff |= esperada.charCodeAt(i) ^ recibida.charCodeAt(i);
+  return diff === 0;
+}
 
 function supabaseAdmin() {
   const url = Deno.env.get("SUPABASE_URL") ?? "https://fyupirswsvojdswpzvjm.supabase.co";
@@ -71,8 +92,16 @@ Deno.serve(async (req) => {
     return new Response("Method not allowed", { status: 405, headers: CORS });
   }
 
+  // Sin firma válida de Meta no se toca la base. Si falta WHATSAPP_APP_SECRET el
+  // webhook queda cerrado (mejor que abierto): se avisa en los logs.
+  const cuerpoCrudo = await req.text();
+  if (!(await firmaValida(cuerpoCrudo, req.headers.get("X-Hub-Signature-256")))) {
+    if (!Deno.env.get("WHATSAPP_APP_SECRET")) console.error("whatsapp-webhook: falta el secreto WHATSAPP_APP_SECRET; se rechaza la petición.");
+    return new Response(JSON.stringify({ ok: false, error: "Firma inválida" }), { status: 401, headers: { ...CORS, "Content-Type": "application/json" } });
+  }
+
   try {
-    const body = await req.json();
+    const body = JSON.parse(cuerpoCrudo || "{}");
     const supabase = supabaseAdmin();
 
     // Formato del webhook de WhatsApp Cloud API:
