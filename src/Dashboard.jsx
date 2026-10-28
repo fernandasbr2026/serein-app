@@ -1,5 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react'
-import SereinChatWidget from './serein-ai/SereinChatWidget.jsx'
+import React, { useState, useMemo, useEffect, lazy, Suspense } from 'react'
 const SEREIN_AI_ACTIVO = true
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { LogOut, TrendingUp, Wallet, AlertTriangle, Landmark, User } from 'lucide-react'
@@ -9,39 +8,40 @@ import LogoSerein from './LogoSerein.jsx'
 import { Sidebar, PageHeader, THEME, GlobalStyles, MontoNetoBruto, useEsMovil } from './ui.jsx'
 import ProyectosModule from './ProyectosModule.jsx'
 import OTModule, { OTS_INICIALES, resumenOTArea } from './OTModule.jsx'
-import PipelineOT from './PipelineOT.jsx'
-import PipelineProyectos from './PipelineProyectos.jsx'
 import ManoObraModule from './ManoObraModule.jsx'
 import FinanzasModule, { FIN_SEED, calcularResumenFin, resumenGastosPeriodoArea, netoEf, PorPagar } from './FinanzasModule.jsx'
-import CotizadorModule from './CotizadorModule.jsx'
 import CotizacionesModule from './CotizacionesModule.jsx'
 import ProduccionModule, { AVANCES_SEED } from './ProduccionModule.jsx'
 import ComprasOperativasModule, { COMPRAS_OP_SEED, CONFIG_COMPRAS_DEFAULT } from './ComprasOperativasModule.jsx'
 import ProveedoresPagosModule, { PP_SEED } from './ProveedoresPagosModule.jsx'
 import OrdenesCompraModule, { ocTotal, costoOCdeOT, listaProveedores } from './OrdenesCompraModule.jsx'
-import TrazabilidadModule from './TrazabilidadModule.jsx'
 import ParametrosModule, { PARAMS_SEED, perdidaFactoringFactura } from './ParametrosModule.jsx'
 import ClientesModule, { CLIENTES_SEED } from './ClientesModule.jsx'
-import LibroComprasModule from './LibroComprasModule.jsx'
-import LibroVentasModule from './LibroVentasModule.jsx'
-import CartolasBancariasModule from './CartolasBancariasModule.jsx'
-import AsesorModule from './AsesorModule.jsx'
 import ConsolidadoModule, { ConsolidadoIntro } from './ConsolidadoModule.jsx'
-import OrganigramaModule from './OrganigramaModule.jsx'
-import CRMModule from './CRMModule.jsx'
 import ContactosModule, { CONTACTOS_SEED, nombresClientes } from './ContactosModule.jsx'
-import CreditoModule from './CreditoModule.jsx'
-import CorreosModule from './CorreosModule.jsx'
-import RevisionContableModule from './RevisionContableModule.jsx'
 import FacturasModule, { FACTURAS_SEED, saldoPendienteDe, montoFacturaDe, CobranzaAtrasadaModule } from './FacturasModule.jsx'
 import { MO_SEED } from './ManoObraModule.jsx'
 import { PROYECTOS } from './proyectos-data.js'
-import InventarioModule from './InventarioModule.jsx'
 import { INVENTARIO_SEED } from './inventario-data.js'
 import { pushState, pullState, aplicarSiSeguro } from './sync.js'
 import { supabase } from './supabase.js'
 
 import { SEREIN } from './theme-serein.js'
+// Carga diferida por módulo (auditoría X-2): el archivo principal baja solo lo que todos usan; cada una de
+// estas pantallas se descarga la primera vez que se abre. Las que exportan helpers al Dashboard siguen estáticas.
+const SereinChatWidget = lazy(() => import('./serein-ai/SereinChatWidget.jsx'))
+const TrazabilidadModule = lazy(() => import('./TrazabilidadModule.jsx'))
+const LibroComprasModule = lazy(() => import('./LibroComprasModule.jsx'))
+const LibroVentasModule = lazy(() => import('./LibroVentasModule.jsx'))
+const CartolasBancariasModule = lazy(() => import('./CartolasBancariasModule.jsx'))
+const AsesorModule = lazy(() => import('./AsesorModule.jsx'))
+const OrganigramaModule = lazy(() => import('./OrganigramaModule.jsx'))
+const CRMModule = lazy(() => import('./CRMModule.jsx'))
+const CreditoModule = lazy(() => import('./CreditoModule.jsx'))
+const CorreosModule = lazy(() => import('./CorreosModule.jsx'))
+const RevisionContableModule = lazy(() => import('./RevisionContableModule.jsx'))
+const InventarioModule = lazy(() => import('./InventarioModule.jsx'))
+const CargandoModulo = () => <div style={{ padding: 28, color: '#6B7580', fontSize: 13 }}>Cargando módulo…</div>
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
 const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, niebla: SEREIN.fog }
 const AREA_COLOR = { 'Santa Rosa': '#D9600A', 'Proyectos': '#F77716', 'Istria': '#101315' }
@@ -844,7 +844,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
       <main style={{ flex: 1, minWidth: 0, height: '100vh', overflowY: 'auto', backgroundImage: 'radial-gradient(820px 300px at 88% -90px, rgba(247,119,22,.075), transparent 70%)', backgroundRepeat: 'no-repeat' }}>
       <div style={{ padding: esMovil ? '14px 12px' : '26px 30px', maxWidth: 1280, margin: '0 auto' }}>
               <PageHeader titulo={nombreTab(areaSel)} perfil={perfil} email={email} onMenu={() => setMenuMovil(true)} />
-        {esModuloOrganigrama ? (<OrganigramaModule esGerencia={esGerencia} />) : esModuloCRM ? (<CRMModule />) : esModuloAsesor && puedeVer('ASESOR') ? (<AsesorModule fin={fin} pp={pp} proyectos={proyectos} ots={ots} params={params} onIr={setAreaSel} />) : esModuloLibroCompras && puedeVer('LIBRO_COMPRAS') ? (<LibroComprasModule esGerencia={esGerencia} ots={ots} factoringList={params.factoring || []} proyectos={proyectos} setProyectos={setProyectos} pp={pp} setPp={setPp} />) : esModuloLibroVentas && puedeVer('LIBRO_VENTAS') ? (<LibroVentasModule ots={ots} proyectos={proyectos} facturas={facturas} setFacturas={setFacturas} params={params} onIr={setAreaSel} />) : esModuloProyectos && puedeVer('GESTION_PROYECTOS') ? (() => {
+        {esModuloOrganigrama ? (<Suspense fallback={<CargandoModulo />}><OrganigramaModule esGerencia={esGerencia} /></Suspense>) : esModuloCRM ? (<Suspense fallback={<CargandoModulo />}><CRMModule /></Suspense>) : esModuloAsesor && puedeVer('ASESOR') ? (<Suspense fallback={<CargandoModulo />}><AsesorModule fin={fin} pp={pp} proyectos={proyectos} ots={ots} params={params} onIr={setAreaSel} /></Suspense>) : esModuloLibroCompras && puedeVer('LIBRO_COMPRAS') ? (<Suspense fallback={<CargandoModulo />}><LibroComprasModule esGerencia={esGerencia} ots={ots} factoringList={params.factoring || []} proyectos={proyectos} setProyectos={setProyectos} pp={pp} setPp={setPp} /></Suspense>) : esModuloLibroVentas && puedeVer('LIBRO_VENTAS') ? (<Suspense fallback={<CargandoModulo />}><LibroVentasModule ots={ots} proyectos={proyectos} facturas={facturas} setFacturas={setFacturas} params={params} onIr={setAreaSel} /></Suspense>) : esModuloProyectos && puedeVer('GESTION_PROYECTOS') ? (() => {
           // proyectosIdsPermitidos filtra por p.ot (el N de OT/cotizacion del
           // proyecto). setProyectosSeguro fusiona el resultado del modulo
           // (que solo conoce su subconjunto filtrado) de vuelta sobre la
@@ -911,19 +911,19 @@ export default function Dashboard({ perfil, email, onLogout }) {
         ) : esModuloOC && puedeVer('ORDENES_COMPRA') ? (
           <OrdenesCompraModule pp={pp} setPp={setPp} ots={ots} />
         ) : esModuloTraza && puedeVer('TRAZABILIDAD') ? (
-          <TrazabilidadModule cotizaciones={cotizaciones} ots={ots} setOts={setOts} ordenesCompra={pp.ocs || []} />
+          <Suspense fallback={<CargandoModulo />}><TrazabilidadModule cotizaciones={cotizaciones} ots={ots} setOts={setOts} ordenesCompra={pp.ocs || []} /></Suspense>
         ) : esModuloCartolas && puedeVer('CARTOLAS_BANCARIAS') ? (
-          <CartolasBancariasModule esGerencia={esGerencia} />
+          <Suspense fallback={<CargandoModulo />}><CartolasBancariasModule esGerencia={esGerencia} /></Suspense>
         ) : (areaSel === 'INVENTARIO') ? (
-          <InventarioModule inventario={inventario} setInventario={setInventario} movimientos={invMov} setMovimientos={setInvMov} usuario={email} />
+          <Suspense fallback={<CargandoModulo />}><InventarioModule inventario={inventario} setInventario={setInventario} movimientos={invMov} setMovimientos={setInvMov} usuario={email} /></Suspense>
         ) : esModuloParams && puedeVer('PARAMETROS') ? (
           <ParametrosModule params={params} setParams={setParams} />
         ) : esModuloCorreos && puedeVer('CORREOS') ? (
-          <CorreosModule esGerencia={esGerencia} ots={ots} proyectos={proyectos} />
+          <Suspense fallback={<CargandoModulo />}><CorreosModule esGerencia={esGerencia} ots={ots} proyectos={proyectos} /></Suspense>
         ) : esModuloRevision && puedeVer('REVISION_CONTABLE') ? (
-          <RevisionContableModule facturas={facturas} />
+          <Suspense fallback={<CargandoModulo />}><RevisionContableModule facturas={facturas} /></Suspense>
         ) : esModuloCredito && puedeVer('CREDITO') ? (
-          <CreditoModule esGerencia={esGerencia} />
+          <Suspense fallback={<CargandoModulo />}><CreditoModule esGerencia={esGerencia} /></Suspense>
         ) : esModuloClientes ? (
           <ClientesModule clientes={clientes} setClientes={setClientes} proyectos={proyectos} ots={ots} />
         ) : esModuloContactos ? (
@@ -1114,7 +1114,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
       </div>
       </main>
             {SEREIN_AI_ACTIVO && (
-        <SereinChatWidget perfil={perfil} email={email} areaSel={areaSel} onNavegar={setAreaSel} datos={{ ots, proyectos, facturas, cotizaciones, avances, params, pp }} />
+        <Suspense fallback={<CargandoModulo />}><SereinChatWidget perfil={perfil} email={email} areaSel={areaSel} onNavegar={setAreaSel} datos={{ ots, proyectos, facturas, cotizaciones, avances, params, pp }} /></Suspense>
       )}
     </div>
   )
