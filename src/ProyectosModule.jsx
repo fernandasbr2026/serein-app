@@ -40,7 +40,7 @@ const clpSigned = n => (n || 0) < 0 ? '-' + clp(-n) : clp(n)
 const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
 const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 const btnMini = { background: 'none', border: 'none', cursor: 'pointer', color: C.rojo, padding: 4 }
-const hoy = () => new Date().toISOString().slice(0, 10)
+const hoy = hoyISO   // hora local de Chile, no UTC (auditoría C-2)
 
 // Empresas de factoring sugeridas en compras y OC a proveedor: las de
 // Parámetros + cualquier nombre ya escrito antes en una compra, etapa de

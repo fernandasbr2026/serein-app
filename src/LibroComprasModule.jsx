@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx'
 import { supabase } from './supabase.js'
 import { pullState, pushState } from './sync.js'
 import { calcularPerdidaFactoring } from './ParametrosModule.jsx'
+import { hoyISO } from './vencimientos.js'
 
 import { SEREIN } from './theme-serein.js'
 import { ocDeFactura, facturasDeOC, guardarOcFrescoEn, ocNeto } from './OrdenesCompraModule.jsx'
@@ -132,7 +133,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
   // ---------- Notas de crédito de proveedores (tipo 61): restan de las compras ----------
   const esNC = r => String(r.document_type || '').trim() === '61'
   const sgn = r => esNC(r) ? -1 : 1
-  const hoy = () => new Date().toISOString().slice(0, 10)
+  const hoy = hoyISO   // hora local de Chile: toISOString() daba la fecha de mañana después de las 20:00 (auditoría C-2)
   const mismaFactura = (n, f) => !esNC(f) && String(f.document_number || '').trim() === String(n.anula_folio || '').trim() && (!n.provider_rut || !f.provider_rut || rutN(n.provider_rut) === rutN(f.provider_rut))
   const vigente = n => esNC(n) && !n.oculto && String(n.anula_folio || '').trim()
   const ncsDe = f => todas.filter(n => vigente(n) && mismaFactura(n, f))
