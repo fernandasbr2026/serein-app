@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { num } from './numeros.js'
 import { ChevronDown, ChevronUp, Plus, Trash2, X, Ruler, Paintbrush, FileText, Receipt, ShoppingCart, CircleDollarSign, Download, Camera, Search, RotateCcw, Lock, Unlock, CalendarDays, Save, TrendingUp, Pencil } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { descargarOTDesdeOT } from './CotizacionesModule.jsx'
@@ -26,7 +27,7 @@ const colorMargen = (margen, colores = {}) => {
   return colores[nivel] || (nivel === 'bueno' ? C.verde : nivel === 'regular' ? C.ambar : C.rojo)
 }
 const clp = n => '$' + Math.round(n).toLocaleString('es-CL')
-const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
+// num(): lectura común de números con signo y decimales (ver numeros.js, auditoría D-6)
 const numDec = s => { const v = parseFloat(String(s).replace(',', '.')); return isNaN(v) ? 0 : v }
 const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 const btnMini = { background: 'none', border: 'none', cursor: 'pointer', color: C.rojo, padding: 4 }

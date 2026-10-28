@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react'
+import { num } from './numeros.js'
 import { ChevronDown, ChevronUp, Target, Receipt, Hammer, ShoppingCart, Pencil, Plus, Trash2, X, AlertTriangle, LayoutGrid, Table2, Flame, Upload, UserCheck } from 'lucide-react'
 import { PROYECTOS, CC_DEFS } from './proyectos-data.js'
 import { calcularPerdidaFactoring, perdidaFactoringFactura, dec } from './ParametrosModule.jsx'
@@ -37,7 +38,7 @@ import { hoyISO } from './vencimientos.js'
 const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const clpSigned = n => (n || 0) < 0 ? '-' + clp(-n) : clp(n)
-const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
+// num(): lectura común de números con signo y decimales (ver numeros.js, auditoría D-6)
 const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 const btnMini = { background: 'none', border: 'none', cursor: 'pointer', color: C.rojo, padding: 4 }
 const hoy = hoyISO   // hora local de Chile, no UTC (auditoría C-2)

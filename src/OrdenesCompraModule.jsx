@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react'
+import { num } from './numeros.js'
 import { Plus, Trash2, Search, ChevronDown, ChevronUp, Download } from 'lucide-react'
 import Paginador, { paginar } from './Paginador.jsx'
 import { PROVEEDORES_FICHA } from './proveedores-data.js'
@@ -14,7 +15,7 @@ import { SEREIN } from './theme-serein.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
 const C = { naranja: SEREIN.orange, teal: '#0E7A8F', carbon: SEREIN.text, verde: SEREIN.green, rojo: SEREIN.red, gris: SEREIN.textFaint, azul: SEREIN.ink }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
-const num = s => { const v = parseInt(String(s).replace(/[^\d-]/g, ''), 10); return isNaN(v) ? 0 : v }
+// num(): lectura común de números con signo y decimales (ver numeros.js, auditoría D-6)
 // Porcentajes de reparto: admiten decimales (el reparto por m² casi nunca da exacto)
 const pctNum = s => { let x = String(s == null ? '' : s).trim().replace(/[^\d.,-]/g, ''); if (x.includes(',')) x = x.replace(/\./g, '').replace(',', '.'); else if (/^-?\d{1,3}(\.\d{3})+$/.test(x)) x = x.replace(/\./g, ''); const v = parseFloat(x); return isNaN(v) ? 0 : v }
 const inp = { padding: '6px 8px', border: '1px solid #DFE4EA', fontSize: 12.5, boxSizing: 'border-box' }

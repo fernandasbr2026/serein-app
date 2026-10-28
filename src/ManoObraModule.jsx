@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react'
+import { num } from './numeros.js'
 import { Plus, Trash2, Pencil, CalendarDays, Clock3, Users, Wallet, Table2, EyeOff, Download, FileText, FileSpreadsheet, Moon, Sun, AlertTriangle } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -8,7 +9,7 @@ import { obtenerFeriadosChile } from './feriadosChile.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
 const C = { naranja: SEREIN.orange, carbon: SEREIN.text, verde: SEREIN.green, rojo: SEREIN.red, gris: SEREIN.textFaint, azul: '#0E7A8F', morado: '#5B4E8C' }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
-const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
+// num(): lectura común de números con signo y decimales (ver numeros.js, auditoría D-6)
 const hoy = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 const inp = { padding: '8px 10px', border: '1px solid #DFE4EA', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }
 

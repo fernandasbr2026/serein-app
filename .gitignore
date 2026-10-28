@@ -2,3 +2,8 @@ backups/
 node_modules/
 dist/
 supabase/.temp/
+
+# Secretos locales: nunca al repositorio (auditoria S-14)
+.env
+.env.*
+*.local

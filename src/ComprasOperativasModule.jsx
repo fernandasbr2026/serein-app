@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react'
+import { num } from './numeros.js'
 import { Plus, Trash2, X, ShoppingCart, ClipboardList, Factory, CheckCircle2, AlertTriangle, Paperclip, Settings2, Filter } from 'lucide-react'
 import { pullState, pushState } from './sync.js'
 import { repartirPorM2 } from './OrdenesCompraModule.jsx'
@@ -7,7 +8,7 @@ import { SEREIN } from './theme-serein.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
 const C = { naranja: SEREIN.orange, carbon: SEREIN.text, verde: SEREIN.green, rojo: SEREIN.red, gris: SEREIN.textFaint, azul: SEREIN.blue }
 const clp = n => '$' + Math.round(n).toLocaleString('es-CL')
-const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
+// num(): lectura común de números con signo y decimales (ver numeros.js, auditoría D-6)
 const hoy = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 
