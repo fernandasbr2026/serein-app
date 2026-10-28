@@ -1533,12 +1533,21 @@ function Informes({ mo }) {
   )
 }
 
+// Migración aditiva de la nómina: conserva trabajadores, asistencias y horas extra guardadas y
+// agrega las claves nuevas de la semilla con su valor por defecto.
+function migrarMo(guardado) {
+  if (!guardado || !Array.isArray(guardado.trabajadores) || guardado.trabajadores.length === 0) return MO_SEED
+  return { ...MO_SEED, ...guardado, ver: MO_VER }
+}
+
 // ================= MÓDULO PRINCIPAL =================
 export default function ManoObraModule({ esGerencia, editaRegistros = false, otsDisponibles = [], usuario = 'supervisor@serein.cl', areas = ['Santa Rosa', 'Istria', 'Proyectos'], mo: moExt, setMo: setMoExt }) {
   const [moInt, setMoInt] = useState(MO_SEED)
   const moRaw = moExt ?? moInt
   // Normaliza: si los datos guardados son de una versión anterior, se usa la nómina real al vuelo.
-  const mo = (moRaw && moRaw.ver === MO_VER) ? moRaw : MO_SEED
+  // Si la versión no coincide se completa lo guardado con la estructura de la semilla (aditivo); solo se parte
+  // de MO_SEED cuando no hay trabajadores guardados. Antes se descartaba TODA la asistencia (auditoría F-1).
+  const mo = (moRaw && moRaw.ver === MO_VER) ? moRaw : migrarMo(moRaw)
   const setMo = setMoExt ?? setMoInt
   // editaRegistros: permiso puntual (sin ser Gerencia) para editar/eliminar
   // CUALQUIER registro de Asistencia/Extras — ve todas las filas (no solo
@@ -1547,7 +1556,7 @@ export default function ManoObraModule({ esGerencia, editaRegistros = false, ots
   const puedeEditarTodo = esGerencia || editaRegistros
 
   // Persiste la migración una vez (sin bloquear el render).
-  useEffect(() => { if (moExt && moExt.ver !== MO_VER && setMoExt) setMoExt(MO_SEED) }, [])
+  useEffect(() => { if (moExt && moExt.ver !== MO_VER && setMoExt) setMoExt(migrarMo(moExt)) }, [])
 
   const tabs = esGerencia ? [
     { id: 'registro', label: 'Registro diario', icono: <CalendarDays size={13} /> },
