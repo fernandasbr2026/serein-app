@@ -4,6 +4,24 @@ import { VitePWA } from 'vite-plugin-pwa'
 // PWA: deja instalar el ERP en el celular (icono en la pantalla de inicio), igual que COPRESEG.
 // El service worker solo guarda los archivos de la app; los datos siguen viniendo siempre de Supabase.
 export default defineConfig({
+  // Auditoría X-2: antes todo salía en UN archivo de 3,4 MB que se volvía a bajar entero tras cada despliegue.
+  // Las librerías grandes van en trozos propios (cambian casi nunca, así que el navegador los conserva) y las
+  // pantallas de uso ocasional se cargan al abrirlas (React.lazy en Dashboard.jsx).
+  build: {
+    chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom'],
+          recharts: ['recharts'],
+          supabase: ['@supabase/supabase-js'],
+          lucide: ['lucide-react'],
+          xlsx: ['xlsx'],
+          jspdf: ['jspdf'],
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({

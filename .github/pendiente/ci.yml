@@ -1,0 +1,20 @@
+# Revisión automática en cada PR y en main (auditoría 2026-10-27, hallazgo C-6):
+# instala, pasa el lint, corre las pruebas y compila. Si algo falla, el PR lo muestra en rojo.
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  revisar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
