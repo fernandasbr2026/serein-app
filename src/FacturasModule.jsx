@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react'
+import { num } from './numeros.js'
 import { Plus, Trash2, Receipt, Upload, Search, FileText } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { calcularPerdidaFactoring, perdidaFactoringFactura } from './ParametrosModule.jsx'
@@ -26,7 +27,7 @@ import { SEREIN } from './theme-serein.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
 const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
-const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
+// num(): lectura común de números con signo y decimales (ver numeros.js, auditoría D-6)
 const inp = { padding: '6px 8px', border: '1px solid #DFE4EA', fontSize: 12.5, boxSizing: 'border-box' }
 // Columna fija (casilla + N° de factura): se queda a la vista cuando la tabla se desplaza hacia la derecha.
 // Sombra en vez de borde: en una tabla con bordes colapsados el borde no acompaña a la celda.

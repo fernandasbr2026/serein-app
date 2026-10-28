@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { num } from './numeros.js'
 import { Plus, Trash2 } from 'lucide-react'
 import { CC_DEFS } from './proyectos-data.js'
 
@@ -14,7 +15,7 @@ import { SEREIN } from './theme-serein.js'
 const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
 const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 const clp = n => '$' + Math.round(+n || 0).toLocaleString('es-CL')
-const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
+// num(): lectura común de números con signo y decimales (ver numeros.js, auditoría D-6)
 const LS_KEY = 'serein_proyParams'
 
 // Lectura reutilizable (la usaran las etapas siguientes del cotizador de proyectos)

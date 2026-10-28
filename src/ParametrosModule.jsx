@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { num } from './numeros.js'
 import { Plus, Trash2, Landmark, Info, TrendingUp, RefreshCw } from 'lucide-react'
 import { pullState, pushState } from './sync.js'
 import { supabase } from './supabase.js'
@@ -15,7 +16,7 @@ import { CONDICIONES_DEF } from './cotizacionDefaults.js'
 // Paleta reskineada a la identidad Serein 2026 — mismas claves, solo cambian los valores hex.
 const C = { naranja: SEREIN.orange, carbon: SEREIN.text, verde: SEREIN.green, rojo: SEREIN.red, gris: SEREIN.textFaint, azul: SEREIN.ink }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
-const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
+// num(): lectura común de números con signo y decimales (ver numeros.js, auditoría D-6)
 export const dec = s => { const v = parseFloat(String(s).replace(',', '.').replace(/[^\d.]/g, '')); return isNaN(v) ? 0 : v }
 const inp = { padding: '7px 9px', border: '1px solid #DFE4EA', fontSize: 13, boxSizing: 'border-box' }
 

@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { num } from './numeros.js'
 import { Plus, Trash2, FileText, Download, CheckCircle2, Search, X } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import Paginador, { paginar } from './Paginador.jsx'
@@ -17,7 +18,7 @@ import { SEREIN } from './theme-serein.js'
 // solo cambian los valores hex. La logica de abajo no se toca.
 const C = { azul: SEREIN.ink, teal: '#0E7A8F', ambar: SEREIN.orange, rojo: SEREIN.red, verde: SEREIN.green, carbon: SEREIN.text, gris: SEREIN.textFaint }
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
-const num = s => { const v = parseInt(String(s).replace(/\D/g, ''), 10); return isNaN(v) ? 0 : v }
+// num(): lectura común de números con signo y decimales (ver numeros.js, auditoría D-6)
 // Cantidad con decimales: la coma es separador decimal; el punto se usa como miles
 const numDec = s => { let x = String(s == null ? '' : s).trim().replace(/[^\d.,-]/g, ''); if (x.includes(',')) x = x.replace(/\./g, '').replace(',', '.'); else if (/^-?\d{1,3}(\.\d{3})+$/.test(x)) x = x.replace(/\./g, ''); const v = parseFloat(x); return isNaN(v) ? 0 : v }
 const fmtCant = s => numDec(s).toLocaleString('es-CL', { maximumFractionDigits: 2 })
