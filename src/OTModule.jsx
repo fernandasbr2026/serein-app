@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx'
 import { descargarOTDesdeOT } from './CotizacionesModule.jsx'
 import { costoOCdeOT, FormOC, nuevaOC, guardarOcFrescoEn, ocNeto, listaProveedores, esGastoMensual, facturasDeOC, FacturasDeOC } from './OrdenesCompraModule.jsx'
 import { supabase } from './supabase.js'
+import { reservarNumeroOT, reservarNumeroOC } from './correlativos.js'
 import { generarPdfProtocoloBlob, blobToBase64, fileToBase64, protocoloCompleto } from './protocolo-pdf.js'
 import { costoMOdeOT } from './ManoObraModule.jsx'
 import { costoComprasOpDeOT } from './ComprasOperativasModule.jsx'
@@ -434,7 +435,8 @@ function SeccionOCsDeOT({ ot, ordenesCompra = [], otsAll = [], pp = null, setPp 
   const total = delaOT.filter(o => o.estadoPago !== 'Anulada').reduce((a, o) => a + ocNeto(o) * pctDe(o) / 100, 0)
   const otsDisponibles = [...new Set((otsAll || []).map(o => o.numero).filter(Boolean))]
   const otsInfo = (otsAll || []).filter(o => o.numero).map(o => ({ numero: o.numero, m2: parseFloat(o.m2) || 0, cliente: o.cliente || '', estado: o.estado }))
-  const nueva = categoria => setForm(nuevaOC((pp && pp.ocs) || ordenesCompra, { categoria, area: ot.area || ot.sede || 'Santa Rosa', detalle: categoria === 'Pintura' ? 'Pintura OT ' + ot.numero : '', asignaciones: [{ ot: ot.numero, pct: 100 }] }))
+  // Número de OC reservado en la base antes de abrir el formulario (auditoría D-5)
+  const nueva = async categoria => { const oc = nuevaOC((pp && pp.ocs) || ordenesCompra, { categoria, area: ot.area || ot.sede || 'Santa Rosa', detalle: categoria === 'Pintura' ? 'Pintura OT ' + ot.numero : '', asignaciones: [{ ot: ot.numero, pct: 100 }] }); oc.numero = await reservarNumeroOC(oc.numero); setForm(oc) }
   const btn = { background: C.teal, color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }
   return (
     <div style={{ marginBottom: 18 }}>
@@ -2856,12 +2858,15 @@ function FormOT({ area, siguienteNumero, clientesActivos = [], onAdd, onCancel }
         <input style={inp} placeholder="Esquema de pintura" value={f.esquema} onChange={e => setF({ ...f, esquema: e.target.value })} />
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-        <button onClick={() => f.cliente && onAdd({
-          id: 'ot' + Date.now(), numero: siguienteNumero, area, fecha: new Date().toISOString().slice(0, 10), nombreEncargo: f.nombreEncargo, correo: f.correo, telefono: f.telefono, nv: f.nv,
+        <button onClick={async () => { if (!f.cliente) return
+          // El número definitivo lo entrega la base (serie única entre sesiones); si no responde, se usa el propuesto (auditoría D-5)
+          const numero = await reservarNumeroOT(siguienteNumero)
+          onAdd({
+          id: 'ot' + Date.now(), numero, area, fecha: new Date().toISOString().slice(0, 10), nombreEncargo: f.nombreEncargo, correo: f.correo, telefono: f.telefono, nv: f.nv,
           cliente: f.cliente, cotizacion: f.cotizacion || '—', oc: f.oc || '—',
           m2: num(f.m2), montoCotizado: num(f.montoCotizado), preparacion: f.preparacion, esquema: f.esquema || '—',
           estado: 'Cotizada', ventas: [], costos: [],
-        })} style={{ background: C.verde, color: '#fff', border: 'none', padding: '8px 18px', cursor: 'pointer', fontSize: 13 }}>Crear OT</button>
+        }) }} style={{ background: C.verde, color: '#fff', border: 'none', padding: '8px 18px', cursor: 'pointer', fontSize: 13 }}>Crear OT</button>
         <button onClick={onCancel} style={{ background: 'none', border: '1px solid #DFE4EA', padding: '8px 14px', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
       </div>
     </div>
