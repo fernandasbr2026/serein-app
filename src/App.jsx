@@ -5,7 +5,7 @@ import Dashboard from './Dashboard.jsx'
 import SubcontratoApp from './SubcontratoApp.jsx'
 import TallerExternoApp from './TallerExternoApp.jsx'
 import LogoSerein from './LogoSerein.jsx'
-import { pullState, pushState, obtenerEstadoGuardado } from './sync.js'
+import { pullState, pushState, obtenerEstadoGuardado, configurarSync } from './sync.js'
 import { SEREIN } from './theme-serein.js'
 
 // Captura errores de render para que la app no se quede en blanco y muestre el detalle
@@ -119,6 +119,7 @@ export default function App() {
     // carga.
     if (!perfil) return
     if (perfil.tipo === 'subcontrato' || perfil.tipo === 'taller_externo') { setSincronizado(true); return }
+    configurarSync(perfil)
     let vivo = true
     pullState().then(res => { if (res.ok && res.n === 0) pushState() }).finally(() => { if (vivo) setSincronizado(true) })
     const id = setInterval(() => { pushState() }, 5000)
@@ -152,6 +153,15 @@ export default function App() {
 
   async function salir() {
     await supabase.auth.signOut()
+    // Al cerrar sesión no queda nada del ERP en el equipo (celulares y PC compartidos de planta):
+    // se borran los datos locales y las marcas de sincronización. Lo que no alcanzó a subir ya
+    // lo retiene el aviso de «guardando» al cerrar la pestaña (más arriba).
+    try {
+      const claves = []
+      for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && /^(serein_|__serein_|cotizador_|__pushok_|__protdesde_)/.test(k)) claves.push(k) }
+      claves.forEach(k => localStorage.removeItem(k))
+    } catch (e) { /* sin localStorage */ }
+    configurarSync(null)
     setPerfil(null)
     setErrorPerfil(null)
     setRecovery(false)

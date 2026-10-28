@@ -1,5 +1,7 @@
 import { SEREIN } from './theme-serein.js'
 import { EMPRESA } from './CotizacionesModule.jsx'
+// Los nombres y folios vienen de datos que cualquier usuario puede editar: se escapan antes de imprimirlos
+const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
 // ============================================================
 // Informe PDF de facturas seleccionadas (Facturas / Libro de Ventas).
@@ -79,19 +81,19 @@ function htmlInforme(items) {
       : (esFactoring ? '-' : '')
     return `<tr>
       <td>${fmtF(f.fechaEmision)}</td>
-      <td>${f.folio || ''}</td>
-      <td>${f.cliente || ''}</td>
-      <td>${otOcNv(f)}</td>
+      <td>${esc(f.folio)}</td>
+      <td>${esc(f.cliente)}</td>
+      <td>${esc(otOcNv(f))}</td>
       <td class="r">${clp(f.ventaNeta)}</td>
       <td class="r">${clp(f.iva)}</td>
       <td class="r">${clp(f.total)}</td>
-      <td><span class="pill" style="background:${bg};color:${fg}">${f.estado || '-'}</span></td>
+      <td><span class="pill" style="background:${bg};color:${fg}">${esc(f.estado || '-')}</span></td>
       <td>${factoringTxt}</td>
       <td>${fmtF(f.fechaVencimiento)}</td>
       <td class="r${mora ? ' mora' : ''}">${mora == null ? '-' : mora}</td>
       <td class="r">${clp(f.abonos)}</td>
       <td class="r">${clp(f.saldoPendiente)}</td>
-      <td>${f.banco || ''}</td>
+      <td>${esc(f.banco)}</td>
     </tr>`
   }).join('')
   const logo = (function () { try { return localStorage.getItem('serein_logo') || '' } catch (e) { return '' } })()

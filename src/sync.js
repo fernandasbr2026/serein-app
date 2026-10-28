@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js'
+import { claveVisible } from './permisosClaves.js'
 
 const KEY_RE = /^(serein_|__serein_|cotizador_)/
 // Prefijo de las marcas "esto ya se confirmó subido a la nube", una por
@@ -23,6 +24,13 @@ const PROTECCION_MAX_MS = 90 * 1000
 const PROTECCION_CON_FALLAS_MS = 30 * 60 * 1000
 let ultimoFalloPush = 0
 let lastPushed = {}
+// Perfil de quien está conectado: decide qué claves se intentan subir (ver permisosClaves.js).
+let perfilSync = null
+export function configurarSync(perfil) { perfilSync = perfil || null }
+// Hasta que esta sesión no haya LEÍDO la nube con éxito, no sube nada: así las semillas de ejemplo
+// con que arranca la app (o un localStorage viejo) nunca pisan los datos reales si Supabase estaba
+// caído al entrar (auditoría 2026-10-27, hallazgo F-1).
+let nubeLeida = false
 
 // Huella liviana de un string (FNV-1a, no criptográfico — solo para
 // detectar si el valor cambió). Antes OK_PREFIX guardaba una copia
@@ -176,6 +184,7 @@ export async function pullState() {
   try {
     const { data, error } = await supabase.from('app_state').select('id, value')
     if (error || !data) return { ok: false, n: 0 }
+    nubeLeida = true
     let n = 0
     data.forEach(row => {
       if (!row.id || row.value == null) return
@@ -276,13 +285,17 @@ let pendiente = false
 // — así ninguna escritura queda sin intentar subirse.
 export async function pushState() {
   if (ocupado) { pendiente = true; return { ok: false, encolado: true } }
+  if (!nubeLeida) return { ok: false, sinNube: true }
   ocupado = true
   pendiente = false
   try {
     const rows = []
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i)
-      if (k && KEY_RE.test(k)) { const v = localStorage.getItem(k); if (v !== lastPushed[k]) rows.push({ id: k, value: v, updated_at: new Date().toISOString() }) }
+      if (!k || !KEY_RE.test(k)) continue
+      // Claves que este perfil no puede escribir en la nube (la base las rechazaría en silencio)
+      if (perfilSync && !claveVisible(perfilSync, k)) continue
+      const v = localStorage.getItem(k); if (v !== lastPushed[k]) rows.push({ id: k, value: v, updated_at: new Date().toISOString() })
     }
     if (rows.length) {
       emitirEstado({ fase: 'guardando' })

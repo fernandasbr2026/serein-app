@@ -1,5 +1,7 @@
 import { SEREIN } from './theme-serein.js'
 import { EMPRESA } from './CotizacionesModule.jsx'
+// Los nombres y folios vienen de datos que cualquier usuario puede editar: se escapan antes de imprimirlos
+const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
 // ============================================================
 // Informe PDF de Cobranza atrasada (Santa Rosa / Istria).
@@ -96,9 +98,9 @@ function htmlInforme({ items, area, filtroDescripcion, periodoDescripcion, usuar
     const [bgC, fgC] = ESTADO_COBRANZA_COLOR[x.estadoCobranza] || [SEREIN.fog2, SEREIN.textSoft]
     const [bgP, fgP] = ESTADO_PUB_COLOR[x.estadoPublicacion] || [SEREIN.fog2, SEREIN.textSoft]
     return `<tr>
-      <td>${x.folio || ''}</td>
-      <td>${x.cliente || ''}</td>
-      <td>${otOcNv(x)}</td>
+      <td>${esc(x.folio)}</td>
+      <td>${esc(x.cliente)}</td>
+      <td>${esc(otOcNv(x))}</td>
       <td>${fmtF(x.fechaEmision)}</td>
       <td>${fmtF(x.fechaVencimiento)}</td>
       <td class="r">${clp(x.neto)}</td>
@@ -106,8 +108,8 @@ function htmlInforme({ items, area, filtroDescripcion, periodoDescripcion, usuar
       <td class="r">${clp(x.pagado)}</td>
       <td class="r">${clp(x.saldoBruto)}</td>
       <td class="r">${x.diasMora}</td>
-      <td><span class="pill" style="background:${bgC};color:${fgC}">${x.estadoCobranza}</span></td>
-      <td><span class="pill" style="background:${bgP};color:${fgP}">${x.estadoPublicacion}</span></td>
+      <td><span class="pill" style="background:${bgC};color:${fgC}">${esc(x.estadoCobranza)}</span></td>
+      <td><span class="pill" style="background:${bgP};color:${fgP}">${esc(x.estadoPublicacion)}</span></td>
       <td>${fmtF(x.fechaPublicacion)}</td>
     </tr>`
   }).join('')
@@ -124,11 +126,11 @@ function htmlInforme({ items, area, filtroDescripcion, periodoDescripcion, usuar
       </div>
       <div class="doc">
         <div class="t">Informe de cobranza atrasada</div>
-        <div class="f">${area}<br/>Emitido el ${fechaHora}${usuarioEmail ? ' · ' + usuarioEmail : ''}</div>
+        <div class="f">${area}<br/>Emitido el ${fechaHora}${usuarioEmail ? ' · ' + esc(usuarioEmail) : ''}</div>
       </div>
     </div>
     <div class="meta">
-      <span>Periodo analizado: <b>${periodoDescripcion || 'Todas las fechas'}</b></span>
+      <span>Periodo analizado: <b>${esc(periodoDescripcion || 'Todas las fechas')}</b></span>
     </div>
     <div class="resumen">
       <div class="c"><div class="l">Facturas vencidas</div><div class="v">${r2.n}</div></div>
