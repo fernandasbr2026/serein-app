@@ -16,7 +16,7 @@ const C = { naranja: SEREIN.orange, teal: '#0E7A8F', carbon: SEREIN.text, verde:
 const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const num = s => { const v = parseInt(String(s).replace(/[^\d-]/g, ''), 10); return isNaN(v) ? 0 : v }
 // Porcentajes de reparto: admiten decimales (el reparto por m² casi nunca da exacto)
-const pctNum = s => { const v = parseFloat(String(s).replace(',', '.')); return isNaN(v) ? 0 : v }
+const pctNum = s => { let x = String(s == null ? '' : s).trim().replace(/[^\d.,-]/g, ''); if (x.includes(',')) x = x.replace(/\./g, '').replace(',', '.'); else if (/^-?\d{1,3}(\.\d{3})+$/.test(x)) x = x.replace(/\./g, ''); const v = parseFloat(x); return isNaN(v) ? 0 : v }
 const inp = { padding: '6px 8px', border: '1px solid #DFE4EA', fontSize: 12.5, boxSizing: 'border-box' }
 const hoy = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 const sumarDias = (fecha, dias) => { if (!fecha) return ''; const d = new Date(fecha + 'T12:00:00'); d.setDate(d.getDate() + (parseInt(dias, 10) || 0)); return d.toISOString().slice(0, 10) }
@@ -44,7 +44,8 @@ const ESTADOS_PAGO = ['Pendiente', 'Parcialmente pagada', 'Pagada', 'Vencida', '
 const AREAS = ['Santa Rosa', 'Istria', 'Proyectos', 'Producción / Planta', 'General empresa']
 
 // ---- Cálculos (compatibles con las OC importadas que sólo traían "monto") ----
-const itemTotalOC = it => Math.max(0, Math.round(num(it.cantidad) * num(it.precio) - num(it.descuento)))
+// Cantidad y precio admiten decimales (1,5 galones; $1.234,56); el total se redondea a pesos al final (auditoría D-6)
+const itemTotalOC = it => Math.max(0, Math.round(Math.max(0, pctNum(it.cantidad)) * Math.max(0, pctNum(it.precio)) - Math.max(0, pctNum(it.descuento))))
 export const ocNeto = oc => (oc.items && oc.items.length) ? oc.items.reduce((a, it) => a + itemTotalOC(it), 0) : ((oc.neto != null && oc.neto !== '') ? num(oc.neto) : Math.round(num(oc.monto) / 1.19))
 export const ocIva = oc => Math.round(ocNeto(oc) * 0.19)
 export const ocTotal = oc => ocNeto(oc) + ocIva(oc)
@@ -313,6 +314,8 @@ export function FormOC({ inicial, otsDisponibles, otsInfo = [], onGuardar, onCan
     if (!(ocNeto(f) > 0)) { setAviso(conItems ? 'Los ítems suman $0: revisa cantidad y precio.' : 'Falta el monto neto (o agrega ítems con precio).'); return }
     // Sin OT la OC no aparece en ninguna ficha: se avisa una vez; si vuelve a pulsar Guardar, se guarda igual (puede ligarse después)
     if (!mensual && asigs.filter(a => a.ot).length === 0 && !avisadoSinOT) { setAvisadoSinOT(true); setAviso('Esta OC no está ligada a ninguna OT: no aparecerá en la ficha de ninguna OT. Asígnala abajo, o pulsa Guardar otra vez para guardarla igual.'); return }
+    // Un reparto que no suma 100 % carga de más (o de menos) a las OT y distorsiona su margen (auditoría F-3)
+    if (!mensual && asigs.filter(a => a.ot).length > 0 && Math.abs(sumaPct - 100) > 0.05) { setAviso('El reparto entre OT suma ' + sumaPct + ' %: debe sumar exactamente 100 % (usa «Repartir por m²» o corrige los porcentajes).'); return }
     setAviso('')
     onGuardar(f)
   }

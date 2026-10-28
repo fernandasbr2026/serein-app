@@ -402,7 +402,7 @@ function RevisionGerencia({ comprasOp, setComprasOp }) {
                     : c.asignacion.items.map((i, ix) => (
                       <div key={ix} style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 2 }}>
                         <span>{i.ref}</span>
-                        <input value={i.pct} onChange={e => upd(c.id, { asignacion: { ...c.asignacion, items: c.asignacion.items.map((x, j) => j === ix ? { ...x, pct: parseFloat(e.target.value) || 0 } : x) }, estado: 'Corregida por Gerencia' })}
+                        <input value={i.pct} onChange={e => upd(c.id, { asignacion: { ...c.asignacion, items: c.asignacion.items.map((x, j) => j === ix ? { ...x, pct: Math.min(100, Math.max(0, parseFloat(String(e.target.value).replace(',', '.')) || 0)) } : x) }, estado: 'Corregida por Gerencia' })}
                           style={{ ...inp, width: 52, padding: '2px 4px', fontSize: 12, textAlign: 'right' }} />%
                       </div>
                     ))}

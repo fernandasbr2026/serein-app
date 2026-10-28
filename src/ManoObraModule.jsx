@@ -363,7 +363,8 @@ const TIPOS_EXTRA = [
 function horasEntre(inicio, fin) {
   if (!inicio || !fin) return 0
   let min = minutosDesde(fin) - minutosDesde(inicio)
-  if (min <= 0) min += 24 * 60
+  if (min === 0) return 0            // misma hora de inicio y fin = nada trabajado (antes pagaba 24 h; auditoría F-5)
+  if (min < 0) min += 24 * 60        // cruza la medianoche (22:00 → 02:00)
   return Math.round((min / 60) * 100) / 100
 }
 // Sugerencia automática de colación según la regla acordada — el

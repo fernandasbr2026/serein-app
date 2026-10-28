@@ -442,6 +442,19 @@ export default function Dashboard({ perfil, email, onLogout }) {
     }))
   }, [params.uf && params.uf.valor])
   const vista = useMemo(() => (esGerencia && areaSel === 'TODAS') ? DATA.global : (DATA.areas[areaSel] || DATA.global), [areaSel, esGerencia])
+  // Cobranza atrasada real (todas las áreas): facturas no pagadas con vencimiento anterior a hoy
+  const atrasadasReales = useMemo(() => {
+    const hoyStr = new Date().toISOString().slice(0, 10)
+    const out = []
+    Object.keys(facturas || {}).forEach(a => (facturas[a] || []).forEach(f => {
+      if (!f || f.estado === 'Pagado' || !f.vencimiento || f.vencimiento >= hoyStr) return
+      const pendiente = (saldoPendienteDe(f) || {}).bruto || 0
+      if (!(pendiente > 0)) return
+      const dias = Math.max(0, Math.round((new Date(hoyStr + 'T12:00:00') - new Date(f.vencimiento + 'T12:00:00')) / 86400000))
+      out.push({ cliente: (f.cliente || '') + ' · ' + a + ' · F' + (f.numero || ''), pendiente, dias })
+    }))
+    return out.sort((x, y) => y.dias - x.dias)
+  }, [facturas])
 
   const mesesVista = useMemo(() => {
     // Gráfico desde las FACTURAS reales (agrupadas por fecha_emision), no desde DATA.meses semilla.
@@ -1017,11 +1030,12 @@ export default function Dashboard({ perfil, email, onLogout }) {
             {/* Riesgo de cobro primero, contexto de clientes después — lectura
                 más propia de finanzas (Fase K del plan). */}
             <div style={{ marginBottom: 16 }}>
-              {(areaSel === 'Santa Rosa' || areaSel === 'Istria') ? (
+              {(areaSel === 'Santa Rosa' || areaSel === 'Istria' || areaSel === 'Proyectos') ? (
                 <CobranzaAtrasadaModule area={areaSel} facturas={facturas} setFacturas={setFacturas} usuarioEmail={email} />
               ) : (
-              <Panel title="Cobranza atrasada" right={<span style={{ fontSize: 12, color: C.rojo }}>{vista.atrasadas.length} facturas</span>}>
-                {vista.atrasadas.length === 0 ? (
+              // TODAS: se arma con las facturas reales de las tres áreas (antes mostraba una lista de ejemplo de data.js; auditoría F-6)
+              <Panel title="Cobranza atrasada" right={<span style={{ fontSize: 12, color: C.rojo }}>{atrasadasReales.length} facturas</span>}>
+                {atrasadasReales.length === 0 ? (
                   <div style={{ color: C.verde, fontSize: 14, padding: '10px 0' }}>✓ Sin facturas atrasadas en esta área.</div>
                 ) : (
                   <div style={{ overflowX: 'auto' }}>
@@ -1034,7 +1048,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {vista.atrasadas.map((r, i) => (
+                        {atrasadasReales.map((r, i) => (
                           <tr key={i} style={{ borderBottom: '1px solid #DFE4EA' }}>
                             <td style={{ padding: 8 }}>{r.cliente}</td>
                             <td style={{ padding: 8, textAlign: 'right' }}>{clp(r.pendiente)}</td>

@@ -42,7 +42,8 @@ function _empVal(k, map) { try { const p = JSON.parse(localStorage.getItem('sere
 export const EMPRESA = {}
 ;[['nombre', 'razonSocial'], ['rut', 'rut'], ['giro', 'giro'], ['direccion', 'direccion'], ['telefono', 'telefono'], ['email', 'correo'], ['banco', 'banco'], ['cuenta', 'cuentaCorriente']].forEach(m => Object.defineProperty(EMPRESA, m[0], { get() { return _empVal(m[0], m[1]) }, enumerable: true }))
 
-const itemTotal = it => Math.max(0, Math.round((numDec(it.cant) * num(it.pUnitario)) - num(it.descuento)))
+// Precio unitario con decimales («1.234,56» → 1234.56) y nunca negativo; se redondea a pesos al final (auditoría D-6)
+const itemTotal = it => Math.max(0, Math.round((Math.max(0, numDec(it.cant)) * Math.max(0, numDec(it.pUnitario))) - Math.max(0, numDec(it.descuento))))
 export function totales(cot) {
   const afecto = (cot.items || []).reduce((a, it) => a + itemTotal(it), 0)
   const iva = Math.round(afecto * 0.19)
