@@ -115,8 +115,88 @@ export function fusionarFacturas(baseStr, otroStr) {
     return agregado ? JSON.stringify(out) : null
   } catch (e) { return null }
 }
-// Qué claves se fusionan en vez de pisarse enteras (ver fusionarOts / fusionarFacturas)
-const FUSIONES = { serein_ots: fusionarOts, serein_facturas: fusionarFacturas }
+// ————— Fusión genérica con lápidas (el resto de los bloques) —————
+// Auditoría 2026-10-27 (D-1): 15 de 17 bloques seguían con «la última subida gana». Esta fusión sirve
+// para cualquier bloque que sea un arreglo de ítems con `id` (cotizaciones, proyectos, inventario,
+// compras operativas, avances, clientes…) o un objeto cuyos campos son arreglos de ítems con `id`
+// (pp.ocs/proveedores/docs/cobros/cheques, mo.trabajadores/asistencias/horasExtras, fin.gastos/
+// obligaciones/plantillas, contactos.clientes/proveedores). Regla: los ítems que están en los dos
+// lados los manda `base`; los que solo están en el otro lado se suman, salvo que tengan lápida.
+// Las lápidas se anotan SOLAS: al subir, se comparan los ids que esta sesión tenía la última vez con
+// los que tiene ahora; los que desaparecieron fueron borrados a propósito en esta sesión. Si un id
+// borrado vuelve a aparecer, la lápida se quita. Todas viven en serein_lapidas ({ clave: { id: fecha } }),
+// que también se fusiona (unión) entre sesiones. Los ítems sin `id` no se fusionan (manda `base`).
+const LAPIDAS_KEY = 'serein_lapidas'
+const LAPIDA_DIAS = 90
+function leerLapidas() {
+  try { const o = JSON.parse(localStorage.getItem(LAPIDAS_KEY) || '{}'); return o && typeof o === 'object' && !Array.isArray(o) ? o : {} } catch (e) { return {} }
+}
+function guardarLapidas(o) {
+  const corte = Date.now() - LAPIDA_DIAS * 86400000
+  const limpio = {}
+  Object.keys(o).forEach(k => { const m = {}; Object.keys(o[k] || {}).forEach(id => { if (Number(o[k][id]) > corte) m[id] = o[k][id] }); if (Object.keys(m).length) limpio[k] = m })
+  try { localStorage.setItem(LAPIDAS_KEY, JSON.stringify(limpio)) } catch (e) {}
+}
+// Ids de todos los ítems del bloque (arreglo, u objeto de arreglos), con la ruta a la que pertenecen
+function idsDeBloque(v) {
+  const out = new Map()
+  const tomar = (arr, ruta) => { if (Array.isArray(arr)) arr.forEach(x => { if (x && typeof x === 'object' && x.id != null) out.set(String(x.id), ruta) }) }
+  if (Array.isArray(v)) tomar(v, '')
+  else if (v && typeof v === 'object') Object.keys(v).forEach(k => tomar(v[k], k))
+  return out
+}
+export function anotarLapidas(clave, antesStr, ahoraStr) {
+  try {
+    const antes = idsDeBloque(JSON.parse(antesStr)), ahora = idsDeBloque(JSON.parse(ahoraStr))
+    const lap = leerLapidas()
+    const m = { ...(lap[clave] || {}) }
+    let cambio = false
+    antes.forEach((_, id) => { if (!ahora.has(id) && !m[id]) { m[id] = Date.now(); cambio = true } })
+    ahora.forEach((_, id) => { if (m[id]) { delete m[id]; cambio = true } })
+    if (cambio) { lap[clave] = m; guardarLapidas(lap) }
+  } catch (e) { /* sin lápidas */ }
+}
+export function fusionarGenerico(clave, baseStr, otroStr) {
+  try {
+    const base = JSON.parse(baseStr), otro = JSON.parse(otroStr)
+    const lap = (leerLapidas()[clave]) || {}
+    const ids = idsDeBloque(base)
+    let agregado = false
+    if (Array.isArray(base) && Array.isArray(otro)) {
+      const out = [...base]
+      otro.forEach(x => { if (x && typeof x === 'object' && x.id != null && !ids.has(String(x.id)) && !lap[String(x.id)]) { out.push(x); ids.set(String(x.id), ''); agregado = true } })
+      return agregado ? JSON.stringify(out) : null
+    }
+    if (base && typeof base === 'object' && !Array.isArray(base) && otro && typeof otro === 'object' && !Array.isArray(otro)) {
+      const out = { ...base }
+      Object.keys(otro).forEach(k => {
+        if (!Array.isArray(otro[k])) return
+        if (out[k] != null && !Array.isArray(out[k])) return
+        const arr = Array.isArray(out[k]) ? [...out[k]] : []
+        let toco = false
+        otro[k].forEach(x => { if (x && typeof x === 'object' && x.id != null && !ids.has(String(x.id)) && !lap[String(x.id)]) { arr.push(x); ids.set(String(x.id), k); toco = true } })
+        if (toco) { out[k] = arr; agregado = true }
+      })
+      return agregado ? JSON.stringify(out) : null
+    }
+    return null
+  } catch (e) { return null }
+}
+// Las lápidas de distintas sesiones se unen (nunca se pisan)
+function fusionarLapidas(baseStr, otroStr) {
+  try {
+    const base = JSON.parse(baseStr) || {}, otro = JSON.parse(otroStr) || {}
+    const out = {}; let cambio = false
+    Object.keys(base).forEach(k => { out[k] = { ...base[k] } })
+    Object.keys(otro).forEach(k => { out[k] = out[k] || {}; Object.keys(otro[k] || {}).forEach(id => { if (!out[k][id]) { out[k][id] = otro[k][id]; cambio = true } }) })
+    return cambio ? JSON.stringify(out) : null
+  } catch (e) { return null }
+}
+const CLAVES_GENERICAS = ['serein_pp', 'serein_cotizaciones', 'serein_proyectos', 'serein_fin', 'serein_mo', 'serein_inventario',
+  'serein_invMov', 'serein_comprasOp', 'serein_avances', 'serein_contactos', 'serein_clientes', 'serein_proyCotizaciones']
+// Qué claves se fusionan en vez de pisarse enteras (ver fusionarOts / fusionarFacturas / fusionarGenerico)
+const FUSIONES = { serein_ots: fusionarOts, serein_facturas: fusionarFacturas, serein_lapidas: fusionarLapidas }
+CLAVES_GENERICAS.forEach(k => { FUSIONES[k] = (b, o) => fusionarGenerico(k, b, o) })
 
 // ————— Estado de guardado observable —————
 // Antes no había forma honesta de saber, desde la pantalla, si un cambio
@@ -304,6 +384,8 @@ export async function pushState() {
       for (const r of rows) {
         const fusion = FUSIONES[r.id]
         if (!fusion) continue
+        // Lo que esta sesión quitó desde la última subida son borrados a propósito: quedan con lápida
+        if (CLAVES_GENERICAS.includes(r.id) && lastPushed[r.id] != null) anotarLapidas(r.id, lastPushed[r.id], r.value)
         try {
           const { data: nube } = await supabase.from('app_state').select('value').eq('id', r.id).maybeSingle()
           if (nube && nube.value != null) {
