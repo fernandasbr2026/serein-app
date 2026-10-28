@@ -41,7 +41,7 @@ export default function Login() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'radial-gradient(760px 460px at 88% -8%, rgba(247,119,22,.18), transparent 66%), radial-gradient(640px 420px at -8% 112%, rgba(247,119,22,.11), transparent 62%), #F5F6F8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Inter',sans-serif", padding: 20 }}>
+    <div style={{ minHeight: 'var(--alto-pantalla)', background: 'radial-gradient(760px 460px at 88% -8%, rgba(247,119,22,.18), transparent 66%), radial-gradient(640px 420px at -8% 112%, rgba(247,119,22,.11), transparent 62%), #F5F6F8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Inter',sans-serif", padding: 20 }}>
       <div style={{ width: '100%', maxWidth: 400 }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 24 }}>
           <LogoSerein alto={54} />
