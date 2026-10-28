@@ -1,0 +1,32 @@
+
+> serein-dashboard@1.0.0 build
+> vite build
+
+[36mvite v5.4.21 [32mbuilding for production...[36m[39m
+transforming...
+[32m✓[39m 2818 modules transformed.
+rendering chunks...
+[1m[33m[plugin:vite:reporter][39m[22m [33m[plugin vite:reporter] 
+(!) C:/Users/maria/gwt/serein-audit/src/OTModule.jsx is dynamically imported by C:/Users/maria/gwt/serein-audit/src/CotizacionesModule.jsx but also statically imported by C:/Users/maria/gwt/serein-audit/src/Dashboard.jsx, C:/Users/maria/gwt/serein-audit/src/TrazabilidadModule.jsx, C:/Users/maria/gwt/serein-audit/src/vistaCliente.js, dynamic import will not move module into another chunk.
+[39m
+computing gzip size...
+[2mdist/[22m[32mregisterSW.js                       [39m[1m[2m    0.13 kB[22m[1m[22m
+[2mdist/[22m[32mmanifest.webmanifest                [39m[1m[2m    0.57 kB[22m[1m[22m
+[2mdist/[22m[32mindex.html                          [39m[1m[2m    1.27 kB[22m[1m[22m[2m │ gzip:   0.64 kB[22m
+[2mdist/[22m[36massets/purify.es-Jn2rvFN8.js        [39m[1m[2m   28.91 kB[22m[1m[22m[2m │ gzip:  10.90 kB[22m
+[2mdist/[22m[36massets/index.es-BMm4gAVE.js         [39m[1m[2m  150.69 kB[22m[1m[22m[2m │ gzip:  51.55 kB[22m
+[2mdist/[22m[36massets/html2canvas.esm-CBrSDip1.js  [39m[1m[2m  201.42 kB[22m[1m[22m[2m │ gzip:  48.03 kB[22m
+[2mdist/[22m[36massets/index-11nljCo9.js            [39m[1m[33m3,442.23 kB[39m[22m[2m │ gzip: 953.87 kB[22m
+[33m
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+[32m✓ built in 27.49s[39m
+
+PWA v2.0.0
+mode      generateSW
+precache  15 entries (3780.94 KiB)
+files generated
+  dist/sw.js
+  dist/workbox-9c191d2f.js
