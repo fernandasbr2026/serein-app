@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx'
 import Paginador, { paginar } from './Paginador.jsx'
 import { PROVEEDORES_FICHA } from './proveedores-data.js'
 import { pushState, pullState } from './sync.js'
+import { reservarFolioCotizacion } from './correlativos.js'
 import { SEREIN } from './theme-serein.js'
 
 // ============================================================
@@ -976,6 +977,8 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
           // Piso en 825 (no 792): el folio 825 falló al guardarse muchas
           // veces seguidas por administración — se salta por completo.
           let folioFresco = Math.max(825, base.reduce((m, c) => Math.max(m, parseInt(String(c.folio).replace(/\D/g, ''), 10) || 0), 792)) + 1
+          // La base entrega el folio definitivo (serie única entre sesiones); si no responde, queda el local (auditoría D-5)
+          folioFresco = Number(await reservarFolioCotizacion(folioFresco)) || folioFresco
           while (base.some(c => String(c.folio) === String(folioFresco))) folioFresco++
           cotFinal = { ...cot, folio: String(folioFresco) }
         }

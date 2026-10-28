@@ -1,9 +1,10 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { num } from './numeros.js'
 import { Plus, Trash2, Search, ChevronDown, ChevronUp, Download } from 'lucide-react'
 import Paginador, { paginar } from './Paginador.jsx'
 import { PROVEEDORES_FICHA } from './proveedores-data.js'
 import { pullState, pushState } from './sync.js'
+import { reservarNumeroOC } from './correlativos.js'
 
 // ============================================================
 // MÓDULO: Órdenes de Compra a PROVEEDORES (emitidas por Serein)
@@ -283,8 +284,10 @@ function FilaOC({ oc, otsDisponibles, upd, onDelete, proveedores = PROVEEDORES_F
 }
 
 // ---- Formulario para crear / editar una OC en una mini ventana ----
-export function FormOC({ inicial, otsDisponibles, otsInfo = [], onGuardar, onCancelar, proveedores = PROVEEDORES_FICHA }) {
+export function FormOC({ inicial, otsDisponibles, otsInfo = [], onGuardar, onCancelar, proveedores = PROVEEDORES_FICHA, nuevo = false }) {
   const [f, setF] = useState(inicial)
+  // OC nueva: el número definitivo lo entrega la base (serie única entre sesiones, auditoría D-5); mientras tanto se muestra el local
+  useEffect(() => { if (!nuevo) return; let vivo = true; reservarNumeroOC(inicial.numero).then(n => { if (vivo && n && n !== inicial.numero) setF(prev => ({ ...prev, numero: n })) }); return () => { vivo = false } }, [])
   const set = (k, v) => setF({ ...f, [k]: v })
   const setProveedor = v => { const p = buscarProv(proveedores, v); setF(prev => ({ ...prev, proveedor: v, ...(p ? { rut: p.rut || prev.rut, direccion: p.direccion || prev.direccion } : {}) })) }
   const setFecha = v => setF({ ...f, fecha: v, vencimiento: sumarDias(v, num(f.plazo)) })
@@ -505,7 +508,7 @@ export default function OrdenesCompraModule({ pp = { ocs: [] }, setPp = () => {}
       <datalist id="prov-list-oc">
         {provLista.map(p => <option key={p.id || p.nombre} value={p.nombre}>{p.rut || ''}</option>)}
       </datalist>
-      {creando && <FormOC inicial={nueva()} otsDisponibles={otsDisponibles} otsInfo={otsInfo} proveedores={provLista} onGuardar={oc => { guardarOcFresco(base => [oc, ...base]); setCreando(false); avisarGuardada(oc) }} onCancelar={() => setCreando(false)} />}
+      {creando && <FormOC nuevo inicial={nueva()} otsDisponibles={otsDisponibles} otsInfo={otsInfo} proveedores={provLista} onGuardar={oc => { guardarOcFresco(base => [oc, ...base]); setCreando(false); avisarGuardada(oc) }} onCancelar={() => setCreando(false)} />}
       <div style={{ fontSize: 12, color: '#D9600A', background: '#FDECDD', padding: '8px 12px', marginBottom: 12 }}>
         <b>Órdenes de compra a proveedores</b> (emitidas por Serein). Cada OC puede asociarse a una o varias OT con reparto porcentual; su costo neto se carga a esas OT. Las OC pendientes alimentan cuentas por pagar y el flujo de caja del Consolidado.
       </div>
