@@ -8,6 +8,7 @@
 // ============================================================
 
 import { supabase } from '../supabase.js'
+import { ejecutar } from '../db.js'
 
 let _disponible = null // cache: true/false si las tablas existen
 
@@ -52,18 +53,18 @@ export async function cargarMensajes(conversacionId) {
 export async function guardarMensaje(conversacionId, rol, texto, extra) {
   if (!conversacionId) return
   try {
-    await supabase.from('ai_mensajes').insert({
+    await ejecutar(supabase.from('ai_mensajes').insert({
       conversacion_id: conversacionId, rol, texto,
       intent: extra?.intent || null, fuentes: extra?.fuentes || null,
-    })
-    await supabase.from('ai_conversaciones').update({ updated_at: new Date().toISOString() }).eq('id', conversacionId)
-  } catch (e) { /* silencioso */ }
+    }), 'Guardar mensaje')
+    await ejecutar(supabase.from('ai_conversaciones').update({ updated_at: new Date().toISOString() }).eq('id', conversacionId), 'Actualizar conversación')
+  } catch (e) { console.warn('Historial IA:', e.message) }
 }
 
 // Registra la trazabilidad tecnica de cada consulta (aunque se cierre el chat).
 export async function registrarAuditoria(reg) {
   try {
-    await supabase.from('ai_auditoria').insert({
+    await ejecutar(supabase.from('ai_auditoria').insert({
       email: reg.email || null,
       rol: reg.rol || null,
       pregunta: reg.pregunta || null,
@@ -76,6 +77,6 @@ export async function registrarAuditoria(reg) {
       error: reg.error || null,
       duracion_ms: reg.duracion_ms || null,
       modelo: reg.modelo || 'reglas',
-    })
-  } catch (e) { /* silencioso */ }
+    }), 'Auditoría IA')
+  } catch (e) { console.warn('Auditoría IA:', e.message) }
 }

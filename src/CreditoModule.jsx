@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Plus, Search, ArrowLeft, CheckCircle2, XCircle, AlertTriangle, Upload, Trash2, Sparkles, FileText } from 'lucide-react'
 import { supabase } from './supabase.js'
+import { ejecutar, intentar } from './db.js'
 import { SEREIN } from './theme-serein.js'
 import { evaluarCredito, condicionesOC, mezclarParams, PARAMS_CREDITO_DEFAULT, diasEntre, datosDesdeExtraccion, resumenExtraccion, datosFichaDesdeExtraccion, hallazgosDe } from './creditoCalculo.js'
 import { fileToBase64 } from './protocolo-pdf.js'
@@ -213,7 +214,7 @@ const leerDocumentoIA = async (d, file) => {
   let datos = await invocarIA(d.tipo === 'otro' ? 'auto' : d.tipo, file)
   if (d.tipo === 'otro' && TIPOS_CONOCIDOS.includes(datos.tipoDocumento)) { tipoFinal = datos.tipoDocumento; datos = await invocarIA(tipoFinal, file) }
   const fecha = datos.fechaGeneracion || datos.fechaEmision
-  await supabase.from('credito_documentos').update({ datos_extraidos: datos, ...(tipoFinal !== d.tipo ? { tipo: tipoFinal } : {}), ...(fecha && !d.fecha_emision ? { fecha_emision: fecha } : {}) }).eq('id', d.id)
+  await ejecutar(supabase.from('credito_documentos').update({ datos_extraidos: datos, ...(tipoFinal !== d.tipo ? { tipo: tipoFinal } : {}), ...(fecha && !d.fecha_emision ? { fecha_emision: fecha } : {}) }).eq('id', d.id), 'Guardar lo leído del documento')
   return { tipoFinal, datos }
 }
 
@@ -285,12 +286,13 @@ function Documentos({ cliente, docs, params, extraidos, setExtraidos, onCambio, 
   }
   const eliminar = async d => {
     if (!window.confirm('¿Eliminar "' + (d.nombre_archivo || 'este documento') + '"?')) return
+    // Primero la fila (si la base la rechaza, el archivo no se toca y no queda un documento fantasma)
+    if (!(await intentar(supabase.from('credito_documentos').delete().eq('id', d.id), 'Eliminar documento'))) return
     if (d.archivo_path) await supabase.storage.from('credito').remove([d.archivo_path])
-    await supabase.from('credito_documentos').delete().eq('id', d.id)
     if (d.tipo !== 'otro') setExtraidos(prev => { const n = { ...prev }; delete n[d.tipo]; return n })
     onCambio()
   }
-  const cambiarFecha = async (d, valor) => { await supabase.from('credito_documentos').update({ fecha_emision: valor || null }).eq('id', d.id); onCambio() }
+  const cambiarFecha = async (d, valor) => { if (await intentar(supabase.from('credito_documentos').update({ fecha_emision: valor || null }).eq('id', d.id), 'Cambiar fecha')) onCambio() }
   const leer = async d => {
     setTrabajando('lee-' + d.id); setErr(''); setAvisos([])
     try { await leerDoc(d, await archivoDeStorage(d)); onCambio() } catch (x) { setErr('No se pudo leer "' + (d.nombre_archivo || 'el documento') + '": ' + mensajeErrorIA(x)) }
@@ -429,7 +431,7 @@ function OrdenesFacturas({ cliente, params, ordenes, facturas, errorTablas, reca
   }
   const eliminarOC = async oc => {
     if (!window.confirm('¿Eliminar la OC ' + (oc.numero_oc || '') + '? Sus facturas quedan sin OC asociada.')) return
-    await supabase.from('credito_ordenes_compra').delete().eq('id', oc.id)
+    if (!(await intentar(supabase.from('credito_ordenes_compra').delete().eq('id', oc.id), 'Eliminar OC'))) return
     if (oc.estado === 'pagada') onTrabajosPagados(-1)
     recargar()
   }
@@ -586,14 +588,14 @@ function FichaCliente({ cliente, params, esGerencia, onVolver, onCambio }) {
     if (facs.length > 0 && Math.round(num(cliente.deuda_vigente)) !== Math.round(deuda)) cambios.deuda_vigente = deuda
     if (diasMax > params.factura_vencida_max_dias && cliente.estado_credito === 'activa') cambios.estado_credito = 'bloqueada'
     if (Object.keys(cambios).length) {
-      await supabase.from('credito_clientes').update(cambios).eq('id', cliente.id)
+      try { await ejecutar(supabase.from('credito_clientes').update(cambios).eq('id', cliente.id), 'Actualizar línea de crédito') }
+      catch (e) { setMsg(e.message); return }
       if (cambios.estado_credito) setMsg('Línea bloqueada automáticamente: hay una factura vencida hace ' + diasMax + ' días.')
       onCambio()
     }
   }
   const sumarTrabajosPagados = async delta => {
-    await supabase.from('credito_clientes').update({ trabajos_pagados: Math.max(0, (parseInt(cliente.trabajos_pagados, 10) || 0) + delta) }).eq('id', cliente.id)
-    onCambio()
+    if (await intentar(supabase.from('credito_clientes').update({ trabajos_pagados: Math.max(0, (parseInt(cliente.trabajos_pagados, 10) || 0) + delta) }).eq('id', cliente.id), 'Actualizar trabajos pagados')) onCambio()
   }
   useEffect(() => { setF(cliente); setExtraidos({}); cargarEvals(); cargarDocs(); cargarOF() }, [cliente.id])
   // Datos que se precargan al evaluar: lo leído por la IA + la fecha de emisión de la carpeta + si están los 4 documentos requeridos.

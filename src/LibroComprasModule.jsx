@@ -103,7 +103,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
     const cl = (window.prompt('Clasificacion para "' + nombre + '": escribe F para Fijo, V para Variable, o deja vacio para ninguna', 'V') || '').trim().toUpperCase()
     const clasif = cl.charAt(0) === 'F' ? 'Fijo' : cl.charAt(0) === 'V' ? 'Variable' : ''
     setCustomTipos(cur => { if (cur.some(c => c.tipo === nombre)) return cur; const nx = [...cur, { tipo: nombre, clasif }]; try { localStorage.setItem('serein_tiposCustom', JSON.stringify(nx)) } catch (e) {} return nx })
-    supabase.from('tipos_gasto').upsert({ tipo: nombre, clasificacion: clasif }, { onConflict: 'tipo' }).then(() => {}, () => {})
+    supabase.from('tipos_gasto').upsert({ tipo: nombre, clasificacion: clasif }, { onConflict: 'tipo' }).then(({ error }) => { if (error) setSyncMsg('No se pudo guardar el tipo de gasto «' + nombre + '»: ' + error.message) }, e => setSyncMsg('No se pudo guardar el tipo de gasto: ' + (e && e.message || e)))
     return { tipo: nombre, clasif }
   }
   const setTipoCompra = (r, v) => {
@@ -115,7 +115,7 @@ export default function LibroComprasModule({ esGerencia = true, ots = [], factor
     const k = rutN(r.provider_rut)
     if (k && tipo) {
       setProvTipo(m => ({ ...m, [k]: tipo }))
-      supabase.from('proveedor_tipo').upsert({ rut: k, tipo, clasificacion: clasif || '', fuente: 'manual', updated_at: new Date().toISOString() }, { onConflict: 'rut' }).then(() => {}, () => {})
+      supabase.from('proveedor_tipo').upsert({ rut: k, tipo, clasificacion: clasif || '', fuente: 'manual', updated_at: new Date().toISOString() }, { onConflict: 'rut' }).then(({ error }) => { if (error) setSyncMsg('No se pudo recordar el tipo del proveedor: ' + error.message) }, e => setSyncMsg('No se pudo recordar el tipo del proveedor: ' + (e && e.message || e)))
     }
   }
   useEffect(() => { supabase.from('proveedor_tipo').select('rut, tipo').then(res => { const m = {}; (res.data || []).forEach(x => { m[x.rut] = x.tipo }); if (Object.keys(m).length) setProvTipo(m) }, () => {}) }, [])

@@ -11,6 +11,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Check, X, UserPlus, FileText } from 'lucide-react'
 import { supabase } from './supabase.js'
+import { intentar } from './db.js'
 import { SEREIN } from './theme-serein.js'
 import { CC_DEFS } from './proyectos-data.js'
 import { blobToBase64 } from './protocolo-pdf.js'
@@ -136,8 +137,7 @@ function PanelAsignar({ proyectos = [] }) {
   }
   const quitar = async id => {
     if (!window.confirm('¿Quitar esta asignación?')) return
-    await supabase.from('subcontrato_asignaciones').delete().eq('id', id)
-    cargar()
+    if (await intentar(supabase.from('subcontrato_asignaciones').delete().eq('id', id), 'Quitar asignación')) cargar()
   }
 
   const nombreDe = pid => (subcontratistas.find(s => s.id === pid) || {}).nombre || pid
@@ -214,8 +214,7 @@ function PanelAsignarTaller({ proyectos = [] }) {
   }
   const quitar = async id => {
     if (!window.confirm('¿Quitar esta asignación?')) return
-    await supabase.from('taller_asignaciones').delete().eq('id', id)
-    cargar()
+    if (await intentar(supabase.from('taller_asignaciones').delete().eq('id', id), 'Quitar asignación')) cargar()
   }
 
   const nombreDe = pid => (personas.find(s => s.id === pid) || {}).nombre || pid

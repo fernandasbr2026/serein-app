@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from './supabase.js'
+import { ejecutar } from './db.js'
 import { calcularResumenFin } from './FinanzasModule.jsx'
 import { calcularPerdidaFactoring } from './ParametrosModule.jsx'
 import { AlertTriangle, CheckCircle2, TrendingDown, TrendingUp, Wallet, Landmark, Receipt, Info, Flag, Factory, ShoppingCart, Banknote, Lightbulb } from 'lucide-react'
@@ -75,7 +76,7 @@ function ChatIA() {
     const botTxt = 'Recibido' + (tema ? ' (tema: ' + tema + ')' : '') + '. La consulta inteligente aun no esta activa; por ahora tu mensaje queda guardado en el historial.'
     const b = await supabase.from('ai_mensajes').insert({ conversacion_id: cid, rol: 'assistant', texto: botTxt }).select().single()
     setMsgs(m => m.concat([u.data, b.data].filter(Boolean)))
-    supabase.from('ai_conversaciones').update({ updated_at: new Date().toISOString() }).eq('id', cid)
+    ejecutar(supabase.from('ai_conversaciones').update({ updated_at: new Date().toISOString() }).eq('id', cid), 'Actualizar conversación').catch(e => console.warn(e.message))
     setEnviando(false)
   }
   return (
@@ -226,9 +227,9 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
         const u = await supabase.auth.getUser(); const uid = u && u.data && u.data.user ? u.data.user.id : null
         if (!uid) return
         const rows = acts.map(a => ({ usuario: uid, area: a.area, prioridad: a.sev === 'rojo' ? 'Alta' : 'Media', registro_relacionado: a.ir || a.area, descripcion: a.titulo + ' - ' + a.detalle, clave: a.area + '::' + a.titulo.replace(/[0-9]+/g, '#') }))
-        await supabase.from('alertas').upsert(rows, { onConflict: 'usuario,clave' })
+        await ejecutar(supabase.from('alertas').upsert(rows, { onConflict: 'usuario,clave' }), 'Guardar alertas')
         if (vivo) cargarAlertas()
-      } catch (e) {}
+      } catch (e) { console.warn('Asesor:', e.message) }
     })()
     return () => { vivo = false }
   }, [analisis])
@@ -242,7 +243,7 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
         const u = await supabase.auth.getUser(); const uid = u && u.data && u.data.user ? u.data.user.id : null
         if (!uid) return
         const rows = acts.map(a => ({ usuario: uid, titulo: a.area + ' - accion recomendada', descripcion: a.recomendacion, motivo: a.titulo + '. ' + a.detalle, prioridad: a.sev === 'rojo' ? 'Alta' : 'Media', modulo: a.ir || a.area, fuente: 'regla', clave: 'rec::' + a.area + '::' + a.titulo.replace(/[0-9]+/g, '#') }))
-        await supabase.from('recomendaciones').upsert(rows, { onConflict: 'usuario,clave' })
+        await ejecutar(supabase.from('recomendaciones').upsert(rows, { onConflict: 'usuario,clave' }), 'Guardar recomendaciones')
         if (vivo) cargarRecs()
       } catch (e) {}
     })()
@@ -286,7 +287,7 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
           A('Flujo de Caja', flujo, 'Ingresos ' + clp(ingresos) + ' menos salidas ' + clp(salida) + ' = ' + clp(flujo) + '.'),
           A('Rentabilidad', ut, margen === null ? 'Sin datos suficientes.' : 'Utilidad ' + clp(ut) + ' (' + margen + '% sobre venta).')
         ]
-        await supabase.from('analisis_financiero').upsert(rows, { onConflict: 'usuario,clave' })
+        await ejecutar(supabase.from('analisis_financiero').upsert(rows, { onConflict: 'usuario,clave' }), 'Guardar analisis_financiero')
         if (vivo) cargarAnalisis()
       } catch (e) {}
     })()
@@ -324,7 +325,7 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
           A('Ventas', facturado, 'Facturado ' + clp(facturado) + '.'),
           A('Margenes', margen || 0, margen === null ? 'Sin datos suficientes.' : 'Margen ' + margen + '% sobre venta.')
         ]
-        await supabase.from('analisis_comercial').upsert(rows, { onConflict: 'usuario,clave' })
+        await ejecutar(supabase.from('analisis_comercial').upsert(rows, { onConflict: 'usuario,clave' }), 'Guardar analisis_comercial')
         if (vivo) cargarComercial()
       } catch (e) {}
     })()
@@ -372,7 +373,7 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
           A('Horas Hombre', HH, HH + ' HH registradas en ' + dias + ' dia(s) de asistencia.'),
           A('Capacidad', util === null ? 0 : util, util === null ? ('Dotacion ' + dotacion + ' trabajadores; sin asistencias para calcular uso.') : ('Utilizacion ' + util + '% (' + HH + ' HH de ' + (capDia * dias) + ' disponibles).'))
         ]
-        await supabase.from('analisis_operacional').upsert(rows, { onConflict: 'usuario,clave' })
+        await ejecutar(supabase.from('analisis_operacional').upsert(rows, { onConflict: 'usuario,clave' }), 'Guardar analisis_operacional')
         if (vivo) cargarOperacional()
       } catch (e) {}
     })()
@@ -423,7 +424,7 @@ export default function AsesorModule({ fin = {}, pp = {}, proyectos = [], ots = 
           A('Historial cliente', cobranza.porCobrar, 'Por cobrar ' + clp(cobranza.porCobrar) + ' en ' + cobranza.porCliente.length + ' clientes.', cobranza.porCliente),
           A('Factoring', cobranza.factMonto, cobranza.factN + ' EDP en factoring por ' + clp(cobranza.factMonto) + '; perdida estimada ' + clp(cobranza.factPerd) + '.')
         ]
-        await supabase.from('analisis_cobranza').upsert(rows, { onConflict: 'usuario,clave' })
+        await ejecutar(supabase.from('analisis_cobranza').upsert(rows, { onConflict: 'usuario,clave' }), 'Guardar analisis_cobranza')
       } catch (e) {}
     })()
   }, [cobranza])
