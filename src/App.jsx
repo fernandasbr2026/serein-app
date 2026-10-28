@@ -17,7 +17,7 @@ class ErrorBoundary extends React.Component {
     if (this.state.error) {
       const msg = (this.state.error && this.state.error.message) || String(this.state.error)
       return (
-        <div style={{ minHeight: '100vh', background: '#101315', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 14, fontFamily: "'Inter',sans-serif", padding: 24, textAlign: 'center' }}>
+        <div style={{ minHeight: 'var(--alto-pantalla)', background: '#101315', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 14, fontFamily: "'Inter',sans-serif", padding: 24, textAlign: 'center' }}>
           <div style={{ color: '#C5453D', fontSize: 16, fontWeight: 600 }}>Se produjo un error al mostrar el panel</div>
           <div style={{ color: '#9AA3AD', fontSize: 13, maxWidth: 620, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg}</div>
           <button onClick={() => { try { Object.keys(localStorage).filter(k => k.startsWith('serein_')).forEach(k => localStorage.removeItem(k)) } catch (e) {} location.reload() }}
@@ -204,7 +204,7 @@ export default function App() {
 
 function Pantalla({ msg, accion, accionTxt, accionSecundaria, accionSecundariaTxt }) {
   return (
-    <div style={{ minHeight: '100vh', background: '#101315', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16, fontFamily: "'Inter',sans-serif", padding: 20, textAlign: 'center' }}>
+    <div style={{ minHeight: 'var(--alto-pantalla)', background: '#101315', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16, fontFamily: "'Inter',sans-serif", padding: 20, textAlign: 'center' }}>
       <div style={{ color: '#9AA3AD', fontSize: 15, maxWidth: 620, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg}</div>
       {accion && (
         <button onClick={accion} style={{ background: '#F77716', border: 'none', padding: '10px 20px', cursor: 'pointer', fontWeight: 600 }}>
@@ -247,7 +247,7 @@ function NuevaClave({ onListo }) {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #F2F4F7 0%, #F2F4F7 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Inter',sans-serif", padding: 20 }}>
+    <div style={{ minHeight: 'var(--alto-pantalla)', background: 'linear-gradient(180deg, #F2F4F7 0%, #F2F4F7 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Inter',sans-serif", padding: 20 }}>
       <div style={{ width: '100%', maxWidth: 400 }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 24 }}>
           <LogoSerein alto={54} />

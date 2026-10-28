@@ -14,6 +14,8 @@
          modulos que aun no se han pasado al nuevo sistema de diseño (Archivo)
          siguen usandola en sus titulos. -->
     <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700;800;900&family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+      <!-- Alto real de la pantalla: en Safari iOS 100vh incluye la barra del navegador y tapa la última fila (auditoría X-7) -->
+    <style>:root{--alto-pantalla:100vh}@supports(height:100dvh){:root{--alto-pantalla:100dvh}}</style>
   </head>
   <body style="margin:0">
     <div id="root"></div>

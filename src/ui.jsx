@@ -25,7 +25,7 @@ export function useEsMovil(ancho = 860) {
   return movil
 }
 
-export function EstadoGuardado({ colapsado }) {
+export function EstadoGuardado({ colapsado, enCabecera = false }) {
   const [estado, setEstado] = useState(() => ({ fase: 'guardado', ultimoOk: null, ultimoError: null }))
   const [forzando, setForzando] = useState(false)
   useEffect(() => suscribirEstadoGuardado(setEstado), [])
@@ -47,10 +47,17 @@ export function EstadoGuardado({ colapsado }) {
   const Icon = cfg.icon
 
   if (colapsado) {
+    // enCabecera: versión para la cabecera del celular (auditoría X-3). Antes el estado solo estaba en el menú
+    // lateral, cerrado en móvil: el supervisor podía cerrar la app sin saber que el protocolo no subió.
+    // Si hay error se muestra con texto, en rojo, para que no pase desapercibido.
+    const conTexto = enCabecera && estado.fase === 'error'
     return (
-      <button onClick={forzar} title={cfg.texto + ' · Click para forzar guardado'} disabled={forzando}
-        style={{ margin: '10px auto', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,.94)', border: 'none', cursor: 'pointer' }}>
+      <button onClick={forzar} title={cfg.texto + ' · Click para forzar guardado'} aria-label={cfg.texto} disabled={forzando}
+        style={enCabecera
+          ? { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 38, width: conTexto ? 'auto' : 38, padding: conTexto ? '0 12px' : 0, borderRadius: 19, background: conTexto ? SEREIN.redSoft : THEME.surface, border: '1px solid ' + (conTexto ? SEREIN.red : THEME.border), cursor: 'pointer', flexShrink: 0 }
+          : { margin: '10px auto', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,.94)', border: 'none', cursor: 'pointer' }}>
         <Icon size={17} color={cfg.color} style={estado.fase === 'guardando' || forzando ? { animation: 'girar 1s linear infinite' } : undefined} />
+        {conTexto && <span style={{ fontSize: 12, fontWeight: 700, color: SEREIN.red, whiteSpace: 'nowrap' }}>Error al guardar</span>}
       </button>
     )
   }
@@ -306,6 +313,7 @@ export function PageHeader({ titulo, perfil, email, onMenu }) {
         <Bell size={17} />
         <span style={{ position: 'absolute', top: 8, right: 9, width: 7, height: 7, borderRadius: '50%', background: THEME.orange, border: '1.5px solid #fff' }} />
       </button>
+      {movil && <EstadoGuardado colapsado enCabecera />}
       <div style={{ width: 38, height: 38, borderRadius: '50%', background: THEME.orange, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, fontFamily: THEME.fontDisplay }}>{iniciales(nom)}</div>
     </div>
   </div>)
