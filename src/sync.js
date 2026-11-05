@@ -229,8 +229,11 @@ export function obtenerEstadoGuardado() { return estadoGuardado }
 // la misma protección.
 // Devuelve true si el valor quedó aplicado en localStorage, false si se
 // protegió el valor local (no se aplicó).
-export function aplicarSiSeguro(id, value) {
+export function aplicarSiSeguro(id, value, actualizado) {
   if (!id || value == null) return false
+  // Eco ATRASADO de una subida de esta sesión (llega por el canal en tiempo real cuando ya se subió otra
+  // versión después): aplicarlo devolvía la pantalla a un estado anterior.
+  if (actualizado && esVersionPropia(id, actualizado)) return false
   try {
     const local = localStorage.getItem(id)
     const confirmado = localStorage.getItem(OK_PREFIX + id)
@@ -260,15 +263,67 @@ export function aplicarSiSeguro(id, value) {
   } catch (e) { return false }
 }
 
-export async function pullState() {
+// ————— Lectura de la nube, liviana —————
+// Hasta el 2026-11-04 cada pullState() bajaba la tabla app_state COMPLETA (~4,5 MB) y se llama desde más
+// de 100 lugares (cada minuto por pestaña, al volver a la ventana, al agregar un abono, una recepción…).
+// Con varias personas conectadas eran más de 600 descargas completas por hora: la base quedó sin memoria,
+// respondía en 5 s o con error 504, y lo recién guardado se perdía. Ahora:
+//  · primero se pide solo el índice (id + updated_at, unos pocos KB) y se bajan únicamente los bloques
+//    que cambiaron desde la última vez; una descarga completa solo al entrar y cada 15 minutos;
+//  · si ya hay una lectura en curso, las demás llamadas esperan esa misma en vez de lanzar otra;
+//  · un bloque que esta sesión escribió DESPUÉS de que partió la lectura no se pisa con esa respuesta
+//    (venía con datos anteriores al guardado: así desaparecían los abonos recién agregados).
+const PULL_COMPLETO_MS = 15 * 60 * 1000
+let versionVista = {}        // id -> updated_at (ms) del valor que esta sesión ya tiene
+let versionesPropias = {}    // id -> últimos updated_at (ms) subidos por esta sesión
+let escrituraLocal = {}      // id -> momento (reloj local) de la última subida propia
+let ultimoPullCompleto = 0
+let pullEnCurso = null
+const ms = t => { const n = Date.parse(t); return Number.isFinite(n) ? n : 0 }
+function esVersionPropia(id, actualizado) {
+  const v = ms(actualizado)
+  const propias = versionesPropias[id] || []
+  // Solo los ecos ATRASADOS: el de la última subida se aplica como siempre (trae la fusión con lo ajeno)
+  return !!v && propias.includes(v) && propias[propias.length - 1] !== v
+}
+function anotarVersionPropia(id, actualizado) {
+  const v = ms(actualizado)
+  escrituraLocal[id] = Date.now()
+  if (!v) { delete versionVista[id]; return }
+  versionVista[id] = v
+  versionesPropias[id] = [...(versionesPropias[id] || []), v].slice(-8)
+}
+export function pullState() {
+  if (pullEnCurso) return pullEnCurso
+  pullEnCurso = hacerPull().finally(() => { pullEnCurso = null })
+  return pullEnCurso
+}
+async function hacerPull() {
+  const inicio = Date.now()
   try {
-    const { data, error } = await supabase.from('app_state').select('id, value')
-    if (error || !data) return { ok: false, n: 0 }
+    let filas = null
+    const completo = !nubeLeida || (inicio - ultimoPullCompleto > PULL_COMPLETO_MS)
+    if (!completo) {
+      const { data: indice, error: e1 } = await supabase.from('app_state').select('id, updated_at')
+      if (e1 || !indice) return { ok: false, n: 0 }
+      const cambiados = indice.filter(r => r && r.id && (ms(r.updated_at) !== versionVista[r.id] || localStorage.getItem(r.id) == null)).map(r => r.id)
+      if (!cambiados.length) return { ok: true, n: 0 }
+      const { data, error } = await supabase.from('app_state').select('id, value, updated_at').in('id', cambiados)
+      if (error || !data) return { ok: false, n: 0 }
+      filas = data
+    } else {
+      const { data, error } = await supabase.from('app_state').select('id, value, updated_at')
+      if (error || !data) return { ok: false, n: 0 }
+      filas = data
+      ultimoPullCompleto = inicio
+    }
     nubeLeida = true
     let n = 0
-    data.forEach(row => {
+    filas.forEach(row => {
       if (!row.id || row.value == null) return
-      if (aplicarSiSeguro(row.id, row.value)) n++
+      // Esta sesión subió este bloque después de que partió la lectura: la respuesta es anterior al guardado
+      if ((escrituraLocal[row.id] || 0) > inicio) return
+      if (aplicarSiSeguro(row.id, row.value)) { n++; versionVista[row.id] = ms(row.updated_at) }
     })
     return { ok: true, n }
   } catch (e) { return { ok: false, n: 0 } }
@@ -333,6 +388,7 @@ export async function escribirConReintento(key, mutar, intentos = 6) {
     } catch (e) { return { ok: false, error: (e && e.message) || String(e) } }
     try { localStorage.setItem(key, valorNuevoStr); localStorage.setItem(OK_PREFIX + key, huella(valorNuevoStr)); localStorage.removeItem(PROT_DESDE_PREFIX + key) } catch (e) {}
     lastPushed[key] = valorNuevoStr
+    escrituraLocal[key] = Date.now(); delete versionVista[key]
     emitirEstado({ fase: 'guardado', ultimoOk: Date.now(), ultimoError: null })
     return { ok: true, value: nuevo }
   }
@@ -378,6 +434,7 @@ export async function pushState() {
       const v = localStorage.getItem(k); if (v !== lastPushed[k]) rows.push({ id: k, value: v, updated_at: new Date().toISOString() })
     }
     if (rows.length) {
+      rows.forEach(r => { escrituraLocal[r.id] = Date.now() })
       emitirEstado({ fase: 'guardando' })
       // Antes de pisar serein_ots en la nube, se traen las OT que otra sesión haya agregado mientras tanto
       // y se suman a lo que se sube (ver fusionarOts). Un viaje extra solo cuando cambian las OT.
@@ -400,7 +457,7 @@ export async function pushState() {
       // como error. Sin este chequeo, la app cree que guardó (sin alerta,
       // sin nada en consola) y el dato desaparece apenas alguien recarga o
       // vuelve a entrar, porque nunca llegó de verdad a la base.
-      const { data: filasSubidas, error } = await supabase.from('app_state').upsert(rows, { onConflict: 'id' }).select('id')
+      const { data: filasSubidas, error } = await supabase.from('app_state').upsert(rows, { onConflict: 'id' }).select('id, updated_at')
       if (error) {
         const msg = error.message || String(error)
         console.error('sync: pushState() falló al subir a la nube —', msg, error)
@@ -417,8 +474,11 @@ export async function pushState() {
         emitirEstado({ fase: 'error', ultimoError: msg })
         return { ok: false, error: msg }
       }
+      const versionSubida = {}
+      ;(filasSubidas || []).forEach(f => { versionSubida[f.id] = f.updated_at })
       rows.forEach(r => {
         lastPushed[r.id] = r.value
+        anotarVersionPropia(r.id, versionSubida[r.id])
         try { localStorage.setItem(OK_PREFIX + r.id, huella(r.value)); localStorage.removeItem(PROT_DESDE_PREFIX + r.id) } catch (e) {}
       })
       emitirEstado({ fase: 'guardado', ultimoOk: Date.now(), ultimoError: null })

@@ -368,7 +368,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
   // pestana ni el formulario en el que la persona este trabajando.
   useEffect(() => {
     const setters = { avances: setAvances, mo: setMo, comprasOp: setComprasOp, configCompras: setConfigCompras, fin: setFin, pp: setPp, params: setParams, clientes: setClientes, contactos: setContactos, facturas: setFacturas, cotizaciones: setCotizaciones, comisiones: setComisiones, ppmPct: setPpmPct, ots: setOts, proyectos: setProyectos, inventario: setInventario, invMov: setInvMov }
-    const aplicar = (clave, valorStr) => {
+    const aplicar = (clave, valorStr, actualizado) => {
       const setter = setters[clave]
       if (!setter || valorStr == null) return
       const key = 'serein_' + clave
@@ -379,7 +379,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
       // sondeo; el tiempo real pisaba directo, así que un cambio local sin
       // guardar podía borrarse apenas cualquier otra persona guardara
       // cualquier cosa, sin necesidad de refrescar ni esperar nada.
-      if (!aplicarSiSeguro(key, valorStr)) return
+      if (!aplicarSiSeguro(key, valorStr, actualizado)) return
       try {
         // Se lee lo que quedó en localStorage (no valorStr): para las OT puede traer la fusión con las locales
         const valor = JSON.parse(localStorage.getItem(key) ?? valorStr)
@@ -393,7 +393,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
       canal = supabase.channel('app_state_vivo').on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, payload => {
         const fila = payload.new
         if (!fila || typeof fila.id !== 'string' || !fila.id.startsWith('serein_')) return
-        aplicar(fila.id.slice('serein_'.length), fila.value)
+        aplicar(fila.id.slice('serein_'.length), fila.value, fila.updated_at)
       }).subscribe()
     }
     suscribir()
