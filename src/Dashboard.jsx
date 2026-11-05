@@ -388,6 +388,22 @@ export default function Dashboard({ perfil, email, onLogout }) {
         else setter(valor)
       } catch (e) {}
     }
+    // Al subir, sync.js puede fusionar lo local con lo que otra persona guardó (ver fusionarOts3): la
+    // pantalla toma ese resultado para no quedar atrás de localStorage.
+    const onFusion = e => {
+      const id = e && e.detail && e.detail.id
+      if (typeof id !== 'string' || !id.startsWith('serein_')) return
+      const clave = id.slice('serein_'.length), setter = setters[clave]
+      if (!setter) return
+      try {
+        const valor = JSON.parse(localStorage.getItem(id))
+        if (valor == null) return
+        if (clave === 'clientes') setter(sanearClientesArr(valor))
+        else if (clave === 'contactos') setter({ ...valor, clientes: sanearClientesArr(valor.clientes) })
+        else setter(valor)
+      } catch (err) {}
+    }
+    window.addEventListener('serein-sync-fusion', onFusion)
     let canal = null
     const suscribir = () => {
       canal = supabase.channel('app_state_vivo').on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, payload => {
@@ -431,6 +447,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
       clearInterval(id)
       document.removeEventListener('visibilitychange', onVis)
       window.removeEventListener('focus', reconectar)
+      window.removeEventListener('serein-sync-fusion', onFusion)
     }
   }, [])
 
