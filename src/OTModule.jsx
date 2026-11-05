@@ -52,9 +52,18 @@ function conLimiteTiempo(promesa, ms, mensaje) {
 // los indicadores de arriba, para que nunca muestren numeros distintos.
 // Prioriza las facturas reales (ot.ventas); si todavia no hay ninguna,
 // cae al monto cotizado (es el mismo criterio que ya usaba la tarjeta).
-export const ventaNetaDeOT = ot => (ot.ventas && ot.ventas.length)
-  ? ot.ventas.reduce((a, v) => a + (v.neta || 0), 0)
-  : (ot.montoCotizado || 0)
+// OT abierta y facturada por partes: vale el mayor entre lo cotizado y lo
+// facturado. Antes, con una sola factura parcial, la "venta neta" pasaba a
+// ser solo esa factura: editar el monto cotizado no se veía, el avance
+// facturado daba 100 % y el saldo por facturar $0. Una OT cerrada conserva
+// el criterio anterior (manda lo facturado), porque ahí la factura es el
+// valor final aunque difiera de lo cotizado.
+export const ventaNetaDeOT = ot => {
+  const cotizado = Number(ot.montoCotizado) || 0
+  if (!(ot.ventas && ot.ventas.length)) return cotizado
+  const facturado = ot.ventas.reduce((a, v) => a + (v.neta || 0), 0)
+  return ot.estado === 'Cerrada' ? facturado : Math.max(cotizado, facturado)
+}
 // Una OT cerrada se considera "Facturada" si tiene al menos una factura
 // (folio) registrada — no se guarda en ot.estado, se calcula al vuelo, asi
 // que si se borra la unica factura vuelve sola a "Pendiente de facturacion".
@@ -2356,7 +2365,9 @@ function TarjetaOT({ pp = null, setPp = null, comprasOp = [], ot, onUpdate, onUp
       {verValores && (
         <div style={{ padding: '0 18px 14px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#9AA3AD', marginBottom: 4 }}>
-            <span>Venta {clp(ventaTotal)}</span>
+            <span>{ventaNetaDeOT(ot) > ventaTotal
+              ? <>Valor OT <b style={{ color: '#101315' }}>{clp(ventaNetaDeOT(ot))}</b> · Facturado {clp(ventaTotal)}{avanceFacturado != null ? ' (' + avanceFacturado + '%)' : ''}</>
+              : <>Venta {clp(ventaTotal)}</>}</span>
             <span>Costos {clp(costoTotal)}</span>
           </div>
           <Barra pct={ventaTotal > 0 ? (costoTotal / ventaTotal) * 100 : 0} color={colorMargen(margen, { bueno: C.teal })} />
