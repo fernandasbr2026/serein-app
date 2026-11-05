@@ -68,6 +68,41 @@ export function fusionarOts(baseStr, otroStr) {
   } catch (e) { return null }
 }
 
+// Fusión de tres lados, campo por campo (2026-11-05). fusionarOts solo evita que desaparezca una OT entera:
+// si la OT existe en ambos lados mandaba la copia que se sube, COMPLETA. Una sesión con la pantalla atrasada
+// (las OT pesan más de 1 MB y no llegan por el canal en tiempo real: se actualizan por sondeo cada 60 s)
+// que guardaba cualquier cosa devolvía todas las demás OT a su versión vieja: así se borraban la OC, la NV,
+// los abonos o el monto que otra persona acababa de ingresar. Ahora se compara con `base` (lo último que
+// esta sesión tuvo sincronizado): solo se suben los CAMPOS que esta sesión cambió de verdad; todo lo demás
+// se toma de la nube. Devuelve el JSON fusionado, o null si es igual a lo local.
+export function fusionarOts3(baseStr, localStr, nubeStr) {
+  try {
+    const base = JSON.parse(baseStr), local = JSON.parse(localStr), nube = JSON.parse(nubeStr)
+    if (!Array.isArray(base) || !Array.isArray(local) || !Array.isArray(nube)) return null
+    const porId = arr => { const m = new Map(); arr.forEach(o => { if (o && o.id) m.set(o.id, o) }); return m }
+    const B = porId(base), N = porId(nube)
+    const s = JSON.stringify
+    const vistos = new Set()
+    const out = local.map(l => {
+      if (!l || !l.id) return l
+      vistos.add(l.id)
+      const n = N.get(l.id), b = B.get(l.id)
+      if (!n || !b) return l                 // OT nueva de esta sesión, o sin referencia: manda lo local
+      const sl = s(l)
+      if (sl === s(n)) return l
+      if (sl === s(b)) return n              // esta sesión no la tocó: vale la de la nube
+      const r = { ...n }
+      new Set([...Object.keys(l), ...Object.keys(b)]).forEach(k => {
+        if (s(l[k]) !== s(b[k])) { if (k in l) r[k] = l[k]; else delete r[k] }
+      })
+      return r
+    })
+    nube.forEach(n => { if (n && n.id && !vistos.has(n.id)) out.push(n) })
+    const res = s(out)
+    return res === localStr ? null : res
+  } catch (e) { return null }
+}
+
 // ————— Fusión de las facturas por área (serein_facturas) —————
 // Mismo problema que las OT: serein_facturas ({ area: [fichas] }) es un solo blob y la última subida gana,
 // así que una sesión atrasada borraba las fichas que el Libro de Ventas acababa de copiar a Santa Rosa.
@@ -446,8 +481,19 @@ export async function pushState() {
         try {
           const { data: nube } = await supabase.from('app_state').select('value').eq('id', r.id).maybeSingle()
           if (nube && nube.value != null) {
-            const f = fusion(r.value, nube.value)
-            if (f) { r.value = f; try { localStorage.setItem(r.id, f) } catch (e) {} }
+            // Se parte de lo que hay AHORA en localStorage: mientras se esperaba la nube la persona pudo
+            // seguir escribiendo, y fusionar la copia de antes le borraba las últimas teclas.
+            const localAhora = localStorage.getItem(r.id) ?? r.value
+            const f = (r.id === 'serein_ots' && lastPushed[r.id] != null)
+              ? fusionarOts3(lastPushed[r.id], localAhora, nube.value)
+              : fusion(localAhora, nube.value)
+            r.value = f || localAhora
+            if (f) {
+              try { localStorage.setItem(r.id, f) } catch (e) {}
+              // La pantalla (estado de React) debe quedar igual a lo fusionado; si no, el siguiente guardado
+              // general volvería a escribir la copia vieja encima.
+              try { window.dispatchEvent(new CustomEvent('serein-sync-fusion', { detail: { id: r.id } })) } catch (e) {}
+            }
           }
         } catch (e) { /* sin fusión: se sube lo local tal cual */ }
       }
