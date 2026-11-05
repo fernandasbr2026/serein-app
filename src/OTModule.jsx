@@ -83,6 +83,25 @@ export const abonoTotalDeOT = ot => (ot.abonos || []).reduce((a, x) => a + (x.mo
 // otra OT ni se muestra como saldo pendiente inexistente.
 export const saldoPorFacturarDeOT = ot => Math.max(0, ventaNetaDeOT(ot) - totalFacturadoDeOT(ot))
 export const saldoPorPercibirDeOT = ot => Math.max(0, totalFacturadoDeOT(ot) - abonoTotalDeOT(ot))
+// Marcar una factura como «Pagado» registra solo su abono (monto neto, fecha de hoy), para no ingresar
+// el mismo pago dos veces. El abono queda ligado a la factura (ventaRef): si la factura vuelve a
+// «Pendiente»/«Factoring» o se elimina, ese abono automático se quita; los abonos ingresados a mano
+// nunca se tocan. Si lo ya abonado a mano cubre la factura, no se agrega nada (evita duplicar el pago).
+const refVenta = v => (v && v.id) || ('folio:' + ((v && v.folio) || ''))
+export const abonosAlCambiarPago = (ot, venta, nuevoEstado) => {
+  const abonos = ot.abonos || []
+  const ref = refVenta(venta)
+  if (nuevoEstado !== 'Pagado') return abonos.filter(a => !(a.auto && a.ventaRef === ref))
+  if (abonos.some(a => a.ventaRef === ref)) return abonos
+  const neta = Number(venta.neta) || 0
+  if (neta <= 0) return abonos
+  const esReal = v => (v.folio || '').trim() && v.folio !== 's/f'
+  const facturado = (ot.ventas || []).filter(esReal).reduce((a, v) => a + (v.neta || 0), 0)
+  const abonado = abonos.reduce((a, x) => a + (x.monto || 0), 0)
+  if (esReal(venta) && abonado + neta > facturado + 1) return abonos
+  return [...abonos, { id: 'ab' + Date.now() + Math.random().toString(36).slice(2, 7), fecha: hoy(), monto: neta, medio: '', obs: 'Pago factura ' + (venta.folio || 's/f'), ventaRef: ref, auto: true }]
+}
+export const abonosSinVenta = (ot, venta) => (ot.abonos || []).filter(a => !(a.auto && a.ventaRef === refVenta(venta)))
 export const estadoFacturacionDeOT = ot => {
   const facturado = totalFacturadoDeOT(ot)
   if (facturado <= 0) return 'Sin facturar'
@@ -2635,7 +2654,7 @@ function TarjetaOT({ pp = null, setPp = null, comprasOp = [], ot, onUpdate, onUp
                         })()}
                         <td style={{ padding: '7px 8px' }}>
                           <select value={v.estadoPago}
-                            onChange={ev => onUpdate(ot.id, { ventas: (ot.ventas || []).map((x, j) => j === i ? { ...x, estadoPago: ev.target.value } : x) })}
+                            onChange={ev => onUpdate(ot.id, { ventas: (ot.ventas || []).map((x, j) => j === i ? { ...x, estadoPago: ev.target.value } : x), abonos: abonosAlCambiarPago(ot, v, ev.target.value) })}
                             style={{ border: 'none', background: v.estadoPago === 'Pagado' ? '#E7F2EA' : v.estadoPago === 'Factoring' ? '#F9E9DE' : '#F6E0DA', color: v.estadoPago === 'Pagado' ? C.verde : v.estadoPago === 'Factoring' ? C.ambar : C.rojo, padding: '3px 6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                             <option>Pendiente</option><option>Pagado</option><option>Factoring</option>
                           </select>
@@ -2664,7 +2683,7 @@ function TarjetaOT({ pp = null, setPp = null, comprasOp = [], ot, onUpdate, onUp
                   </tbody>
                 </table>
               )}
-              {addVenta && <FormVenta onAdd={async v => { const ok = await onAgregarVenta(ot.id, v); if (ok) setAddVenta(false) }} onCancel={() => setAddVenta(false)} abonoTotal={abonoTotal} ventaTotalActual={ventaTotal} />}
+              {addVenta && <FormVenta onAdd={async v => { const ok = await onAgregarVenta(ot.id, v); if (ok) { if (v.estadoPago === 'Pagado') onUpdate(ot.id, { abonos: abonosAlCambiarPago({ ...ot, ventas: [...(ot.ventas || []), v] }, v, 'Pagado') }); setAddVenta(false) } }} onCancel={() => setAddVenta(false)} abonoTotal={abonoTotal} ventaTotalActual={ventaTotal} />}
 
               {/* Cruce de las facturas contra el checklist de piezas —
                   que se facturó, qué falta, y cuánto vale lo que falta. */}
@@ -3862,7 +3881,11 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   }
 
   const eliminarVenta = (id, index) => {
-    escribir(xs => xs.map(o => o.id === id ? { ...o, ventas: (o.ventas || []).filter((_, j) => j !== index) } : o))
+    escribir(xs => xs.map(o => {
+      if (o.id !== id) return o
+      const quitada = (o.ventas || [])[index]
+      return { ...o, ventas: (o.ventas || []).filter((_, j) => j !== index), ...(quitada && (o.abonos || []).length ? { abonos: abonosSinVenta(o, quitada) } : {}) }
+    }))
   }
 
   const coincideBusqueda = o => {
