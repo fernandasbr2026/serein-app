@@ -88,7 +88,7 @@ export const saldoPorPercibirDeOT = ot => Math.max(0, totalFacturadoDeOT(ot) - a
 // «Pendiente»/«Factoring» o se elimina, ese abono automático se quita; los abonos ingresados a mano
 // nunca se tocan. Si lo ya abonado a mano cubre la factura, no se agrega nada (evita duplicar el pago).
 const refVenta = v => (v && v.id) || ('folio:' + ((v && v.folio) || ''))
-export const abonosAlCambiarPago = (ot, venta, nuevoEstado) => {
+export const abonosAlCambiarPago = (ot, venta, nuevoEstado, fecha) => {
   const abonos = ot.abonos || []
   const ref = refVenta(venta)
   if (nuevoEstado !== 'Pagado') return abonos.filter(a => !(a.auto && a.ventaRef === ref))
@@ -99,7 +99,24 @@ export const abonosAlCambiarPago = (ot, venta, nuevoEstado) => {
   const facturado = (ot.ventas || []).filter(esReal).reduce((a, v) => a + (v.neta || 0), 0)
   const abonado = abonos.reduce((a, x) => a + (x.monto || 0), 0)
   if (esReal(venta) && abonado + neta > facturado + 1) return abonos
-  return [...abonos, { id: 'ab' + Date.now() + Math.random().toString(36).slice(2, 7), fecha: hoy(), monto: neta, medio: '', obs: 'Pago factura ' + (venta.folio || 's/f'), ventaRef: ref, auto: true }]
+  return [...abonos, { id: 'ab' + Date.now() + Math.random().toString(36).slice(2, 7), fecha: fecha || hoy(), monto: neta, medio: '', obs: 'Pago factura ' + (venta.folio || 's/f'), ventaRef: ref, auto: true }]
+}
+// Puesta al día, una sola vez por OT (marca migAbonos): las facturas que ya estaban en «Pagado» antes de
+// que existiera el abono automático reciben el suyo, con la fecha de la factura (no la de hoy, para no
+// cargar pagos antiguos al periodo actual). Rige la misma regla: si los abonos manuales ya cubren la
+// factura, no se agrega nada. Devuelve el arreglo nuevo, o null si no había nada que marcar.
+export const migrarAbonosPagados = ots => {
+  let cambio = false
+  const out = (ots || []).map(o => {
+    if (!o || o.migAbonos) return o
+    cambio = true
+    let abonos = o.abonos || []
+    ;(o.ventas || []).forEach(v => {
+      if (v && v.estadoPago === 'Pagado') abonos = abonosAlCambiarPago({ ...o, abonos }, v, 'Pagado', /^\d{4}-\d{2}-\d{2}$/.test(v.fecha || '') ? v.fecha : '—')
+    })
+    return { ...o, ...(abonos.length ? { abonos } : {}), migAbonos: 1 }
+  })
+  return cambio ? out : null
 }
 export const abonosSinVenta = (ot, venta) => (ot.abonos || []).filter(a => !(a.auto && a.ventaRef === refVenta(venta)))
 export const estadoFacturacionDeOT = ot => {
@@ -3865,6 +3882,20 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
     setOts(nuevo)
     pushState()
   }
+
+  // Puesta al día de abonos de facturas ya pagadas: tras leer la nube, una vez por OT (ver migrarAbonosPagados)
+  useEffect(() => {
+    let vivo = true
+    pullState().then(r => {
+      if (!vivo || !r || !r.ok) return
+      const nuevo = migrarAbonosPagados(baseFresca())
+      if (!nuevo) return
+      try { localStorage.setItem('serein_ots', JSON.stringify(nuevo)) } catch (e) {}
+      setOts(nuevo)
+      pushState()
+    }).catch(() => {})
+    return () => { vivo = false }
+  }, [])
 
   const cambiarEstado = (id, nuevoEstado) => {
     escribir(xs => xs.map(o => o.id === id ? { ...o, estado: nuevoEstado, ...(nuevoEstado === 'Cerrada' ? { fechaCierre: hoy() } : {}) } : o))
