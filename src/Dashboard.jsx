@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, lazy, Suspense } from 'react'
+import React, { useState, useMemo, useEffect, useRef, lazy, Suspense } from 'react'
 const SEREIN_AI_ACTIVO = true
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { LogOut, TrendingUp, Wallet, AlertTriangle, Landmark, User } from 'lucide-react'
@@ -353,8 +353,16 @@ export default function Dashboard({ perfil, email, onLogout }) {
   }, [])
 
   // Guarda automáticamente en el navegador cada vez que cambian los datos
+  // Solo se escriben los bloques que cambiaron en pantalla. Antes se reescribían LOS 17 con cada cambio de
+  // cualquiera: si un módulo acababa de traer de la nube algo más nuevo (queda en localStorage antes que en
+  // pantalla), ese guardado lo pisaba con la copia vieja y la subía como si fuera un cambio propio.
+  const refsGuardadas = useRef(null)
   useEffect(() => {
-    guardarSerein({ avances, mo, comprasOp, configCompras, fin, pp, params, clientes, contactos, facturas, cotizaciones, comisiones, ppmPct, ots, proyectos, inventario, invMov }); try { clearTimeout(window.__sereinPushT); window.__sereinPushT = setTimeout(function () { pushState() }, 800) } catch (e) {}
+    const todo = { avances, mo, comprasOp, configCompras, fin, pp, params, clientes, contactos, facturas, cotizaciones, comisiones, ppmPct, ots, proyectos, inventario, invMov }
+    const cambiados = {}
+    Object.keys(todo).forEach(k => { if (!refsGuardadas.current || refsGuardadas.current[k] !== todo[k]) cambiados[k] = todo[k] })
+    refsGuardadas.current = todo
+    guardarSerein(cambiados); try { clearTimeout(window.__sereinPushT); window.__sereinPushT = setTimeout(function () { pushState() }, 800) } catch (e) {}
   }, [avances, mo, comprasOp, configCompras, fin, pp, params, clientes, contactos, facturas, cotizaciones, comisiones, ppmPct, ots, proyectos, inventario, invMov])
 
   // Sincronizacion con lo que hacen otros usuarios, en dos capas:
@@ -414,9 +422,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     }
     suscribir()
     const refrescar = async () => {
-      const r = await pullState()
-      if (!r.ok) return
-      Object.keys(setters).forEach(clave => aplicar(clave, localStorage.getItem('serein_' + clave)))
+      await pullState()
     }
     // 60s, no 15s: el canal en tiempo real ya cubre la sincronización
     // instantánea entre usuarios — este intervalo es solo respaldo por si
