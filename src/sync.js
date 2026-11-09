@@ -217,6 +217,76 @@ export function fusionarGenerico(clave, baseStr, otroStr) {
     return null
   } catch (e) { return null }
 }
+// Fusión de tres lados para el resto de los bloques (2026-11-09): mismo criterio que fusionarOts3. Antes, en
+// los ítems que existían en ambos lados mandaba la copia que se subía, COMPLETA y para TODOS los ítems: una
+// sesión atrasada que editaba una cotización devolvía las demás a su versión vieja. Ahora cada sesión sube
+// solo los campos de los ítems que cambió de verdad (comparando con `base`, lo último sincronizado).
+// Borrados: lo que esta sesión quitó no vuelve; lo que falta en la nube solo se quita acá si tiene lápida.
+function fusionarArr3(b, l, n, tieneLapida, enOtraParteNube, enOtraParteLocal) {
+  const s = JSON.stringify
+  const conId = x => x && typeof x === 'object' && x.id != null
+  const porId = arr => { const m = new Map(); arr.forEach(x => { if (conId(x)) m.set(String(x.id), x) }); return m }
+  const B = porId(b), N = porId(n), vistos = new Set(), out = []
+  l.forEach(x => {
+    if (!conId(x)) { out.push(x); return }
+    const id = String(x.id); vistos.add(id)
+    const nn = N.get(id), bb = B.get(id)
+    if (!nn) { if (bb && s(x) === s(bb) && (tieneLapida(id) || enOtraParteNube(id))) return; out.push(x); return }
+    if (!bb) { out.push(x); return }
+    const sx = s(x)
+    if (sx === s(nn)) { out.push(x); return }
+    if (sx === s(bb)) { out.push(nn); return }
+    const r = { ...nn }
+    new Set([...Object.keys(x), ...Object.keys(bb)]).forEach(k => {
+      if (s(x[k]) !== s(bb[k])) { if (k in x) r[k] = x[k]; else delete r[k] }
+    })
+    out.push(r)
+  })
+  n.forEach(x => {
+    if (!conId(x)) return
+    const id = String(x.id)
+    if (vistos.has(id) || B.has(id) || tieneLapida(id) || enOtraParteLocal(id)) return
+    out.push(x)
+  })
+  return out
+}
+export function fusionar3(clave, baseStr, localStr, nubeStr) {
+  try {
+    const b = JSON.parse(baseStr), l = JSON.parse(localStr), n = JSON.parse(nubeStr)
+    const s = JSON.stringify
+    const lap = clave === 'serein_facturas' ? leerFacturasEliminadas() : null
+    const lapGen = lap ? null : ((leerLapidas()[clave]) || {})
+    const tieneLapida = id => lap ? lap.has(id) : !!lapGen[id]
+    const no = () => false
+    let out
+    if (Array.isArray(b) && Array.isArray(l) && Array.isArray(n)) out = fusionarArr3(b, l, n, tieneLapida, no, no)
+    else if ([b, l, n].every(v => v && typeof v === 'object' && !Array.isArray(v))) {
+      const idsDe = (obj, salvo) => { const set = new Set(); Object.keys(obj).forEach(k => { if (k !== salvo && Array.isArray(obj[k])) obj[k].forEach(x => { if (x && typeof x === 'object' && x.id != null) set.add(String(x.id)) }) }); return set }
+      out = { ...l }
+      // Primera pasada: qué ítems locales sobreviven en cada arreglo (un ítem que otra persona movió de un
+      // arreglo a otro sale del antiguo). Segunda: lo de la nube se suma solo si no sobrevive en otro arreglo.
+      const arreglos = Object.keys(l).filter(k => Array.isArray(l[k]) && Array.isArray(n[k]))
+      const vivos = {}
+      arreglos.forEach(k => {
+        const otrosN = idsDe(n, k), mios = idsDe({ k: l[k] })
+        vivos[k] = fusionarArr3(Array.isArray(b[k]) ? b[k] : [], l[k], n[k], tieneLapida, id => otrosN.has(id), no).filter(x => x && typeof x === 'object' && x.id != null && mios.has(String(x.id)))
+      })
+      Object.keys(l).forEach(k => {
+        if (arreglos.includes(k)) {
+          const otrosN = idsDe(n, k), otrosL = idsDe(vivos, k)
+          out[k] = fusionarArr3(Array.isArray(b[k]) ? b[k] : [], l[k], n[k], tieneLapida, id => otrosN.has(id), id => otrosL.has(id))
+        } else if (k in n && s(l[k]) === s(b[k])) out[k] = n[k]
+      })
+      Object.keys(n).forEach(k => {
+        if (k in l || k in b) return
+        if (Array.isArray(n[k])) { const otrosL = idsDe(l, k); out[k] = n[k].filter(x => !(x && typeof x === 'object' && x.id != null && (otrosL.has(String(x.id)) || tieneLapida(String(x.id))))) }
+        else out[k] = n[k]
+      })
+    } else return null
+    const res = s(out)
+    return res === localStr ? null : res
+  } catch (e) { return null }
+}
 // Las lápidas de distintas sesiones se unen (nunca se pisan)
 function fusionarLapidas(baseStr, otroStr) {
   try {
@@ -358,7 +428,10 @@ async function hacerPull() {
       if (!row.id || row.value == null) return
       // Esta sesión subió este bloque después de que partió la lectura: la respuesta es anterior al guardado
       if ((escrituraLocal[row.id] || 0) > inicio) return
-      if (aplicarSiSeguro(row.id, row.value)) { n++; versionVista[row.id] = ms(row.updated_at) }
+      if (aplicarSiSeguro(row.id, row.value)) {
+        n++; versionVista[row.id] = ms(row.updated_at)
+        try { window.dispatchEvent(new CustomEvent('serein-sync-fusion', { detail: { id: row.id } })) } catch (e) {}
+      }
     })
     return { ok: true, n }
   } catch (e) { return { ok: false, n: 0 } }
@@ -484,9 +557,10 @@ export async function pushState() {
             // Se parte de lo que hay AHORA en localStorage: mientras se esperaba la nube la persona pudo
             // seguir escribiendo, y fusionar la copia de antes le borraba las últimas teclas.
             const localAhora = localStorage.getItem(r.id) ?? r.value
-            const f = (r.id === 'serein_ots' && lastPushed[r.id] != null)
-              ? fusionarOts3(lastPushed[r.id], localAhora, nube.value)
-              : fusion(localAhora, nube.value)
+            const base = lastPushed[r.id]
+            const f = base == null || r.id === LAPIDAS_KEY ? fusion(localAhora, nube.value)
+              : r.id === 'serein_ots' ? fusionarOts3(base, localAhora, nube.value)
+              : fusionar3(r.id, base, localAhora, nube.value)
             r.value = f || localAhora
             if (f) {
               try { localStorage.setItem(r.id, f) } catch (e) {}
