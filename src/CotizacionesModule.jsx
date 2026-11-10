@@ -1032,18 +1032,31 @@ export default function CotizacionesModule({ cotizaciones = [], setCotizaciones 
       const yaEstaba = baseCotsFrescas.some(c => c.id === cot.id)
       const baseCots = yaEstaba ? baseCotsFrescas : [cot, ...baseCotsFrescas]
       const cotFresca = baseCots.find(c => c.id === cot.id) || cot
-      const numeroOT = 'OT-' + cotFresca.folio
+      // Número de la OT = folio de la cotización. Si ese número ya lo ocupa una OT de OTRA cotización (pasó con
+      // la 1006: la cotización original de Ingomar se perdió, el folio se reutilizó para Almex y la OT-1006 de
+      // Ingomar seguía existiendo, cerrada y facturada), no se bloquea la aprobación: la OT nueva sale con sufijo
+      // (OT-1006-B). Se considera «la misma cotización» si la OT apunta a su id o si coincide el cliente.
+      const limpiar = x => String(x || '').trim().toLowerCase().replace(/\s+/g, ' ')
+      const esDeEsta = o => o.cotId === cotFresca.id || (o.folioCot == cotFresca.folio && limpiar(o.cliente) === limpiar(cotFresca.cliente)) || (o.numero === 'OT-' + cotFresca.folio && limpiar(o.cliente) === limpiar(cotFresca.cliente))
+      const otDeEsta = baseOts.find(esDeEsta)
+      let numeroOT = 'OT-' + cotFresca.folio
+      if (!otDeEsta && baseOts.some(o => o.numero === numeroOT)) {
+        const sufijos = 'BCDEFGH'
+        let i = 0
+        while (i < sufijos.length && baseOts.some(o => o.numero === 'OT-' + cotFresca.folio + '-' + sufijos[i])) i++
+        numeroOT = 'OT-' + cotFresca.folio + '-' + sufijos[Math.min(i, sufijos.length - 1)]
+      }
       // Una cotización aprobada cuya OT no existe (se perdió en un choque de guardado) se puede volver a generar
-      if (cotFresca.estado === 'Aprobada' && baseOts.some(o => o.numero === numeroOT)) { window.alert('Esta cotización ya fue aprobada y su OT ya existe.'); return }
+      if (cotFresca.estado === 'Aprobada' && otDeEsta) { window.alert('Esta cotización ya fue aprobada y su OT ya existe (' + otDeEsta.numero + (otDeEsta.estado === 'Cerrada' ? ', está en la pestaña de OT cerradas' : '') + ').'); return }
       let nuevasOts = baseOts
-      if (baseOts.some(o => o.numero === numeroOT)) { window.alert('Ya existe una OT creada para esta cotización (' + numeroOT + '). No se creó otra.') }
+      if (otDeEsta) { window.alert('Ya existe una OT creada para esta cotización (' + otDeEsta.numero + '). No se creó otra.') }
       else {
         const t = totales(cotFresca)
         const nuevaOT = {
           id: 'ot' + Date.now(), numero: numeroOT, area: cotFresca.area || 'Santa Rosa', cliente: cotFresca.cliente, fecha: cotFresca.fecha,
           cotizacion: 'COT ' + cotFresca.folio, oc: '—', m2: (cotFresca.items || []).filter(i => i.unidad === 'm²').reduce((a, i) => a + numDec(i.cant), 0), montoCotizado: t.afecto,
           procesos: [], preparacion: '—', esquema: (cotFresca.items || []).map(i => i.comentario).filter(Boolean).join(' · ') || '—',
-          estado: 'Cotizada', fechaEntrega, responsable, ventas: [], costos: [], itemsCot: cotFresca.items, folioCot: cotFresca.folio, pinturaCotizada: (() => { const m = {}; (cotFresca.items || []).forEach(it => (it.comprasPintura || []).forEach(cp => { if (!m[cp.producto]) m[cp.producto] = { producto: cp.producto, litrosEnvase: cp.litrosEnvase, envases: 0, litros: 0 }; m[cp.producto].envases += cp.envases; m[cp.producto].litros += (cp.litrosComprados || 0) })); return Object.values(m) })(),
+          estado: 'Cotizada', fechaEntrega, responsable, ventas: [], costos: [], itemsCot: cotFresca.items, folioCot: cotFresca.folio, cotId: cotFresca.id, pinturaCotizada: (() => { const m = {}; (cotFresca.items || []).forEach(it => (it.comprasPintura || []).forEach(cp => { if (!m[cp.producto]) m[cp.producto] = { producto: cp.producto, litrosEnvase: cp.litrosEnvase, envases: 0, litros: 0 }; m[cp.producto].envases += cp.envases; m[cp.producto].litros += (cp.litrosComprados || 0) })); return Object.values(m) })(),
         }
         nuevasOts = [nuevaOT, ...baseOts]
       }
