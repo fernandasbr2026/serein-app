@@ -457,6 +457,37 @@ export default function Dashboard({ perfil, email, onLogout }) {
     }
   }, [])
 
+  // Aviso de versión nueva (2026-11-11). Una pestaña que queda abierta días sigue con la versión con la que
+  // se abrió: el navegador solo busca la versión nueva al recargar. Mientras tanto esa pestaña guarda con las
+  // reglas antiguas y puede pisar lo que otros ingresan. Cada 5 minutos (y al volver a la pestaña) se mira si
+  // el index.html publicado apunta a otro paquete; si cambió, se muestra una franja con el botón «Actualizar».
+  // Nunca recarga sola: recargar a mitad de un formulario perdería lo que la persona está escribiendo.
+  const [versionNueva, setVersionNueva] = useState(false)
+  useEffect(() => {
+    const actual = () => { const sc = document.querySelector('script[type="module"][src]'); return sc ? (sc.getAttribute('src') || '') : '' }
+    const mio = actual()
+    if (!mio) return
+    let vivo = true
+    const revisar = async () => {
+      try {
+        const r = await fetch('/index.html?v=' + Date.now(), { cache: 'no-store' })
+        if (!r.ok) return
+        const html = await r.text()
+        const m = html.match(/<script[^>]+type="module"[^>]+src="([^"]+)"/) || html.match(/<script[^>]+src="([^"]+)"[^>]+type="module"/)
+        if (vivo && m && m[1] && m[1] !== mio) {
+          setVersionNueva(true)
+          // Pedirle al service worker que baje la versión nueva ya, para que el botón recargue a la nueva
+          try { if (navigator.serviceWorker) navigator.serviceWorker.getRegistration().then(reg => reg && reg.update()) } catch (e) {}
+        }
+      } catch (e) { /* sin red: se vuelve a intentar */ }
+    }
+    const id = setInterval(revisar, 5 * 60 * 1000)
+    const onVis = () => { if (document.visibilityState === 'visible') revisar() }
+    document.addEventListener('visibilitychange', onVis)
+    setTimeout(revisar, 20000)
+    return () => { vivo = false; clearInterval(id); document.removeEventListener('visibilitychange', onVis) }
+  }, [])
+
   // Trae la UF (valor del día) al cargar la app, desde mindicador.cl (Banco Central)
   useEffect(() => {
     fetch('https://mindicador.cl/api/uf')
@@ -862,6 +893,12 @@ export default function Dashboard({ perfil, email, onLogout }) {
   return (
     <div style={{ display: 'flex', minHeight: 'var(--alto-pantalla)', background: THEME.bg, fontFamily: THEME.font }}>
       <GlobalStyles />
+      {versionNueva && (
+        <div role="status" style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, flexWrap: 'wrap', padding: '9px 16px', background: '#101315', color: '#fff', fontSize: 13.5, boxShadow: '0 2px 10px rgba(0,0,0,.25)' }}>
+          <span>Hay una versión nueva del ERP. Termina lo que estás escribiendo y actualiza: una pestaña con la versión anterior puede pisar lo que otros guardan.</span>
+          <button type="button" onClick={() => { try { clearTimeout(window.__sereinPushT) } catch (e) {} pushState().finally(() => window.location.reload()) }} style={{ background: '#F77716', color: '#fff', border: 0, borderRadius: 6, padding: '6px 14px', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>Actualizar ahora</button>
+        </div>
+      )}
       <Sidebar tabs={tabs} areaSel={areaSel} setAreaSel={setAreaSel} nombreTab={nombreTab} perfil={perfil} email={email} onLogout={onLogout} colapsado={sidebarColapsado} setColapsado={setSidebarColapsado} onReset={borrarDatosLocales} movilAbierto={menuMovil} setMovilAbierto={setMenuMovil} />
 
       <main style={{ flex: 1, minWidth: 0, height: 'var(--alto-pantalla)', overflowY: 'auto', backgroundImage: 'radial-gradient(820px 300px at 88% -90px, rgba(247,119,22,.075), transparent 70%)', backgroundRepeat: 'no-repeat' }}>
