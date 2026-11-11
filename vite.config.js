@@ -49,6 +49,8 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+        // Recarga las pestañas con la versión anterior cuando se activa una nueva (ver public/sw-recarga.js)
+        importScripts: ['sw-recarga.js'],
       },
     }),
   ],
