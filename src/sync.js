@@ -221,7 +221,9 @@ export function fusionarGenerico(clave, baseStr, otroStr) {
 // los ítems que existían en ambos lados mandaba la copia que se subía, COMPLETA y para TODOS los ítems: una
 // sesión atrasada que editaba una cotización devolvía las demás a su versión vieja. Ahora cada sesión sube
 // solo los campos de los ítems que cambió de verdad (comparando con `base`, lo último sincronizado).
-// Borrados: lo que esta sesión quitó no vuelve; lo que falta en la nube solo se quita acá si tiene lápida.
+// Borrados: lo que esta sesión quitó no vuelve, y lo que otra sesión quitó (falta en la nube) tampoco vuelve
+// desde acá si esta sesión no lo había tocado. Las lápidas siguen valiendo para las sesiones con la versión
+// anterior y para los bloques que no llegan por este camino.
 function fusionarArr3(b, l, n, tieneLapida, enOtraParteNube, enOtraParteLocal) {
   const s = JSON.stringify
   const conId = x => x && typeof x === 'object' && x.id != null
@@ -231,7 +233,9 @@ function fusionarArr3(b, l, n, tieneLapida, enOtraParteNube, enOtraParteLocal) {
     if (!conId(x)) { out.push(x); return }
     const id = String(x.id); vistos.add(id)
     const nn = N.get(id), bb = B.get(id)
-    if (!nn) { if (bb && s(x) === s(bb) && (tieneLapida(id) || enOtraParteNube(id))) return; out.push(x); return }
+    // Falta en la nube: si estaba en la base y esta sesión no lo tocó, otra persona lo borró (o lo movió de
+    // arreglo) a propósito, y acá también se quita; si esta sesión lo editó, se conserva (manda lo local).
+    if (!nn) { if (bb && (s(x) === s(bb) || enOtraParteNube(id))) return; out.push(x); return }
     if (!bb) { out.push(x); return }
     const sx = s(x)
     if (sx === s(nn)) { out.push(x); return }
@@ -287,6 +291,17 @@ export function fusionar3(clave, baseStr, localStr, nubeStr) {
     return res === localStr ? null : res
   } catch (e) { return null }
 }
+// La lista de fichas eliminadas (serein_facturasEliminadas) también se une: antes la pisaba entera la última
+// sesión en subir, y una sesión atrasada perdía las lápidas de las demás y resucitaba lo borrado.
+function fusionarListaIds(baseStr, otroStr) {
+  try {
+    const base = JSON.parse(baseStr), otro = JSON.parse(otroStr)
+    if (!Array.isArray(base) || !Array.isArray(otro)) return null
+    const set = new Set(base.map(String))
+    const faltan = otro.filter(x => x != null && !set.has(String(x)))
+    return faltan.length ? JSON.stringify([...base, ...faltan].slice(-5000)) : null
+  } catch (e) { return null }
+}
 // Las lápidas de distintas sesiones se unen (nunca se pisan)
 function fusionarLapidas(baseStr, otroStr) {
   try {
@@ -300,8 +315,10 @@ function fusionarLapidas(baseStr, otroStr) {
 const CLAVES_GENERICAS = ['serein_pp', 'serein_cotizaciones', 'serein_proyectos', 'serein_fin', 'serein_mo', 'serein_inventario',
   'serein_invMov', 'serein_comprasOp', 'serein_avances', 'serein_contactos', 'serein_clientes', 'serein_proyCotizaciones']
 // Qué claves se fusionan en vez de pisarse enteras (ver fusionarOts / fusionarFacturas / fusionarGenerico)
-const FUSIONES = { serein_ots: fusionarOts, serein_facturas: fusionarFacturas, serein_lapidas: fusionarLapidas }
-CLAVES_GENERICAS.forEach(k => { FUSIONES[k] = (b, o) => fusionarGenerico(k, b, o) })
+const FUSIONES = { serein_ots: fusionarOts, serein_facturas: fusionarFacturas, serein_lapidas: fusionarLapidas, [ELIMINADAS_KEY]: fusionarListaIds }
+// Bloques que al subir se fusionan de tres lados, campo por campo (ver fusionar3)
+const TRES_LADOS = new Set(['serein_facturas'])
+CLAVES_GENERICAS.forEach(k => { FUSIONES[k] = (b, o) => fusionarGenerico(k, b, o); TRES_LADOS.add(k) })
 
 // ————— Estado de guardado observable —————
 // Antes no había forma honesta de saber, desde la pantalla, si un cambio
@@ -558,9 +575,9 @@ export async function pushState() {
             // seguir escribiendo, y fusionar la copia de antes le borraba las últimas teclas.
             const localAhora = localStorage.getItem(r.id) ?? r.value
             const base = lastPushed[r.id]
-            const f = base == null || r.id === LAPIDAS_KEY ? fusion(localAhora, nube.value)
-              : r.id === 'serein_ots' ? fusionarOts3(base, localAhora, nube.value)
-              : fusionar3(r.id, base, localAhora, nube.value)
+            const f = r.id === 'serein_ots' && base != null ? fusionarOts3(base, localAhora, nube.value)
+              : TRES_LADOS.has(r.id) && base != null ? fusionar3(r.id, base, localAhora, nube.value)
+              : fusion(localAhora, nube.value)
             r.value = f || localAhora
             if (f) {
               try { localStorage.setItem(r.id, f) } catch (e) {}
