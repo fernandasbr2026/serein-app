@@ -54,6 +54,9 @@ function FilaPendiente({ f, onAddCompra, onDecidido }) {
       onAddCompra(f.ot, {
         proveedor: f.proveedor, detalle: f.detalle, fecha: f.fecha || '—', monto: f.monto,
         cc: f.cc, folio: f.folio, rut: f.rut, exento: !!f.exento, abonado: abonadoFinal,
+        // Enlace con la factura del portal: portal_subcontrato_resumen() lo usa
+        // para mostrarle al subcontratista el abonado ACTUAL de esta compra.
+        facturaSubcontratoId: f.id,
       })
       // Sube el PDF (ya guardado en el bucket propio de Franco) a Drive,
       // organizado COMPRAS / OT / Centro de Costo — misma Edge Function
@@ -94,7 +97,7 @@ function FilaPendiente({ f, onAddCompra, onDecidido }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
         <div>
           <div style={{ fontWeight: 700 }}>{f.proveedor || 'Sin proveedor'} {f.folio ? '· Folio ' + f.folio : ''}</div>
-          <div style={{ fontSize: 12.5, color: C.gris }}>OT {f.ot} · {f.cc_nombre || f.cc} · {f.fecha || 'sin fecha'} · {clp(bruto)}{pdfUrl && <> · <a href={pdfUrl} target="_blank" rel="noreferrer" style={{ color: C.teal }}>ver PDF</a></>}</div>
+          <div style={{ fontSize: 12.5, color: C.gris }}>OT {f.ot} · <b>{f.cc}</b> {f.cc_nombre ? '· ' + f.cc_nombre : ''} · {f.fecha || 'sin fecha'} · {clp(bruto)}{pdfUrl && <> · <a href={pdfUrl} target="_blank" rel="noreferrer" style={{ color: C.teal }}>ver PDF</a></>}</div>
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
           <input value={pagadaCompleta ? bruto : abonado} disabled={pagadaCompleta} onChange={e => setAbonado(e.target.value)} placeholder="Abonado" style={{ ...inp, width: 100 }} />
@@ -113,7 +116,9 @@ function PanelAsignar({ proyectos = [] }) {
   const [perfilId, setPerfilId] = useState('')
   const [proyectoId, setProyectoId] = useState('')
   const [cc, setCc] = useState('')
+  const [montoAcordado, setMontoAcordado] = useState('')
   const [msg, setMsg] = useState('')
+  const [editando, setEditando] = useState(null)   // { id, valor } de la fila cuyo monto acordado se está editando
 
   const cargar = async () => {
     const [p, a] = await Promise.all([
@@ -130,9 +135,25 @@ function PanelAsignar({ proyectos = [] }) {
 
   const agregar = async () => {
     if (!perfilId || !proyecto || !cc) { window.alert('Elige el subcontratista, el proyecto y el centro de costo.'); return }
-    const { error } = await supabase.from('subcontrato_asignaciones').insert({ perfil_id: perfilId, ot: proyecto.ot, cc, cc_nombre: nombreCC(proyecto, cc) })
+    const fila = { perfil_id: perfilId, ot: proyecto.ot, cc, cc_nombre: nombreCC(proyecto, cc) }
+    const monto = parseInt(String(montoAcordado).replace(/\D/g, ''), 10)
+    // monto_acordado existe desde la migración 2026-11-11; si todavía no se
+    // corrió, se asigna igual (sin monto) para no frenar a gerencia.
+    let { error } = await supabase.from('subcontrato_asignaciones').insert(monto > 0 ? { ...fila, monto_acordado: monto } : fila)
+    if (error && monto > 0 && /monto_acordado/.test(error.message || '')) {
+      ;({ error } = await supabase.from('subcontrato_asignaciones').insert(fila))
+      if (!error) window.alert('La asignación quedó guardada, pero SIN el monto acordado: falta correr en Supabase la migración 2026-11-11-portal-subcontratista-resumen.sql.')
+    }
     if (error) { window.alert('No se pudo agregar: ' + error.message); return }
-    setCc(''); setMsg('Asignación agregada.')
+    setCc(''); setMontoAcordado(''); setMsg('Asignación agregada.')
+    cargar()
+  }
+  const guardarMonto = async () => {
+    if (!editando) return
+    const monto = parseInt(String(editando.valor).replace(/\D/g, ''), 10)
+    const { error } = await supabase.from('subcontrato_asignaciones').update({ monto_acordado: monto > 0 ? monto : null }).eq('id', editando.id)
+    if (error) { window.alert('No se pudo guardar el monto acordado: ' + error.message + (/monto_acordado/.test(error.message || '') ? ' (falta correr la migración 2026-11-11-portal-subcontratista-resumen.sql)' : '')); return }
+    setEditando(null)
     cargar()
   }
   const quitar = async id => {
@@ -161,18 +182,31 @@ function PanelAsignar({ proyectos = [] }) {
           <option value="">{proyecto ? 'Centro de costo…' : 'Elige un proyecto primero'}</option>
           {ccsDelProyecto.map(id => <option key={id} value={id}>{id} · {nombreCC(proyecto, id)}</option>)}
         </select>
+        <input value={montoAcordado} onChange={e => setMontoAcordado(e.target.value)} placeholder="Monto acordado neto (opcional)" title="Lo que Serein acordó pagarle en este centro de costo (neto). El subcontratista lo ve en su portal como «Acordado» y «Por facturar». Si queda vacío, su portal usa el presupuesto del CC." style={{ ...inp, width: 210 }} />
         <button onClick={agregar} style={{ background: C.teal, color: '#fff', border: 'none', borderRadius: 4, padding: '7px 14px', cursor: 'pointer', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 5 }}><UserPlus size={13} /> Asignar</button>
       </div>
       {msg && <div style={{ fontSize: 12, color: C.verde, marginBottom: 8 }}>{msg}</div>}
       {asignaciones.length > 0 && (
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-          <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['Subcontratista', 'OT', 'Centro de costo', ''].map((h, i) => <th key={i} style={{ textAlign: 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
+          <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['Subcontratista', 'OT', 'CC', 'Centro de costo', 'Monto acordado (neto)', ''].map((h, i) => <th key={i} style={{ textAlign: i === 4 ? 'right' : 'left', padding: '5px 8px', fontSize: 11, color: C.gris, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead>
           <tbody>
             {asignaciones.map(a => (
               <tr key={a.id} style={{ borderBottom: '1px solid #DFE4EA' }}>
                 <td style={{ padding: '5px 8px' }}>{nombreDe(a.perfil_id)}</td>
-                <td style={{ padding: '5px 8px' }}>{a.ot}</td>
-                <td style={{ padding: '5px 8px' }}>{a.cc_nombre || a.cc}</td>
+                <td style={{ padding: '5px 8px', fontWeight: 600 }}>{a.ot}</td>
+                <td style={{ padding: '5px 8px', fontWeight: 700 }}>{a.cc}</td>
+                <td style={{ padding: '5px 8px' }}>{a.cc_nombre || ''}</td>
+                <td style={{ padding: '5px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  {editando && editando.id === a.id ? (
+                    <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                      <input autoFocus value={editando.valor} onChange={e => setEditando({ id: a.id, valor: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') guardarMonto(); if (e.key === 'Escape') setEditando(null) }} style={{ ...inp, width: 120, textAlign: 'right', padding: '4px 6px' }} />
+                      <button onClick={guardarMonto} style={{ background: C.verde, color: '#fff', border: 'none', borderRadius: 4, padding: '4px 8px', cursor: 'pointer', fontSize: 11.5 }}>Guardar</button>
+                      <button onClick={() => setEditando(null)} style={{ background: 'none', border: '1px solid #DFE4EA', borderRadius: 4, padding: '4px 8px', cursor: 'pointer', fontSize: 11.5 }}>Cancelar</button>
+                    </span>
+                  ) : (
+                    <button onClick={() => setEditando({ id: a.id, valor: a.monto_acordado || '' })} title="Cambiar el monto acordado" style={{ background: 'none', border: 'none', cursor: 'pointer', color: a.monto_acordado ? C.carbon : C.gris, fontSize: 12.5, textDecoration: 'underline dotted', padding: 0 }}>{a.monto_acordado ? clp(a.monto_acordado) : 'fijar monto'}</button>
+                  )}
+                </td>
                 <td style={{ padding: '5px 8px', textAlign: 'right' }}><button onClick={() => quitar(a.id)} style={{ background: 'none', border: 'none', color: C.rojo, cursor: 'pointer' }}><X size={14} /></button></td>
               </tr>
             ))}
