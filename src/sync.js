@@ -163,8 +163,39 @@ export function fusionarFacturas(baseStr, otroStr) {
 // que también se fusiona (unión) entre sesiones. Los ítems sin `id` no se fusionan (manda `base`).
 const LAPIDAS_KEY = 'serein_lapidas'
 const LAPIDA_DIAS = 90
+// Amnistía (2026-11-12): el 9 y el 12 de noviembre una sesión subió la lista de cotizaciones con muchos
+// menos registros y cada faltante quedó con lápida, así que ninguna sesión volvía a aceptarlos. Las
+// cotizaciones se restauraron desde el respaldo; las lápidas de cotizaciones anteriores a esta marca se
+// ignoran (acá y en la base, ver 2026-11-12-proteccion-app-state.sql) para que no las vuelvan a borrar.
+const AMNISTIA_COTIZACIONES_MS = 1794513600000 // 2026-11-12 20:00 UTC
 function leerLapidas() {
-  try { const o = JSON.parse(localStorage.getItem(LAPIDAS_KEY) || '{}'); return o && typeof o === 'object' && !Array.isArray(o) ? o : {} } catch (e) { return {} }
+  try {
+    const o = JSON.parse(localStorage.getItem(LAPIDAS_KEY) || '{}')
+    if (!o || typeof o !== 'object' || Array.isArray(o)) return {}
+    if (o.serein_cotizaciones && typeof o.serein_cotizaciones === 'object') {
+      const m = {}
+      Object.keys(o.serein_cotizaciones).forEach(id => { if (Number(o.serein_cotizaciones[id]) >= AMNISTIA_COTIZACIONES_MS) m[id] = o.serein_cotizaciones[id] })
+      o.serein_cotizaciones = m
+    }
+    return o
+  } catch (e) { return {} }
+}
+// Ids que estaban en `antesStr` y ya no están en `ahoraStr`
+function idsPerdidos(antesStr, ahoraStr) {
+  try {
+    const antes = idsDeBloque(JSON.parse(antesStr)), ahora = idsDeBloque(JSON.parse(ahoraStr))
+    const out = []
+    antes.forEach((_, id) => { if (!ahora.has(id)) out.push(id) })
+    return { perdidos: out, total: antes.size }
+  } catch (e) { return { perdidos: [], total: 0 } }
+}
+// Un borrado a propósito quita uno o unos pocos registros por vez. Si desde la última subida
+// desaparecieron muchos de golpe (más de 3 y al menos el 20 %), no fue la persona: fue una copia
+// incompleta (pantalla atrasada, localStorage recortado, error al cargar). Así se perdieron más de
+// 200 cotizaciones el 2026-11-09: cada faltante recibió lápida y la nube quedó con 11.
+export function encogimientoSospechoso(antesStr, ahoraStr) {
+  const { perdidos, total } = idsPerdidos(antesStr, ahoraStr)
+  return perdidos.length > 3 && perdidos.length >= total * 0.2
 }
 function guardarLapidas(o) {
   const corte = Date.now() - LAPIDA_DIAS * 86400000
@@ -566,8 +597,14 @@ export async function pushState() {
       for (const r of rows) {
         const fusion = FUSIONES[r.id]
         if (!fusion) continue
-        // Lo que esta sesión quitó desde la última subida son borrados a propósito: quedan con lápida
-        if (CLAVES_GENERICAS.includes(r.id) && lastPushed[r.id] != null) anotarLapidas(r.id, lastPushed[r.id], r.value)
+        // Lo que esta sesión quitó desde la última subida son borrados a propósito: quedan con lápida.
+        // Salvo que hayan desaparecido muchos de golpe: eso es una copia incompleta, no un borrado.
+        let sospechoso = false
+        if (CLAVES_GENERICAS.includes(r.id) && lastPushed[r.id] != null) {
+          sospechoso = encogimientoSospechoso(lastPushed[r.id], r.value)
+          if (sospechoso) console.warn(`sync: ${r.id} perdió muchos registros de golpe desde la última subida; no se marcan como borrados y se recuperan antes de subir.`)
+          else anotarLapidas(r.id, lastPushed[r.id], r.value)
+        }
         try {
           const { data: nube } = await supabase.from('app_state').select('value').eq('id', r.id).maybeSingle()
           if (nube && nube.value != null) {
@@ -575,9 +612,18 @@ export async function pushState() {
             // seguir escribiendo, y fusionar la copia de antes le borraba las últimas teclas.
             const localAhora = localStorage.getItem(r.id) ?? r.value
             const base = lastPushed[r.id]
-            const f = r.id === 'serein_ots' && base != null ? fusionarOts3(base, localAhora, nube.value)
-              : TRES_LADOS.has(r.id) && base != null ? fusionar3(r.id, base, localAhora, nube.value)
-              : fusion(localAhora, nube.value)
+            let f
+            if (sospechoso) {
+              // Se devuelven los registros que faltan: primero los de la nube, después los de la última
+              // subida propia (por si la nube también los perdió).
+              f = fusionarGenerico(r.id, localAhora, nube.value) || localAhora
+              f = fusionarGenerico(r.id, f, base) || f
+              if (f === localAhora) f = null
+            } else {
+              f = r.id === 'serein_ots' && base != null ? fusionarOts3(base, localAhora, nube.value)
+                : TRES_LADOS.has(r.id) && base != null ? fusionar3(r.id, base, localAhora, nube.value)
+                : fusion(localAhora, nube.value)
+            }
             r.value = f || localAhora
             if (f) {
               try { localStorage.setItem(r.id, f) } catch (e) {}
