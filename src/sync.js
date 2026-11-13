@@ -168,15 +168,26 @@ const LAPIDA_DIAS = 90
 // cotizaciones se restauraron desde el respaldo; las lápidas de cotizaciones anteriores a esta marca se
 // ignoran (acá y en la base, ver 2026-11-12-proteccion-app-state.sql) para que no las vuelvan a borrar.
 const AMNISTIA_COTIZACIONES_MS = 1794513600000 // 2026-11-12 20:00 UTC
+// Los dos borrados masivos también vaciaron órdenes de compra (serein_pp), proyectos y clientes. Toda lápida,
+// de cualquier bloque, con marca de tiempo dentro de esos dos minutos se ignora (igual que en la base:
+// 2026-11-13-amnistia-lapidas-borrados-masivos.sql). Un borrado legítimo hecho justo en esos minutos es improbable.
+const VENTANAS_AMNISTIA = [[1794232380000, 1794232440000], [1794505560000, 1794505620000]] // 09-nov 13:53 y 12-nov 17:46 UTC
+export function lapidaAmnistiada(clave, ts) {
+  const t = Number(ts)
+  if (!t) return false
+  if (clave === 'serein_cotizaciones' && t < AMNISTIA_COTIZACIONES_MS) return true
+  return VENTANAS_AMNISTIA.some(([a, b]) => t >= a && t <= b)
+}
 function leerLapidas() {
   try {
     const o = JSON.parse(localStorage.getItem(LAPIDAS_KEY) || '{}')
     if (!o || typeof o !== 'object' || Array.isArray(o)) return {}
-    if (o.serein_cotizaciones && typeof o.serein_cotizaciones === 'object') {
+    Object.keys(o).forEach(clave => {
+      if (!o[clave] || typeof o[clave] !== 'object') return
       const m = {}
-      Object.keys(o.serein_cotizaciones).forEach(id => { if (Number(o.serein_cotizaciones[id]) >= AMNISTIA_COTIZACIONES_MS) m[id] = o.serein_cotizaciones[id] })
-      o.serein_cotizaciones = m
-    }
+      Object.keys(o[clave]).forEach(id => { if (!lapidaAmnistiada(clave, o[clave][id])) m[id] = o[clave][id] })
+      o[clave] = m
+    })
     return o
   } catch (e) { return {} }
 }
