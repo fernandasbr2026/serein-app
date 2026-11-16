@@ -3788,6 +3788,27 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
     setOts(nuevo)
     pushState()
   }
+  // Deshacer un borrado (2026-11-16). La OT-1022 se eliminó por error 3 minutos después de
+  // crearse y nadie podía recuperarla. Se quita la marca y se anota quién y cuándo la
+  // restauró; `restauradaFecha` es lo que la base exige para dejarla revivir (la protección
+  // contra sesiones atrasadas sigue: una copia vieja sin esa fecha no la hace volver).
+  const restaurar = async id => {
+    let quien = ''
+    try { const { data } = await supabase.auth.getUser(); quien = (data && data.user && data.user.email) || '' } catch (e) {}
+    try { await pullState() } catch (e) {}
+    let fresco = null
+    try { fresco = JSON.parse(localStorage.getItem('serein_ots') || 'null') } catch (e) {}
+    const base = Array.isArray(fresco) ? fresco : otsAll
+    const nuevo = base.map(o => {
+      if (o.id !== id) return o
+      const r = { ...o, eliminada: false, restauradaPor: quien, restauradaFecha: new Date().toISOString() }
+      delete r.eliminadaProtegida
+      return r
+    })
+    try { localStorage.setItem('serein_ots', JSON.stringify(nuevo)) } catch (e) {}
+    setOts(nuevo)
+    pushState()
+  }
 
   // Agregar un ítem nuevo a un array de la OT (partidas/despachos: "Agregar
   // recepción"/"Agregar despacho") es distinto a editar un campo existente
@@ -3948,7 +3969,10 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
   const cerradasTodas = delArea.filter(o => o.estado === 'Cerrada')
   const cerradasArea = cerradasTodas.filter(o => estadoFacturacionDeOT(o) !== 'Totalmente facturada')
   const facturadasArea = cerradasTodas.filter(o => estadoFacturacionDeOT(o) === 'Totalmente facturada')
-  const porVista = { activas: activasArea, cerradas: cerradasArea, facturadas: facturadasArea }[vista] || activasArea
+  // OT eliminadas (borrado suave) del área: solo se ven en su propia pestaña, para poder restaurarlas.
+  const eliminadasArea = otsAll.filter(o => o.area === areaSel && o.eliminada && (!fCliente || _norm(o.cliente) === _norm(fCliente)))
+    .sort((a, b) => String(b.eliminadaFecha || '').localeCompare(String(a.eliminadaFecha || '')))
+  const porVista = { activas: activasArea, cerradas: cerradasArea, facturadas: facturadasArea, eliminadas: eliminadasArea }[vista] || activasArea
   const visibles = porVista.filter(o => coincideBusqueda(o) && coincideFiltros(o))
 
   // Solo se considera el correlativo de OTs con el formato propio de este módulo (OT-AAAA-NNN).
@@ -4062,6 +4086,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
         { key: 'activas', label: `OT activas (${activasArea.length})` },
         { key: 'cerradas', label: `OT cerradas (${cerradasArea.length})` },
         { key: 'facturadas', label: `OT facturadas (${facturadasArea.length})` },
+        { key: 'eliminadas', label: `OT eliminadas (${eliminadasArea.length})` },
       ]} active={vista} onChange={v => { setVista(v); setPage(1) }} />
 
       {/* Buscador y filtros (aditivos, sobre lo ya existente) */}
@@ -4079,7 +4104,7 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
         <label style={{ fontSize: 12, color: '#9AA3AD', display: 'flex', alignItems: 'center', gap: 6 }}>Estado
           <select value={fEstado} onChange={e => { setFEstado(e.target.value); setPage(1) }} style={inp}>
             <option value="">Todos</option>
-            {(vista === 'activas' ? ['Cotizada', 'En ejecución', 'Terminada'] : ['Cerrada']).map(es => <option key={es} value={es}>{etiquetaEstado({ estado: es })}</option>)}
+            {(vista === 'activas' ? ['Cotizada', 'En ejecución', 'Terminada'] : vista === 'eliminadas' ? ESTADOS_OT : ['Cerrada']).map(es => <option key={es} value={es}>{etiquetaEstado({ estado: es })}</option>)}
           </select>
         </label>
         {vista === 'cerradas' && (
@@ -4129,11 +4154,34 @@ export default function OTModule({ areasPermitidas = ['Santa Rosa', 'Istria'], o
       )}
       {creando && <FormOT area={areaSel} siguienteNumero={siguiente} clientesActivos={clientesActivos} onAdd={o => { setOts(xs => [o, ...xs]); setCreando(false) }} onCancel={() => setCreando(false)} />}
 
-      {visibles.length === 0 && <div style={{ color: '#9AA3AD', fontSize: 14, padding: 20, textAlign: 'center', background: '#fff', border: '1px dashed #DFE4EA' }}>{{ activas: `Sin OT activas en ${areaSel} con estos filtros.`, cerradas: `Sin OT cerradas en ${areaSel} con estos filtros.`, facturadas: `Sin OT facturadas en ${areaSel} con estos filtros.` }[vista]}</div>}
-      {(<>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
-          {paginar(visibles, page).items.map(o => <TileOT key={o.id} ot={o} verValores={verValores} onOpen={() => setSel(o.id)} onDragStart={() => { dragId.current = o.id }} onDropOn={() => { mover(dragId.current, o.id); dragId.current = null }} />)}
+      {visibles.length === 0 && <div style={{ color: '#9AA3AD', fontSize: 14, padding: 20, textAlign: 'center', background: '#fff', border: '1px dashed #DFE4EA' }}>{{ activas: `Sin OT activas en ${areaSel} con estos filtros.`, cerradas: `Sin OT cerradas en ${areaSel} con estos filtros.`, facturadas: `Sin OT facturadas en ${areaSel} con estos filtros.`, eliminadas: `No hay OT eliminadas en ${areaSel}.` }[vista]}</div>}
+      {vista === 'eliminadas' && visibles.length > 0 && (
+        <div style={{ background: '#fff', border: '1px solid #DFE4EA', borderRadius: SEREIN.radius, overflowX: 'auto', marginBottom: 14 }}>
+          <div style={{ padding: '10px 14px', fontSize: 12, color: '#5A636E', borderBottom: '1px solid #DFE4EA' }}>Estas OT se eliminaron desde el ERP. No se borran de verdad: con «Restaurar» vuelven a su pestaña con todo lo que tenían (piezas, protocolos, ventas).</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead><tr style={{ borderBottom: '1px solid #E4E8ED' }}>{['OT', 'Cliente', 'Estado', 'Ingreso', 'Eliminada por', 'Cuándo', ''].map((h, i) => <th key={i} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 11, textTransform: 'uppercase', color: '#9AA3AD', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
+            <tbody>
+              {paginar(visibles, page).items.map(o => (
+                <tr key={o.id} style={{ borderBottom: '1px solid #EEF1F4' }}>
+                  <td style={{ padding: '8px 10px', fontWeight: 700, whiteSpace: 'nowrap' }}>{o.numero}</td>
+                  <td style={{ padding: '8px 10px' }}>{o.cliente}</td>
+                  <td style={{ padding: '8px 10px' }}>{etiquetaEstado(o)}</td>
+                  <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{otFecha(o) || '—'}</td>
+                  <td style={{ padding: '8px 10px' }}>{o.eliminadaPor || '—'}</td>
+                  <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{o.eliminadaFecha ? new Date(o.eliminadaFecha).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</td>
+                  <td style={{ padding: '8px 10px', textAlign: 'right' }}>
+                    <Btn variant="dark" icon={RotateCcw} onClick={() => { if (window.confirm(`¿Restaurar la ${o.numero} (${o.cliente})? Volverá a aparecer en sus pestañas para todos.`)) restaurar(o.id) }}>Restaurar</Btn>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
+      )}
+      {(<>
+        {vista !== 'eliminadas' && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
+          {paginar(visibles, page).items.map(o => <TileOT key={o.id} ot={o} verValores={verValores} onOpen={() => setSel(o.id)} onDragStart={() => { dragId.current = o.id }} onDropOn={() => { mover(dragId.current, o.id); dragId.current = null }} />)}
+        </div>}
         {(() => { const so = otsAll.find(x => x.id === sel); return so ? (
           <div onClick={() => setSel(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,26,46,.55)', zIndex: 70, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '28px 16px', overflowY: 'auto' }}>
             <div onClick={e => e.stopPropagation()} style={{ background: '#F7F6F3', width: '100%', maxWidth: 1000, boxShadow: '0 20px 60px -12px rgba(0,0,0,.4)' }}>
