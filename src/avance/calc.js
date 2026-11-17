@@ -130,8 +130,10 @@ export function resumenOT({ ot, procesos, partidas, libro, aprobaciones, partes 
     avance: Number(p.avance), planInicio: p.plan_inicio, planFin: p.plan_fin, partida: p.partida,
     unidad: p.unidad, cantidadTotal: Number(p.cantidad_total), predecesor: p.predecesor, visibleCliente: p.visible_cliente !== false,
   })))
-  const eventos = (libro || []).map(e => ({ fecha: e.fecha, hasta: e.hasta, tipo: e.tipo }))
-  if (!eventos.some(e => e.tipo === 'ini') && ot?.fecha_inicio_contractual) eventos.push({ fecha: ot.fecha_inicio_contractual, tipo: 'ini' })
+  // El inicio contractual manda desde la ficha de la OT: si en Configuración se
+  // corrige la fecha, el evento 'ini' del libro se lee con esa fecha.
+  const eventos = (libro || []).filter(e => e.tipo !== 'ini' || !ot?.fecha_inicio_contractual).map(e => ({ fecha: e.fecha, hasta: e.hasta, tipo: e.tipo }))
+  if (ot?.fecha_inicio_contractual) eventos.push({ fecha: ot.fecha_inicio_contractual, tipo: 'ini' })
   let plazo = null
   try { plazo = plazoVigente(eventos, Number(ot?.plazo_dias || 0), hoy) } catch (e) { plazo = null }
   const real = avanceGlobal(ps)
