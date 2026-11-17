@@ -357,7 +357,29 @@ function fusionarLapidas(baseStr, otroStr) {
 const CLAVES_GENERICAS = ['serein_pp', 'serein_cotizaciones', 'serein_proyectos', 'serein_fin', 'serein_mo', 'serein_inventario',
   'serein_invMov', 'serein_comprasOp', 'serein_avances', 'serein_contactos', 'serein_clientes', 'serein_proyCotizaciones']
 // Qué claves se fusionan en vez de pisarse enteras (ver fusionarOts / fusionarFacturas / fusionarGenerico)
-const FUSIONES = { serein_ots: fusionarOts, serein_facturas: fusionarFacturas, serein_lapidas: fusionarLapidas, [ELIMINADAS_KEY]: fusionarListaIds }
+// Parámetros (serein_params) es UN objeto con secciones (factoring, uf, instrumentos con fotos,
+// certificados y firmas, logos…). Hasta el 2026-11-17 se pisaba entero: la copia más nueva ganaba
+// aunque le faltaran secciones, y así se perdieron las fotos de los equipos, los certificados y las
+// firmas de Parámetros. Ahora se UNE clave por clave: lo que una copia trae y la otra no, se conserva.
+// Un valor borrado a propósito queda como '' (no desaparece la clave), así que no se "resucita".
+const esObjetoPlano = v => v != null && typeof v === 'object' && !Array.isArray(v)
+function unirParams(a, b) {
+  const out = { ...b, ...a }
+  for (const k of Object.keys(b)) {
+    if (esObjetoPlano(a[k]) && esObjetoPlano(b[k])) out[k] = unirParams(a[k], b[k])
+    else if (!(k in a)) out[k] = b[k]
+  }
+  return out
+}
+function fusionarParams(aStr, bStr) {
+  try {
+    const a = JSON.parse(aStr), b = JSON.parse(bStr)
+    if (!esObjetoPlano(a) || !esObjetoPlano(b)) return null
+    const unido = JSON.stringify(unirParams(a, b))
+    return unido === aStr ? null : unido
+  } catch (e) { return null }
+}
+const FUSIONES = { serein_ots: fusionarOts, serein_facturas: fusionarFacturas, serein_lapidas: fusionarLapidas, [ELIMINADAS_KEY]: fusionarListaIds, serein_params: fusionarParams }
 // Bloques que al subir se fusionan de tres lados, campo por campo (ver fusionar3)
 const TRES_LADOS = new Set(['serein_facturas'])
 CLAVES_GENERICAS.forEach(k => { FUSIONES[k] = (b, o) => fusionarGenerico(k, b, o); TRES_LADOS.add(k) })
