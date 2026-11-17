@@ -225,14 +225,14 @@ function PanelComando({ datos, res, recargar, irA }) {
 /* ---------------- 08 · Configuración ---------------- */
 function PanelConfig({ datos, res, recargar, otsERP }) {
   const ot = datos.ot
-  const [f, setF] = useState(() => ({ nombre: ot.nombre, cliente: ot.cliente || '', fecha_inicio_contractual: ot.fecha_inicio_contractual, plazo_dias: ot.plazo_dias, kg_contrato: ot.kg_contrato, precio_contrato: ot.precio_contrato, suma_partidas: ot.suma_partidas, anticipo: ot.anticipo, retencion_pct: Math.round(Number(ot.retencion_pct) * 10000) / 100, amortizacion: ot.amortizacion, amortizacion_pct: Math.round(Number(ot.amortizacion_pct) * 10000) / 100, multa_dia: ot.multa_dia, drive_folder_id: ot.drive_folder_id || '', remitentes: (ot.remitentes_cliente || []).join(', '), correo_cliente: ot.correo_cliente || '' }))
+  const [f, setF] = useState(() => ({ codigo: ot.codigo, nombre: ot.nombre, cliente: ot.cliente || '', fecha_inicio_contractual: ot.fecha_inicio_contractual, plazo_dias: ot.plazo_dias, kg_contrato: ot.kg_contrato, precio_contrato: ot.precio_contrato, suma_partidas: ot.suma_partidas, anticipo: ot.anticipo, retencion_pct: Math.round(Number(ot.retencion_pct) * 10000) / 100, amortizacion: ot.amortizacion, amortizacion_pct: Math.round(Number(ot.amortizacion_pct) * 10000) / 100, multa_dia: ot.multa_dia, drive_folder_id: ot.drive_folder_id || '', remitentes: (ot.remitentes_cliente || []).join(', '), correo_cliente: ot.correo_cliente || '' }))
   const [msg, setMsg] = useState('')
   const [perfiles, setPerfiles] = useState([])
   const [partidas, setPartidas] = useState(() => Object.fromEntries((datos.partidas || []).map(p => [p.id, p.monto])))
   useEffect(() => { api.listarPerfilesInternos().then(setPerfiles).catch(() => {}) }, [])
   const set = k => e => setF(s => ({ ...s, [k]: e.target.value }))
   const run = async (fn, ok) => { setMsg(''); try { await fn(); setMsg(ok || 'Guardado'); recargar(); setTimeout(() => setMsg(''), 2500) } catch (e) { setMsg('ERROR: ' + api.errorLegible(e)) } }
-  const guardarContrato = () => run(() => api.actualizarOT(ot.id, { nombre: f.nombre, cliente: f.cliente || null, fecha_inicio_contractual: f.fecha_inicio_contractual, plazo_dias: Math.max(1, Math.round(num(f.plazo_dias))), kg_contrato: num(f.kg_contrato), precio_contrato: num(f.precio_contrato), suma_partidas: num(f.suma_partidas), anticipo: num(f.anticipo), retencion_pct: num(f.retencion_pct) / 100, amortizacion: f.amortizacion, amortizacion_pct: num(f.amortizacion_pct) / 100, multa_dia: num(f.multa_dia) }))
+  const guardarContrato = () => run(() => api.actualizarOT(ot.id, { codigo: (f.codigo || ot.codigo).trim(), nombre: f.nombre, cliente: f.cliente || null, fecha_inicio_contractual: f.fecha_inicio_contractual, plazo_dias: Math.max(1, Math.round(num(f.plazo_dias))), kg_contrato: num(f.kg_contrato), precio_contrato: num(f.precio_contrato), suma_partidas: num(f.suma_partidas), anticipo: num(f.anticipo), retencion_pct: num(f.retencion_pct) / 100, amortizacion: f.amortizacion, amortizacion_pct: num(f.amortizacion_pct) / 100, multa_dia: num(f.multa_dia) }))
   const guardarFuentes = () => run(() => api.actualizarOT(ot.id, { drive_folder_id: f.drive_folder_id || null, remitentes_cliente: f.remitentes.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean), correo_cliente: f.correo_cliente || null }))
   const guardarPartidas = () => run(() => Promise.all((datos.partidas || []).map(p => api.guardarPartida(p.id, { monto: num(partidas[p.id]) }))), 'Montos de partida guardados')
   const sumaPartidas = (datos.partidas || []).reduce((a, p) => a + num(partidas[p.id]), 0)
@@ -251,7 +251,8 @@ function PanelConfig({ datos, res, recargar, otsERP }) {
 
       <Card title="Datos del contrato" right={<Btn tipo="p" onClick={guardarContrato}>Guardar contrato</Btn>}>
         <div style={col2}>
-          <Campo label="Nombre de la obra" style={{ gridColumn: '1 / 3' }}><input value={f.nombre} onChange={set('nombre')} style={inp} /></Campo>
+          <Campo label="Código"><input value={f.codigo} onChange={set('codigo')} style={inp} /></Campo>
+          <Campo label="Nombre de la obra"><input value={f.nombre} onChange={set('nombre')} style={inp} /></Campo>
           <Campo label="Cliente"><input value={f.cliente} onChange={set('cliente')} style={inp} list="avance-clientes" /><datalist id="avance-clientes">{[...new Set(otsERP.map(o => o.cliente).filter(Boolean))].map(c => <option key={c} value={c} />)}</datalist></Campo>
           <Campo label="Inicio contractual"><input type="date" value={f.fecha_inicio_contractual} onChange={set('fecha_inicio_contractual')} style={inp} /></Campo>
           <Campo label="Plazo (días)"><input inputMode="numeric" value={f.plazo_dias} onChange={set('plazo_dias')} style={inp} /></Campo>
@@ -304,7 +305,7 @@ function NuevaOT({ otsERP, onCerrar, onCreada }) {
   const [err, setErr] = useState('')
   const [creando, setCreando] = useState(false)
   const set = k => e => setF(s => ({ ...s, [k]: e.target.value }))
-  const elegirOT = e => { const o = otsERP.find(x => String(x.numero) === e.target.value); if (!o) return; setF(s => ({ ...s, codigo: 'OT' + o.numero, cliente: o.cliente || s.cliente, nombre: s.nombre || o.nombre || o.proyecto || o.descripcion || '' })) }
+  const elegirOT = e => { const o = otsERP.find(x => String(x.numero) === e.target.value); if (!o) return; setF(s => ({ ...s, codigo: /^ot/i.test(String(o.numero)) ? String(o.numero).toUpperCase() : 'OT' + o.numero, cliente: o.cliente || s.cliente, nombre: s.nombre || o.nombre || o.proyecto || o.descripcion || '' })) }
   const pasos = ['OT y contrato', 'Carpeta de Drive', 'Correo del cliente', 'Confirmar']
   const validar = () => {
     if (paso === 0) { if (!f.codigo.trim()) return 'Falta el código de la OT'; if (!f.nombre.trim()) return 'Falta el nombre de la obra'; if (!f.fecha_inicio_contractual) return 'Falta el inicio contractual'; if (!(num(f.plazo_dias) > 0)) return 'El plazo debe ser mayor que cero' }
