@@ -31,6 +31,7 @@ import { SEREIN } from './theme-serein.js'
 // estas pantallas se descarga la primera vez que se abre. Las que exportan helpers al Dashboard siguen estáticas.
 const SereinChatWidget = lazy(() => import('./serein-ai/SereinChatWidget.jsx'))
 const TrazabilidadModule = lazy(() => import('./TrazabilidadModule.jsx'))
+const AvanceModule = lazy(() => import('./avance/AvanceModule.jsx'))
 const LibroComprasModule = lazy(() => import('./LibroComprasModule.jsx'))
 const LibroVentasModule = lazy(() => import('./LibroVentasModule.jsx'))
 const CartolasBancariasModule = lazy(() => import('./CartolasBancariasModule.jsx'))
@@ -219,6 +220,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
       ...(esGerencia ? ['REVISION_CONTABLE'] : []),
       ...(esGerencia ? ['CARTOLAS_BANCARIAS'] : []),
     ...(esGerencia ? ['TRAZABILIDAD'] : []),
+    ...(esGerencia ? ['AVANCE'] : []),
     ...(esGerencia ? ['FINANZAS'] : []),
     'CLIENTES',
     ...(esGerencia ? ['CREDITO'] : []),
@@ -232,7 +234,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     'INVENTARIO',
     ...(esGerencia ? ['PARAMETROS'] : []),
   ]
-  const ORDEN_MODULOS = ['TODAS', 'ORGANIGRAMA', 'CRM', 'ASESOR', 'Santa Rosa', 'Istria', 'GESTION_PROYECTOS', 'CALENDARIO_PAGOS', 'FINANZAS', 'ORDENES_COMPRA', 'PAGOS', 'LIBRO_COMPRAS', 'LIBRO_VENTAS', 'REVISION_CONTABLE', 'CARTOLAS_BANCARIAS', 'TRAZABILIDAD', 'CORREOS', 'COTIZADOR', 'CLIENTES', 'CREDITO', 'CONTACTOS', 'COMPRAS_OP', 'PRODUCCION', 'GESTION_OT', 'ASISTENCIA', 'INVENTARIO', 'PARAMETROS']
+  const ORDEN_MODULOS = ['TODAS', 'ORGANIGRAMA', 'CRM', 'ASESOR', 'Santa Rosa', 'Istria', 'GESTION_PROYECTOS', 'CALENDARIO_PAGOS', 'FINANZAS', 'ORDENES_COMPRA', 'PAGOS', 'LIBRO_COMPRAS', 'LIBRO_VENTAS', 'REVISION_CONTABLE', 'CARTOLAS_BANCARIAS', 'TRAZABILIDAD', 'AVANCE', 'CORREOS', 'COTIZADOR', 'CLIENTES', 'CREDITO', 'CONTACTOS', 'COMPRAS_OP', 'PRODUCCION', 'GESTION_OT', 'ASISTENCIA', 'INVENTARIO', 'PARAMETROS']
   // INVENTARIO se agrega siempre para los perfiles con lista blanca de
   // modulos (varios supervisores lo necesitan aunque no este en su lista) —
   // perfil.ocultar_inventario es la excepcion explicita para un perfil que
@@ -888,7 +890,7 @@ export default function Dashboard({ perfil, email, onLogout }) {
     )
   }
 
-  const nombreTab = t => t === 'ASESOR' ? 'Asesor IA' : t === 'TODAS' ? 'Consolidado' : t === 'ORGANIGRAMA' ? '🗂️ Organigrama' : t === 'CRM' ? '📞 CRM' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'CALENDARIO_PAGOS' ? '🗓️ Pagos' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'ORDENES_COMPRA' ? '🧾 Órdenes de Compra' : t === 'TRAZABILIDAD' ? '🔗 Trazabilidad y Alertas' : t === 'INVENTARIO' ? '📦 Inventario' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Resumen ventas por cliente' : t === 'CONTACTOS' ? '📇 Clientes y Proveedores' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t === 'LIBRO_COMPRAS' ? 'Libro de Compras' : t === 'LIBRO_VENTAS' ? 'Libro de Ventas' : t === 'REVISION_CONTABLE' ? 'Revisión contable' : t === 'CORREOS' ? 'Correos: OC y cotizaciones' : t === 'CREDITO' ? 'Crédito de clientes' : t === 'CARTOLAS_BANCARIAS' ? 'Cartolas Bancarias' : t
+  const nombreTab = t => t === 'ASESOR' ? 'Asesor IA' : t === 'TODAS' ? 'Consolidado' : t === 'ORGANIGRAMA' ? '🗂️ Organigrama' : t === 'CRM' ? '📞 CRM' : t === 'GESTION_PROYECTOS' ? 'Proyectos' : t === 'GESTION_OT' ? '🔧 Órdenes de Trabajo' : t === 'ASISTENCIA' ? '👷 Asistencia' : t === 'FINANZAS' ? '💰 Finanzas' : t === 'CALENDARIO_PAGOS' ? '🗓️ Pagos' : t === 'PAGOS' ? '💵 Proveedores y Pagos' : t === 'ORDENES_COMPRA' ? '🧾 Órdenes de Compra' : t === 'TRAZABILIDAD' ? '🔗 Trazabilidad y Alertas' : t === 'AVANCE' ? '🏗️ Avance de obra' : t === 'INVENTARIO' ? '📦 Inventario' : t === 'PARAMETROS' ? '🧮 Parámetros' : t === 'CLIENTES' ? '🏢 Resumen ventas por cliente' : t === 'CONTACTOS' ? '📇 Clientes y Proveedores' : t === 'COTIZADOR' ? '📋 Cotizaciones' : t === 'PRODUCCION' ? '🏭 Producción' : t === 'COMPRAS_OP' ? '🛒 Compras Operativas' : t === 'LIBRO_COMPRAS' ? 'Libro de Compras' : t === 'LIBRO_VENTAS' ? 'Libro de Ventas' : t === 'REVISION_CONTABLE' ? 'Revisión contable' : t === 'CORREOS' ? 'Correos: OC y cotizaciones' : t === 'CREDITO' ? 'Crédito de clientes' : t === 'CARTOLAS_BANCARIAS' ? 'Cartolas Bancarias' : t
 
   return (
     <div style={{ display: 'flex', minHeight: 'var(--alto-pantalla)', background: THEME.bg, fontFamily: THEME.font }}>
@@ -970,6 +972,8 @@ export default function Dashboard({ perfil, email, onLogout }) {
           <ProveedoresPagosModule pp={pp} setPp={setPp} gastos={fin.gastos || []} />
         ) : esModuloOC && puedeVer('ORDENES_COMPRA') ? (
           <OrdenesCompraModule pp={pp} setPp={setPp} ots={ots} />
+        ) : areaSel === 'AVANCE' && puedeVer('AVANCE') ? (
+          <Suspense fallback={<CargandoModulo />}><AvanceModule ots={ots} email={email} /></Suspense>
         ) : esModuloTraza && puedeVer('TRAZABILIDAD') ? (
           <Suspense fallback={<CargandoModulo />}><TrazabilidadModule cotizaciones={cotizaciones} ots={ots} setOts={setOts} ordenesCompra={pp.ocs || []} /></Suspense>
         ) : esModuloCartolas && puedeVer('CARTOLAS_BANCARIAS') ? (
