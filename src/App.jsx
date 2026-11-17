@@ -17,13 +17,29 @@ class ErrorBoundary extends React.Component {
   render() {
     if (this.state.error) {
       const msg = (this.state.error && this.state.error.message) || String(this.state.error)
+      // «Failed to fetch dynamically imported module» = se publicó una versión nueva mientras esta
+      // pestaña tenía la anterior: basta recargar. Antes el único botón borraba TODOS los datos locales
+      // (serein_*) y eso, el 2026-11-17, hizo que Parámetros apareciera vacío.
+      const esErrorDeVersion = /dynamically imported module|Importing a module script failed|Loading chunk|ChunkLoadError/i.test(msg)
+      if (esErrorDeVersion) {
+        try { if (!sessionStorage.getItem('serein_recarga_version')) { sessionStorage.setItem('serein_recarga_version', '1'); location.reload(); return null } } catch (e) {}
+        return (
+          <div style={{ minHeight: 'var(--alto-pantalla)', background: '#101315', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 14, fontFamily: "'Inter',sans-serif", padding: 24, textAlign: 'center' }}>
+            <div style={{ color: '#fff', fontSize: 16, fontWeight: 600 }}>Hay una versión nueva del ERP</div>
+            <div style={{ color: '#9AA3AD', fontSize: 13, maxWidth: 520 }}>Esta pestaña tenía la versión anterior. Recarga para seguir; tus datos no se tocan.</div>
+            <button onClick={() => { try { sessionStorage.removeItem('serein_recarga_version') } catch (e) {} location.reload() }}
+              style={{ background: '#F77716', color: '#fff', border: 'none', padding: '10px 20px', cursor: 'pointer', fontWeight: 600 }}>Recargar</button>
+          </div>
+        )
+      }
       return (
         <div style={{ minHeight: 'var(--alto-pantalla)', background: '#101315', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 14, fontFamily: "'Inter',sans-serif", padding: 24, textAlign: 'center' }}>
           <div style={{ color: '#C5453D', fontSize: 16, fontWeight: 600 }}>Se produjo un error al mostrar el panel</div>
           <div style={{ color: '#9AA3AD', fontSize: 13, maxWidth: 620, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg}</div>
-          <button onClick={() => { try { Object.keys(localStorage).filter(k => k.startsWith('serein_')).forEach(k => localStorage.removeItem(k)) } catch (e) {} location.reload() }}
-            style={{ background: '#F77716', color: '#fff', border: 'none', padding: '10px 20px', cursor: 'pointer', fontWeight: 600 }}>
-            Reiniciar datos locales y recargar
+          <button onClick={() => location.reload()} style={{ background: '#F77716', color: '#fff', border: 'none', padding: '10px 20px', cursor: 'pointer', fontWeight: 600 }}>Recargar</button>
+          <button onClick={() => { if (!window.confirm('Esto borra la copia local de esta pestaña y vuelve a bajar todo desde la nube. Lo que no haya alcanzado a subir se pierde. ¿Continuar?')) return; try { Object.keys(localStorage).filter(k => k.startsWith('serein_')).forEach(k => localStorage.removeItem(k)) } catch (e) {} location.reload() }}
+            style={{ background: 'transparent', color: '#9AA3AD', border: '1px solid #4A5158', padding: '8px 16px', cursor: 'pointer', fontSize: 12 }}>
+            Reiniciar datos locales (solo si Recargar no lo arregla)
           </button>
         </div>
       )
