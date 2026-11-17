@@ -1,0 +1,299 @@
+{
+ "_nota": "Datos de OT914 al corte 11-11-2026. Las fechas de plan son relativas al inicio contractual; el sistema las desplaza con la renovación del plazo.",
+ "ot": {
+  "codigo": "OT914",
+  "nombre": "Estructura metálica · Zona B",
+  "cliente": "(tomar del ERP)",
+  "fecha_inicio_contractual": "2026-09-04",
+  "plazo_dias": 133,
+  "kg_contrato": 100000,
+  "precio_contrato": 439894332,
+  "suma_partidas": 443063692,
+  "anticipo": 131968300,
+  "retencion_pct": 0.1,
+  "amortizacion": "total",
+  "amortizacion_pct": 0.3,
+  "multa_dia": 350000,
+  "fecha_corte": "2026-11-11",
+  "inicio_fabricacion": "2026-10-29"
+ },
+ "partidas": [
+  {
+   "codigo": "prov",
+   "nombre": "Provisión estructura",
+   "monto": 245000000
+  },
+  {
+   "codigo": "mon",
+   "nombre": "Montaje estructura",
+   "monto": 115000000
+  },
+  {
+   "codigo": "pin",
+   "nombre": "Pintura anticorrosiva",
+   "monto": 25259000
+  },
+  {
+   "codigo": "int",
+   "nombre": "Protección intumescente",
+   "monto": 35813282
+  },
+  {
+   "codigo": "ter",
+   "nombre": "Pintura terminación",
+   "monto": 21991410
+  }
+ ],
+ "procesos": [
+  {
+   "codigo": "ING",
+   "nombre": "Ingeniería de detalle",
+   "orden": 1,
+   "duracion_sem": 3,
+   "peso_edp": 8,
+   "avance": 0.5,
+   "plan_inicio": "2026-09-04",
+   "plan_fin": "2026-11-15",
+   "partida": "prov",
+   "unidad": "%",
+   "cantidad_total": 100,
+   "predecesor": null,
+   "req_lib_interna": true,
+   "req_lib_externa": true,
+   "libera_externo": "Cliente / ingeniería",
+   "visible_cliente": true
+  },
+  {
+   "codigo": "PER",
+   "nombre": "Pernos de anclaje",
+   "orden": 2,
+   "duracion_sem": 0.5,
+   "peso_edp": 4,
+   "avance": 0.2631578947368421,
+   "plan_inicio": "2026-10-01",
+   "plan_fin": "2026-11-20",
+   "partida": "prov",
+   "unidad": "pedestales",
+   "cantidad_total": 95,
+   "predecesor": null,
+   "req_lib_interna": true,
+   "req_lib_externa": true,
+   "libera_externo": "Topografía cliente",
+   "visible_cliente": true
+  },
+  {
+   "codigo": "SUM",
+   "nombre": "Suministro de material",
+   "orden": 3,
+   "duracion_sem": 2,
+   "peso_edp": 42,
+   "avance": 0.566,
+   "plan_inicio": "2026-09-15",
+   "plan_fin": "2026-11-30",
+   "partida": "prov",
+   "unidad": "kg",
+   "cantidad_total": 100000,
+   "predecesor": null,
+   "req_lib_interna": true,
+   "req_lib_externa": false,
+   "libera_externo": null,
+   "visible_cliente": true
+  },
+  {
+   "codigo": "COR",
+   "nombre": "Corte",
+   "orden": 4,
+   "duracion_sem": 2,
+   "peso_edp": 10,
+   "avance": 0.4,
+   "plan_inicio": "2026-10-01",
+   "plan_fin": "2026-12-10",
+   "partida": "prov",
+   "unidad": "kg",
+   "cantidad_total": 100000,
+   "predecesor": "SUM",
+   "req_lib_interna": true,
+   "req_lib_externa": false,
+   "libera_externo": null,
+   "visible_cliente": true
+  },
+  {
+   "codigo": "ARM",
+   "nombre": "Armado",
+   "orden": 5,
+   "duracion_sem": 6.5,
+   "peso_edp": 16,
+   "avance": 0.107637,
+   "plan_inicio": "2026-10-05",
+   "plan_fin": "2026-12-15",
+   "partida": "prov",
+   "unidad": "kg",
+   "cantidad_total": 100000,
+   "predecesor": "COR",
+   "req_lib_interna": true,
+   "req_lib_externa": true,
+   "libera_externo": "ITO cliente",
+   "visible_cliente": true
+  },
+  {
+   "codigo": "SOL",
+   "nombre": "Soldadura",
+   "orden": 6,
+   "duracion_sem": 8.5,
+   "peso_edp": 20,
+   "avance": 0.107637,
+   "plan_inicio": "2026-10-10",
+   "plan_fin": "2026-12-20",
+   "partida": "prov",
+   "unidad": "kg",
+   "cantidad_total": 100000,
+   "predecesor": "ARM",
+   "req_lib_interna": true,
+   "req_lib_externa": true,
+   "libera_externo": "ITO cliente",
+   "visible_cliente": true
+  },
+  {
+   "codigo": "PIN",
+   "nombre": "Granallado y anticorrosivo",
+   "orden": 7,
+   "duracion_sem": 2.5,
+   "peso_edp": 100,
+   "avance": 0,
+   "plan_inicio": "2026-10-15",
+   "plan_fin": "2026-12-28",
+   "partida": "pin",
+   "unidad": "m²",
+   "cantidad_total": 4355,
+   "predecesor": "SOL",
+   "req_lib_interna": true,
+   "req_lib_externa": true,
+   "libera_externo": "ITO cliente",
+   "visible_cliente": true
+  },
+  {
+   "codigo": "MON",
+   "nombre": "Montaje",
+   "orden": 8,
+   "duracion_sem": 4.5,
+   "peso_edp": 100,
+   "avance": 0,
+   "plan_inicio": "2026-11-01",
+   "plan_fin": "2027-01-05",
+   "partida": "mon",
+   "unidad": "kg",
+   "cantidad_total": 100000,
+   "predecesor": "PIN",
+   "req_lib_interna": true,
+   "req_lib_externa": true,
+   "libera_externo": "Cliente",
+   "visible_cliente": true
+  },
+  {
+   "codigo": "INT",
+   "nombre": "Protección intumescente",
+   "orden": 9,
+   "duracion_sem": 2,
+   "peso_edp": 100,
+   "avance": 0,
+   "plan_inicio": "2026-12-10",
+   "plan_fin": "2027-01-12",
+   "partida": "int",
+   "unidad": "m²",
+   "cantidad_total": 1072.8,
+   "predecesor": "MON",
+   "req_lib_interna": true,
+   "req_lib_externa": true,
+   "libera_externo": "Mandante / arquitectos",
+   "visible_cliente": true
+  },
+  {
+   "codigo": "TER",
+   "nombre": "Pintura de terminación en obra",
+   "orden": 10,
+   "duracion_sem": 2,
+   "peso_edp": 100,
+   "avance": 0,
+   "plan_inicio": "2026-12-20",
+   "plan_fin": "2027-01-15",
+   "partida": "ter",
+   "unidad": "m²",
+   "cantidad_total": 3282.3,
+   "predecesor": "INT",
+   "req_lib_interna": true,
+   "req_lib_externa": true,
+   "libera_externo": "ITO cliente",
+   "visible_cliente": true
+  }
+ ],
+ "libro_obra": [
+  {
+   "fecha": "2026-09-04",
+   "tipo": "ini",
+   "titulo": "Firma de contrato e inicio contractual"
+  },
+  {
+   "fecha": "2026-09-14",
+   "tipo": "com",
+   "titulo": "SEREIN informa inicio de trabajos"
+  },
+  {
+   "fecha": "2026-09-14",
+   "tipo": "com",
+   "titulo": "Consultas técnicas RDI 001 a 004",
+   "aprobacion": {
+    "clase": "Consulta técnica",
+    "estado": "resp"
+   }
+  },
+  {
+   "fecha": "2026-10-02",
+   "tipo": "pla",
+   "titulo": "Recepción ingeniería Rev. 0"
+  },
+  {
+   "fecha": "2026-10-13",
+   "tipo": "renov",
+   "titulo": "Planos finales para fabricar",
+   "origen_ia": true
+  },
+  {
+   "fecha": "2026-10-28",
+   "tipo": "tra",
+   "titulo": "Planos de montaje G1–G8 Rev. B"
+  },
+  {
+   "fecha": "2026-10-29",
+   "tipo": "tra",
+   "titulo": "Transmittal N°1",
+   "aprobacion": {
+    "clase": "Aprobación de planos",
+    "estado": "pend",
+    "vence": "2026-11-03"
+   }
+  },
+  {
+   "fecha": "2026-11-03",
+   "tipo": "com",
+   "titulo": "Vence plazo de observaciones a Rev. B"
+  },
+  {
+   "fecha": "2026-11-10",
+   "tipo": "ava",
+   "titulo": "Despacho N°1, entrega de pernos y retiro N°1"
+  }
+ ],
+ "valores_esperados": {
+  "avance_global_pct": 15.5,
+  "bruto_acumulado_mm": 89.3,
+  "inicio_vigente": "2026-10-13",
+  "termino_vigente": "2027-02-23",
+  "dia_actual": 29,
+  "ritmo_t_semana": 5.8,
+  "termino_proyectado": "2027-03-13",
+  "atraso_dias": 18,
+  "multa_expuesta_mm": 6.3,
+  "edp2_neto_amortizacion_total": 0,
+  "espera_cliente_dias": 8
+ }
+}

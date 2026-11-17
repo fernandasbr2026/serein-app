@@ -4,6 +4,7 @@ import Login from './Login.jsx'
 import Dashboard from './Dashboard.jsx'
 import SubcontratoApp from './SubcontratoApp.jsx'
 import TallerExternoApp from './TallerExternoApp.jsx'
+import ClienteObraApp from './ClienteObraApp.jsx'
 import LogoSerein from './LogoSerein.jsx'
 import { pullState, pushState, obtenerEstadoGuardado, configurarSync } from './sync.js'
 import { SEREIN } from './theme-serein.js'
@@ -118,7 +119,7 @@ export default function App() {
     // pullState/pushState, para no dejarlo colgado en la pantalla de
     // carga.
     if (!perfil) return
-    if (perfil.tipo === 'subcontrato' || perfil.tipo === 'taller_externo') { setSincronizado(true); return }
+    if (perfil.tipo === 'subcontrato' || perfil.tipo === 'taller_externo' || perfil.tipo === 'cliente') { setSincronizado(true); return }
     configurarSync(perfil)
     let vivo = true
     pullState().then(res => { if (res.ok && res.n === 0) pushState() }).finally(() => { if (vivo) setSincronizado(true) })
@@ -185,6 +186,8 @@ export default function App() {
   // useEffect de sincronizacion, arriba).
   if (perfil.tipo === 'subcontrato') return <SubcontratoApp perfil={perfil} email={session.user.email} onLogout={salir} />
   if (perfil.tipo === 'taller_externo') return <TallerExternoApp perfil={perfil} email={session.user.email} onLogout={salir} />
+  // Cliente del Módulo Avance de Obra: solo ve su obra publicada (esquema `avance`), nunca app_state.
+  if (perfil.tipo === 'cliente') return <ClienteObraApp perfil={perfil} email={session.user.email} userId={session.user.id} onLogout={salir} />
   if (!sincronizado) return <Pantalla msg="Sincronizando datos con la nube..." />
   return (
     <ErrorBoundary>
