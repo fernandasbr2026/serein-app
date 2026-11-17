@@ -24,7 +24,9 @@ export default function Login() {
 
   async function entrar() {
     setErr(''); setInfo(''); setCargando(true)
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: pass })
+    // Los clientes del Módulo Avance de Obra entran con un usuario corto (sin @): es un correo técnico del dominio obras.sereinspa.com
+    const correoLogin = email.trim().includes('@') ? email.trim() : email.trim().toLowerCase() + '@obras.sereinspa.com'
+    const { error } = await supabase.auth.signInWithPassword({ email: correoLogin, password: pass })
     setCargando(false)
     if (error) setErr('Correo o contraseña incorrectos.')
   }
@@ -50,7 +52,7 @@ export default function Login() {
         <div style={{ background: '#fff', border: '1px solid ' + C.borde, borderRadius: 18, padding: 32, boxShadow: '0 1px 2px rgba(16,19,21,.04), 0 24px 48px -24px rgba(120,45,0,.28)' }}>
           <label style={{ fontSize: 12.5, fontWeight: 600, color: SEREIN.textSoft }}>Correo</label>
           <input value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && entrar()}
-            type="email" placeholder="tu@correo.com" autoComplete="username" style={inputBase} />
+            type="text" inputMode="email" placeholder="tu@correo.com o tu usuario" autoComplete="username" style={inputBase} />
           <label style={{ fontSize: 12.5, fontWeight: 600, color: SEREIN.textSoft }}>Contraseña</label>
           <input value={pass} onChange={e => setPass(e.target.value)} onKeyDown={e => e.key === 'Enter' && entrar()}
             type="password" placeholder="••••••••" autoComplete="current-password" style={inputBase} />

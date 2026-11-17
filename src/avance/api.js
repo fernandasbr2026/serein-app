@@ -22,7 +22,7 @@ const sel = async q => { const { data, error } = await q; if (error) throw error
 export const listarOts = () => sel(av().from('ots').select('*').order('creado_en', { ascending: false }))
 
 export async function cargarOT(id) {
-  const [ots, procesos, partidas, libro, aprobaciones, partes, documentos, alertas, miembros, liberaciones, edp, registros] = await Promise.all([
+  const [ots, procesos, partidas, libro, aprobaciones, partes, documentos, alertas, miembros, liberaciones, edp, registros, propuestas] = await Promise.all([
     sel(av().from('ots').select('*').eq('id', id)),
     sel(av().from('procesos').select('*').eq('ot_id', id).order('orden')),
     sel(av().from('partidas').select('*').eq('ot_id', id)),
@@ -35,8 +35,9 @@ export async function cargarOT(id) {
     sel(av().from('liberaciones').select('*, procesos!inner(ot_id, codigo)').eq('procesos.ot_id', id)),
     sel(av().from('edp').select('*').eq('ot_id', id).order('numero')),
     sel(av().from('registros').select('*').eq('ot_id', id).order('fecha', { ascending: false }).limit(200)),
+    sel(av().from('propuestas').select('*').eq('ot_id', id).eq('estado', 'pend').order('creado_en', { ascending: false }).limit(200)).catch(() => []),
   ])
-  return { ot: ots[0] || null, procesos, partidas, libro, aprobaciones, partes, documentos, alertas, miembros, liberaciones, edp, registros }
+  return { ot: ots[0] || null, procesos, partidas, libro, aprobaciones, partes, documentos, alertas, miembros, liberaciones, edp, registros, propuestas }
 }
 
 export async function crearOT(datos) {
@@ -73,3 +74,35 @@ export const actualizarEDP = (id, cambios) => upd('edp', id, cambios)
 export async function fijarMiembro(p_ot, p_user, p_rol) { const { error } = await av().rpc('fijar_miembro', { p_ot, p_user, p_rol }); if (error) throw error }
 export const listarPerfilesInternos = () => sel(supabase.from('perfiles').select('id, nombre, tipo').order('nombre'))
 export const usuarioActual = async () => { const { data } = await supabase.auth.getUser(); return data?.user || null }
+
+/* ---------- Fase 2: propuestas («el sistema propone, tú confirmas») ---------- */
+export const listarPropuestas = (ot_id, estado = 'pend') => sel(av().from('propuestas').select('*').eq('ot_id', ot_id).eq('estado', estado).order('creado_en', { ascending: false }).limit(200))
+export async function aplicarPropuesta(p_id, p_datos) { const { error } = await av().rpc('aplicar_propuesta', p_datos ? { p_id, p_datos } : { p_id }); if (error) throw error }
+export async function descartarPropuesta(p_id) { const { error } = await av().rpc('descartar_propuesta', { p_id }); if (error) throw error }
+export const listarLecturas = ot_id => sel(av().from('lecturas').select('*').eq('ot_id', ot_id).order('inicio', { ascending: false }).limit(10))
+// Llama a la función de servidor que relee Drive y correos y deja propuestas.
+export async function actualizarProyecto(ot_id) {
+  const { data, error } = await supabase.functions.invoke('avance-actualizar', { body: { ot_id } })
+  if (error) throw new Error(error.message || String(error))
+  if (!data || data.ok === false) throw new Error((data && data.error) || 'La función no respondió')
+  return data
+}
+// Tiempo real: avisa cuando cambia cualquier tabla del módulo para esta OT.
+export function escucharOT(ot_id, onCambio) {
+  const canal = supabase.channel('avance-' + ot_id)
+  for (const t of ['procesos', 'libro_obra', 'aprobaciones', 'alertas', 'partes_diarios', 'propuestas', 'documentos', 'liberaciones', 'edp', 'ots']) {
+    canal.on('postgres_changes', { event: '*', schema: 'avance', table: t }, () => onCambio(t))
+  }
+  canal.subscribe()
+  return () => { try { supabase.removeChannel(canal) } catch (e) {} }
+}
+
+/* ---------- Fase 3: acceso del cliente ---------- */
+export async function invitarCliente(body) {
+  const { data, error } = await supabase.functions.invoke('avance-invitar-cliente', { body })
+  if (error) throw new Error(error.message || String(error))
+  if (!data || data.ok === false) throw new Error((data && data.error) || 'La función no respondió')
+  return data
+}
+export async function claveCambiada() { const { error } = await av().rpc('clave_cambiada'); if (error) throw error }
+export const miMembresia = async () => { const u = await usuarioActual(); if (!u) return []; return sel(av().from('miembros').select('*').eq('user_id', u.id)) }

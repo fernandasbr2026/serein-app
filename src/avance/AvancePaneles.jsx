@@ -1,7 +1,7 @@
 // Módulo Avance de Obra · paneles internos: Procesos y liberaciones, EDP,
 // Libro de obra, Documentos, Registros y Carga de avance. Cada uno recibe
 // `datos` (filas de la base), `res` (resumenOT) y `recargar`.
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import * as api from './api.js'
 import { S, Card, Eyebrow, Pill, Btn, inp, Campo, Nota, Aviso, Switch, Luz, ESTADO_LIB, Estanque, Barras, colorProceso, COLOR_PARTIDA, COLOR_PARTIDA_SUAVE } from './ui.jsx'
 import { fmtPct, fmtCLP, fmtMM, fmtFecha, hoyISO, planProceso, secuenciaEDP, TIPOS_EVENTO, PARTIDAS_NOMBRE, PARTIDAS, dias } from './calc.js'
@@ -89,7 +89,7 @@ export function PanelProcesos({ datos, res, recargar }) {
 }
 
 /* ---------------- 03 · EDP ---------------- */
-export function PanelEDP({ datos, res, recargar }) {
+export function PanelEDP({ datos, res, recargar, onPDF }) {
   const [msg, run] = useGuardar(recargar)
   const ot = datos.ot
   const prm = { anticipo: Number(ot.anticipo || 0), retencionPct: Number(ot.retencion_pct || 0), amortizacion: ot.amortizacion || 'total', amortizacionPct: Number(ot.amortizacion_pct || 0.3) }
@@ -121,15 +121,16 @@ export function PanelEDP({ datos, res, recargar }) {
             <span style={{ fontWeight: 700 }}>Neto a cobrar</span><b style={{ fontFamily: S.fontDisplay, fontSize: 18, color: S.orangeDark }}>{fmtCLP(prox.neto)}</b>
             <span style={{ color: S.textFaint }}>Anticipo pendiente después</span><span style={{ color: S.textFaint }}>{fmtCLP(prox.anticipoPendiente)}</span>
           </div>
-          <div style={{ marginTop: 10, display: 'flex', gap: 8 }}><Btn tipo="p" onClick={emitir}>Crear EDP N°{(datos.edp || []).length + 1} en borrador</Btn></div>
-          <Nota style={{ marginTop: 6 }}>El cliente solo ve los EDP presentados, aprobados o pagados. El PDF y el Excel de respaldo vienen en la fase 2.</Nota>
+          <div style={{ marginTop: 10, display: 'flex', gap: 8 }}><Btn tipo="p" onClick={emitir}>Crear EDP N°{(datos.edp || []).length + 1} en borrador</Btn>{onPDF && <Btn onClick={() => onPDF(null)}>PDF del cálculo</Btn>}</div>
+          <Nota style={{ marginTop: 6 }}>El cliente solo ve los EDP presentados, aprobados o pagados.</Nota>
         </Card>
         <Card title="EDP registrados" pad={false}>
           {(datos.edp || []).length === 0 ? <Nota style={{ padding: 12 }}>Todavía no hay EDP.</Nota> : (datos.edp || []).map(e => (
-            <div key={e.id} style={{ display: 'grid', gridTemplateColumns: '50px 80px 1fr auto auto', gap: 8, alignItems: 'center', padding: '8px 14px', borderBottom: '1px solid #EEF1F4', fontSize: 12 }}>
+            <div key={e.id} style={{ display: 'grid', gridTemplateColumns: '50px 80px 1fr auto auto auto', gap: 8, alignItems: 'center', padding: '8px 14px', borderBottom: '1px solid #EEF1F4', fontSize: 12 }}>
               <b>N°{e.numero}</b><span style={{ color: S.textSoft }}>{fmtFecha(e.fecha)}</span><span>neto <b>{fmtCLP(e.neto)}</b> · bruto acum. {fmtMM(e.bruto_acumulado)}</span>
               <select value={e.estado} onChange={ev => run(() => api.actualizarEDP(e.id, { estado: ev.target.value }), 'Estado del EDP actualizado')} style={{ ...inp, width: 'auto', padding: '3px 6px' }}>{['borrador', 'presentado', 'aprobado', 'pagado'].map(s => <option key={s}>{s}</option>)}</select>
               <Pill tono={e.estado === 'pagado' ? 'verde' : e.estado === 'borrador' ? 'gris' : 'naranja'}>{e.estado}</Pill>
+              {onPDF && <Btn tipo="s" onClick={() => onPDF(e)}>PDF</Btn>}
             </div>
           ))}
         </Card>
@@ -299,6 +300,69 @@ export function PanelCarga({ datos, res, recargar, userId }) {
             <span style={{ color: S.textFaint, fontSize: 11 }}>{[pt.responsable, pt.n_parte].filter(Boolean).join(' · ')}</span>
           </div>) })}
       </Card>
+    </div>
+  )
+}
+
+/* ---------------- 02 · Propuestas (fase 2: el sistema lee, tú confirmas) ---------------- */
+const TIPO_PROP = { evento: ['Libro de obra', 'naranja'], documento: ['Documento', 'azul'], avance: ['Avance', 'verde'], contrato: ['Contrato', 'ambar'], alerta: ['Alerta', 'rojo'] }
+export function PanelPropuestas({ datos, res, recargar, onActualizar, actualizando, ultimoResultado }) {
+  const [msg, run] = useGuardar(recargar)
+  const [ed, setEd] = useState(null) // { id, datos }
+  const [lecturas, setLecturas] = useState([])
+  useEffect(() => { api.listarLecturas(datos.ot.id).then(setLecturas).catch(() => {}) }, [datos.ot.id, ultimoResultado])
+  const props = datos.propuestas || []
+  const confirmar = (pr, d) => run(() => api.aplicarPropuesta(pr.id, d || null), 'Propuesta aplicada')
+  const descartar = pr => run(() => api.descartarPropuesta(pr.id), 'Propuesta descartada')
+  const confirmarTodas = () => run(async () => { for (const pr of props) await api.aplicarPropuesta(pr.id) }, 'Todas aplicadas')
+  const setD = (k, v) => setEd(s => ({ ...s, datos: { ...s.datos, [k]: v } }))
+  const campoEd = (k, label, type = 'text') => <Campo key={k} label={label}><input type={type} value={ed.datos[k] ?? ''} onChange={e => setD(k, e.target.value)} style={inp} /></Campo>
+  const resumenDatos = pr => {
+    const d = pr.datos || {}
+    if (pr.tipo === 'evento') return `${TIPOS_EVENTO[d.tipo] || d.tipo} · ${fmtFecha(d.fecha)}${d.hasta ? ' → ' + fmtFecha(d.hasta) : ''}${d.aprobacion ? ' · pide respuesta del cliente' + (d.aprobacion.vence ? ' hasta ' + fmtFecha(d.aprobacion.vence) : '') : ''}${d.interno ? ' · interno' : ''}`
+    if (pr.tipo === 'documento') return `${d.paso || 'Otro'}${d.url ? ' · con enlace' : ''}${d.interno ? ' · interno' : ' · visible para el cliente'}`
+    if (pr.tipo === 'avance') return `${d.proceso}: ${Number(d.cantidad || 0).toLocaleString('es-CL')} · ${fmtFecha(d.fecha)}${d.zona ? ' · ' + d.zona : ''}`
+    if (pr.tipo === 'contrato') return Object.entries(d).filter(([, v]) => v != null && v !== '').map(([k, v]) => k + ' = ' + v).join(' · ')
+    if (pr.tipo === 'alerta') return (d.nivel || 'aviso') + (d.cuerpo ? ' · ' + d.cuerpo : '')
+    return ''
+  }
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 14, alignItems: 'start' }}>
+      <Card title={<>Propuestas del sistema {props.length > 0 && <span style={{ background: S.orange, color: '#fff', borderRadius: 11, padding: '0 8px', fontSize: 11.5, marginLeft: 6 }}>{props.length}</span>}</>} right={<><span>nada se aplica hasta que lo confirmes</span><Msg m={msg} />{props.length > 1 && <Btn tipo="s" onClick={confirmarTodas}>Confirmar todas</Btn>}</>} pad={false}>
+        {props.length === 0 && <Nota style={{ padding: 14 }}>No hay propuestas pendientes. Pulsa «Actualizar proyecto» para que el sistema relea la carpeta de Drive y los correos del cliente.</Nota>}
+        {props.map(pr => { const [t, tono] = TIPO_PROP[pr.tipo] || ['', 'gris']; const enEd = ed && ed.id === pr.id; return (
+          <div key={pr.id} style={{ padding: '10px 16px', borderBottom: '1px solid #EEF1F4' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '92px 1fr auto', gap: 12, alignItems: 'start' }}>
+              <div style={{ fontSize: 11, color: S.textSoft }}><Eyebrow>{pr.origen}</Eyebrow><div style={{ wordBreak: 'break-all' }}>{String(pr.referencia || '').slice(0, 18)}</div><Pill tono={pr.confianza === 'alta' ? 'verde' : pr.confianza === 'baja' ? 'rojo' : 'ambar'} style={{ marginTop: 3 }}>{pr.confianza || 'media'}</Pill></div>
+              <div style={{ fontSize: 12.5 }}><Pill tono={tono}>{t}</Pill> <b>{pr.titulo}</b>{pr.detalle && <div style={{ color: S.textSoft, marginTop: 2 }}>{pr.detalle}</div>}<div style={{ color: S.textFaint, fontSize: 11.5, marginTop: 2 }}>{resumenDatos(pr)}</div></div>
+              <div style={{ display: 'flex', gap: 6 }}><Btn tipo="ok" style={{ padding: '4px 9px', fontSize: 11 }} onClick={() => confirmar(pr)}>Confirmar</Btn><Btn tipo="s" onClick={() => setEd(enEd ? null : { id: pr.id, datos: { ...(pr.datos || {}) } })}>{enEd ? 'Cerrar' : 'Editar'}</Btn><Btn tipo="no" style={{ padding: '4px 9px', fontSize: 11 }} onClick={() => descartar(pr)}>Descartar</Btn></div>
+            </div>
+            {enEd && (
+              <div style={{ marginTop: 10, background: S.fog, borderRadius: 8, padding: 12, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                {pr.tipo === 'evento' && <><Campo label="Tipo"><select value={ed.datos.tipo || 'com'} onChange={e => setD('tipo', e.target.value)} style={inp}>{Object.entries(TIPOS_EVENTO).filter(([k]) => k !== 'ini').map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Campo>{campoEd('fecha', 'Fecha', 'date')}{campoEd('hasta', 'Hasta', 'date')}<Campo label="Título" style={{ gridColumn: '1 / -1' }}><input value={ed.datos.titulo ?? pr.titulo} onChange={e => setD('titulo', e.target.value)} style={inp} /></Campo>{campoEd('detalle', 'Detalle')}{campoEd('respaldo', 'Respaldo')}<label style={{ fontSize: 12, alignSelf: 'end' }}><input type="checkbox" checked={!!ed.datos.interno} onChange={e => setD('interno', e.target.checked)} /> Solo interno</label></>}
+                {pr.tipo === 'documento' && <>{campoEd('paso', 'Paso')}<Campo label="Título" style={{ gridColumn: '2 / -1' }}><input value={ed.datos.titulo ?? pr.titulo} onChange={e => setD('titulo', e.target.value)} style={inp} /></Campo><Campo label="Enlace" style={{ gridColumn: '1 / 3' }}><input value={ed.datos.url ?? ''} onChange={e => setD('url', e.target.value)} style={inp} /></Campo><label style={{ fontSize: 12, alignSelf: 'end' }}><input type="checkbox" checked={!!ed.datos.interno} onChange={e => setD('interno', e.target.checked)} /> Solo interno</label></>}
+                {pr.tipo === 'avance' && <><Campo label="Proceso"><select value={ed.datos.proceso || ''} onChange={e => setD('proceso', e.target.value)} style={inp}>{datos.procesos.map(x => <option key={x.codigo} value={x.codigo}>{x.codigo} · {x.nombre} ({x.unidad})</option>)}</select></Campo>{campoEd('fecha', 'Fecha', 'date')}{campoEd('cantidad', 'Cantidad')}{campoEd('zona', 'Zona')}{campoEd('detalle', 'Detalle')}{campoEd('respaldo', 'Respaldo')}</>}
+                {pr.tipo === 'contrato' && ['fecha_inicio_contractual', 'plazo_dias', 'kg_contrato', 'precio_contrato', 'suma_partidas', 'anticipo', 'retencion_pct', 'amortizacion', 'amortizacion_pct', 'multa_dia'].map(k => campoEd(k, k.replace(/_/g, ' ')))}
+                {pr.tipo === 'alerta' && <>{campoEd('titulo', 'Título')}{campoEd('cuerpo', 'Cuerpo')}<Campo label="Nivel"><select value={ed.datos.nivel || 'aviso'} onChange={e => setD('nivel', e.target.value)} style={inp}><option value="info">info</option><option value="aviso">aviso</option><option value="critico">crítico</option></select></Campo></>}
+                <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8 }}><Btn tipo="p" onClick={() => { confirmar(pr, ed.datos); setEd(null) }}>Confirmar con estos datos</Btn><Btn onClick={() => setEd(null)}>Cancelar</Btn></div>
+              </div>
+            )}
+          </div>) })}
+      </Card>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <Card title="Fuentes" right={<Btn tipo="p" disabled={actualizando} onClick={onActualizar}>{actualizando ? 'Leyendo…' : 'Actualizar ahora'}</Btn>}>
+          <div style={{ fontSize: 12.5, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div>Drive: {datos.ot.drive_folder_id ? <b>carpeta configurada</b> : <span style={{ color: S.red }}>sin carpeta</span>} · última lectura {datos.ot.ultima_lectura ? new Date(datos.ot.ultima_lectura).toLocaleString('es-CL') : 'nunca'}</div>
+            <div>Remitentes del cliente: {(datos.ot.remitentes_cliente || []).length ? <b>{(datos.ot.remitentes_cliente || []).join(', ')}</b> : <span style={{ color: S.red }}>ninguno</span>}</div>
+          </div>
+          {ultimoResultado && <div style={{ marginTop: 8 }}><Aviso tono={ultimoResultado.ok ? 'verde' : 'rojo'}>{ultimoResultado.texto}</Aviso></div>}
+          <Nota style={{ marginTop: 8 }}>Cada lectura revisa solo lo nuevo desde la última vez (máximo 6 archivos con contenido y 12 correos por vez) y hace UNA consulta a la IA, que queda anotada en el registro de consumo.</Nota>
+        </Card>
+        <Card title="Últimas lecturas" pad={false}>
+          {lecturas.length === 0 && <Nota style={{ padding: 12 }}>Todavía no se ha leído nada.</Nota>}
+          {lecturas.map(l => <div key={l.id} style={{ padding: '7px 14px', borderBottom: '1px solid #EEF1F4', fontSize: 12 }}><b>{new Date(l.inicio).toLocaleString('es-CL')}</b> · {l.drive_archivos} archivos · {l.correos} correos · <b>{l.propuestas} propuestas</b>{l.error && <div style={{ color: S.red }}>{l.error}</div>}{!l.fin && !l.error && <span style={{ color: S.textFaint }}> · en curso</span>}</div>)}
+        </Card>
+      </div>
     </div>
   )
 }

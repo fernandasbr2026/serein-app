@@ -16,9 +16,11 @@ import * as api from './api.js'
 import { resumenOT, fmtPct, fmtCLP, fmtMM, fmtFecha, hoyISO, sumarDias, dias, planGlobal, PLANTILLA_PROCESOS, PARTIDAS, PARTIDAS_NOMBRE } from './calc.js'
 import { S, Card, Eyebrow, Pill, Btn, inp, Campo, Nota, Aviso, Switch, Luz, Estanque, Barras, Dona, Curva, Kpi, TabsNum, colorProceso, COLOR_PARTIDA } from './ui.jsx'
 import VistaCliente from './VistaCliente.jsx'
-import { PanelProcesos, PanelEDP, PanelLibro, PanelDocumentos, PanelRegistros, PanelCarga } from './AvancePaneles.jsx'
+import { PanelProcesos, PanelEDP, PanelLibro, PanelDocumentos, PanelRegistros, PanelCarga, PanelPropuestas } from './AvancePaneles.jsx'
+import { informeAvance, informeEDP } from './informes.js'
+import { FileText } from 'lucide-react'
 
-const TABS = [{ id: 'comando', t: 'Comando' }, { id: 'procesos', t: 'Procesos y liberaciones' }, { id: 'edp', t: 'EDP' }, { id: 'libro', t: 'Libro de obra' }, { id: 'docs', t: 'Documentos' }, { id: 'registros', t: 'Registros' }, { id: 'carga', t: 'Carga de avance' }, { id: 'config', t: 'Configuración' }]
+const TABS = [{ id: 'comando', t: 'Comando' }, { id: 'propuestas', t: 'Propuestas' }, { id: 'procesos', t: 'Procesos y liberaciones' }, { id: 'edp', t: 'EDP' }, { id: 'libro', t: 'Libro de obra' }, { id: 'docs', t: 'Documentos' }, { id: 'registros', t: 'Registros' }, { id: 'carga', t: 'Carga de avance' }, { id: 'config', t: 'Configuración' }]
 const num = v => { const n = Number(String(v ?? '').replace(/\./g, '').replace(',', '.')); return Number.isFinite(n) ? n : 0 }
 
 export default function AvanceModule({ ots: otsERP = [], email }) {
@@ -32,6 +34,8 @@ export default function AvanceModule({ ots: otsERP = [], email }) {
   const [wizard, setWizard] = useState(false)
   const [userId, setUserId] = useState(null)
   const [ultima, setUltima] = useState(null)
+  const [actualizando, setActualizando] = useState(false)
+  const [ultimoResultado, setUltimoResultado] = useState(null)
 
   useEffect(() => { api.usuarioActual().then(u => setUserId(u?.id || null)) }, [])
   const cargarLista = useCallback(async () => {
@@ -43,13 +47,32 @@ export default function AvanceModule({ ots: otsERP = [], email }) {
     api.cargarOT(otId).then(d => { setDatos(d); setUltima(new Date()); setError('') }).catch(e => setError(api.errorLegible(e)))
   }, [otId])
   useEffect(() => { recargar(); try { sessionStorage.setItem('serein_avance_ot', otId || '') } catch (e) {} }, [otId, recargar])
-  // Refresco suave cada 60 s (el tiempo real por Realtime llega en la fase 2).
+  // Refresco de respaldo cada 60 s + tiempo real: cualquier cambio en las tablas de la OT recarga (con un pequeño retardo para agrupar ráfagas).
   useEffect(() => { const id = setInterval(recargar, 60000); return () => clearInterval(id) }, [recargar])
+  useEffect(() => {
+    if (!otId) return
+    let t = null
+    const parar = api.escucharOT(otId, () => { clearTimeout(t); t = setTimeout(recargar, 700) })
+    return () => { clearTimeout(t); parar() }
+  }, [otId, recargar])
+  const actualizarProyecto = async () => {
+    if (!otId || actualizando) return
+    setActualizando(true); setUltimoResultado(null)
+    try {
+      const r = await api.actualizarProyecto(otId)
+      const pl = (n, u, p) => n + ' ' + (n === 1 ? u : p)
+      const partes = [pl(r.propuestas, 'propuesta nueva', 'propuestas nuevas'), pl(r.archivos_leidos, 'archivo de Drive leído', 'archivos de Drive leídos') + (r.archivos_en_carpeta ? ' (' + r.archivos_en_carpeta + ' en la carpeta)' : ''), pl(r.correos, 'correo', 'correos')]
+      if (r.duplicadas) partes.push(r.duplicadas + ' ya propuestas antes')
+      setUltimoResultado({ ok: true, texto: partes.join(' · ') + (r.avisos && r.avisos.length ? '\n' + r.avisos.join('\n') : '') })
+      setTab('propuestas')
+    } catch (e) { setUltimoResultado({ ok: false, texto: api.errorLegible(e) }) } finally { setActualizando(false); recargar() }
+  }
 
   const res = useMemo(() => (datos && datos.ot ? resumenOT(datos) : null), [datos])
   const alertasNoLeidas = (datos?.alertas || []).filter(a => !a.leida).length
   const pendientesCliente = (datos?.aprobaciones || []).filter(a => a.estado === 'pend').length
-  const tabs = TABS.map(t => ({ ...t, n: t.id === 'libro' ? pendientesCliente : 0 }))
+  const nPropuestas = (datos?.propuestas || []).length
+  const tabs = TABS.map(t => ({ ...t, n: t.id === 'libro' ? pendientesCliente : t.id === 'propuestas' ? nPropuestas : 0 }))
 
   const cabecera = (
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
@@ -71,7 +94,9 @@ export default function AvanceModule({ ots: otsERP = [], email }) {
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <Btn title="Fase 2: volverá a leer la carpeta de Drive y los correos del cliente y te propondrá cambios para confirmar" disabled><RefreshCw size={13} /> Actualizar proyecto (fase 2)</Btn>
+          <Btn tipo="p" title="Relee la carpeta de Drive y los correos del cliente y deja propuestas para que confirmes" disabled={!datos?.ot || actualizando} onClick={actualizarProyecto}><RefreshCw size={13} style={actualizando ? { animation: 'girar 1s linear infinite' } : null} /> {actualizando ? 'Leyendo Drive y correos…' : 'Actualizar proyecto'}</Btn>
+          <Btn disabled={!datos?.ot} onClick={() => datos?.ot && res && informeAvance({ datos, res, version: 'interna' })} title="Informe de avance en PDF (versión interna)"><FileText size={13} /> Informe</Btn>
+          <Btn disabled={!datos?.ot} onClick={() => datos?.ot && res && informeAvance({ datos, res, version: 'cliente' })} title="Informe de avance en PDF tal como lo ve el cliente"><FileText size={13} /> Informe cliente</Btn>
           <Btn onClick={() => setTab('carga')}><Upload size={13} /> Cargar avance</Btn>
           <Btn onClick={() => setTab('libro')} style={{ position: 'relative' }}><Bell size={13} /> Alertas{alertasNoLeidas > 0 && <span style={{ background: S.red, color: '#fff', borderRadius: 10, fontSize: 10.5, padding: '0 6px', marginLeft: 2 }}>{alertasNoLeidas}</span>}</Btn>
           <Btn tipo="g" onClick={() => setWizard(true)}><Plus size={13} /> Nueva OT</Btn>
@@ -89,7 +114,9 @@ export default function AvanceModule({ ots: otsERP = [], email }) {
   return (
     <div style={{ padding: '18px 22px 40px', fontFamily: S.fontBody, color: S.text }}>
       {cabecera}
+      <style>{'@keyframes girar{to{transform:rotate(360deg)}}'}</style>
       {error && <div style={{ marginTop: 12 }}><Aviso>{error}</Aviso></div>}
+      {ultimoResultado && tab !== 'propuestas' && <div style={{ marginTop: 12 }}><Aviso tono={ultimoResultado.ok ? 'verde' : 'rojo'}>{ultimoResultado.texto}</Aviso></div>}
       {!error && lista.length === 0 && (
         <Card style={{ marginTop: 16 }}><div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 260 }}><div style={{ fontFamily: S.fontDisplay, fontWeight: 800, fontSize: 16 }}>Todavía no hay proyectos en el módulo de avance</div><Nota style={{ marginTop: 4 }}>Crea la primera OT con el asistente: en 4 pasos defines el contrato, la carpeta de Drive y los correos del cliente. Los procesos se crean con la plantilla de Gerencia y después los ajustas.</Nota></div>
@@ -104,8 +131,9 @@ export default function AvanceModule({ ots: otsERP = [], email }) {
               <div style={{ minWidth: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}><span style={{ fontFamily: S.fontDisplay, fontWeight: 800, fontSize: 14 }}>Interno · tú editas</span><Nota>administrador y operadores</Nota></div>
                 {tab === 'comando' && <PanelComando datos={datos} res={res} recargar={recargar} irA={setTab} />}
+                {tab === 'propuestas' && <PanelPropuestas datos={datos} res={res} recargar={recargar} onActualizar={actualizarProyecto} actualizando={actualizando} ultimoResultado={ultimoResultado} />}
                 {tab === 'procesos' && <PanelProcesos datos={datos} res={res} recargar={recargar} />}
-                {tab === 'edp' && <PanelEDP datos={datos} res={res} recargar={recargar} />}
+                {tab === 'edp' && <PanelEDP datos={datos} res={res} recargar={recargar} onPDF={edp => informeEDP({ datos, res, edp })} />}
                 {tab === 'libro' && <PanelLibro datos={datos} res={res} recargar={recargar} userId={userId} />}
                 {tab === 'docs' && <PanelDocumentos datos={datos} recargar={recargar} />}
                 {tab === 'registros' && <PanelRegistros datos={datos} />}
@@ -188,6 +216,7 @@ function PanelComando({ datos, res, recargar, irA }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <Card title="Alertas y pendientes" right={<Btn tipo="s" onClick={() => irA('libro')}>Libro de obra →</Btn>}>
+          {(datos.propuestas || []).length > 0 && <div onClick={() => irA('propuestas')} style={{ cursor: 'pointer', marginBottom: 8, padding: '9px 12px', border: '1px solid ' + S.orange, background: S.orangeSoft, borderRadius: 8, fontSize: 12.5 }}><b>{datos.propuestas.length} propuesta{datos.propuestas.length === 1 ? '' : 's'} del sistema</b> esperan tu confirmación · ver →</div>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
             {pendientes.map(a => { const vencida = a.vence && a.vence < hoy; return (
               <div key={a.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '8px 10px', border: '1px solid ' + S.line, borderRadius: 8 }}>
@@ -246,8 +275,8 @@ function PanelConfig({ datos, res, recargar, otsERP }) {
           <Switch on={ot.portal_publicado} onChange={v => run(() => api.actualizarOT(ot.id, { portal_publicado: v }), v ? 'Portal publicado: el cliente con acceso ya puede ver la obra' : 'Portal despublicado')} />
           <div style={{ fontSize: 12.5, flex: 1, minWidth: 240 }}>Mientras esté apagado, el cliente no ve nada aunque tenga usuario. Lo que ve está a la derecha (vista «Cliente»).</div>
         </div>
-        <Nota style={{ marginTop: 8 }}>El acceso del cliente (usuario + clave inicial, obligación de cambiarla, dirección obras.sereinspa.com) se habilita en la fase 3; requiere una función de servidor para crear el usuario y la decisión de Gerencia sobre el formato de la clave.</Nota>
       </Card>
+      <AccesoCliente datos={datos} recargar={recargar} />
 
       <Card title="Datos del contrato" right={<Btn tipo="p" onClick={guardarContrato}>Guardar contrato</Btn>}>
         <div style={col2}>
@@ -378,5 +407,38 @@ function NuevaOT({ otsERP, onCerrar, onCreada }) {
         </div>
       </div>
     </div>
+  )
+}
+
+/* ---------------- Acceso del cliente (fase 3) ---------------- */
+function AccesoCliente({ datos, recargar }) {
+  const ot = datos.ot
+  const clientes = (datos.miembros || []).filter(m => m.rol === 'cliente')
+  const [usuario, setUsuario] = useState(() => String(ot.cliente || 'cliente').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '').slice(0, 40))
+  const [nombre, setNombre] = useState(ot.cliente || '')
+  const [msg, setMsg] = useState(null) // { ok, texto, usuario, clave }
+  const [trab, setTrab] = useState(false)
+  const llamar = async (accion, u) => {
+    setTrab(true); setMsg(null)
+    try { const r = await api.invitarCliente({ ot_id: ot.id, accion, usuario: u || usuario, nombre }); setMsg({ ok: true, texto: r.mensaje, usuario: r.usuario, clave: r.clave_inicial }); recargar() }
+    catch (e) { setMsg({ ok: false, texto: api.errorLegible(e) }) } finally { setTrab(false) }
+  }
+  return (
+    <Card title="Acceso del cliente al portal" right={clientes.length ? <Pill tono="verde">{clientes.length} usuario{clientes.length > 1 ? 's' : ''}</Pill> : <Pill tono="gris">sin usuario</Pill>}>
+      {clientes.map(m => (
+        <div key={m.user_id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #EEF1F4', fontSize: 12.5 }}>
+          <span style={{ flex: 1 }}>Usuario <b>{m.usuario}</b>{m.debe_cambiar_clave ? <Pill tono="ambar" style={{ marginLeft: 6 }}>debe cambiar su clave al entrar</Pill> : <Pill tono="verde" style={{ marginLeft: 6 }}>clave propia</Pill>}</span>
+          <Btn tipo="s" disabled={trab} onClick={() => llamar('reiniciar', m.usuario)}>Reiniciar clave</Btn>
+          <Btn tipo="s" disabled={trab} onClick={() => { if (window.confirm('¿Quitar el acceso de ' + m.usuario + '? Podrás crearlo de nuevo.')) llamar('revocar', m.usuario) }} style={{ color: S.red }}>Revocar</Btn>
+        </div>
+      ))}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'end', marginTop: 10 }}>
+        <Campo label="Usuario (sin espacios ni @)"><input value={usuario} onChange={e => setUsuario(e.target.value.toLowerCase().replace(/[^a-z0-9.]/g, ''))} style={inp} /></Campo>
+        <Campo label="Nombre que verá en pantalla"><input value={nombre} onChange={e => setNombre(e.target.value)} style={inp} /></Campo>
+        <Btn tipo="p" disabled={trab || usuario.length < 3} onClick={() => llamar('crear')}>{trab ? 'Creando…' : 'Crear acceso'}</Btn>
+      </div>
+      {msg && <div style={{ marginTop: 10 }}><Aviso tono={msg.ok ? 'verde' : 'rojo'}>{msg.texto}{msg.clave && <div style={{ marginTop: 8, fontFamily: S.fontDisplay, fontSize: 15 }}>Usuario: <b>{msg.usuario}</b> · Clave inicial: <b>{msg.clave}</b><div style={{ fontSize: 11.5, fontFamily: S.fontBody, fontWeight: 400, marginTop: 4 }}>Entra en app.sereinspa.com escribiendo solo el usuario (sin @). Anótala ahora: no se vuelve a mostrar. El cliente deberá cambiarla en su primer ingreso.</div></div>}</Aviso></div>}
+      <Nota style={{ marginTop: 8 }}>El cliente entra por la misma dirección del ERP y solo ve el portal de su obra (lo decide la base de datos, no la pantalla). Mientras el portal esté sin publicar, no verá nada aunque tenga usuario.</Nota>
+    </Card>
   )
 }
