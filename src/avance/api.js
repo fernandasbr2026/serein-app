@@ -106,3 +106,11 @@ export async function invitarCliente(body) {
 }
 export async function claveCambiada() { const { error } = await av().rpc('clave_cambiada'); if (error) throw error }
 export const miMembresia = async () => { const u = await usuarioActual(); if (!u) return []; return sel(av().from('miembros').select('*').eq('user_id', u.id)) }
+
+// Manda por correo las alertas pendientes (crítico/aviso) y crea las alertas diarias de aprobaciones vencidas.
+export async function enviarAlertasCorreo() {
+  const { data, error } = await supabase.functions.invoke('avance-alertas-correo', { body: {} })
+  if (error) throw new Error(error.message || String(error))
+  if (!data || data.ok === false) throw new Error((data && data.error) || (data && data.errores && data.errores.join(' · ')) || 'La función no respondió')
+  return data
+}

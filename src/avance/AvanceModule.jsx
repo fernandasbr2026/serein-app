@@ -159,6 +159,8 @@ export default function AvanceModule({ ots: otsERP = [], email }) {
 /* ---------------- 01 · Comando ---------------- */
 function PanelComando({ datos, res, recargar, irA }) {
   const ot = datos.ot, hoy = res.hoy
+  const [enviandoCorreo, setEnviandoCorreo] = useState(false)
+  const [msgCorreo, setMsgCorreo] = useState('')
   const libDe = (pid, tipo) => (datos.liberaciones || []).find(l => l.proceso_id === pid && l.tipo === tipo)
   // Curva: plan desde el inicio vigente hasta el término; real = puntos acumulados por fecha de parte (aproximación con el avance actual al último parte).
   const curva = useMemo(() => {
@@ -215,7 +217,8 @@ function PanelComando({ datos, res, recargar, irA }) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        <Card title="Alertas y pendientes" right={<Btn tipo="s" onClick={() => irA('libro')}>Libro de obra →</Btn>}>
+        <Card title="Alertas y pendientes" right={<><Btn tipo="s" disabled={enviandoCorreo} title="Manda por correo a Gerencia las alertas críticas y los avisos que aún no se enviaron (el cron lo hace solo cada hora)" onClick={async () => { setEnviandoCorreo(true); setMsgCorreo(''); try { const r = await api.enviarAlertasCorreo(); setMsgCorreo(r.correos ? r.correos + ' correo' + (r.correos === 1 ? '' : 's') + ' enviado' + (r.correos === 1 ? '' : 's') + ' (' + r.enviadas + ' alertas)' : 'Nada pendiente de enviar' + (r.creadas ? ' · ' + r.creadas + ' alerta(s) de vencimiento creadas' : '')) } catch (e) { setMsgCorreo('ERROR: ' + api.errorLegible(e)) } finally { setEnviandoCorreo(false); recargar() } }}>{enviandoCorreo ? 'Enviando…' : 'Enviar avisos ahora'}</Btn><Btn tipo="s" onClick={() => irA('libro')}>Libro de obra →</Btn></>}>
+          {msgCorreo && <div style={{ fontSize: 11.5, color: msgCorreo.startsWith('ERROR') ? S.red : S.green, marginBottom: 6 }}>{msgCorreo}</div>}
           {(datos.propuestas || []).length > 0 && <div onClick={() => irA('propuestas')} style={{ cursor: 'pointer', marginBottom: 8, padding: '9px 12px', border: '1px solid ' + S.orange, background: S.orangeSoft, borderRadius: 8, fontSize: 12.5 }}><b>{datos.propuestas.length} propuesta{datos.propuestas.length === 1 ? '' : 's'} del sistema</b> esperan tu confirmación · ver →</div>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
             {pendientes.map(a => { const vencida = a.vence && a.vence < hoy; return (
