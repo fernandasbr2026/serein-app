@@ -34,7 +34,11 @@ async function autorizar(req: Request): Promise<{ ok: true; quien: string } | { 
   const auth = (req.headers.get("Authorization") || "").trim();
   const tk = auth.replace(/^Bearer\s+/i, "");
   if (!tk) return { ok: false, error: "Falta la autorización." };
-  if (srv() && tk === srv()) return { ok: true, quien: "cron" };
+  // El cron manda la clave service_role del Vault; puede ser la legacy (JWT) o la nueva (sb_secret): se aceptan ambas.
+  const clavesServicio = [Deno.env.get("SERVICE_ROLE_KEY"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")].map((s) => (s || "").trim()).filter(Boolean);
+  if (clavesServicio.includes(tk)) return { ok: true, quien: "cron" };
+  // La pasarela ya verificó la firma del JWT («Verify JWT» activado): basta con mirar el rol que declara.
+  try { const p = tk.split(".")[1]; if (p) { const j = JSON.parse(atob(p.replace(/-/g, "+").replace(/_/g, "/"))); if (j && j.role === "service_role") return { ok: true, quien: "cron" }; } } catch (_e) { /* no es JWT: sigue como sesión */ }
   const u = await fetch(url() + "/auth/v1/user", { headers: { Authorization: auth, apikey: (Deno.env.get("SUPABASE_ANON_KEY") || "").trim() } });
   if (!u.ok) return { ok: false, error: "Tu sesión no es válida o venció." };
   const uid = String((await u.json())?.id || "");

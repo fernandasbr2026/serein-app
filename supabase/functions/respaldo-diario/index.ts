@@ -163,6 +163,10 @@ Deno.serve(async (req) => {
     } catch (_e) { return json({ ok: false, error: "No se pudo comprobar tu sesión. Inténtalo de nuevo." }); }
   }
   if (!tablas) tablas = (await rpcTablas(url, srv, srv)) || TABLAS_CONOCIDAS;
+  // app_state_historial (decenas de MB, es el historial anti-borrado que ya vive en la base) y las copias
+  // manuales app_state_backup_* no caben en la memoria de la función y no hace falta duplicarlas a diario.
+  const EXCLUIR = ["app_state_historial"];
+  tablas = tablas.filter((t) => !EXCLUIR.includes(t) && !t.startsWith("app_state_backup"));
 
   // ---- Respaldo ----
   const hoy = fechaChile();
