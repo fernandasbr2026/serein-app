@@ -11,7 +11,20 @@ import * as api from './api.js'
 const SUGERENCIAS_INTERNO = ['¿Cómo vamos respecto del programa?', '¿Cuánto cobraríamos hoy en el próximo EDP?', '¿Qué está esperando respuesta del cliente?', 'Registra una detención por lluvia desde ayer', '¿Qué procesos tienen liberación bloqueada?']
 const SUGERENCIAS_CLIENTE = ['¿En qué va mi obra?', '¿Cuándo termina según el plan vigente?', '¿Qué documentos hay publicados?', '¿Hay algo pendiente de mi respuesta?']
 
-export default function ChatMaestro({ otId, otCodigo, modo = 'interno', onCerrar, onPropuestas, embebido = false }) {
+// Cifras ya calculadas por el sistema (calc.js): la IA las usa tal cual en vez de recalcularlas.
+function resumenCompacto(r) {
+  if (!r) return null
+  const n = x => (x == null || !Number.isFinite(Number(x)) ? null : Math.round(Number(x) * 10000) / 10000)
+  return {
+    avance_fisico: n(r.real), programa_a_hoy: n(r.plan), spi: n(r.spi),
+    plazo: r.plazo ? { inicio_contractual: r.plazo.inicioContractual, inicio_vigente: r.plazo.inicio, termino_vigente: r.plazo.termino, dia_actual: r.plazo.diaActual, plazo_consumido: n(r.plazo.plazoConsumido), renovado_el: r.plazo.renovacion || null, detenciones_dias: r.plazo.diasDetencion } : null,
+    ritmo_t_sem: n(r.ritmo), ritmo_requerido_t_sem: Number.isFinite(r.ritmoRequerido) ? n(r.ritmoRequerido) : null, t_restantes: n(r.tRestantes),
+    termino_proyectado: r.proy?.termino || null, atraso_proyectado_dias: r.atraso, multa_expuesta: n(r.multa), bruto_cobrable: n(r.bruto), factor_contrato: n(r.factor), espera_cliente_dias: r.espera,
+    procesos: (r.procesos || []).map(p => ({ codigo: p.codigo, avance: n(p.avance) })),
+  }
+}
+
+export default function ChatMaestro({ otId, otCodigo, modo = 'interno', resumen, onCerrar, onPropuestas, embebido = false }) {
   const clave = 'serein_avance_chat_' + otId
   const [msgs, setMsgs] = useState(() => { try { return JSON.parse(sessionStorage.getItem(clave) || '[]') } catch (e) { return [] } })
   const [texto, setTexto] = useState('')
@@ -26,7 +39,7 @@ export default function ChatMaestro({ otId, otCodigo, modo = 'interno', onCerrar
     const nuevo = [...msgs, { rol: 'user', texto: pregunta, t: Date.now() }]
     setMsgs(nuevo); setPensando(true)
     try {
-      const r = await api.chatMaestro(otId, pregunta, nuevo.slice(-12).map(m => ({ rol: m.rol, texto: m.texto })))
+      const r = await api.chatMaestro(otId, pregunta, nuevo.slice(-12).map(m => ({ rol: m.rol, texto: m.texto })), resumenCompacto(resumen))
       setMsgs(m => [...m, { rol: 'assistant', texto: r.respuesta, propuestas: r.propuestas_creadas || 0, t: Date.now() }])
       if (r.propuestas_creadas && onPropuestas) onPropuestas(r.propuestas_creadas)
     } catch (e) {
