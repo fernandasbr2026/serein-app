@@ -16,7 +16,8 @@
 // ============================================================
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 const MODEL = "claude-sonnet-5";
-const MAX_TOKENS = 1800;
+// El modelo razona antes de responder (thinking adaptativo): el tope cubre razonamiento + texto.
+const MAX_TOKENS = 8000;
 const MAX_HISTORIAL = 12;
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 const url = () => Deno.env.get("SUPABASE_URL") || "";
@@ -103,19 +104,22 @@ Deno.serve(async (req) => {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: MODEL, max_tokens: MAX_TOKENS, system: [{ type: "text", text: (cliente ? PROMPT_CLIENTE : PROMPT_INTERNO) + "\n\nESTADO ACTUAL DE LA OT:\n" + JSON.stringify(estado), cache_control: { type: "ephemeral" } }], messages: mensajes }),
+      body: JSON.stringify({ model: MODEL, max_tokens: MAX_TOKENS, output_config: { effort: "low" }, system: [{ type: "text", text: (cliente ? PROMPT_CLIENTE : PROMPT_INTERNO) + "\n\nESTADO ACTUAL DE LA OT:\n" + JSON.stringify(estado), cache_control: { type: "ephemeral" } }], messages: mensajes }),
     });
     const data = await res.json().catch(() => ({}));
     await registrarUsoIA(data?.usage, otId, res.ok, res.ok ? undefined : JSON.stringify(data).slice(0, 200));
     if (!res.ok) throw new Error("La IA respondió " + res.status + ": " + JSON.stringify(data).slice(0, 300));
-    let texto = (data.content || []).map((b: any) => b.text || "").join("").trim();
+    let texto = (data.content || []).filter((b: any) => b.type === "text").map((b: any) => b.text || "").join("").trim();
+    if (data.stop_reason === "refusal") texto = texto || "No puedo responder esa consulta.";
+    if (!texto) texto = data.stop_reason === "max_tokens" ? "La respuesta se cortó por largo. Hazme la pregunta más acotada." : "No obtuve respuesta de la IA. Intenta de nuevo.";
 
     // Propuestas que deja el chat (solo internos): se guardan para confirmar en la pestaña Propuestas.
     let creadas = 0;
     if (!cliente) {
-      const m = texto.match(/PROPUESTAS:\s*(\{[\s\S]*\})\s*$/);
+      const i0 = texto.lastIndexOf("PROPUESTAS:");
+      const m = i0 >= 0 ? texto.slice(i0).match(/PROPUESTAS:\s*(\{[\s\S]*\})\s*$/) : null;
       if (m) {
-        texto = texto.slice(0, m.index).trim();
+        texto = texto.slice(0, i0).trim() || "Dejé propuestas para que las confirmes.";
         try {
           const parsed = JSON.parse(m[1]);
           const TIPOS = new Set(["evento", "documento", "avance", "contrato", "alerta"]);
