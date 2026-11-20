@@ -83,7 +83,7 @@ export default function ClienteObraApp({ perfil, email, onLogout, userId }) {
               {datos && datos.ot && !chat && (
                 <button onClick={() => setChat(true)} title="Pregunta sobre tu obra" style={{ position: 'fixed', right: 18, bottom: 18, background: SEREIN.orange, color: '#fff', border: 0, borderRadius: 999, padding: '12px 18px', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 8px 24px -8px rgba(16,19,21,.5)', zIndex: 800 }}><MessageSquare size={16} /> Pregunta sobre tu obra</button>
               )}
-              {chat && datos && datos.ot && <ChatMaestro otId={datos.ot.id} otCodigo={datos.ot.codigo} modo="cliente" onCerrar={() => setChat(false)} />}
+              {chat && datos && datos.ot && <ChatMaestro otId={datos.ot.id} otCodigo={datos.ot.codigo} modo="cliente" resumen={resumen} onCerrar={() => setChat(false)} />}
             </>
           )}
       </div>

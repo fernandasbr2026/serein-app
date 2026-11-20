@@ -49,9 +49,10 @@ Cómo respondes:
   PROPUESTAS: {"propuestas":[{"tipo":"evento"|"documento"|"avance"|"contrato"|"alerta","titulo":string,"detalle":string|null,"confianza":"alta"|"media"|"baja","datos":object}]}
   con los mismos formatos de "datos" que usa el sistema: evento {"tipo":"renov"|"det"|"com"|"pla"|"tra"|"ava","fecha":"YYYY-MM-DD","hasta":"YYYY-MM-DD"|null,"titulo":string,"detalle":string|null,"respaldo":string|null,"interno":boolean,"aprobacion":{"clase":string,"vence":"YYYY-MM-DD"|null}|null}; documento {"paso":string,"titulo":string,"url":string|null,"descripcion":string|null,"interno":boolean}; avance {"proceso":CODIGO,"fecha":"YYYY-MM-DD","cantidad":number,"zona":string|null,"detalle":string|null,"respaldo":string|null}; contrato {campo:valor…}; alerta {"titulo":string,"cuerpo":string|null,"nivel":"info"|"aviso"|"critico"}.
   Si no hay nada que proponer, no incluyas el bloque. Nunca propongas un segundo evento "renov" si ya existe uno.
-- Puedes hacer cálculos (días de atraso, multa, neto de EDP) mostrando la cuenta en una línea.`;
+- El campo resumen_sistema trae las cifras OFICIALES ya calculadas por el módulo (avance físico, programa a hoy, inicio y término vigentes, día actual, atraso proyectado, multa, espera del cliente, bruto cobrable). Úsalas TAL CUAL y cítalas; nunca las recalcules ni las contradigas. Si no viene resumen_sistema, dilo y responde solo con lo demás.
+- Puedes hacer cálculos derivados (p. ej. multa × días) mostrando la cuenta en una línea.`;
 
-const PROMPT_CLIENTE = `Eres el asistente del portal de obra de SEREIN Group para el CLIENTE. Te paso solo la información PUBLICADA de su obra. Responde en español de Chile, breve y cordial, únicamente con esos datos (avance por proceso, término vigente, eventos del libro de obra publicados, documentos publicados, estados de pago presentados). No inventes nada. Si preguntan por plazos contractuales, precios, adicionales, multas, descuentos o cualquier tema comercial o legal, responde que esos temas los ve directamente el equipo de SEREIN y sugiere escribirles. Nunca propongas cambios ni incluyas bloques JSON.`;
+const PROMPT_CLIENTE = `Eres el asistente del portal de obra de SEREIN Group para el CLIENTE. Te paso solo la información PUBLICADA de su obra. Responde en español de Chile, breve y cordial, únicamente con esos datos (avance por proceso, término vigente, eventos del libro de obra publicados, documentos publicados, estados de pago presentados). No inventes nada. Si preguntan por plazos contractuales, precios, adicionales, multas, descuentos o cualquier tema comercial o legal, responde que esos temas los ve directamente el equipo de SEREIN y sugiere escribirles. Si viene resumen_sistema, usa esas cifras (avance físico y término vigente) tal cual, sin recalcular. Nunca propongas cambios ni incluyas bloques JSON.`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -61,6 +62,8 @@ Deno.serve(async (req) => {
     const otId = String(body?.ot_id || "");
     const pregunta = String(body?.pregunta || "").trim().slice(0, 4000);
     const historial = Array.isArray(body?.historial) ? body.historial.slice(-MAX_HISTORIAL) : [];
+    // Cifras que la pantalla ya calculó con la lógica oficial del módulo (calc.js); la IA no debe recalcularlas.
+    const resumen = body?.resumen && typeof body.resumen === "object" && JSON.stringify(body.resumen).length < 20000 ? body.resumen : null;
     if (!otId || !pregunta) return json({ ok: false, error: "Falta la OT o la pregunta." });
     const acceso = await autorizar(req, otId);
     if (!acceso.ok) return json({ ok: false, error: acceso.error });
@@ -83,14 +86,14 @@ Deno.serve(async (req) => {
     const codigoDe = Object.fromEntries((await get(`procesos?select=id,codigo&ot_id=eq.${otId}`)).map((p: any) => [p.id, p.codigo]));
     const hoy = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
     const estado: any = cliente ? {
-      hoy, ot: { codigo: ot.codigo, nombre: ot.nombre, cliente: ot.cliente, inicio_contractual: ot.fecha_inicio_contractual, plazo_dias: ot.plazo_dias },
+      hoy, resumen_sistema: resumen ? { avance_fisico: resumen.avance_fisico, termino_vigente: resumen.plazo?.termino_vigente, procesos: resumen.procesos } : null, ot: { codigo: ot.codigo, nombre: ot.nombre, cliente: ot.cliente, inicio_contractual: ot.fecha_inicio_contractual, plazo_dias: ot.plazo_dias },
       procesos: procesos.filter((p: any) => p.visible_cliente !== false).map((p: any) => ({ codigo: p.codigo, nombre: p.nombre, avance: p.avance, plan_inicio: p.plan_inicio, plan_fin: p.plan_fin })),
       libro_obra: libro.filter((e: any) => !e.interno).map(({ interno: _i, respaldo: _r, ...e }: any) => e),
       documentos: documentos.filter((d: any) => !d.interno),
       aprobaciones_pendientes: aprobaciones.filter((a: any) => a.estado === "pend" && !a.libro_obra.interno).map((a: any) => ({ clase: a.clase, vence: a.vence, evento: a.libro_obra.titulo })),
       edp: edp.filter((e: any) => e.estado !== "borrador").map((e: any) => ({ numero: e.numero, fecha: e.fecha, estado: e.estado })),
     } : {
-      hoy, ot: { ...ot, drive_folder_id: ot.drive_folder_id ? "configurada" : null }, procesos, liberaciones: liberaciones.map((l: any) => ({ proceso: l.procesos.codigo, tipo: l.tipo, estado: l.estado, motivo: l.motivo })),
+      hoy, resumen_sistema: resumen, ot: { ...ot, drive_folder_id: ot.drive_folder_id ? "configurada" : null }, procesos, liberaciones: liberaciones.map((l: any) => ({ proceso: l.procesos.codigo, tipo: l.tipo, estado: l.estado, motivo: l.motivo })),
       libro_obra: libro, aprobaciones: aprobaciones.map((a: any) => ({ clase: a.clase, estado: a.estado, vence: a.vence, evento: a.libro_obra.titulo, fecha_evento: a.libro_obra.fecha })),
       partes: partes.map((p: any) => ({ ...p, proceso: codigoDe[p.proceso_id] || null, proceso_id: undefined })), alertas, documentos, edp, propuestas_pendientes: propuestas,
     };

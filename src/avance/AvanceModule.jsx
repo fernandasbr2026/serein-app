@@ -157,7 +157,7 @@ export default function AvanceModule({ ots: otsERP = [], email }) {
           </div>
         </>
       )}
-      {chat && datos?.ot && <ChatMaestro otId={datos.ot.id} otCodigo={datos.ot.codigo} onCerrar={() => setChat(false)} onPropuestas={() => { recargar(); setTab('propuestas') }} />}
+      {chat && datos?.ot && <ChatMaestro otId={datos.ot.id} otCodigo={datos.ot.codigo} resumen={res} onCerrar={() => setChat(false)} onPropuestas={() => { recargar(); setTab('propuestas') }} />}
       {wizard && <NuevaOT otsERP={otsERP} onCerrar={() => setWizard(false)} onCreada={async id => { setWizard(false); await cargarLista(); setOtId(id); setTab('config') }} />}
     </div>
   )
