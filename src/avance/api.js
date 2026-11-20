@@ -114,3 +114,12 @@ export async function enviarAlertasCorreo() {
   if (!data || data.ok === false) throw new Error((data && data.error) || (data && data.errores && data.errores.join(' · ')) || 'La función no respondió')
   return data
 }
+
+/* ---------- Fase 5: chat maestro ---------- */
+// Pregunta sobre la OT (o pedido de cambio) a la función de servidor; los cambios vuelven como propuestas.
+export async function chatMaestro(ot_id, pregunta, historial = []) {
+  const { data, error } = await supabase.functions.invoke('avance-chat', { body: { ot_id, pregunta, historial } })
+  if (error) throw new Error(error.message || String(error))
+  if (!data || data.ok === false) throw new Error((data && data.error) || 'La función no respondió')
+  return data
+}

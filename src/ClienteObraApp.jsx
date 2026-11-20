@@ -5,9 +5,10 @@
 // políticas de la base ya le entregan únicamente las OT publicadas en las que
 // es miembro, sin nada marcado como interno.
 import React, { useState, useEffect } from 'react'
-import { LogOut, HardHat } from 'lucide-react'
+import { LogOut, HardHat, MessageSquare } from 'lucide-react'
 import { SEREIN } from './theme-serein.js'
 import VistaCliente from './avance/VistaCliente.jsx'
+import ChatMaestro from './avance/ChatMaestro.jsx'
 import { listarOts, cargarOT, responderAprobacion, errorLegible, miMembresia, claveCambiada } from './avance/api.js'
 import { supabase } from './supabase.js'
 import { resumenOT } from './avance/calc.js'
@@ -15,6 +16,7 @@ import { resumenOT } from './avance/calc.js'
 export default function ClienteObraApp({ perfil, email, onLogout, userId }) {
   const [ots, setOts] = useState([])
   const [otId, setOtId] = useState('')
+  const [chat, setChat] = useState(false)
   const [datos, setDatos] = useState(null)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
@@ -78,6 +80,10 @@ export default function ClienteObraApp({ perfil, email, onLogout, userId }) {
                 </select>
               )}
               {datos && datos.ot && <VistaCliente datos={datos} resumen={resumen} modo="cliente" onResponder={responder} usuario={perfil.nombre || email} />}
+              {datos && datos.ot && !chat && (
+                <button onClick={() => setChat(true)} title="Pregunta sobre tu obra" style={{ position: 'fixed', right: 18, bottom: 18, background: SEREIN.orange, color: '#fff', border: 0, borderRadius: 999, padding: '12px 18px', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 8px 24px -8px rgba(16,19,21,.5)', zIndex: 800 }}><MessageSquare size={16} /> Pregunta sobre tu obra</button>
+              )}
+              {chat && datos && datos.ot && <ChatMaestro otId={datos.ot.id} otCodigo={datos.ot.codigo} modo="cliente" onCerrar={() => setChat(false)} />}
             </>
           )}
       </div>
