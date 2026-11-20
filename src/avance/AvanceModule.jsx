@@ -10,17 +10,20 @@
 // perezosamente desde Dashboard.jsx. La lectura de Drive y correo
 // («Actualizar proyecto») y el acceso real del cliente llegan en las fases
 // 2 y 3: aquí quedan señalados, no simulados.
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
-import { Bell, Plus, RefreshCw, Eye, Columns2, PanelLeft, Upload } from 'lucide-react'
+import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react'
+import { Bell, Plus, RefreshCw, Eye, Columns2, PanelLeft, Upload, MessageSquare } from 'lucide-react'
 import * as api from './api.js'
 import { resumenOT, fmtPct, fmtCLP, fmtMM, fmtFecha, hoyISO, sumarDias, dias, planGlobal, PLANTILLA_PROCESOS, PARTIDAS, PARTIDAS_NOMBRE } from './calc.js'
 import { S, Card, Eyebrow, Pill, Btn, inp, Campo, Nota, Aviso, Switch, Luz, Estanque, Barras, Dona, Curva, Kpi, TabsNum, colorProceso, COLOR_PARTIDA } from './ui.jsx'
 import VistaCliente from './VistaCliente.jsx'
 import { PanelProcesos, PanelEDP, PanelLibro, PanelDocumentos, PanelRegistros, PanelCarga, PanelPropuestas } from './AvancePaneles.jsx'
 import { informeAvance, informeEDP } from './informes.js'
+import ChatMaestro from './ChatMaestro.jsx'
+// Three.js solo se descarga al abrir la pestaña 3D.
+const Modelo3D = lazy(() => import('./Modelo3D.jsx'))
 import { FileText } from 'lucide-react'
 
-const TABS = [{ id: 'comando', t: 'Comando' }, { id: 'propuestas', t: 'Propuestas' }, { id: 'procesos', t: 'Procesos y liberaciones' }, { id: 'edp', t: 'EDP' }, { id: 'libro', t: 'Libro de obra' }, { id: 'docs', t: 'Documentos' }, { id: 'registros', t: 'Registros' }, { id: 'carga', t: 'Carga de avance' }, { id: 'config', t: 'Configuración' }]
+const TABS = [{ id: 'comando', t: 'Comando' }, { id: 'propuestas', t: 'Propuestas' }, { id: 'procesos', t: 'Procesos y liberaciones' }, { id: 'edp', t: 'EDP' }, { id: 'libro', t: 'Libro de obra' }, { id: 'docs', t: 'Documentos' }, { id: 'registros', t: 'Registros' }, { id: 'modelo', t: 'Modelo 3D' }, { id: 'carga', t: 'Carga de avance' }, { id: 'config', t: 'Configuración' }]
 const num = v => { const n = Number(String(v ?? '').replace(/\./g, '').replace(',', '.')); return Number.isFinite(n) ? n : 0 }
 
 export default function AvanceModule({ ots: otsERP = [], email }) {
@@ -36,6 +39,7 @@ export default function AvanceModule({ ots: otsERP = [], email }) {
   const [ultima, setUltima] = useState(null)
   const [actualizando, setActualizando] = useState(false)
   const [ultimoResultado, setUltimoResultado] = useState(null)
+  const [chat, setChat] = useState(false)
 
   useEffect(() => { api.usuarioActual().then(u => setUserId(u?.id || null)) }, [])
   const cargarLista = useCallback(async () => {
@@ -98,6 +102,7 @@ export default function AvanceModule({ ots: otsERP = [], email }) {
           <Btn disabled={!datos?.ot} onClick={() => datos?.ot && res && informeAvance({ datos, res, version: 'interna' })} title="Informe de avance en PDF (versión interna)"><FileText size={13} /> Informe</Btn>
           <Btn disabled={!datos?.ot} onClick={() => datos?.ot && res && informeAvance({ datos, res, version: 'cliente' })} title="Informe de avance en PDF tal como lo ve el cliente"><FileText size={13} /> Informe cliente</Btn>
           <Btn onClick={() => setTab('carga')}><Upload size={13} /> Cargar avance</Btn>
+          <Btn tipo={chat ? 'p' : undefined} disabled={!datos?.ot} onClick={() => setChat(v => !v)} title="Pregunta en lenguaje natural sobre la OT; los cambios que pidas quedan como propuestas"><MessageSquare size={13} /> Chat</Btn>
           <Btn onClick={() => setTab('libro')} style={{ position: 'relative' }}><Bell size={13} /> Alertas{alertasNoLeidas > 0 && <span style={{ background: S.red, color: '#fff', borderRadius: 10, fontSize: 10.5, padding: '0 6px', marginLeft: 2 }}>{alertasNoLeidas}</span>}</Btn>
           <Btn tipo="g" onClick={() => setWizard(true)}><Plus size={13} /> Nueva OT</Btn>
         </div>
@@ -137,6 +142,7 @@ export default function AvanceModule({ ots: otsERP = [], email }) {
                 {tab === 'libro' && <PanelLibro datos={datos} res={res} recargar={recargar} userId={userId} />}
                 {tab === 'docs' && <PanelDocumentos datos={datos} recargar={recargar} />}
                 {tab === 'registros' && <PanelRegistros datos={datos} />}
+                {tab === 'modelo' && <Suspense fallback={<Nota>Cargando el modelo 3D…</Nota>}><Modelo3D datos={datos} res={res} geometria={datos.ot.geometria} onGuardarGeometria={async g => { try { await api.actualizarOT(datos.ot.id, { geometria: g }); recargar() } catch (e) { setError(api.errorLegible(e)) } }} /></Suspense>}
                 {tab === 'carga' && <PanelCarga datos={datos} res={res} recargar={recargar} userId={userId} />}
                 {tab === 'config' && <PanelConfig datos={datos} res={res} recargar={recargar} otsERP={otsERP} />}
               </div>
@@ -151,6 +157,7 @@ export default function AvanceModule({ ots: otsERP = [], email }) {
           </div>
         </>
       )}
+      {chat && datos?.ot && <ChatMaestro otId={datos.ot.id} otCodigo={datos.ot.codigo} onCerrar={() => setChat(false)} onPropuestas={() => { recargar(); setTab('propuestas') }} />}
       {wizard && <NuevaOT otsERP={otsERP} onCerrar={() => setWizard(false)} onCreada={async id => { setWizard(false); await cargarLista(); setOtId(id); setTab('config') }} />}
     </div>
   )

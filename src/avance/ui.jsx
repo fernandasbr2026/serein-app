@@ -125,7 +125,7 @@ export const Kpi = ({ l, v, s, acento, oscuro, children, style }) => (
 
 // Tabs numerados «01 COMANDO · 02 PROCESOS…» (del prototipo), en claro.
 export const TabsNum = ({ tabs, sel, onSel }) => (
-  <div style={{ display: 'flex', gap: 2, borderBottom: '2px solid ' + S.line, overflowX: 'auto' }}>
+  <div style={{ display: 'flex', gap: 2, borderBottom: '2px solid ' + S.line, flexWrap: 'wrap' }}>
     {tabs.map((t, i) => (
       <button key={t.id} onClick={() => onSel(t.id)} style={{ background: 'none', border: 0, borderBottom: '2px solid ' + (sel === t.id ? S.orange : 'transparent'), marginBottom: -2, padding: '9px 13px', fontFamily: S.fontDisplay, fontSize: 12, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: sel === t.id ? S.text : S.textSoft, cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', gap: 7, alignItems: 'center' }}>
         <span style={{ color: sel === t.id ? S.orange : S.textFaint, fontSize: 10.5 }}>{String(i + 1).padStart(2, '0')}</span>{t.t}
