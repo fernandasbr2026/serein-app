@@ -130,8 +130,11 @@ Deno.serve(async (req) => {
             ot_id: otId, origen: "ia", referencia: "chat-" + Date.now(), tipo: p.tipo, titulo: String(p.titulo).slice(0, 300), detalle: p.detalle ? String(p.detalle).slice(0, 2000) : null,
             confianza: ["alta", "media", "baja"].includes(p.confianza) ? p.confianza : "media", datos: p.datos && typeof p.datos === "object" ? p.datos : {},
           }));
-          if (filas.length) {
-            const r = await fetch(url() + "/rest/v1/propuestas", { method: "POST", headers: { ...H(), Prefer: "return=representation" }, body: JSON.stringify(filas) });
+          // No repetir una propuesta que ya está pendiente con el mismo título (el chat tiende a volver a sugerir la misma alerta).
+          const yaPendientes = new Set((propuestas || []).map((p: any) => String(p.titulo || "").trim().toLowerCase()));
+          const nuevas = filas.filter((f: any) => !yaPendientes.has(String(f.titulo).trim().toLowerCase()));
+          if (nuevas.length) {
+            const r = await fetch(url() + "/rest/v1/propuestas", { method: "POST", headers: { ...H(), Prefer: "return=representation" }, body: JSON.stringify(nuevas) });
             if (r.ok) creadas = ((await r.json()) || []).length;
           }
         } catch (_e) { /* el texto queda igual */ }

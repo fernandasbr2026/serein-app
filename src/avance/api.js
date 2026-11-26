@@ -123,3 +123,23 @@ export async function chatMaestro(ot_id, pregunta, historial = [], resumen = nul
   if (!data || data.ok === false) throw new Error((data && data.error) || 'La función no respondió')
   return data
 }
+
+/* ---------- Fase 6: modelo IFC ---------- */
+const BUCKET_MODELOS = 'avance-modelos'
+// Sube el IFC de la OT (reemplaza el anterior) y lo anota en la ficha de la OT.
+export async function subirIFC(ot_id, archivo) {
+  const ruta = ot_id + '/modelo.ifc'
+  const { error } = await supabase.storage.from(BUCKET_MODELOS).upload(ruta, archivo, { upsert: true, contentType: 'application/octet-stream' })
+  if (error) throw error
+  await actualizarOT(ot_id, { ifc_path: ruta, ifc_nombre: archivo.name || 'modelo.ifc', ifc_subido_en: new Date().toISOString() })
+  return ruta
+}
+export async function descargarIFC(ruta) {
+  const { data, error } = await supabase.storage.from(BUCKET_MODELOS).download(ruta)
+  if (error) throw error
+  return await data.arrayBuffer()
+}
+export async function quitarIFC(ot_id, ruta) {
+  if (ruta) { const { error } = await supabase.storage.from(BUCKET_MODELOS).remove([ruta]); if (error) throw error }
+  await actualizarOT(ot_id, { ifc_path: null, ifc_nombre: null, ifc_subido_en: null })
+}

@@ -142,7 +142,7 @@ export default function AvanceModule({ ots: otsERP = [], email }) {
                 {tab === 'libro' && <PanelLibro datos={datos} res={res} recargar={recargar} userId={userId} />}
                 {tab === 'docs' && <PanelDocumentos datos={datos} recargar={recargar} />}
                 {tab === 'registros' && <PanelRegistros datos={datos} />}
-                {tab === 'modelo' && <Suspense fallback={<Nota>Cargando el modelo 3D…</Nota>}><Modelo3D datos={datos} res={res} geometria={datos.ot.geometria} onGuardarGeometria={async g => { try { await api.actualizarOT(datos.ot.id, { geometria: g }); recargar() } catch (e) { setError(api.errorLegible(e)) } }} /></Suspense>}
+                {tab === 'modelo' && <Suspense fallback={<Nota>Cargando el modelo 3D…</Nota>}><Modelo3D datos={datos} res={res} geometria={datos.ot.geometria} onCambio={recargar} onGuardarGeometria={async g => { try { await api.actualizarOT(datos.ot.id, { geometria: g }); recargar() } catch (e) { setError(api.errorLegible(e)) } }} /></Suspense>}
                 {tab === 'carga' && <PanelCarga datos={datos} res={res} recargar={recargar} userId={userId} />}
                 {tab === 'config' && <PanelConfig datos={datos} res={res} recargar={recargar} otsERP={otsERP} />}
               </div>
